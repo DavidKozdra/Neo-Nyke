@@ -2,22 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 function loadItemDescriptions() {
-  const source = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
-  const dataSource = source
-    .slice(0, source.indexOf('export const ui ='))
-    .replace(/\bexport\s+/g, '');
-  return new Function(
-    'Neo',
-    `${dataSource}; return {
-      ITEM_DEFS,
-      ITEM_SHORT_DESCRIPTIONS,
-      getItemShortDescription,
-    };`,
-  )({
-    buildWeightTable(entries) {
-      return entries;
-    },
-  });
+  return require('../js/simulation/SharedItemDefinitions');
 }
 
 describe('item short descriptions', () => {

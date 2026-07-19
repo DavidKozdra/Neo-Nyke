@@ -4,7 +4,7 @@ const path = require('node:path');
 describe('Cloak of the Naked King flat damage reduction', () => {
   const playerSource = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
-  const inputSource = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
+  const inputSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedItemDefinitions.js'), 'utf8');
 
   test('publishes flat reduction separately from percentage reduction', () => {
     expect(playerSource).toContain('const flatDamageReduction = getCloakFlatDamageReduction(nakedKingCloak, ownedToolStacks)');

@@ -39,6 +39,36 @@ describe('network multiplayer game view', () => {
     expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
   });
 
+  test('enters campaign play presentation without advancing a second browser simulation', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'js/core/update.js'), 'utf8');
+    const states = [];
+    const view = new NetworkGameView({
+      session: { subscribe: () => () => {}, snapshot: () => ({}) },
+      neo: {
+        canvas: {}, ctx: {}, gameState: 'menu', loopStarted: true,
+        setGameState: state => states.push(state),
+      },
+      canvas: {}, context: {}, document: { getElementById: () => null, addEventListener: () => {} },
+    });
+    view.start();
+    expect(states).toContain('play');
+    expect(source).toContain('!Neo.multiplayerGameView?.active');
+    view.stop();
+  });
+
+  test('leaves Escape entirely to the campaign pause and panel handler', () => {
+    const preventDefault = jest.fn();
+    const pauseGame = jest.fn();
+    const view = new NetworkGameView({ session: {}, neo: { gameState: 'play', pauseGame } });
+    view.active = true;
+
+    view._onKey({ code: 'Escape', preventDefault }, true);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(pauseGame).not.toHaveBeenCalled();
+    expect(view.paused).toBe(false);
+  });
+
   test('sends lasers along campaign FPS yaw instead of overwriting aim with a top-down click angle', () => {
     const sent = [];
     const canvas = {
@@ -312,8 +342,8 @@ describe('network multiplayer game view', () => {
     const view = new NetworkGameView({ session: {}, neo });
     const state = { tick: 10 };
     const players = {
-      p1: { id: 'p1', x: 10, y: 20, health: 100, maxHealth: 100, characterKey: 'princess' },
-      p2: { id: 'p2', x: 30, y: 40, health: 100, maxHealth: 100, characterKey: 'metao' },
+      p1: { id: 'p1', x: 10, y: 20, hp: 100, maxHp: 100, characterKey: 'princess' },
+      p2: { id: 'p2', x: 30, y: 40, hp: 100, maxHp: 100, characterKey: 'metao' },
     };
 
     view._syncCampaignPresentationEntities(players, {}, 'p1', state);
@@ -392,23 +422,57 @@ describe('network multiplayer game view', () => {
     expect(sent).toEqual(['chest']);
   });
 
+  test('uses the campaign item notification for authoritative item pickups', () => {
+    const pushItemNotification = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1' }) },
+      neo: { pushItemNotification, playSfx: jest.fn() },
+    });
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'room-a' } } } };
+    view._consumeGameplayEvents([{
+      eventId: 'pickup-1', eventType: 'PICKUP_COLLECTED',
+      data: { playerId: 'p1', roomId: 'room-a', pickupType: 'item', itemKey: 'titan_heart', amount: 1 },
+    }]);
+    expect(pushItemNotification).toHaveBeenCalledWith('titan_heart', 1);
+  });
+
+  test('uses the same campaign item notification for A/B chest selection rewards', () => {
+    const pushItemNotification = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1' }) },
+      neo: { pushItemNotification, playSfx: jest.fn() },
+    });
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'room-a' } } } };
+    view._consumeGameplayEvents([{
+      eventId: 'upgrade-1', eventType: 'UPGRADE_APPLIED',
+      data: { playerId: 'p1', roomId: 'room-a', itemKey: 'neo_knife', amount: 1 },
+    }]);
+    expect(pushItemNotification).toHaveBeenCalledWith('neo_knife', 1);
+  });
+
+  test('does not show another player\'s acquisition as the local player\'s item card', () => {
+    const pushItemNotification = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1' }) },
+      neo: { pushItemNotification, playSfx: jest.fn() },
+    });
+    view.currentSample = { state: { players: {
+      p1: { id: 'p1', roomId: 'room-a' }, p2: { id: 'p2', roomId: 'room-a' },
+    } } };
+    view._consumeGameplayEvents([{
+      eventId: 'pickup-p2', eventType: 'PICKUP_COLLECTED',
+      data: { playerId: 'p2', roomId: 'room-a', itemKey: 'titan_heart', amount: 1 },
+    }]);
+    expect(pushItemNotification).not.toHaveBeenCalled();
+  });
+
   test('keeps normal room pillars and chamber geometry in network presentation', () => {
-    const neo = {
-      rngStreams: {}, rng: () => 0.5,
-      createRngStream: () => ({ next: () => 0.5 }),
-      decorateRoomData: room => {
-        room.structures = [{ kind: 'pillar', x: 120, y: 160, w: 34, h: 34 }];
-        room.layoutChambers = [{ x: 40, y: 40, w: 300, h: 260 }];
-        room.destructibles = [{ kind: 'cover_wall' }];
-        room.decorations = [{ kind: 'torch' }];
-      },
-    };
-    const view = new NetworkGameView({ session: {}, neo });
-    const room = { id: 'room-a', cleared: false };
-    view._hydrateRoomDecor(room, { floorSeed: 'floor-a' }, { floorSeed: 'floor-a' });
-    expect(room.structures).toEqual([expect.objectContaining({ kind: 'pillar', x: 120, y: 160 })]);
-    expect(room.layoutChambers).toEqual([{ x: 40, y: 40, w: 300, h: 260 }]);
-    expect(room.destructibles).toEqual([]);
+    const source = fs.readFileSync(path.join(__dirname, '..', 'js/rendering/NetworkGameView.js'), 'utf8');
+    expect(source).not.toContain('_hydrateRoomDecor');
+    expect(source).not.toContain('decorateRoomData(room)');
+    expect(source).toContain('Object.assign(room, source');
+    expect(source).toContain('this.neo.structures = this.neo.currentRoom?.structures || []');
+    expect(source).toContain('this.neo.destructibles = this.neo.currentRoom?.destructibles || []');
   });
 
   test('uses campaign-authored ability presentation from the authority event', () => {
@@ -501,7 +565,7 @@ describe('network multiplayer game view', () => {
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state)');
     expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.threeRenderer?.render?.()');
     expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.drawWorldViewport(Neo.camera');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.decorateRoomData(room)');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('this.neo.decorateRoomData(room)');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.updateHud?.()');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('this.neo.uiController?.setHudValues');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_drawAbilityEffects');

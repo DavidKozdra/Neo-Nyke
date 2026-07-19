@@ -22,7 +22,7 @@ function combatHarness(characterKey = 'princess') {
     players: {
       p1: {
         id: 'p1', characterKey, roomId: 'room-4-4', x: 300, y: 350, radius: 18, moveSpeed: 180,
-        maxHealth: 100, health: 100, coins: 0, action: 'idle', attackCooldownUntilTick: 0,
+        maxHp: 100, hp: 100, coins: 0, action: 'idle', attackCooldownUntilTick: 0,
       },
     },
   });
@@ -35,6 +35,23 @@ function combatHarness(characterKey = 'princess') {
 }
 
 describe('authoritative network combat system', () => {
+  test('uses authoritative room obstacles for enemy and projectile collision', () => {
+    const { state, simulation, events } = combatHarness();
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === state.players.p1.roomId);
+    room.structures = [{ kind: 'pillar', x: 340, y: 350, w: 34, h: 34 }];
+    room.destructibles = [{ kind: 'pot', x: 380, y: 350, r: 12, hp: 1, broken: false }];
+    const firstId = state.allocateEntityId('projectile');
+    state.projectiles[firstId] = { id: firstId, ownerId: 'p1', roomId: room.id, x: 340, y: 350, vx: 0, vy: 0, radius: 6, damage: 10, expiresTick: 20 };
+    simulation.updateGame({}, 0.05);
+    expect(state.projectiles[firstId]).toBeUndefined();
+    expect(events.some(event => event.eventType === 'PROJECTILE_BLOCKED')).toBe(true);
+    const secondId = state.allocateEntityId('projectile');
+    state.projectiles[secondId] = { id: secondId, ownerId: 'p1', roomId: room.id, x: 380, y: 350, vx: 0, vy: 0, radius: 6, damage: 10, expiresTick: 20 };
+    simulation.updateGame({}, 0.05);
+    expect(room.destructibles[0].broken).toBe(true);
+    expect(events.some(event => event.eventType === 'DESTRUCTIBLE_BROKEN')).toBe(true);
+  });
+
   test('holds newly spawned enemies harmless during the shared portal animation', () => {
     const { state, simulation, events } = combatHarness();
     simulation.updateGame({}, 0.05);
@@ -42,15 +59,15 @@ describe('authoritative network combat system', () => {
     enemy.x = state.players.p1.x;
     enemy.y = state.players.p1.y;
     enemy.attackCooldownUntilTick = 0;
-    const startingHealth = state.players.p1.health;
+    const startingHealth = state.players.p1.hp;
     for (let tick = 0; tick < 13; tick += 1) simulation.updateGame({}, 0.05);
     expect(enemy.state).toBe('spawning');
-    expect(state.players.p1.health).toBe(startingHealth);
+    expect(state.players.p1.hp).toBe(startingHealth);
     expect(events.some(event => event.eventType === 'PLAYER_HIT')).toBe(false);
   });
 
   test('creates the selected hero with their campaign starter inventory and loadout', () => {
-    const player = { maxHealth: 100, health: 100 };
+    const player = { maxHp: 100, hp: 100 };
     applyNetworkHeroProfile(player, 'thorn_knight');
 
     expect(player).toEqual(expect.objectContaining({
@@ -78,16 +95,16 @@ describe('authoritative network combat system', () => {
   });
 
   test('applies hero health and movement profiles without client-authored stats', () => {
-    const player = { characterKey: 'thorn_knight', maxHealth: 100, health: 50, moveSpeed: 180 };
+    const player = { characterKey: 'thorn_knight', maxHp: 100, hp: 50, moveSpeed: 180 };
     applyNetworkHeroProfile(player, 'turtle_boy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'turtle_boy', maxHealth: 144, health: 72, moveSpeed: 180,
+      characterKey: 'turtle_boy', maxHp: 144, hp: 72, moveSpeed: 180,
       damageMultiplier: 1, items: { turtle_shell: 1, dragon_orb: 1 },
       equippedMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
     }));
     applyNetworkHeroProfile(player, 'mooggy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'mooggy', maxHealth: 130, health: 65, moveSpeed: 180,
+      characterKey: 'mooggy', maxHp: 130, hp: 65, moveSpeed: 180,
       damageMultiplier: 0.6,
       items: { hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 },
     }));
@@ -185,7 +202,7 @@ describe('authoritative network combat system', () => {
     const { state, simulation, events } = combatHarness('gelleh');
     const player = state.players.p1;
     applyNetworkHeroProfile(player, 'gelleh');
-    player.health = 40;
+    player.hp = 40;
     simulation.updateGame({}, 0.05);
     const enemy = Object.values(state.enemies)[0];
     enemy.x = player.x + 40;
@@ -199,7 +216,7 @@ describe('authoritative network combat system', () => {
     expect(Object.values(state.abilityEntities)).toEqual([
       expect.objectContaining({ kind: 'healing_zone', ownerId: 'p1', roomId: player.roomId }),
     ]);
-    expect(player.health).toBeGreaterThan(40);
+    expect(player.hp).toBeGreaterThan(40);
     expect(enemy.health).toBeLessThan(enemy.maxHealth);
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'ABILITY_ENTITY_PULSED' }));
 
@@ -328,7 +345,7 @@ describe('authoritative network combat system', () => {
     projectile.vx = 0;
     projectile.vy = 0;
     simulation.updateGame({}, 0.05);
-    expect(state.players.p1.health).toBe(91);
+    expect(state.players.p1.hp).toBe(91);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'PLAYER_HIT',
       data: expect.objectContaining({ attackKind: 'hunter_arrow', damage: 9 }),

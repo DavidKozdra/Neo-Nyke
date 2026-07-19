@@ -347,16 +347,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       return;
     }
 
-    // Boss and god rooms need an open arena — structures block projectiles and beams
-    if (room.type !== 'god' && room.type !== 'boss' && !specialServiceRoom) {
-      decorateRoomStructures(room);
-    }
-
-    // Procedural prop/hazard population (rules live in roomTemplates.js). The
-    // hazard factories below are injected so the rules can stay data-only. RNG
-    // consumption order is preserved, so seeded output is unchanged.
+    // Both modes execute this same headless operation. The renderer consumes
+    // room state; it never generates alternate multiplayer geometry.
     if (!specialServiceRoom) {
-      Neo.populateRoomProps(room, {
+      NeoNyke.simulation.decorateSharedRoomInterior(room, {
+        context: Neo,
         createCornerMoatLavaHazards,
         createExplosiveTrapHazard,
       });
@@ -374,8 +369,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         { type: 'potion', cost: Neo.getShopPotionCost(), x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 88, bought: false },
       ];
       ensureShopHasMinimumItemOffers(room);
-      room.shopMoveOffers = [];
-      room.shopWeaponOffers = [];
+      room.shopMoveOffers = Array.isArray(room.shopMoveOffers) ? room.shopMoveOffers : [];
+      room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
       room.cleared = true;
     } else if (room.type === 'challenge') {
       room.cleared = false;
@@ -1702,189 +1697,41 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   }
 
   function ensureShopHasMinimumItemOffers(room, minItemOffers = null) {
-    if (!room || room.type !== 'shop') return;
-    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
-    const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
-    const baseItemOffers = minItemOffers == null
-      ? Math.max(0, Math.floor(Number(Neo.getDifficultyDef()?.shopItemOffers ?? 3)))
-      : Math.max(0, Math.floor(Number(minItemOffers || 0)));
-    const extraOffers = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
-    const targetItemOffers = baseItemOffers + extraOffers;
-    if (itemOffers.length >= targetItemOffers) {
-      ensureFeaturedGodOffer(room);
-      ensureShopScrollOffer(room);
-      ensureShopTradeOffer(room);
-      layoutShopItemOffers(room);
-      return;
-    }
-
-    const shopRandom = Neo.createRoomRandom(room, 'shop:item-offers');
-    const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
-    let created = 0;
-
-    while (itemOffers.length + created < targetItemOffers) {
-      let key = '';
-      for (let attempts = 0; attempts < 12; attempts += 1) {
-        const candidate = Neo.rollItemDrop({ random: shopRandom });
-        if (!occupiedKeys.has(candidate)) {
-          key = candidate;
-          break;
-        }
-      }
-      if (!key) key = Neo.rollItemDrop({ random: shopRandom });
-      occupiedKeys.add(key);
-      const itemIndex = itemOffers.length + created;
-      const rarity = Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight';
-      room.shopOffers.push({
-        type: 'item',
-        key,
-        cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, rarity),
-        x: Neo.ROOM_W / 2,
-        y: Neo.ROOM_H / 2 - 16,
-        bought: false,
-      });
-      created += 1;
-    }
-    ensureFeaturedGodOffer(room);
-    ensureShopScrollOffer(room);
-    ensureShopTradeOffer(room);
-    // Position every floor display once the full offer set is known, so the grid
-    // is sized for the real count (base + rich-man's-luck extras + scroll).
-    layoutShopItemOffers(room);
-  }
-
-  // Assigns each shop item display a centered, in-bounds floor position on a grid
-  // sized for the actual number of displays. A fixed 6-slot table used to stack
-  // overflow offers at center / jam the scroll into a corner once the count grew
-  // past it; laying everything out together keeps all displays on screen.
-  function layoutShopItemOffers(room) {
-    if (!room || room.type !== 'shop') return;
-    const displays = (room.shopOffers || []).filter(offer => offer?.type === 'item');
-    displays.forEach((offer, index) => {
-      const slot = getShopItemSlot(index, displays.length);
-      offer.x = slot.x;
-      offer.y = slot.y;
-    });
-  }
-
-  // Computes a centered, in-bounds floor position for shop item display `index`
-  // (0-based) out of `total` displays. Displays flow left-to-right in rows of up
-  // to SHOP_GRID_COLS, and rows are centered both horizontally and vertically so
-  // the whole spread stays within the camera view regardless of count.
-  function getShopItemSlot(index, total) {
-    const SHOP_GRID_COLS = 4;
-    const COL_SPACING = 150;
-    const ROW_SPACING = 76;
-    const count = Math.max(1, Math.floor(Number(total) || 1));
-    const idx = Math.max(0, Math.min(Math.floor(Number(index) || 0), count - 1));
-    const cols = Math.min(SHOP_GRID_COLS, count);
-    const rows = Math.ceil(count / cols);
-    const row = Math.floor(idx / cols);
-    // Last row may be short; center the items it actually holds.
-    const itemsInRow = Math.min(cols, count - row * cols);
-    const colInRow = idx - row * cols;
-    const x = Neo.ROOM_W / 2 + (colInRow - (itemsInRow - 1) / 2) * COL_SPACING;
-    const y = Neo.ROOM_H / 2 - 16 + (row - (rows - 1) / 2) * ROW_SPACING;
-    return { x, y };
-  }
-
-  // 50% of shops feature a guaranteed god-tier (yellow) item. It replaces one
-  // standard item slot (so it never inflates the offer count) and carries a
-  // premium price on top of the god rarity multiplier, making it a deliberate,
-  // balanced splurge rather than a cheap god roll.
-  function ensureFeaturedGodOffer(room) {
-    if (!room || room.type !== 'shop') return;
-    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
-    const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item' && !offer.scrollOffer);
-    if (!itemOffers.length) return;
-    const isGod = (offer) => {
-      const rarity = Neo.itemRegistry?.get?.(offer.key)?.rarity || Neo.ITEM_DEFS?.[offer.key]?.rarity;
-      return Neo.isGodTier?.(rarity);
-    };
-    // A god item already rolled in naturally — nothing to guarantee.
-    if (itemOffers.some(isGod)) return;
-    const featureRandom = Neo.createRoomRandom(room, 'shop:featured-god');
-    if (featureRandom() >= (Neo.SHOP_FEATURED_GOD_CHANCE ?? 0.5)) return;
-
-    const occupiedKeys = new Set(room.shopOffers.filter(o => o?.type === 'item').map(o => o.key));
-    let godKey = '';
-    for (let attempts = 0; attempts < 12; attempts += 1) {
-      const candidate = Neo.rollItemDrop({ rarities: ['god'], random: featureRandom });
-      if (candidate && !occupiedKeys.has(candidate)) { godKey = candidate; break; }
-    }
-    if (!godKey) godKey = Neo.rollItemDrop({ rarities: ['god'], random: featureRandom });
-    if (!godKey) return;
-
-    // Convert the last standard (non-scroll) item slot into the featured god item.
-    const target = [...room.shopOffers].reverse().find(offer => offer?.type === 'item' && !offer.scrollOffer && !offer.bought);
-    if (!target) return;
-    const rarity = Neo.itemRegistry?.get?.(godKey)?.rarity || Neo.ITEM_DEFS?.[godKey]?.rarity || 'god';
-    const floorValue = Neo.getShopProgressionDepth?.() ?? Neo.floor;
-    const baseCost = Neo.getShopItemCost(0, floorValue, Neo.selectedDifficulty, rarity);
-    target.key = godKey;
-    target.cost = Math.round(baseCost * (Neo.SHOP_FEATURED_GOD_PRICE_PREMIUM ?? 1.6));
-    target.featuredGod = true;
+    if (!room || room.type !== 'shop') return null;
+    if (room.shopStocked) return room;
+    const stockCampaignShop = globalThis.NeoNyke?.simulation?.stockCampaignShop;
+    if (typeof stockCampaignShop !== 'function') throw new Error('Canonical campaign shop operation is unavailable');
+    const shopRandom = Neo.createRoomRandom(room, 'shop:canonical-stock');
+    return stockCampaignShop({
+      floorNumber: Neo.getShopProgressionDepth?.() ?? Neo.floor,
+      elapsedSeconds: Neo.gameElapsedTime || 0,
+      matchRules: {
+        shopItemOffers: minItemOffers == null ? Neo.getDifficultyDef()?.shopItemOffers ?? 3 : minItemOffers,
+        shopPriceMultiplier: Number(Neo.getDifficultyDef()?.shopPriceMultiplier || 1),
+        cursedShops: Neo.isChallengeActive?.('cursed_shops') || false,
+        godSweepUnlocked: Number(Neo.metaProgress?.godsKilled || 0) > 0 && Number(Neo.metaProgress?.loopCrystals || 0) >= 5,
+      },
+    }, room, Neo.player, { next: shopRandom });
   }
 
   function rollScrollOfControl(random = Neo.rng) {
-    const pool = Neo.SCROLL_OF_CONTROL_KEYS || [];
-    if (!pool.length) return '';
-    return pool[Math.floor(random() * pool.length)] || pool[0];
+    return globalThis.NeoNyke?.content?.rollCampaignScroll?.(random) || '';
   }
 
   function ensureShopScrollOffer(room) {
-    if (!room || room.type !== 'shop' || Neo.floor <= 3) return null;
-    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
-    if (room.shopOffers.some(offer => offer?.type === 'item' && (Neo.SCROLL_OF_CONTROL_KEYS || []).includes(offer.key))) return null;
-    const itemOfferCount = room.shopOffers.filter(offer => offer?.type === 'item').length;
-    const configuredBaseOffers = Neo.getDifficultyDef()?.shopItemOffers;
-    if (configuredBaseOffers != null) {
-      const baseOfferLimit = Math.max(0, Math.floor(Number(configuredBaseOffers)));
-      const extraOfferLimit = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
-      if (itemOfferCount >= baseOfferLimit + extraOfferLimit) return null;
-    }
-    const shopRandom = Neo.createRoomRandom(room, 'shop:scroll-offer');
-    if (shopRandom() >= 0.2) return null;
-    const key = rollScrollOfControl(shopRandom);
-    if (!key) return null;
-    const itemIndex = itemOfferCount;
-    // Position is a placeholder; layoutShopItemOffers re-slots every display once
-    // the full offer set (including this scroll) is known.
-    room.shopOffers.push({
-      type: 'item',
-      key,
-      cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, 'knight'),
-      x: Neo.ROOM_W / 2,
-      y: Neo.ROOM_H / 2 - 16,
-      bought: false,
-      scrollOffer: true,
-    });
-    return key;
+    return room?.shopOffers?.find(offer => offer?.scrollOffer) || null;
+  }
+
+  function ensureShopTradeOffer(room) {
+    if (!room || room.type !== 'shop') return null;
+    if (!room.shopStocked) ensureShopHasMinimumItemOffers(room);
+    return room.shopTradeOffer || null;
   }
 
   function createSeededItemChoices(count, random, options = {}) {
-    const targetCount = Math.max(1, Math.floor(Number(count || 1)));
-    const choices = [];
-    const seen = new Set();
-    let guard = 0;
-    while (choices.length < targetCount && guard < targetCount * 18) {
-      guard += 1;
-      const key = Neo.rollItemDrop({ elite: !!options.elite, random });
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        choices.push(key);
-      }
-    }
-    for (const key of Neo.ITEM_KEYS || []) {
-      if (choices.length >= targetCount) break;
-      const poolRarity = Neo.ITEM_DEFS?.[key]?.rarity;
-      if (poolRarity === 'blue' || poolRarity === 'green') continue; // greens are loop drop-only
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        choices.push(key);
-      }
-    }
-    return choices;
+    const createChoices = globalThis.NeoNyke?.content?.createCampaignItemChoices;
+    if (typeof createChoices !== 'function') throw new Error('Canonical campaign item choice operation is unavailable');
+    return createChoices(count, { next: random }, options);
   }
 
   function getBossRewardPickCount(floorValue = Neo.floor, room = Neo.currentRoom) {
@@ -1892,48 +1739,6 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const bossBonus = room?.type === 'god' ? 1 : 0;
     const difficultyBonus = { easy: 0, normal: 0, hard: 1, nightmare: 1 }[String(Neo.selectedDifficulty || '').toLowerCase()] || 0;
     return Neo.clamp(1 + floorPickBonus + bossBonus + difficultyBonus, 1, 3);
-  }
-
-  function getItemRarityRank(key) {
-    const rarity = String(Neo.itemRegistry?.get?.(key)?.rarity || Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
-    if (rarity === 'green') return 5; // post-loop drop-only tier, ranks above all
-    if (rarity === 'blue') return 4;
-    if (rarity === 'god' || rarity === 'red') return 3;
-    if (rarity === 'wizard' || rarity === 'purple') return 2;
-    return 1;
-  }
-
-  function getTradeTargetRarityRank(costKeys) {
-    const highestCostRank = Math.max(1, ...costKeys.map(getItemRarityRank));
-    return Math.min(3, highestCostRank + 1);
-  }
-
-  function ensureShopTradeOffer(room) {
-    if (!room || room.type !== 'shop') return null;
-    const playerItems = Neo.player?.items || {};
-    const costPool = Object.keys(playerItems)
-      .filter(key => Number(playerItems[key] || 0) > 0 && getItemRarityRank(key) < 3);
-    if (room.shopTradeOffer && typeof room.shopTradeOffer === 'object' && !(room.shopTradeOffer.unavailable && costPool.length >= 2)) return room.shopTradeOffer;
-    if (costPool.length < 2) {
-      room.shopTradeOffer = { type: 'trade', unavailable: true, bought: false };
-      return room.shopTradeOffer;
-    }
-    const tradeRandom = Neo.createRoomRandom(room, 'shop:trade-offer');
-    const shuffledCostPool = Neo.shuffleWithRandom(costPool, tradeRandom);
-    const costKeys = shuffledCostPool.slice(0, 2);
-    const targetRank = getTradeTargetRarityRank(costKeys);
-    const normalItemPool = (Neo.ITEM_KEYS || []).filter(key => getItemRarityRank(key) < 4);
-    const targetPool = normalItemPool.filter(key => getItemRarityRank(key) === targetRank && !costKeys.includes(key));
-    const shuffledTargetPool = Neo.shuffleWithRandom(targetPool.length ? targetPool : normalItemPool, tradeRandom);
-    room.shopTradeOffer = {
-      type: 'trade',
-      key: shuffledTargetPool[0] || '',
-      costKeys,
-      targetRank,
-      unavailable: false,
-      bought: false,
-    };
-    return room.shopTradeOffer;
   }
 
   // ── Rival Adventurer System ──────────────────────────────────────────────

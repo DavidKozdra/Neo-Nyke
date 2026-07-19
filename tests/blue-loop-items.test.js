@@ -14,7 +14,7 @@ function loadInputData() {
     buildWeightTable(entries) {
       return entries;
     },
-  }, { NeoNyke: { content: require('../js/simulation/SharedItemContent') } });
+  }, { NeoNyke: { content: { ...require('../js/simulation/SharedItemContent'), ...require('../js/simulation/SharedItemDefinitions') } } });
 }
 
 function extractFunction(sourcePath, functionName, dependencies = {}) {
@@ -123,7 +123,7 @@ describe('loop-exclusive Blue relics', () => {
   });
 
   test('uses the requested Artificer and cloak scaling formulas', () => {
-    const getArtificerLevelGains = extractFunction(playerPath, 'getArtificerLevelGains');
+    const { getArtificerLevelGains } = require('../js/simulation/SharedProgressionSystem');
     const getCloakFlatDamageReduction = extractFunction(playerPath, 'getCloakFlatDamageReduction');
     const countOwnedToolStacks = extractFunction(playerPath, 'countOwnedToolStacks');
 

@@ -24,7 +24,7 @@ function progressionHarness({ floorNumber = 1, players } = {}) {
     status: 'running',
     floorState,
     players: players || {
-      p1: { id: 'p1', characterKey: 'thorn_knight', roomId: exitRoomId, x: floorState.width / 2, y: floorState.height / 2, radius: 18, moveSpeed: 180, maxHealth: 100, health: 100, downed: false },
+      p1: { id: 'p1', characterKey: 'thorn_knight', roomId: exitRoomId, x: floorState.width / 2, y: floorState.height / 2, radius: 18, moveSpeed: 180, maxHp: 100, hp: 100, downed: false },
     },
   });
   const random = new RandomService({ matchSeed: state.matchSeed });
@@ -86,8 +86,8 @@ describe('floor progression, run end, and revive', () => {
     const state = new GameState({
       matchId: 'revive-test', matchSeed: 'prog-seed', status: 'running', floorState,
       players: {
-        alive: { id: 'alive', characterKey: 'thorn_knight', roomId: room, x: 300, y: 300, radius: 18, maxHealth: 100, health: 100, downed: false },
-        down: { id: 'down', characterKey: 'metao', roomId: room, x: 315, y: 300, radius: 18, maxHealth: 100, health: 0, downed: true },
+        alive: { id: 'alive', characterKey: 'thorn_knight', roomId: room, x: 300, y: 300, radius: 18, maxHp: 100, hp: 100, downed: false },
+        down: { id: 'down', characterKey: 'metao', roomId: room, x: 315, y: 300, radius: 18, maxHp: 100, hp: 0, downed: true },
       },
     });
     const events = [];
@@ -95,7 +95,7 @@ describe('floor progression, run end, and revive', () => {
     const simulation = new GameSimulation({ state, systems: [system] });
     stepMany(simulation, 45);
     expect(state.players.down.downed).toBe(false);
-    expect(state.players.down.health).toBeGreaterThan(0);
+    expect(state.players.down.hp).toBeGreaterThan(0);
     expect(events.some(e => e.eventType === 'PLAYER_REVIVED' && e.data.playerId === 'down')).toBe(true);
   });
 
@@ -106,8 +106,8 @@ describe('floor progression, run end, and revive', () => {
     const state = new GameState({
       matchId: 'wipe-test', matchSeed: 'prog-seed', status: 'running', floorState,
       players: {
-        p1: { id: 'p1', characterKey: 'thorn_knight', roomId: room, x: 300, y: 300, radius: 18, maxHealth: 100, health: 0, downed: true },
-        p2: { id: 'p2', characterKey: 'metao', roomId: room, x: 600, y: 300, radius: 18, maxHealth: 100, health: 0, downed: true },
+        p1: { id: 'p1', characterKey: 'thorn_knight', roomId: room, x: 300, y: 300, radius: 18, maxHp: 100, hp: 0, downed: true },
+        p2: { id: 'p2', characterKey: 'metao', roomId: room, x: 600, y: 300, radius: 18, maxHp: 100, hp: 0, downed: true },
       },
     });
     const events = [];

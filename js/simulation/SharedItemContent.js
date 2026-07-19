@@ -1,11 +1,12 @@
 (function initializeSharedItemContent(root, factory) {
   const worldContent = typeof require === 'function' ? require('./SharedWorldContent.js') : (root.NeoNyke?.content || {});
-  const api = factory(worldContent);
+  const definitions = typeof require === 'function' ? require('./SharedItemDefinitions.js') : (root.NeoNyke?.content || {});
+  const api = factory(worldContent, definitions);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.content = namespace.content || {};
   Object.assign(namespace.content, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedItemContentApi(worldContent) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedItemContentApi(worldContent, definitions) {
   'use strict';
 
   // Canonical normal-campaign drop content. Browser loot and remote authority
@@ -84,6 +85,12 @@
     return choices;
   }
 
+  function rollCampaignScroll(random) {
+    const scrollKeys = Array.isArray(definitions.SCROLL_KEYS) ? definitions.SCROLL_KEYS : [];
+    if (!scrollKeys.length) return '';
+    return scrollKeys[Math.floor(nextRandom(random) * scrollKeys.length)] || scrollKeys[0];
+  }
+
   function createTreasureChestPlan(options = {}) {
     const random = options.random;
     const geometry = options.geometry || worldContent.CAMPAIGN_ROOM_GEOMETRY;
@@ -136,6 +143,7 @@
     ELITE_ITEM_RARITY_DROP_WEIGHTS,
     rollCampaignItem,
     createCampaignItemChoices,
+    rollCampaignScroll,
     createTreasureChestPlan,
   };
 });

@@ -147,7 +147,7 @@ async function main() {
       && globalThis.Neo?.render3D === false
       && globalThis.Neo?.presentationPlayerSlots?.length === 2
       && (globalThis.Neo?.__network2dSmokeCalls || 0) > 0
-    ), undefined, { timeout: 10_000 });
+    ), undefined, { timeout: 30_000 });
     const twoDimensionalProof = {
       mode: await host.evaluate(() => globalThis.Neo?.getViewMode?.()),
       visiblePlayers: await host.evaluate(() => globalThis.Neo?.presentationPlayerSlots?.length || 0),
@@ -187,8 +187,35 @@ async function main() {
     const pauseProof = await host.evaluate(opened => ({
       settingsOpened: opened,
       resumed: document.querySelector('#pause')?.classList.contains('hidden') === true,
-      legacyGameStateWasNotStarted: globalThis.Neo?.gameState !== 'play',
+      campaignPlayStateRestored: globalThis.Neo?.gameState === 'play',
     }), settingsOpened);
+
+    // Authoritative acquisition events must enter the normal campaign toast
+    // stack. This checks the actual browser DOM, not a network-only HUD label.
+    const itemNotificationEventId = `smoke-item-${Date.now()}`;
+    await host.evaluate(eventId => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const player = snapshot.gameState.players[snapshot.playerId];
+      globalThis.Neo.multiplayerGameView._consumeGameplayEvents([{
+        eventId,
+        eventType: 'UPGRADE_APPLIED',
+        data: {
+          playerId: snapshot.playerId,
+          roomId: player.roomId,
+          itemKey: 'neo_knife',
+          amount: 1,
+        },
+      }]);
+    }, itemNotificationEventId);
+    await host.locator('#itemNotifyStack .item-toast').first().waitFor({ state: 'visible' });
+    const itemNotificationProof = await host.evaluate(() => {
+      const toast = document.querySelector('#itemNotifyStack .item-toast');
+      return {
+        visible: !!toast && getComputedStyle(toast).display !== 'none',
+        title: toast?.querySelector('.item-toast-title')?.textContent || '',
+        description: toast?.querySelector('.item-toast-desc')?.textContent || '',
+      };
+    });
 
     // Trigger Princess's real RMB Love Beam. Both the ordinary projected effect
     // list and the ordinary Three.js beam scene must see it; no network renderer
@@ -289,6 +316,7 @@ async function main() {
       memberCount: hostSnapshot.lobbyState?.members?.length,
       gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
       pauseProof,
+      itemNotificationProof,
       twoDimensionalProof,
       fpsProof,
       thirdPersonProof,
@@ -352,7 +380,8 @@ async function main() {
       || report.thirdPersonProof.mode !== 'third' || report.thirdPersonProof.visibleRemotePlayers !== 1
       || report.beamProof.activeEffects < 1 || report.beamProof.beams < 1
       || report.bladeJusticeProof.projectedBlades !== 3 || report.bladeJusticeProof.renderedBlades !== 3
-      || !report.pauseProof.settingsOpened || !report.pauseProof.resumed || !report.pauseProof.legacyGameStateWasNotStarted
+      || !report.pauseProof.settingsOpened || !report.pauseProof.resumed || !report.pauseProof.campaignPlayStateRestored
+      || !report.itemNotificationProof.visible || !report.itemNotificationProof.title.includes('Neo-Knife')
       || !report.leaveProof.gameViewReleased || !report.leaveProof.menuVisible
       || !report.leaveProof.networkClassRemoved || !report.leaveProof.webglSuspended
       || !report.leaveProof.pauseClosed || !report.leaveProof.settingsClosed

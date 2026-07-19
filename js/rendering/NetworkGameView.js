@@ -14,6 +14,9 @@
   const worldContent = typeof require === 'function'
     ? require('../simulation/SharedWorldContent.js')
     : (root.NeoNyke?.content || {});
+  const roomInterior = typeof require === 'function'
+    ? require('../simulation/SharedRoomInteriorSystem.js')
+    : (root.NeoNyke?.simulation || {});
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
@@ -156,12 +159,17 @@
     const width = Math.max(1, Number(floorState.width) || 900);
     const height = Math.max(1, Number(floorState.height) || 700);
     const minimum = wall + radius;
+    const desiredX = clamp(Number(player.x || 0) + movement.moveX * speed * fixedDelta, minimum, width - minimum);
+    const desiredY = clamp(Number(player.y || 0) + movement.moveY * speed * fixedDelta, minimum, height - minimum);
+    const room = floorState.layout?.rooms?.find(candidate => candidate.id === player.roomId);
+    const collision = roomInterior.resolveRoomObstacleMovement?.(room, player, desiredX, desiredY)
+      || { x: desiredX, y: desiredY, blockedX: false, blockedY: false };
     return {
       ...player,
-      x: clamp(Number(player.x || 0) + movement.moveX * speed * fixedDelta, minimum, width - minimum),
-      y: clamp(Number(player.y || 0) + movement.moveY * speed * fixedDelta, minimum, height - minimum),
-      vx: movement.moveX * speed,
-      vy: movement.moveY * speed,
+      x: collision.x,
+      y: collision.y,
+      vx: collision.blockedX ? 0 : movement.moveX * speed,
+      vy: collision.blockedY ? 0 : movement.moveY * speed,
       aimDirection: Number(input.aimDirection) || 0,
     };
   }
@@ -212,6 +220,7 @@
       this.campaignPresentationState = null;
       this.campaignHudState = null;
       this.campaignBodyPaused = null;
+      this.campaignGameState = null;
       this.boundKeyDown = event => this._onKey(event, true);
       this.boundKeyUp = event => this._onKey(event, false);
       this.boundPointerMove = event => this._onPointerMove(event);
@@ -250,6 +259,11 @@
       if (!this.canvas || !this.ctx) throw new Error('NetworkGameView requires the Neo Nyke canvas');
       this._captureCampaignPresentationState();
       this.active = true;
+      // Use the campaign's real presentation/UI state. The main update loop
+      // explicitly skips local simulation while this adapter is active, so this
+      // enables canonical mouse-look, panels, pause and settings without running
+      // a second authority in the browser.
+      this.neo.setGameState?.('play');
       this.document?.getElementById('start')?.classList.add('hidden');
       const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
       multiplayerHud?.classList.add('hidden');
@@ -336,6 +350,7 @@
         } : null];
       }));
       this.campaignBodyPaused = root.document?.body?.classList.contains('game-paused') || false;
+      this.campaignGameState = this.neo.gameState || 'menu';
     }
 
     _restoreCampaignPresentationState() {
@@ -356,8 +371,10 @@
         });
       }
       if (this.campaignBodyPaused != null) root.document?.body?.classList.toggle('game-paused', this.campaignBodyPaused);
+      if (this.campaignGameState) this.neo.setGameState?.(this.campaignGameState);
       this.campaignHudState = null;
       this.campaignBodyPaused = null;
+      this.campaignGameState = null;
       this.presentationRooms.clear();
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
@@ -444,14 +461,22 @@
     }
 
     _onKey(event, pressed) {
-      if (this.active && event.code === 'Escape' && pressed && !event.repeat) {
-        event.preventDefault();
-        this._togglePause(!this.paused);
-        return;
-      }
+      // Escape is owned by the campaign panel handler. Registering a second
+      // network toggle here made the same keydown pause and immediately resume
+      // because both listeners run on window. Multiplayer uses the campaign
+      // game state and pause overlay, so no adapter is required for this key.
+      if (event.code === 'Escape') return;
       if (this.active && pressed && !event.repeat && event.code === 'KeyE') {
         event.preventDefault();
         this._interact();
+        return;
+      }
+      if (this.active && pressed && !event.repeat && /^Digit[1-8]$/.test(event.code)) {
+        const index = Number(event.code.slice(5)) - 1;
+        const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+        const itemKey = player?.equipmentSlots?.[index];
+        if (itemKey) this.session.sendGameCommand?.('ACTIVATE_EQUIPMENT', { itemKey });
+        event.preventDefault();
         return;
       }
       if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code) && !ABILITY_KEYS.has(event.code))) return;
@@ -470,7 +495,7 @@
     }
 
     _onPointerDown(event) {
-      if (!this.active || this.paused || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
+      if (!this.active || this._isInputBlocked() || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
       event.preventDefault();
       this._onPointerMove(event);
       if (event.button === 2) this._useSlot('laser');
@@ -478,7 +503,7 @@
     }
 
     _attack() {
-      if (!this.active || this.paused || this.session.snapshot().status !== 'running') return;
+      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
       try {
         this.session.sendAction('ATTACK', this.aimDirection);
       } catch {
@@ -487,7 +512,7 @@
     }
 
     _useSlot(slot) {
-      if (!this.active || this.paused || this.session.snapshot().status !== 'running') return;
+      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
       const player = this.localPredictedPlayer;
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
@@ -509,6 +534,10 @@
       }
       if (this.neo.currentRoom?.type === 'anvil') {
         this.neo.toggleAnvilPanel?.();
+        return;
+      }
+      if (this.neo.isSpecialRoom?.(this.neo.currentRoom)) {
+        this.neo.toggleSpecialRoomPanel?.();
         return;
       }
       const target = Object.values(state.interactables || {})
@@ -609,6 +638,7 @@
 
     _consumeGameplayEvents(events) {
       const now = root.performance?.now?.() || Date.now();
+      const localPlayerId = this.session.snapshot().playerId;
       events.forEach(event => {
         if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
         this.seenGameplayEvents.add(event.eventId);
@@ -624,6 +654,19 @@
         }
         if (event.eventType === 'PLAYER_ABILITY_USED') {
           this.neo.playSfx?.(deriveAbilityPresentation(event.data).sound || 'lazer_blast');
+        }
+        if (event.eventType === 'PICKUP_COLLECTED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
+          this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
+          this.neo.playSfx?.('item_collect');
+        }
+        if (event.eventType === 'UPGRADE_APPLIED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
+          this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
+          this.neo.playSfx?.('item_collect');
+        }
+        if (event.eventType === 'SHOP_PURCHASED' && event.data?.playerId === localPlayerId) {
+          if (event.data?.kind === 'item' && event.data?.key) this.neo.pushItemNotification?.(event.data.key, 1);
+          else if (event.data?.kind === 'move' && event.data?.key) this.neo.pushMoveNotification?.(event.data.key, 1);
+          else if (event.data?.kind === 'weapon' && event.data?.key) this.neo.pushWeaponNotification?.(event.data.key);
         }
         this._spawnGameplayEventEffect(event);
         if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
@@ -767,7 +810,7 @@
 
     _sendInput() {
       if (!this.active || this.session.snapshot().status !== 'running') return;
-      const movement = this.paused || this.localPredictedPlayer?.downed
+      const movement = this._isInputBlocked() || this.localPredictedPlayer?.downed
         ? { moveX: 0, moveY: 0 }
         : this._readMovement();
       // The campaign uses first-person yaw as its canonical aim. Send that same
@@ -793,13 +836,19 @@
     _togglePause(visible) {
       this.paused = !!visible && this.active;
       this.keys.clear();
-      const pause = this.document?.getElementById('pause');
-      pause?.classList.toggle('hidden', !this.paused);
       const title = this.document?.getElementById('pauseTitle');
       if (title) title.textContent = this.paused ? 'MULTIPLAYER' : 'PAUSED';
       this.document?.getElementById('pauseMain')?.classList.toggle('hidden', this.paused);
       this.document?.getElementById('pauseLeaveServer')?.classList.toggle('hidden', !this.paused);
-      root.document?.body?.classList.toggle('game-paused', this.paused);
+      if (this.paused) this.neo.pauseGame?.();
+      else this.neo.resumeGame?.();
+    }
+
+    _isInputBlocked() {
+      return this.paused
+        || (!!this.neo.gameState && this.neo.gameState !== 'play')
+        || !!this.neo.isOverlayBlockingInput?.()
+        || !!this.neo.uiController?.isDialogueOpen?.();
     }
 
     _renderedPlayers(now) {
@@ -886,8 +935,8 @@
           ...player,
           character: player.characterKey || 'thorn_knight',
           r: Number(player.radius || 18),
-          hp: Number(player.health || 0),
-          maxHp: Number(player.maxHealth || 100),
+          hp: Number(player.hp || 0),
+          maxHp: Number(player.maxHp || 100),
           coins: Number(player.coins || 0),
           items: { ...(player.items || {}) },
           equipmentSlots: Array.isArray(player.equipmentSlots) ? [...player.equipmentSlots] : [],
@@ -900,7 +949,7 @@
           swingA: Number(player.aimDirection || 0),
           swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
           overhealBarrier: Number(player.barrier || 0),
-          overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHealth || 100) * 0.4),
+          overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4),
         });
         this.presentationPlayerActors.set(player.id, actor);
         return {
@@ -1179,7 +1228,6 @@
         if (!activeIds.has(id)) this.presentationRooms.delete(id);
       });
       this.neo.rooms = rooms;
-      rooms.forEach(room => this._hydrateRoomDecor(room, floorState, state));
       this.neo.currentRoom = rooms.find(room => room.id === floorState.currentRoomId) || rooms[0] || null;
       this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
       this.neo.floorsEntered = this.neo.floor;
@@ -1278,54 +1326,16 @@
           r: Number(pickup.radius || pickup.r || 13),
         }),
       );
-      this.neo.hazards = this._stablePresentationEntities(
+      const authoritativeAbilityHazards = this._stablePresentationEntities(
         this.presentationHazards,
         Object.values(state?.abilityEntities || {}).filter(entity => entity.roomId === floorState.currentRoomId),
         entity => ({ ...entity, r: Number(entity.radius || entity.r || 32), ttl: Math.max(0, Number(entity.expiresTick || 0) - Number(state?.tick || 0)) / 20 }),
       );
+      this.neo.hazards = [...(this.neo.currentRoom?.hazards || []), ...authoritativeAbilityHazards];
       this.neo.decorations = this.neo.currentRoom?.decorations || [];
       this.neo.structures = this.neo.currentRoom?.structures || [];
       this.neo.destructibles = this.neo.currentRoom?.destructibles || [];
       this.neo.environmentBackgroundCache = this.neo.environmentBackgroundCache || { key: '', canvas: null };
-    }
-
-    _hydrateRoomDecor(room, floorState, state) {
-      if (!room || typeof this.neo.decorateRoomData !== 'function' || typeof this.neo.createRngStream !== 'function') return;
-      const seedKey = `${state?.floorSeed ?? floorState.floorSeed ?? 'network'}|presentation|${room.id}`;
-      if (room._networkDecorSeed === seedKey) return;
-      const savedStreams = this.neo.rngStreams;
-      const savedRng = this.neo.rng;
-      const authoritativeCleared = room.cleared;
-      const authoritativeShopOffers = Array.isArray(room.shopOffers) ? room.shopOffers.map(offer => ({ ...offer })) : null;
-      try {
-        this.neo.rngStreams = {
-          world: this.neo.createRngStream(`${seedKey}|world`),
-          loot: this.neo.createRngStream(`${seedKey}|loot`),
-          encounter: this.neo.createRngStream(`${seedKey}|encounter`),
-          fx: this.neo.createRngStream(`${seedKey}|fx`),
-        };
-        this.neo.rng = () => this.neo.nextRandom?.('encounter') ?? Math.random();
-        this.neo.decorateRoomData(room);
-        if (authoritativeShopOffers) room.shopOffers = authoritativeShopOffers;
-        // Room geometry is presentation authored by the normal campaign room
-        // decorator. Removing it made network rooms lose pillars/chambers and
-        // appear larger despite sharing the same 900x700 authority bounds.
-        // Dynamic/gameplay entities below still come only from authority.
-        room.destructibles = [];
-        room.hazards = [];
-        room.pickups = [];
-        room.chests = [];
-        room.enemies = [];
-        room.projectiles = [];
-        room.cleared = authoritativeCleared;
-        room._networkDecorSeed = seedKey;
-      } catch (_error) {
-        room.decorations = Array.isArray(room.decorations) ? room.decorations : [];
-        room._networkDecorSeed = seedKey;
-      } finally {
-        this.neo.rngStreams = savedStreams;
-        this.neo.rng = savedRng;
-      }
     }
 
     _updateHud(state, players) {

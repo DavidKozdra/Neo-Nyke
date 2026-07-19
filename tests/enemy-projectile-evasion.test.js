@@ -23,6 +23,7 @@ function extractFunction(source, functionName, dependencies = {}) {
 describe('enemy projectile evasion', () => {
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
   const updateSource = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
+  const sharedAiSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedEnemyAISystem.js'), 'utf8');
 
   test('detects active beams and incoming player projectiles', () => {
     const pathSegment = { x1: 0, y1: 100, x2: 500, y2: 100 };
@@ -54,11 +55,12 @@ describe('enemy projectile evasion', () => {
   });
 
   test('runs shared evasion before enemy AI dispatch', () => {
-    const evadeIndex = updateSource.indexOf('Neo.updateEnemyProjectileEvade?.(enemy, dt)');
-    const dispatchIndex = updateSource.indexOf('const methodName = ENEMY_UPDATE_METHOD_BY_TYPE');
+    const evadeIndex = sharedAiSource.indexOf('context.updateEnemyProjectileEvade?.(enemy, fixedDelta)');
+    const dispatchIndex = sharedAiSource.indexOf('const handler = context[enemyUpdateMethod(enemy.type)]');
 
     expect(evadeIndex).toBeGreaterThan(-1);
     expect(evadeIndex).toBeLessThan(dispatchIndex);
+    expect(updateSource).toContain('simulationApi.invokeCampaignEnemyAI(enemy, dt, Neo)');
   });
 
   test('rolls once per distinct incoming threat', () => {

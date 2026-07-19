@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v71';
+const CACHE_VERSION = 'neonyke-v74';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -10,11 +10,22 @@ const PRECACHE = [
   '/js/main.js',
   '/js/config/FeatureFlags.js',
   '/js/simulation/RandomService.js',
+  '/js/simulation/SharedWorldContent.js',
+  '/js/simulation/SharedRoomInteriorSystem.js',
   '/js/simulation/SharedCombatContent.js',
   '/js/simulation/SharedMoveContent.js',
   '/js/simulation/SharedEnemyContent.js',
+  '/js/simulation/SharedEnemyAISystem.js',
   '/js/simulation/SharedItemContent.js',
+  '/js/simulation/SharedItemDefinitions.js',
+  '/js/simulation/SharedItemEffectSystem.js',
+  '/js/simulation/SharedDamageSystem.js',
+  '/js/simulation/SharedHitResolutionSystem.js',
+  '/js/simulation/SharedProgressionSystem.js',
   '/js/simulation/SharedForgeSystem.js',
+  '/js/simulation/SharedInventorySystem.js',
+  '/js/simulation/SharedShopSystem.js',
+  '/js/simulation/SharedSpecialRoomSystem.js',
   '/js/simulation/GameState.js',
   '/js/simulation/GameSimulation.js',
   '/js/simulation/FixedTickRunner.js',

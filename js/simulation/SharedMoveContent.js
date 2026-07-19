@@ -158,6 +158,21 @@
   const MOVE_SLOT_BY_KEY = Object.freeze(Object.fromEntries(
     Object.entries(MOVE_SLOT_KEYS).flatMap(([slot, keys]) => keys.map(key => [key, slot])),
   ));
+  const MOVE_EXCLUSIVE_CHARACTERS = Object.freeze({
+    narwal_fight: 'princess', mooggy_swipe: 'mooggy', love_beam: 'princess', love_bomb_laser: 'princess',
+    ghost_ball: 'turtle_boy', hammer_throw: 'sarge', lightning_cross: 'sarge', holy_eye_beams: 'gelleh',
+    nail_shot: 'mooggy', mooggy_blood_beam: 'mooggy', thorn_blood_beams: 'thorn_knight', wizard_lazer: 'metao',
+    hammer_smash: 'sarge', titan_hammer: 'sarge', death_ball: 'turtle_boy', turtle_powerup: 'turtle_boy',
+    mooggy_hairball: 'mooggy', potion_bath: 'metao', excalibur_strike: 'gelleh', holy_turrets: 'gelleh',
+    kicky_kick: 'princess', random_pounce: 'mooggy', flying_unhitable: 'princess', princess_shield: 'princess',
+    mooggy_zoomies: 'mooggy', knight_slash_dash: 'thorn_knight',
+  });
+
+  function isMoveAllowedForCharacter(moveKey, characterKey) {
+    if (!MOVE_SLOT_BY_KEY[moveKey]) return false;
+    const exclusive = MOVE_EXCLUSIVE_CHARACTERS[moveKey];
+    return !exclusive || exclusive === characterKey;
+  }
 
   function getDefaultMoveLoadout(characterKey) {
     return { ...(DEFAULT_MOVE_LOADOUTS[characterKey] || DEFAULT_MOVE_LOADOUTS.thorn_knight) };
@@ -205,12 +220,14 @@
     MOVE_SLOTS,
     MOVE_SLOT_KEYS,
     MOVE_SLOT_BY_KEY,
+    MOVE_EXCLUSIVE_CHARACTERS,
     MOVE_BASE_STATS,
     MOVE_PRESENTATION_DEFS,
     DEFAULT_MOVE_LOADOUTS,
     KIT_ALTERNATIVES,
     getDefaultMoveLoadout,
     getMoveSlot,
+    isMoveAllowedForCharacter,
     createPowerDiskBurstDescriptors,
   };
 });

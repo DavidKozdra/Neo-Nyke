@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const input = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
+const input = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedItemDefinitions.js'), 'utf8');
 const player = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
 const combat = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
 const world = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');

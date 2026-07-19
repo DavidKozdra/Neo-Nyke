@@ -20,7 +20,7 @@ function loadItemData() {
     buildWeightTable(entries) {
       return entries;
     },
-  }, { NeoNyke: { content: require('../js/simulation/SharedItemContent') } });
+  }, { NeoNyke: { content: { ...require('../js/simulation/SharedItemContent'), ...require('../js/simulation/SharedItemDefinitions') } } });
 }
 
 describe('relic rarity distribution', () => {

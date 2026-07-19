@@ -104,44 +104,46 @@
   // Difficulties above Hard can also add damage reduction per completed loop;
   // the rate lives on the difficulty definition so Custom remains unaffected.
   function getEnemyDamageTakenMultiplier(enemy) {
-    if (enemy?.mirrorExactCopy) return 1;
-    const eliteFactor = enemy?.elite ? 0.95 : 1;
     const reductionPerLoop = Math.max(0, Number(Neo.getDifficultyDef?.()?.enemyLoopDamageReduction || 0));
-    const loopReduction = Math.min(0.95, (getCurrentLoopNumber() - 1) * reductionPerLoop);
-    return eliteFactor * (1 - loopReduction);
+    return globalThis.NeoNyke.simulation.getCampaignEnemyDamageTakenMultiplier(enemy, {
+      loopNumber: getCurrentLoopNumber(),
+      enemyLoopDamageReduction: reductionPerLoop,
+    });
   }
 
   function scaleDamageAgainstEnemy(enemy, damage, options = {}, cachedStats = null) {
     const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
-    const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
-    const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     const bountyWeaknessActive = !!enemy?.bountyWeakness && Neo.getStatusStacks?.(enemy, enemy.bountyWeakness) > 0;
     const bountyWeaknessMultiplier = bountyWeaknessActive ? 1.35 : 1;
     // Pendant of Kronos: flat +1%/god-item damage everywhere, plus +2%/stack
     // against bosses (boss types, miniBosses, and the god enemy).
     const isBoss = Neo.isBossType?.(enemy?.type) || enemy?.type === 'god' || !!enemy?.miniBoss;
-    const kronosMultiplier = (stats.kronosDamageMultiplier || 1)
-      * (isBoss ? (stats.kronosBossDamageMultiplier || 1) : 1);
-    const powered = (damage + (Neo.player?.attackPower || 0))
-      * characterMultiplier
-      * (stats.levelEdgeDamageMultiplier || 1)
-      * kronosMultiplier
-      * bountyWeaknessMultiplier
-      * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
-    const flatReduction = Math.max(0, Number(enemy?.flatDamageReduction || 0));
-    if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.max(0, Math.round((powered * stats.bleedDamageMultiplier * damageTakenMultiplier) / defenseMultiplier - flatReduction));
-    }
-    return Math.max(0, Math.round((powered * damageTakenMultiplier) / defenseMultiplier - flatReduction));
+    return globalThis.NeoNyke.simulation.scaleCampaignDamage({
+      damage,
+      enemy,
+      itemStats: stats,
+      attackPower: Neo.player?.attackPower,
+      attackerDamageMultiplier: characterMultiplier,
+      isBoss,
+      hasBleed: Neo.getStatusStacks(enemy, 'bleed') > 0,
+      applyBleedBonus,
+      bountyWeaknessMultiplier,
+      glassCannon: Neo.isChallengeActive('glass_cannon'),
+      loopNumber: getCurrentLoopNumber(),
+      enemyLoopDamageReduction: Neo.getDifficultyDef?.()?.enemyLoopDamageReduction,
+    });
   }
 
   function scaleRawDamageAgainstEnemy(enemy, damage) {
-    const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
-    const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
-    const flatReduction = Math.max(0, Number(enemy?.flatDamageReduction || 0));
-    return Math.max(0, Math.round((Number(damage || 0) * damageTakenMultiplier) / defenseMultiplier - flatReduction));
+    return globalThis.NeoNyke.simulation.scaleCampaignDamage({
+      damage,
+      enemy,
+      raw: true,
+      loopNumber: getCurrentLoopNumber(),
+      enemyLoopDamageReduction: Neo.getDifficultyDef?.()?.enemyLoopDamageReduction,
+    });
   }
 
   function getBloodMultiplier() {
@@ -3616,7 +3618,8 @@
   }
 
   function rollProcEffect(chance, baseMultiplier = 1) {
-    const rolled = Neo.applyProcRollback?.(chance, baseMultiplier) || { procChance: Number(chance || 0), effectMultiplier: Number(baseMultiplier || 1) };
+    const rolled = globalThis.NeoNyke?.simulation?.applyProcRollback?.(chance, baseMultiplier)
+      || { procChance: Number(chance || 0), effectMultiplier: Number(baseMultiplier || 1) };
     return {
       chance: Neo.clamp(Number(rolled.procChance || 0), 0, 0.999),
       multiplier: Math.max(1, Number(rolled.effectMultiplier || 1)),
@@ -3652,10 +3655,15 @@
     // Hit-time crit bonuses (weapons, anvil moves) can push chance past 100%, so
     // run the roll-back here too: overflow becomes extra crit damage on top of the
     // already rolled-back multiplier from getItemStats.
-    const critRollback = Neo.applyCritRollback((stats.critChance || 0) + Number(options.critBonus || 0), stats.critMultiplier || 1.6);
-    const critChance = Neo.clamp(critRollback.critChance, 0, 1);
-    const critMultiplier = critRollback.critMultiplier;
     const elBartoAmbush = !!Neo.player?.elBartoAmbushReady && Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
+    const sparkled = Number(enemy.critSparkle || 0) > 0;
+    const critResolution = globalThis.NeoNyke.simulation.resolveCampaignCrit({
+      itemStats: stats,
+      critBonus: options.critBonus,
+      forced: elBartoAmbush || sparkled,
+      random: () => Neo.nextRandom('encounter'),
+    });
+    const critMultiplier = critResolution.critMultiplier;
     let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage, options, stats);
     // Copper Penny: every electric/lightning hit deals +20% damage per stack and
     // builds a stacking Static charge on the target. Static is a DoT that arcs to
@@ -3670,8 +3678,7 @@
     }
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
-    const sparkled = Number(enemy.critSparkle || 0) > 0;
-    const isCrit = elBartoAmbush || sparkled || (critChance > 0 && Neo.nextRandom('encounter') < critChance);
+    const isCrit = critResolution.isCrit;
     // Higher-level enemies (deeper/later runs, scaled by difficulty) resist
     // knockback: the impulse is divided by 1+ccLevel, so they need a bigger hit to
     // be moved and to cross the heavy-knockback stun threshold. No cap.
@@ -5129,15 +5136,10 @@
   }
 
   function levelUp() {
-    Neo.player.level += 1;
+    const result = globalThis.NeoNyke?.simulation?.applyCampaignLevelUp?.(Neo.player);
+    if (!result) return;
     window.achievementEvents?.emit('player:leveled', { level: Neo.player.level });
-    Neo.player.xpToNext = Math.round(Neo.player.xpToNext * 1.22);
-    const gains = Neo.getArtificerLevelGains(Neo.getItemCount('artificer_charger'));
-    Neo.player.maxHp += gains.maxHp;
-    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp);
-    Neo.player.attackPower += gains.attackPower;
-    Neo.player.attackSpeed += gains.attackSpeed;
-    applyLevelMilestone(Neo.player.level);
+    applyLevelMilestone(Neo.player.level, false);
     Neo.markInventoryPanelDirty();
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
   }
@@ -5146,16 +5148,16 @@
   // gains) and surface feedback. Move-charge milestones are read live by
   // getMoveMaxStacks/tickCooldowns — this just announces them. moveSpeed feeds
   // getItemStats().moveSpeedMultiplier, so no field write is needed here either.
-  function applyLevelMilestone(level) {
+  function applyLevelMilestone(level, mutateStats = true) {
     const milestone = Neo.getLevelMilestone(level, Neo.player?.character || Neo.chosenCharacter);
     if (!milestone) return;
     const stat = milestone.stat || {};
-    if (stat.maxHp) {
+    if (mutateStats && stat.maxHp) {
       Neo.player.maxHp += stat.maxHp;
       Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + stat.maxHp);
     }
-    if (stat.attackPower) Neo.player.attackPower += stat.attackPower;
-    if (stat.attackSpeed) Neo.player.attackSpeed += stat.attackSpeed;
+    if (mutateStats && stat.attackPower) Neo.player.attackPower += stat.attackPower;
+    if (mutateStats && stat.attackSpeed) Neo.player.attackSpeed += stat.attackSpeed;
     if (milestone.label) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: milestone.label, c: '#cfd7ff' });
     }
@@ -5399,8 +5401,8 @@
     const duplicatePickup = canDuplicateItemPickup(itemKey) && duplicateChance > 0 && Neo.rng() < duplicateChance;
     const collectCount = duplicatePickup ? 2 : 1;
     const previousCount = Neo.getItemCount(itemKey);
-    Neo.player.items[itemKey] = previousCount + collectCount;
-    readyRobotArmOnFirstPickup(itemKey, previousCount);
+    const sharedCollection = globalThis.NeoNyke?.simulation?.collectCampaignItem?.(Neo.player, itemKey, { amount: collectCount });
+    if (!sharedCollection?.ok) return;
     // Early pickup effects that must run before notifications (crystals/charge state).
     runEarlyItemPickupHandlers(itemKey, { previousCount, collectCount });
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
@@ -5415,7 +5417,14 @@
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 
-    runLateItemPickupHandlers(itemKey, { previousCount, collectCount });
+    // Core inventory and persistent pickup hooks are resolved by the shared
+    // campaign operation above. Browser-only selection/presentation handlers
+    // remain here, but must not mutate the collected stack or health twice.
+    if (!['titan_heart', 'veggys_pendant', 'foleys_irish_newyork_charm', 'wizards_paw', 'extra_battery'].includes(itemKey)) {
+      runLateItemPickupHandlers(itemKey, { previousCount, collectCount });
+    } else {
+      Neo.requestPanelItemSelection?.({ itemKey });
+    }
 
     if (!Neo.metaProgress.unlockedItems.includes(itemKey)) {
       Neo.metaProgress.unlockedItems.push(itemKey);

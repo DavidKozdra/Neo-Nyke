@@ -1687,69 +1687,17 @@ export function isGodSweepUnlocked() {
 
 export function getShopMoveOffers() {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'shop') return [];
-    if (!Array.isArray(Neo.currentRoom.shopMoveOffers) || Neo.currentRoom.shopMoveOffers.length === 0) {
-      const shopRandom = Neo.createRoomRandom(Neo.currentRoom, 'shop:move-offers');
-      const seen = new Set(Object.keys(Neo.player?.ownedMoves || {}));
-      const allowedCharacter = Neo.player?.character || Neo.chosenCharacter;
-      const pool = Neo.SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key) && Neo.isMoveAllowedForCharacter(key, allowedCharacter));
-      const shuffledPool = Neo.shuffleWithRandom(pool, shopRandom);
-      const offers = shuffledPool.slice(0, 4).map((moveKey, index) => ({
-        type: 'move',
-        key: moveKey,
-        bought: false,
-        cost: Neo.getShopMoveCost(index),
-      }));
-      if (isGodSweepUnlocked() && !seen.has('god_sweep') && shopRandom() < 0.12) {
-        const insertIndex = Math.min(offers.length, Math.floor(shopRandom() * (Math.min(offers.length, 3) + 1)));
-        offers.splice(insertIndex, 0, {
-          type: 'move',
-          key: 'god_sweep',
-          bought: false,
-          cost: Neo.getShopGodSweepCost(),
-        });
-      }
-      Neo.currentRoom.shopMoveOffers = offers.slice(0, 4);
-    } else {
-      const allowedCharacter = Neo.player?.character || Neo.chosenCharacter;
-      Neo.currentRoom.shopMoveOffers = Neo.currentRoom.shopMoveOffers.filter(offer => offer.type !== 'move' || Neo.isMoveAllowedForCharacter(offer.key, allowedCharacter));
-    }
+    Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
     Neo.refreshRoomShopCosts(Neo.currentRoom);
-    return Neo.currentRoom.shopMoveOffers;
+    return Array.isArray(Neo.currentRoom.shopMoveOffers) ? Neo.currentRoom.shopMoveOffers : [];
   }
 
 export function getShopWeaponOffers() {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'shop') return [];
-    if (!Array.isArray(Neo.currentRoom.shopWeaponOffers) || Neo.currentRoom.shopWeaponOffers.length === 0) {
-      const shopRandom = Neo.createRoomRandom(Neo.currentRoom, 'shop:weapon-offers');
-      const owned = new Set(Object.keys(Neo.player?.ownedWeapons || {}).filter(key => Neo.player?.ownedWeapons?.[key]));
-      const pool = [];
-      if (Neo.floor >= 1) pool.push(...Neo.WHITE_WEAPON_POOL);
-      if (Neo.floor >= 4) pool.push(...Neo.PURPLE_WEAPON_POOL);
-      if (Neo.floor >= 7) pool.push(...Neo.RED_WEAPON_POOL);
-      const filtered = pool.filter(key => !owned.has(key));
-      const shuffledFiltered = Neo.shuffleWithRandom(filtered, shopRandom);
-      const offers = shuffledFiltered.slice(0, 3).map((weaponKey, index) => ({
-        type: 'weapon',
-        key: weaponKey,
-        bought: false,
-        cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, weaponKey),
-      }));
-      const projectilePool = Neo.getProjectileWeaponKeys?.(filtered) || [];
-      if (offers.length > 0 && projectilePool.length > 0 && !offers.some(offer => Neo.isProjectileWeaponKey?.(offer.key))) {
-        const projectileKey = Neo.shuffleWithRandom(projectilePool, shopRandom)[0];
-        offers[offers.length - 1] = {
-          type: 'weapon',
-          key: projectileKey,
-          bought: false,
-          cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[projectileKey]?.rarity || 'knight', offers.length - 1, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, projectileKey),
-        };
-      }
-      Neo.currentRoom.shopWeaponOffers = offers;
-    }
+    Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
     Neo.refreshRoomShopCosts(Neo.currentRoom);
-    return Neo.currentRoom.shopWeaponOffers;
+    return Array.isArray(Neo.currentRoom.shopWeaponOffers) ? Neo.currentRoom.shopWeaponOffers : [];
   }
-
   function getShopPurchaseState(offer, { owned = false, blocked = false } = {}) {
     const canAfford = !!Neo.player && Neo.player.coins >= Number(offer?.cost || 0);
     const bought = !!offer?.bought;
@@ -2941,8 +2889,15 @@ export function equipMove(slot, moveKey) {
     if (Neo.MOVE_DEFS[moveKey].slot !== slot) return;
     if (!Neo.isMoveAllowedForCharacter(moveKey, Neo.player.character)) return;
     if (!Neo.player.ownedMoves?.[moveKey]) return;
-    Neo.player.equippedMoves[slot] = moveKey;
-    Neo.cooldowns[slot] = Neo.createCooldownEntry(slot, Neo.player, Neo.cooldowns[slot]);
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('EQUIP_MOVE', { slot, moveKey });
+    } else {
+      const result = globalThis.NeoNyke?.simulation?.applyInventoryCommand?.(Neo.player, {
+        type: 'EQUIP_MOVE', slot, moveKey,
+      }, { MOVE_SLOT_BY_KEY: globalThis.NeoNyke?.content?.MOVE_SLOT_BY_KEY });
+      if (!result?.ok) return;
+      Neo.cooldowns[slot] = Neo.createCooldownEntry(slot, Neo.player, Neo.cooldowns[slot]);
+    }
     markInventoryPanelDirty();
     renderInventoryPanel();
     Neo.updateHud();
@@ -2953,15 +2908,14 @@ export function equipMove(slot, moveKey) {
 
 export function equipWeapon(weaponKey) {
     if (!Neo.player) return;
-    if (!weaponKey) {
-      Neo.player.equippedWeapon = '';
-      Neo.player.weaponCooldown = 0;
-      Neo.player.weaponBeamTime = 0;
-      Neo.player.weaponBeamTick = 0;
+    if (weaponKey && (!Neo.WEAPON_DEFS[weaponKey] || !Neo.player.ownedWeapons?.[weaponKey])) return;
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('EQUIP_WEAPON', { weaponKey });
     } else {
-      if (!Neo.WEAPON_DEFS[weaponKey]) return;
-      if (!Neo.player.ownedWeapons?.[weaponKey]) return;
-      Neo.player.equippedWeapon = weaponKey;
+      const result = globalThis.NeoNyke?.simulation?.applyInventoryCommand?.(Neo.player, {
+        type: 'EQUIP_WEAPON', weaponKey,
+      }, { WEAPON_BASE_STATS: Neo.WEAPON_BASE_STATS });
+      if (!result?.ok) return;
       Neo.player.weaponCooldown = 0;
       Neo.player.weaponBeamTime = 0;
       Neo.player.weaponBeamTick = 0;
@@ -3012,16 +2966,31 @@ export function spendCoins(cost) {
     }
   }
 
+  function resolveLocalCampaignShopPurchase(command, options = {}) {
+    const purchase = globalThis.NeoNyke?.simulation?.purchaseCampaignShop;
+    if (typeof purchase !== 'function' || !Neo.currentRoom || !Neo.player) {
+      return { ok: false, reason: 'SHOP_OPERATION_UNAVAILABLE' };
+    }
+    return purchase({
+      floorNumber: Neo.getShopProgressionDepth?.() ?? Neo.floor,
+      elapsedSeconds: Neo.runTime || 0,
+      matchRules: {
+        shopPriceMultiplier: Neo.getShopDifficultyMultiplier?.() || 1,
+        cursedShops: Neo.isChallengeActive?.('cursed_shops') || false,
+      },
+    }, Neo.currentRoom, Neo.player, command, options);
+  }
+
 export function handleShopBuyClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest('.shop-buy');
     if (!button || !Neo.player) return;
     const kind = button.dataset.kind;
-    if (Neo.multiplayerGameView?.active && ['item', 'heal'].includes(kind)) {
+    if (Neo.multiplayerGameView?.active && ['item', 'move', 'weapon', 'trade', 'heal'].includes(kind)) {
       const offerIndex = Number(button.dataset.index || 0);
       const heal = Number(button.dataset.heal || 0);
       const healKind = heal >= 80 ? 'major' : 'small';
-      Neo.gameSession?.sendShopPurchase?.(kind, kind === 'item' ? { offerIndex } : { healKind });
+      Neo.gameSession?.sendShopPurchase?.(kind, ['item', 'move', 'weapon'].includes(kind) ? { offerIndex } : { healKind });
       return;
     }
     if (kind === 'voucher-redeem') {
@@ -3037,10 +3006,11 @@ export function handleShopBuyClick(event) {
       const offerIndex = Number(button.dataset.index || -1);
       const itemOffers = Neo.shopOffers.filter(offer => offer.type === 'item');
       const offer = itemOffers[offerIndex];
-      if (!offer || offer.bought) return;
-      if (!spendCoins(offer.cost)) return;
-      offer.bought = true;
-      Neo.collectItem(offer.key);
+      if (!offer) return;
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'item', offerIndex }, {
+        collectItem: key => Neo.collectItem(key),
+      });
+      if (!purchase.ok) return;
       if ((Neo.VOUCHER_KEYS || []).includes(offer.key)) {
         Neo.gameEvents?.emit?.('shop:voucher-bought', { voucherKey: offer.key });
       }
@@ -3064,13 +3034,10 @@ export function handleShopBuyClick(event) {
       // would silently take the player's items and give nothing back.
       const rewardItem = Neo.itemRegistry?.get?.(tradeOffer.key) || Neo.ITEM_DEFS?.[tradeOffer.key];
       if (!rewardItem) return;
-      const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
-      costKeys.forEach(key => {
-        Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0) - 1);
-        if (Neo.player.items[key] <= 0) delete Neo.player.items[key];
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'trade' }, {
+        collectItem: key => Neo.collectItem(key),
       });
-      tradeOffer.bought = true;
-      Neo.collectItem(tradeOffer.key);
+      if (!purchase.ok) return;
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.85, text: 'TRADE MADE', c: '#d7f6ff' });
       Neo.playSfx?.('buy_sell');
       window.achievementEvents?.emit('shop:bought');
@@ -3078,10 +3045,9 @@ export function handleShopBuyClick(event) {
       const offerIndex = Number(button.dataset.index || -1);
       const moveOffers = getShopMoveOffers();
       const offer = moveOffers[offerIndex];
-      if (!offer || offer.bought || Neo.player.ownedMoves?.[offer.key] || !Neo.isMoveAllowedForCharacter(offer.key, Neo.player.character)) return;
-      if (!spendCoins(offer.cost)) return;
-      offer.bought = true;
-      Neo.player.ownedMoves[offer.key] = true;
+      if (!offer || !Neo.isMoveAllowedForCharacter(offer.key, Neo.player.character)) return;
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'move', offerIndex });
+      if (!purchase.ok) return;
       playShopPurchaseFeedback(button, offer.cost);
       markInventoryPanelDirty();
       Neo.pushMoveNotification(offer.key, 1);
@@ -3090,10 +3056,9 @@ export function handleShopBuyClick(event) {
       const offerIndex = Number(button.dataset.index || -1);
       const weaponOffers = getShopWeaponOffers();
       const offer = weaponOffers[offerIndex];
-      if (!offer || offer.bought || Neo.player.ownedWeapons?.[offer.key]) return;
-      if (!spendCoins(offer.cost)) return;
-      offer.bought = true;
-      Neo.player.ownedWeapons[offer.key] = true;
+      if (!offer) return;
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'weapon', offerIndex });
+      if (!purchase.ok) return;
       playShopPurchaseFeedback(button, offer.cost);
       if (!Neo.player.equippedWeapon) equipWeapon(offer.key);
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${Neo.WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
@@ -3112,14 +3077,20 @@ export function handleShopBuyClick(event) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'Already full health', c: '#a0ffa0' });
         return;
       }
-      if (!spendCoins(cost)) return;
+      const healKind = heal >= 80 ? 'major' : 'small';
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'heal', healKind, healAmount: heal, cost }, {
+        potionCap,
+        applyHealing: amount => {
+          const scaledHeal = Neo.scalePlayerHealing?.(amount, amount) ?? amount;
+          return Neo.applyPlayerHealing?.(scaledHeal) ?? 0;
+        },
+      });
+      if (!purchase.ok) return;
       playShopPurchaseFeedback(button, cost);
-      if (canHealNow) {
-        const scaledHeal = Neo.scalePlayerHealing?.(heal, heal) ?? heal;
-        const gained = Neo.applyPlayerHealing?.(scaledHeal) ?? 0;
+      if (!purchase.stored) {
+        const gained = purchase.healing;
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
       } else {
-        Neo.player.storedPotions = stored + 1;
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
       }
       window.achievementEvents?.emit('shop:bought');

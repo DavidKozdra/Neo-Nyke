@@ -1,7 +1,7 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedItemContent.js'), ...require('./SharedForgeSystem.js') }
-    : (root.NeoNyke?.content || {});
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
+    : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
@@ -53,7 +53,22 @@
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
     applyForgeCommand = () => ({ ok: false, reason: 'FORGE_UNAVAILABLE' }),
+    collectCampaignItem: collectSharedCampaignItem = () => ({ ok: false }),
+    applyInventoryCommand = () => ({ ok: false, reason: 'INVENTORY_UNAVAILABLE' }),
+    activateEquipment = () => ({ ok: false, reason: 'EQUIPMENT_UNAVAILABLE' }),
+    updateEquipmentEffects = () => [],
+    stockCampaignShop = () => null,
+    purchaseCampaignShop = () => ({ ok: false, reason: 'SHOP_UNAVAILABLE' }),
+    applySpecialRoomChoice = () => ({ ok: false, reason: 'SPECIAL_ROOM_UNAVAILABLE' }),
+    RANGED_BEHAVIORS = new Set(),
+    SPAWN_LOCK_TICKS = 15,
+    resolveRoomObstacleMovement = (_room, _entity, x, y) => ({ x, y, blockedX: false, blockedY: false }),
+    circleIntersectsRoomObstacle = () => false,
+    scaleCampaignDamage = options => Math.max(0, Number(options.damage || 0)),
+    resolveCampaignCrit = () => ({ isCrit: false, critMultiplier: 1 }),
+    applyCampaignLevelUp = () => null,
   } = contentApi || {};
+  const combatRandomByState = new WeakMap();
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
     Object.entries(CHARACTER_DEFAULT_WEAPONS).map(([characterKey, weaponKey]) => [characterKey, Object.freeze({
       characterKey,
@@ -70,13 +85,13 @@
   // Keep the authority's selected hero identical to createDefaultPlayer(),
   // rather than maintaining a separate multiplayer balance table.
   const HERO_BASE_STATS = Object.freeze({
-    princess: Object.freeze({ maxHealth: 138, moveSpeed: 180, damageMultiplier: 1.2 }),
-    thorn_knight: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 1 }),
-    metao: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 0.5 }),
-    gelleh: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 1 }),
-    mooggy: Object.freeze({ maxHealth: 130, moveSpeed: 180, damageMultiplier: 0.6 }),
-    turtle_boy: Object.freeze({ maxHealth: 144, moveSpeed: 180, damageMultiplier: 1 }),
-    sarge: Object.freeze({ maxHealth: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
+    princess: Object.freeze({ maxHp: 138, moveSpeed: 180, damageMultiplier: 1.2 }),
+    thorn_knight: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 1 }),
+    metao: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 0.5 }),
+    gelleh: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 1 }),
+    mooggy: Object.freeze({ maxHp: 130, moveSpeed: 180, damageMultiplier: 0.6 }),
+    turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 180, damageMultiplier: 1 }),
+    sarge: Object.freeze({ maxHp: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
   });
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
@@ -96,25 +111,15 @@
     return result;
   }
 
-  function collectCampaignItem(player, itemKey) {
-    if (!player || !itemKey) return false;
-    player.items = player.items || {};
-    player.items[itemKey] = Number(player.items[itemKey] || 0) + 1;
-    // Match collectItem's immediate Titan Heart pickup hook. Other campaign
-    // relic effects are derived from player.items by shared combat/stat rules,
-    // not by a network-only acquisition switch.
-    if (itemKey === 'titan_heart') {
-      player.maxHealth = Math.max(120, Math.round(Number(player.maxHealth || 100) * 1.08));
-      player.health = Math.min(player.maxHealth, Math.round(Number(player.health || 0) * 1.08));
-    }
-    return true;
+  function collectNetworkCampaignItem(player, itemKey) {
+    return !!collectSharedCampaignItem(player, itemKey)?.ok;
   }
 
   function applyNetworkHeroProfile(player, characterKey) {
     const key = HERO_BASE_STATS[characterKey] ? characterKey : 'thorn_knight';
     const profile = HERO_BASE_STATS[key];
-    const previousMaximum = Math.max(1, Number(player.maxHealth || profile.maxHealth));
-    const healthRatio = Math.max(0, Math.min(1, Number(player.health ?? previousMaximum) / previousMaximum));
+    const previousMaximum = Math.max(1, Number(player.maxHp || profile.maxHp));
+    const healthRatio = Math.max(0, Math.min(1, Number(player.hp ?? previousMaximum) / previousMaximum));
     player.characterKey = key;
     player.character = key;
     player.equippedWeapon = getCharacterDefaultWeapon(key);
@@ -126,8 +131,8 @@
     player.moveCooldownUntilTick = {};
     player.statusUntilTick = {};
     player.barrier = 0;
-    player.maxHealth = profile.maxHealth;
-    player.health = Math.round(profile.maxHealth * healthRatio);
+    player.maxHp = profile.maxHp;
+    player.hp = Math.round(profile.maxHp * healthRatio);
     player.moveSpeed = profile.moveSpeed;
     player.damageMultiplier = profile.damageMultiplier;
     return player;
@@ -296,61 +301,26 @@
   function ensureCampaignShop(state, random, emitEvent = () => {}, roomId = null) {
     const room = currentRoom(state, roomId);
     if (!room || room.type !== 'shop') return null;
-    if (Array.isArray(room.shopOffers) && room.shopOffers.length) return room.shopOffers;
+    if (room.shopStocked) return room.shopOffers;
     const stream = random.scoped(`shop-inventory:${state.floorNumber}:${room.id}`);
-    const itemKeys = createCampaignItemChoices(3, stream);
-    if (stream.next() < 0.5 && !itemKeys.some(key => ITEM_DROP_ENTRIES.find(entry => entry[0] === key)?.[2] === 'god')) {
-      const godKeys = ITEM_DROP_ENTRIES.filter(([, weight, rarity]) => weight > 0 && rarity === 'god').map(([key]) => key);
-      if (godKeys.length && itemKeys.length) itemKeys[itemKeys.length - 1] = godKeys[stream.int(0, godKeys.length - 1)];
-    }
-    room.shopOffers = itemKeys.map((key, index) => ({
-      id: `shop:${room.id}:item:${index}`,
-      type: 'item',
-      key,
-      cost: campaignShopItemCost(state, null, index, key),
-      x: Number(state.floorState.width || 900) / 2 + (index - (itemKeys.length - 1) / 2) * 150,
-      y: Number(state.floorState.height || 700) / 2 - 16,
-      bought: false,
-    }));
-    room.shopOffers.push({
-      id: `shop:${room.id}:potion`, type: 'potion',
-      cost: scaleCampaignShopPrice(state, null, 18 + Number(state.floorNumber || 1) * 2),
-      x: Number(state.floorState.width || 900) / 2,
-      y: Number(state.floorState.height || 700) / 2 + 88,
-      bought: false,
+    const occupant = activePlayers(state).find(player => player.roomId === room.id) || null;
+    stockCampaignShop(state, room, occupant, stream);
+    emitEvent('SHOP_STOCKED', {
+      roomId: room.id,
+      offerCount: room.shopOffers?.length || 0,
+      moveOfferCount: room.shopMoveOffers?.length || 0,
+      weaponOfferCount: room.shopWeaponOffers?.length || 0,
+      hasTrade: !room.shopTradeOffer?.unavailable,
     });
-    emitEvent('SHOP_STOCKED', { roomId: room.id, offerCount: room.shopOffers.length });
     return room.shopOffers;
   }
 
   function resolveShopPurchase(state, player, action, emitEvent) {
     const room = currentRoom(state, player.roomId);
-    if (!room || room.type !== 'shop') return false;
-    if (action.kind === 'item') {
-      const itemOffers = (room.shopOffers || []).filter(offer => offer.type === 'item');
-      const offer = itemOffers[Math.max(0, Math.trunc(Number(action.offerIndex) || 0))];
-      if (!offer || offer.bought) return false;
-      const cost = campaignShopItemCost(state, player, itemOffers.indexOf(offer), offer.key);
-      if (Number(player.coins || 0) < cost) return false;
-      player.coins -= cost;
-      offer.cost = cost;
-      offer.bought = true;
-      collectCampaignItem(player, offer.key);
-      emitEvent('SHOP_PURCHASED', { playerId: player.id, roomId: room.id, kind: 'item', itemKey: offer.key, cost });
-      return true;
-    }
-    if (action.kind === 'heal') {
-      const major = action.healKind === 'major';
-      if (Number(player.health || 0) >= Number(player.maxHealth || 1)) return false;
-      const cost = scaleCampaignShopPrice(state, player, (major ? 34 : 16) + Number(state.floorNumber || 1) * (major ? 4 : 2));
-      if (Number(player.coins || 0) < cost) return false;
-      player.coins -= cost;
-      const amount = major ? 100 : 45;
-      player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + amount);
-      emitEvent('SHOP_PURCHASED', { playerId: player.id, roomId: room.id, kind: 'heal', healKind: action.healKind, cost });
-      return true;
-    }
-    return false;
+    const result = purchaseCampaignShop(state, room, player, action);
+    if (!result.ok) return false;
+    emitEvent('SHOP_PURCHASED', { playerId: player.id, roomId: room.id, ...result, itemKey: result.kind === 'item' ? result.key : undefined });
+    return true;
   }
 
   function resolveForgeCommand(state, player, action, emitEvent) {
@@ -370,6 +340,86 @@
       stagedSteps: result.stagedSteps,
       voucherSteps: result.voucherSteps,
     });
+    return true;
+  }
+
+  function resolveInventoryCommand(state, player, action, emitEvent) {
+    const result = action.action === 'ACTIVATE_EQUIPMENT'
+      ? activateEquipment(player, action.itemKey, state.tick)
+      : applyInventoryCommand(player, { ...action, type: action.action }, { MOVE_SLOT_BY_KEY, WEAPON_BASE_STATS });
+    if (!result.ok) {
+      emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result.reason });
+      return false;
+    }
+    if (action.action === 'ACTIVATE_EQUIPMENT' && result.kind === 'panic') {
+      player.statusUntilTick = {};
+      livingEncounterEnemies(state, player.roomId).forEach(enemy => {
+        const distance = Math.hypot(Number(enemy.x) - Number(player.x), Number(enemy.y) - Number(player.y));
+        if (distance > 190 + (result.stacks - 1) * 28) return;
+        const angle = Math.atan2(Number(enemy.y) - Number(player.y), Number(enemy.x) - Number(player.x));
+        enemy.vx = Number(enemy.vx || 0) + Math.cos(angle) * (440 + (result.stacks - 1) * 55);
+        enemy.vy = Number(enemy.vy || 0) + Math.sin(angle) * (440 + (result.stacks - 1) * 55);
+        enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + Math.round((0.28 + (result.stacks - 1) * 0.05) * 20));
+        damageEnemy(state, enemy, 8 + (result.stacks - 1) * 4, player.id, emitEvent, { attackKind: 'panic_button' });
+      });
+    } else if (action.action === 'ACTIVATE_EQUIPMENT' && result.kind === 'sparkle') {
+      livingEncounterEnemies(state, player.roomId)
+        .map(enemy => ({ enemy, distance: Math.hypot(Number(enemy.x) - Number(player.x), Number(enemy.y) - Number(player.y)) }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, Math.min(12, 5 + (result.stacks - 1) * 2))
+        .forEach(({ enemy }) => { enemy.critSparkleUntilTick = state.tick + (6 + result.stacks - 1) * 20; });
+    }
+    emitEvent(action.action === 'ACTIVATE_EQUIPMENT' ? 'EQUIPMENT_ACTIVATED' : 'INVENTORY_CHANGED', {
+      playerId: player.id, roomId: player.roomId, ...result,
+    });
+    return true;
+  }
+
+  function updatePlayerEquipmentEffects(state, emitEvent) {
+    Object.values(state.players || {}).forEach(player => {
+      if (!player || player.downed) return;
+      updateEquipmentEffects(player, state.tick).forEach(intent => {
+        const enemies = livingEncounterEnemies(state, player.roomId);
+        if (intent.kind === 'missiles') {
+          const count = Math.min(4, intent.stacks);
+          for (let index = 0; index < count; index += 1) {
+            const target = enemies.slice().sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[index % Math.max(1, enemies.length)];
+            const angle = target ? Math.atan2(target.y - player.y, target.x - player.x) : Number(player.aimDirection || 0) + (index - (count - 1) / 2) * 0.22;
+            createPlayerProjectile(state, player, { kind: 'homing_missile', attackKind: intent.itemKey, damage: 16 * (1 + (count - 1) * 0.12), speed: 430, radius: 6, lifeTicks: 50 }, angle);
+          }
+        } else if (intent.kind === 'lightning') {
+          enemies.map(enemy => ({ enemy, distance: Math.hypot(enemy.x - player.x, enemy.y - player.y) }))
+            .filter(entry => entry.distance <= 300 + (intent.stacks - 1) * 22)
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, Math.min(12, 7 + intent.stacks - 1))
+            .forEach(({ enemy }) => damageEnemy(state, enemy, 15 + (intent.stacks - 1) * 3, player.id, emitEvent, { attackKind: intent.itemKey }));
+          createAbilityEntity(state, player, { kind: 'lightning_column', presentationKey: intent.itemKey, radius: 42, damage: 13 + (intent.stacks - 1) * 2, durationTicks: 11, pulseIntervalTicks: 5 });
+        } else if (intent.kind === 'mines') {
+          for (let index = 0; index < Math.min(3, intent.stacks); index += 1) {
+            const angle = state.tick * 1.7 + index * Math.PI * 2 / Math.min(3, intent.stacks);
+            createAbilityEntity(state, player, { kind: 'thorn_mine', presentationKey: intent.itemKey, x: player.x + Math.cos(angle) * (42 + index * 12), y: player.y + Math.sin(angle) * (42 + index * 12), radius: 62 + (intent.stacks - 1) * 6, damage: 18 + (intent.stacks - 1) * 4, durationTicks: 100, firstPulseDelayTicks: 4, pulseIntervalTicks: 100 });
+          }
+        }
+        emitEvent('EQUIPMENT_EFFECT_PULSED', { playerId: player.id, roomId: player.roomId, ...intent });
+      });
+    });
+  }
+
+  function resolveSpecialRoomCommand(state, player, action, emitEvent, random) {
+    const room = currentRoom(state, player?.roomId);
+    const stream = random.scoped(`special:${state.floorNumber}:${room?.id}:${action.choiceId}`);
+    const result = applySpecialRoomChoice(state, room, player, action.choiceId, stream);
+    if (!result.ok) {
+      emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result.reason });
+      return false;
+    }
+    if (result.transitionToRoomId) {
+      player.roomId = result.transitionToRoomId;
+      player.x = Number(state.floorState?.width || 900) / 2;
+      player.y = Number(state.floorState?.height || 700) / 2;
+    }
+    if (result.advanceFloor) advanceToNextFloor(state, emitEvent);
+    emitEvent('SPECIAL_ROOM_CHOICE_APPLIED', { playerId: player.id, roomId: room.id, ...result });
     return true;
   }
 
@@ -404,27 +454,19 @@
     markEncounterCleared(state, enemy.roomId, emitEvent);
   }
 
-  function xpRequiredForLevel(level) {
-    return 20 + Math.max(0, Number(level || 1) - 1) * 15;
-  }
-
   function awardEncounterExperience(state, enemy, playerId, emitEvent) {
     const definition = getEnemyDefinition(enemy.type) || {};
-    const amount = definition.boss ? 30 : enemy.elite ? 12 : 6;
+    const baseAmount = definition.boss ? 30 : enemy.elite ? 12 : 6;
     const recipients = activePlayers(state).filter(player => !player.downed && player.roomId === enemy.roomId);
     recipients.forEach(player => {
+      const amount = Math.max(1, Math.round(baseAmount * Math.max(0, Number(player.itemStats?.xpGainMultiplier || 1))));
       player.xp = Math.max(0, Number(player.xp || 0)) + amount;
       player.level = Math.max(1, Number(player.level || 1));
-      player.xpToNext = Math.max(1, Number(player.xpToNext || xpRequiredForLevel(player.level)));
+      player.xpToNext = Math.max(1, Number(player.xpToNext || 20));
       while (player.xp >= player.xpToNext) {
         player.xp -= player.xpToNext;
-        player.level += 1;
-        const healthGain = 8;
-        player.maxHealth = Math.max(1, Number(player.maxHealth || 100)) + healthGain;
-        player.health = Math.min(player.maxHealth, Number(player.health || 0) + healthGain);
-        player.damageMultiplier = 1 + (player.level - 1) * 0.08;
-        player.xpToNext = xpRequiredForLevel(player.level);
-        emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHealth });
+        applyCampaignLevelUp(player);
+        emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHp });
       }
       emitEvent('XP_AWARDED', { playerId: player.id, sourcePlayerId: playerId, amount, xp: player.xp, level: player.level });
     });
@@ -437,12 +479,41 @@
 
   function playerDamage(state, playerId, amount) {
     const attacker = state.players?.[playerId];
-    return Math.max(0, Number(amount || 0)) * Math.max(0.1, Number(attacker?.damageMultiplier || 1));
+    const itemStats = attacker?.itemStats || {};
+    return Math.max(0, Number(amount || 0))
+      * Math.max(0.1, Number(attacker?.damageMultiplier || 1))
+      * Math.max(0, Number(itemStats.kronosDamageMultiplier || 1))
+      * Math.max(0, Number(itemStats.levelEdgeDamageMultiplier || 1));
   }
 
   function damageEnemy(state, enemy, damage, playerId, emitEvent, details = {}) {
     if (!enemy || enemy.dead) return false;
-    const incoming = playerDamage(state, playerId, damage);
+    const sparkleMultiplier = state.tick < Number(enemy.critSparkleUntilTick || 0) ? 2 : 1;
+    const attacker = state.players?.[playerId];
+    const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
+    let incoming = scaleCampaignDamage({
+      damage,
+      enemy,
+      itemStats: attacker?.itemStats,
+      attackPower: attacker?.attackPower,
+      attackerDamageMultiplier: Math.max(0.1, Number(attacker?.damageMultiplier || 1)),
+      isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
+      hasBleed: Number(enemy.bleedTicksRemaining || 0) > 0,
+      applyBleedBonus: details.applyBleedBonus,
+      glassCannon: !!state.matchRules?.glassCannon,
+      loopNumber,
+      enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+    });
+    const randomService = combatRandomByState.get(state);
+    const capeActive = Number(attacker?.equipmentEffectsUntilTick?.el_bartos_cape || 0) > Number(state.tick || 0);
+    const crit = resolveCampaignCrit({
+      itemStats: attacker?.itemStats,
+      critBonus: details.critBonus,
+      forced: sparkleMultiplier > 1 || (!!attacker?.elBartoAmbushReady && capeActive),
+      random: randomService ? () => randomService.next('encounter') : null,
+    });
+    if (crit.isCrit) incoming = Math.round(incoming * crit.critMultiplier);
+    if (attacker?.elBartoAmbushReady && capeActive) attacker.elBartoAmbushReady = false;
     const absorbed = Math.min(incoming, Math.max(0, Number(enemy.barrier || 0)));
     enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - absorbed);
     const dealt = incoming - absorbed;
@@ -457,6 +528,7 @@
       attackKind: details.attackKind,
       projectileId: details.projectileId,
       strike: details.strike,
+      crit: crit.isCrit,
     });
     if (details.bleedDamage && enemy.health > 0) {
       enemy.bleedDamage = Math.max(Number(enemy.bleedDamage || 0), Number(details.bleedDamage));
@@ -709,7 +781,7 @@
       });
       damageRivalsInRadius(state, owner, pulseX, pulseY, pulseRadius, entity.damage, emitEvent, entity.presentationKey, targetIds);
       if (entity.kind === 'healing_zone' && Math.hypot(owner.x - pulseX, owner.y - pulseY) <= pulseRadius) {
-        owner.health = Math.min(Number(owner.maxHealth || 100), Number(owner.health || 0) + Number(entity.heal || 0));
+        owner.hp = Math.min(Number(owner.maxHp || 100), Number(owner.hp || 0) + Number(entity.heal || 0));
       }
       emitEvent('ABILITY_ENTITY_PULSED', {
         entityId, playerId: owner.id, roomId: entity.roomId,
@@ -830,7 +902,8 @@
     }
 
     player.attackCooldownUntilTick = state.tick + Math.max(1, Math.ceil(Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS)
-      * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
+      * Math.max(0.45, Number(player.cooldownMultiplier || 1))
+      / Math.max(0.2, Number(player.itemStats?.attackSpeedMultiplier || 1))));
     player.action = 'attack';
     player.actionTick = state.tick;
     player.actionKind = definition.weaponKey;
@@ -935,7 +1008,7 @@
         statusUntil[moveKey] = state.tick + durationTicks;
         mode = 'status';
       } else if (moveKey === 'princess_shield') {
-        player.barrier = Math.max(Number(player.barrier || 0), Number(player.maxHealth || 100) * 0.4);
+        player.barrier = Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4);
         mode = 'shield';
       } else {
         const distance = moveKey === 'warp' ? 300 : moveKey === 'zip_lightning' ? 230 : 170;
@@ -1020,19 +1093,19 @@
         });
         damageRivalsInBeam(state, player, angle, range, width, stats.damage, emitEvent, moveKey, targetIds);
         if (moveKey === 'love_beam' || moveKey === 'holy_eye_beams') {
-          player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + Math.max(1, targetIds.length * 4));
+          player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + Math.max(1, targetIds.length * 4));
         }
         mode = 'beam';
       }
     } else if (slot === 'smash') {
       if (moveKey === 'healing_zone' || moveKey === 'potion_bath' || moveKey === 'turtle_powerup') {
         const heal = moveKey === 'potion_bath'
-          ? Number(player.maxHealth || 100) * 0.2
+          ? Number(player.maxHp || 100) * 0.2
           : moveKey === 'turtle_powerup'
-            ? Number(player.maxHealth || 100) * 0.12
+            ? Number(player.maxHp || 100) * 0.12
             : 0;
-        player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + heal);
-        if (moveKey === 'turtle_powerup') player.barrier = Math.max(Number(player.barrier || 0), Number(player.health || 0) * 0.25);
+        player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + heal);
+        if (moveKey === 'turtle_powerup') player.barrier = Math.max(Number(player.barrier || 0), Number(player.hp || 0) * 0.25);
         const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
         statusUntil[moveKey] = state.tick + Math.max(1, Math.round(Number(stats.duration || 3) * 20));
         if (moveKey === 'healing_zone') {
@@ -1193,7 +1266,7 @@
       player.pendingUpgrade = null;
       return false;
     }
-    if (!collectCampaignItem(player, action.optionId)) return false;
+    if (!collectNetworkCampaignItem(player, action.optionId)) return false;
     source.opened = true;
     source.claimedBy = player.id;
     source.openedTick = state.tick;
@@ -1207,8 +1280,11 @@
     player.pendingUpgrade = null;
     emitEvent('UPGRADE_APPLIED', {
       playerId: player.id,
+      roomId: source.roomId,
       selectionEventId: action.selectionEventId,
       optionId: action.optionId,
+      itemKey: action.optionId,
+      amount: 1,
       itemCount: Object.values(player.items || {}).reduce((total, count) => total + Number(count || 0), 0),
     });
     return true;
@@ -1244,6 +1320,10 @@
         .forEach(action => resolveShopPurchase(state, player, action, emitEvent));
       actions.filter(action => action?.action === 'FORGE_COMMIT')
         .forEach(action => resolveForgeCommand(state, player, action, emitEvent));
+      actions.filter(action => ['EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT'].includes(action?.action))
+        .forEach(action => resolveInventoryCommand(state, player, action, emitEvent));
+      actions.filter(action => action?.action === 'SPECIAL_ROOM_CHOICE')
+        .forEach(action => resolveSpecialRoomCommand(state, player, action, emitEvent, random));
       if (player.action !== 'idle' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
     });
   }
@@ -1259,13 +1339,20 @@
       emitEvent('PLAYER_DAMAGE_BLOCKED', { playerId: player.id, sourceId, roomId: player.roomId, attackKind });
       return;
     }
-    const incoming = Math.max(0, Number(damage || 0));
+    const itemStats = player.itemStats || {};
+    let incoming = Math.max(0, Number(damage || 0))
+      * (1 - Math.max(0, Math.min(0.85, Number(itemStats.damageReduction || 0))));
+    incoming = Math.max(0, incoming - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
+    const room = currentRoom(state, player.roomId);
+    if (itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god') {
+      incoming = Math.min(incoming, Math.max(1, Number(player.maxHp || 100)) * 0.2);
+    }
     const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
     player.barrier = Math.max(0, Number(player.barrier || 0) - absorbed);
     const dealt = incoming - absorbed;
-    player.health = Math.max(0, Number(player.health || 0) - dealt);
+    player.hp = Math.max(0, Number(player.hp || 0) - dealt);
     player.hitTick = state.tick;
-    const newlyDowned = player.health <= 0;
+    const newlyDowned = player.hp <= 0;
     if (newlyDowned) {
       player.downed = true;
       player.downedAtTick = state.tick;
@@ -1289,8 +1376,61 @@
       sourcePlayerId: state.players?.[sourceId] ? sourceId : undefined,
       damage: dealt,
       absorbed,
-      health: player.health,
+      health: player.hp,
       attackKind,
+    });
+  }
+
+  function playerInsideRoomHazard(player, hazard) {
+    const radius = Math.max(1, Number(player.radius || 18));
+    if (hazard.shape === 'rect' || (Number(hazard.w) > 0 && Number(hazard.h) > 0)) {
+      const left = Number.isFinite(Number(hazard.left)) ? Number(hazard.left) : Number(hazard.x) - Number(hazard.w) / 2;
+      const top = Number.isFinite(Number(hazard.top)) ? Number(hazard.top) : Number(hazard.y) - Number(hazard.h) / 2;
+      const nearX = Math.max(left, Math.min(left + Number(hazard.w), Number(player.x)));
+      const nearY = Math.max(top, Math.min(top + Number(hazard.h), Number(player.y)));
+      return Math.hypot(Number(player.x) - nearX, Number(player.y) - nearY) < radius;
+    }
+    return Math.hypot(Number(player.x) - Number(hazard.x), Number(player.y) - Number(hazard.y))
+      <= radius + Number(hazard.triggerRadius || hazard.r || 16);
+  }
+
+  function updateRoomHazards(state, fixedDelta, emitEvent) {
+    const rooms = state.floorState?.layout?.rooms || [];
+    rooms.forEach(room => {
+      if (!Array.isArray(room.hazards) || room.hazards.length === 0) return;
+      const players = Object.values(state.players || {}).filter(player => !player.downed && player.roomId === room.id);
+      room.hazards.forEach(hazard => {
+        hazard.damageCooldownByPlayer = hazard.damageCooldownByPlayer || {};
+        if (hazard.kind === 'lava') {
+          players.forEach(player => {
+            if (!playerInsideRoomHazard(player, hazard)) return;
+            if (state.tick < Number(hazard.damageCooldownByPlayer[player.id] || 0)) return;
+            hazard.damageCooldownByPlayer[player.id] = state.tick + 10;
+            damagePlayer(state, player, Number(hazard.baseDamage || hazard.damage || 8), `room-hazard:${room.id}`, emitEvent, 'lava');
+          });
+          return;
+        }
+        if (hazard.kind !== 'explosive_trap') return;
+        if (!hazard.triggered) {
+          const trigger = players.find(player => playerInsideRoomHazard(player, { ...hazard, r: hazard.triggerRadius || 34 }));
+          if (!trigger) return;
+          hazard.triggered = true;
+          hazard.triggeredTick = state.tick;
+          hazard.fuse = Number(hazard.fuseDuration || 0.78);
+          emitEvent('ROOM_HAZARD_TRIGGERED', { roomId: room.id, hazardKind: hazard.kind, playerId: trigger.id, x: hazard.x, y: hazard.y });
+          return;
+        }
+        if (hazard.exploded) return;
+        hazard.fuse = Math.max(0, Number(hazard.fuse || 0) - fixedDelta);
+        if (hazard.fuse > 0) return;
+        hazard.exploded = true;
+        players.forEach(player => {
+          if (Math.hypot(Number(player.x) - Number(hazard.x), Number(player.y) - Number(hazard.y)) > Number(hazard.blastRadius || 88) + Number(player.radius || 18)) return;
+          damagePlayer(state, player, Number(hazard.baseDamage || 18), `room-hazard:${room.id}`, emitEvent, 'explosive_trap');
+        });
+        emitEvent('ROOM_HAZARD_EXPLODED', { roomId: room.id, hazardKind: hazard.kind, x: hazard.x, y: hazard.y, blastRadius: hazard.blastRadius });
+      });
+      room.hazards = room.hazards.filter(hazard => !hazard.exploded);
     });
   }
 
@@ -1359,7 +1499,7 @@
     emitEvent('ENEMY_SUPPORT_USED', { enemyId: enemy.id, targetEnemyId: target.id, supportKind: enemy.behavior });
   }
 
-  function moveEnemy(enemy, angle, multiplier, fixedDelta, floor) {
+  function moveEnemy(enemy, angle, multiplier, fixedDelta, floor, room) {
     const speed = Number(enemy.moveSpeed || 72) * multiplier;
     enemy.vx = Math.cos(angle) * speed;
     enemy.vy = Math.sin(angle) * speed;
@@ -1367,8 +1507,13 @@
     const minimum = Number(floor.wallThickness || 28) + Number(enemy.radius || 20);
     const maximumX = Number(floor.width || 900) - minimum;
     const maximumY = Number(floor.height || 700) - minimum;
-    enemy.x = Math.max(minimum, Math.min(maximumX, enemy.x + enemy.vx * fixedDelta));
-    enemy.y = Math.max(minimum, Math.min(maximumY, enemy.y + enemy.vy * fixedDelta));
+    const desiredX = Math.max(minimum, Math.min(maximumX, enemy.x + enemy.vx * fixedDelta));
+    const desiredY = Math.max(minimum, Math.min(maximumY, enemy.y + enemy.vy * fixedDelta));
+    const collision = resolveRoomObstacleMovement(room, enemy, desiredX, desiredY);
+    if (collision.blockedX) enemy.vx = 0;
+    if (collision.blockedY) enemy.vy = 0;
+    enemy.x = collision.x;
+    enemy.y = collision.y;
   }
 
   function updateEnemies(state, fixedDelta, emitEvent) {
@@ -1381,7 +1526,7 @@
       // Match the campaign's 0.72 second portal/emergence window. During this
       // authoritative phase the enemy cannot move, attack, or deal contact
       // damage; every client is free to render the shared spawn animation.
-      if (state.tick - Number(enemy.spawnTick || 0) < 15) {
+      if (state.tick - Number(enemy.spawnTick || 0) < SPAWN_LOCK_TICKS) {
         enemy.state = 'spawning';
         enemy.vx = 0;
         enemy.vy = 0;
@@ -1426,6 +1571,7 @@
         return;
       }
       const angle = Math.atan2(target.player.y - enemy.y, target.player.x - enemy.x);
+      const room = currentRoom(state, enemy.roomId);
       const contactDistance = Number(enemy.radius || 20) + Number(target.player.radius || 18) + 4;
       if (enemy.behavior === 'summoner' && state.tick >= Number(enemy.summonCooldownUntilTick || 0)) {
         const liveSummons = livingEncounterEnemies(state, enemy.roomId).filter(candidate => candidate.summonedBy === enemy.id).length;
@@ -1437,7 +1583,7 @@
         const hpRatio = Number(enemy.health || 0) / Math.max(1, Number(enemy.maxHealth || 1));
         enemy.phase = hpRatio <= 0.25 ? 4 : hpRatio <= 0.5 ? 3 : hpRatio <= 0.75 ? 2 : 1;
       }
-      const rangedBehavior = ['ranged', 'sniper', 'beam', 'burst', 'summoner', 'healer', 'shield', 'boss_spawner', 'boss'].includes(enemy.behavior);
+      const rangedBehavior = RANGED_BEHAVIORS.has(enemy.behavior);
       if (rangedBehavior) {
         if (Number(enemy.attackWindupUntilTick || 0) > 0) {
           enemy.vx = 0;
@@ -1458,10 +1604,10 @@
           emitEvent('ENEMY_TELEGRAPH', { enemyId, targetPlayerId: target.player.id, attackKind: enemy.type, windupTicks: 7, phase: enemy.phase || 1 });
         } else if (target.distance < 165) {
           enemy.state = 'retreating';
-          moveEnemy(enemy, angle, -1, fixedDelta, floor);
+          moveEnemy(enemy, angle, -1, fixedDelta, floor, room);
         } else if (target.distance > 285) {
           enemy.state = 'approaching';
-          moveEnemy(enemy, angle, 1, fixedDelta, floor);
+          moveEnemy(enemy, angle, 1, fixedDelta, floor, room);
         } else {
           enemy.state = 'holding';
           enemy.vx = 0;
@@ -1469,7 +1615,7 @@
         }
       } else if (target.distance > contactDistance) {
         enemy.state = enemy.behavior === 'charger' ? 'charging' : 'chasing';
-        moveEnemy(enemy, angle, 1, fixedDelta, floor);
+        moveEnemy(enemy, angle, 1, fixedDelta, floor, room);
       } else {
         enemy.vx = 0;
         enemy.vy = 0;
@@ -1549,6 +1695,29 @@
         delete state.projectiles[projectileId];
         return;
       }
+      const room = currentRoom(state, projectile.roomId);
+      const solidStructure = (room?.structures || []).find(obstacle => (
+        circleIntersectsRoomObstacle(projectile.x, projectile.y, Number(projectile.radius || 6), obstacle)
+      ));
+      if (solidStructure) {
+        delete state.projectiles[projectileId];
+        emitEvent('PROJECTILE_BLOCKED', { projectileId, roomId: projectile.roomId, obstacleKind: solidStructure.kind });
+        return;
+      }
+      const destructible = (room?.destructibles || []).find(obstacle => (
+        !obstacle.broken && !obstacle.hidden
+          && circleIntersectsRoomObstacle(projectile.x, projectile.y, Number(projectile.radius || 6), obstacle)
+      ));
+      if (destructible) {
+        destructible.hp = Math.max(0, Number(destructible.hp || 1) - 1);
+        destructible.broken = destructible.hp <= 0;
+        delete state.projectiles[projectileId];
+        emitEvent(destructible.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
+          projectileId, roomId: projectile.roomId, obstacleKind: destructible.kind,
+          x: destructible.x, y: destructible.y, health: destructible.hp,
+        });
+        return;
+      }
       if (projectile.hostile) {
         const player = Object.values(state.players || {}).find(candidate => (
           candidate && !candidate.downed && candidate.roomId === projectile.roomId
@@ -1614,7 +1783,7 @@
     });
   }
 
-  function updatePickups(state, emitEvent) {
+  function updatePickups(state, emitEvent, random) {
     Object.entries(state.pickups || {}).forEach(([pickupId, pickup]) => {
       const player = Object.values(state.players || {}).find(candidate => (
           candidate && !candidate.downed && candidate.roomId === pickup.roomId
@@ -1624,12 +1793,21 @@
       if (!player) return;
       let amount = Math.max(0, Number(pickup.amount || 0));
       if (pickup.type === 'coin') {
-        amount += Math.max(0, Number(player.goldBonus || 0));
+        amount = Math.round(Math.max(1, amount || 1) * Math.max(1, Number(player.itemStats?.coinPickupMultiplier || 1)))
+          + Math.max(0, Number(player.items?.naked_kings_last_penny || 0))
+          + Math.max(0, Number(player.goldBonus || 0));
         player.coins = Math.max(0, Number(player.coins || 0)) + amount;
       } else if (pickup.type === 'item') {
-        collectCampaignItem(player, pickup.key);
+        const duplicateChance = Math.max(0, Math.min(1, Number(player.itemStats?.itemDuplicateChance || 0)));
+        const duplicate = duplicateChance > 0 && random.stream('loot').chance(duplicateChance);
+        amount = duplicate ? 2 : 1;
+        collectSharedCampaignItem(player, pickup.key, { amount });
       } else if (pickup.type === 'potion') {
-        player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + 40);
+        const doubled = Number(player.itemStats?.potionDoubleChance || 0) > 0
+          && random.stream('loot').chance(Number(player.itemStats.potionDoubleChance));
+        amount = doubled ? 2 : 1;
+        player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0)
+          + 40 * amount * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
       }
       delete state.pickups[pickupId];
       emitEvent('PICKUP_COLLECTED', {
@@ -1639,6 +1817,7 @@
         amount,
         gold: player.coins,
         itemKey: pickup.key || '',
+        roomId: pickup.roomId,
       });
     });
   }
@@ -1813,11 +1992,11 @@
         player.downed = false;
         player.downedAtTick = null;
         player.reviveProgress = 0;
-        player.health = Math.max(1, Math.round(Number(player.maxHealth || 100) * 0.75));
+        player.hp = Math.max(1, Math.round(Number(player.maxHp || 100) * 0.75));
         player.roomId = startRoomId;
         player.x = Number(state.floorState?.width || 900) / 2;
         player.y = Number(state.floorState?.height || 700) / 2;
-        emitEvent('PLAYER_RESPAWNED', { playerId: player.id, roomId: startRoomId, health: player.health });
+        emitEvent('PLAYER_RESPAWNED', { playerId: player.id, roomId: startRoomId, health: player.hp });
       });
       return;
     }
@@ -1839,8 +2018,8 @@
       downedPlayer.downed = false;
       downedPlayer.reviveTicks = 0;
       downedPlayer.reviveProgress = 0;
-      downedPlayer.health = Math.max(1, Math.round(Number(downedPlayer.maxHealth || 100) * REVIVE_HEALTH_FRACTION));
-      emitEvent('PLAYER_REVIVED', { playerId: downedPlayer.id, reviverId: reviver.id, health: downedPlayer.health });
+      downedPlayer.hp = Math.max(1, Math.round(Number(downedPlayer.maxHp || 100) * REVIVE_HEALTH_FRACTION));
+      emitEvent('PLAYER_REVIVED', { playerId: downedPlayer.id, reviverId: reviver.id, health: downedPlayer.hp });
     });
     if (state.status === 'running' && living.length === 0) {
       state.status = 'ended';
@@ -1866,6 +2045,7 @@
   function createNetworkCombatSystem(options = {}) {
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
+      combatRandomByState.set(state, random);
       const occupiedRoomIds = new Set(Object.values(state.players || {})
         .filter(player => player && !player.disconnected)
         .map(player => player.roomId));
@@ -1876,10 +2056,12 @@
       });
       updateChestProximity(state, emitEvent);
       updatePlayerActions(state, inputs, emitEvent, random);
+      updatePlayerEquipmentEffects(state, emitEvent);
       updateAbilityEntities(state, emitEvent, random);
+      updateRoomHazards(state, fixedDelta, emitEvent);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random);
-      updatePickups(state, emitEvent);
+      updatePickups(state, emitEvent, random);
     };
   }
 
@@ -1895,7 +2077,6 @@
     ENEMY_ARCHETYPES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
-    collectCampaignItem,
     ensureNetworkEncounter,
     ensureNetworkRoomReward,
     ensureCampaignShop,
