@@ -1,5 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { RandomService } = require('../js/simulation/RandomService');
+const { stockCampaignShop } = require('../js/simulation/SharedShopSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -51,38 +53,15 @@ describe('God difficulty progression rules', () => {
   });
 
   test('creates one base relic offer in God shops', () => {
-    const room = { type: 'shop', shopOffers: [] };
-    const Neo = {
-      ROOM_W: 900,
-      ROOM_H: 700,
-      floor: 1,
-      selectedDifficulty: 'god',
-      getDifficultyDef: () => ({ shopItemOffers: 1 }),
-      getItemStats: () => ({ shopExtraItemOffers: 0 }),
-      createRoomRandom: () => () => 0.25,
-      rollItemDrop: () => 'test_item',
-      itemRegistry: new Map([['test_item', { rarity: 'knight' }]]),
-      ITEM_DEFS: {},
-      getShopItemCost: () => 10,
-    };
-    const ensureFeaturedGodOffer = jest.fn();
-    const ensureShopScrollOffer = jest.fn();
-    const ensureShopTradeOffer = jest.fn();
-    const layoutShopItemOffers = jest.fn();
-    const ensureShopHasMinimumItemOffers = new Function(
-      'Neo',
-      'ensureFeaturedGodOffer',
-      'ensureShopScrollOffer',
-      'ensureShopTradeOffer',
-      'layoutShopItemOffers',
-      `${extractFunction(roomsSource, 'ensureShopHasMinimumItemOffers')}; return ensureShopHasMinimumItemOffers;`,
-    )(Neo, ensureFeaturedGodOffer, ensureShopScrollOffer, ensureShopTradeOffer, layoutShopItemOffers);
-
-    ensureShopHasMinimumItemOffers(room);
+    const room = { id: 'god-shop', type: 'shop' };
+    stockCampaignShop(
+      { floorNumber: 1, elapsedSeconds: 0, matchRules: { shopItemOffers: 1 } },
+      room,
+      { items: {}, itemStats: { shopExtraItemOffers: 0 }, ownedMoves: {}, ownedWeapons: {} },
+      new RandomService({ matchSeed: 'god-shop' }).stream('shop'),
+    );
 
     expect(room.shopOffers.filter(offer => offer.type === 'item')).toHaveLength(1);
-    expect(roomsSource).toContain('if (configuredBaseOffers != null)');
-    expect(roomsSource).toContain('if (itemOfferCount >= baseOfferLimit + extraOfferLimit) return null;');
   });
 
   test('marks every generated start room for a two-elite ambush', () => {

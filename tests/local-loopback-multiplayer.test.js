@@ -105,8 +105,8 @@ describe('protocol-driven local multiplayer session', () => {
 
     expect(authority.simulation.state.players[client.playerId].characterKey).toBe('sarge');
     expect(authority.simulation.state.players[client.playerId]).toEqual(expect.objectContaining({
-      maxHealth: 108,
-      health: 108,
+      maxHp: 108,
+      hp: 108,
       moveSpeed: 180,
       damageMultiplier: 1.05,
       items: { copper_penny: 1 },

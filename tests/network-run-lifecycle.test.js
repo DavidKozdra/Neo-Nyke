@@ -12,7 +12,7 @@ const {
 
 function player(id, roomId, x = 450, y = 350) {
   const result = {
-    id, roomId, x, y, radius: 18, maxHealth: 100, health: 100,
+    id, roomId, x, y, radius: 18, maxHp: 100, hp: 100,
     moveSpeed: 180, coins: 0, level: 1, xp: 0, xpToNext: 20,
     attackCooldownUntilTick: 0, action: 'idle',
   };
@@ -65,7 +65,7 @@ describe('networked run lifecycle', () => {
     const state = stateFor('rival');
     state.players.p1.x = 300;
     state.players.p2.x = 380;
-    state.players.p2.health = 20;
+    state.players.p2.hp = 20;
     const events = [];
     const simulation = new GameSimulation({
       state,
@@ -83,7 +83,7 @@ describe('networked run lifecycle', () => {
 
     for (let tick = 0; tick < RIVAL_RESPAWN_TICKS; tick += 1) simulation.updateGame({}, 0.05);
     expect(state.players.p2.downed).toBe(false);
-    expect(state.players.p2.health).toBeGreaterThan(0);
+    expect(state.players.p2.hp).toBeGreaterThan(0);
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'PLAYER_RESPAWNED' }));
   });
 

@@ -1,32 +1,6 @@
-const fs = require('node:fs');
-const path = require('node:path');
-
-// The level-milestone registry and its helpers live as a self-contained block
-// in player.js (the const tables plus the pure getter functions). Evaluate that
-// block in isolation so we can exercise the cadence without booting the game.
-function loadMilestoneHelpers() {
-  const source = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
-  const start = source.indexOf('const DEFAULT_LEVEL_MILESTONES = {');
-  // Grab from the registry tables through the end of the last helper
-  // (getLevelMoveSpeedBonus), whose body ends at the first `}` after its
-  // `return bonus;`.
-  const lastFn = source.indexOf('export function getLevelMoveSpeedBonus');
-  const tail = source.indexOf('}', source.indexOf('return bonus;', lastFn)) + 1;
-  const block = source.slice(start, tail).replace(/export /g, '');
-  return new Function(`${block}
-    return {
-      getLevelMilestone,
-      getMilestoneChargeBonus,
-      getLevelMoveSpeedBonus,
-      LEVEL_MILESTONE_LEVELS,
-      DEFAULT_LEVEL_MILESTONES,
-      CHARACTER_LEVEL_MILESTONES,
-    };`)();
-}
+const M = require('../js/simulation/SharedProgressionSystem');
 
 describe('level milestone registry', () => {
-  const M = loadMilestoneHelpers();
-
   test('milestones land on the every-7 cadence', () => {
     expect(M.LEVEL_MILESTONE_LEVELS).toEqual([7, 14, 21, 28]);
   });

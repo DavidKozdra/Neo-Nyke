@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { getCampaignEnemyDamageTakenMultiplier } = require('../js/simulation/SharedDamageSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -19,30 +20,15 @@ function extractFunction(source, functionName) {
 describe('enemy loop damage reduction', () => {
   const corePath = path.join(__dirname, '../js/core/game-core.js');
   const coreSource = fs.readFileSync(corePath, 'utf8');
-  const combatPath = path.join(__dirname, '../js/game/combat.js');
-  const combatSource = fs.readFileSync(combatPath, 'utf8');
-  const declarations = [
-    extractFunction(combatSource, 'getCurrentLoopNumber'),
-    extractFunction(combatSource, 'getEnemyDamageTakenMultiplier'),
-  ].join('\n');
-
   function getMultiplier({ difficulty, loopNumber, elite = false }) {
     const reductionRates = {
       impossible: 0.05,
       god: 0.05,
     };
-    const Neo = {
-      MAX_FLOOR: 10,
-      runLoopIndex: loopNumber - 1,
-      getProgressionDepth: () => (loopNumber - 1) * 10 + 1,
-      getDifficultyDef: () => ({
-        enemyLoopDamageReduction: reductionRates[difficulty] || 0,
-      }),
-    };
-    return new Function(
-      'Neo',
-      `${declarations}; return getEnemyDamageTakenMultiplier;`,
-    )(Neo)({ elite });
+    return getCampaignEnemyDamageTakenMultiplier({ elite }, {
+      loopNumber,
+      enemyLoopDamageReduction: reductionRates[difficulty] || 0,
+    });
   }
 
   test('configures the reduction only on progression difficulties after Hard', () => {

@@ -666,7 +666,32 @@ export function trySpecialRoomChoiceInteract() {
     Neo.playSfx?.('menu_error');
     return true;
   }
-  return !!choice.apply();
+  return applySharedSpecialChoice(nearest.choice.id);
+}
+
+function applySharedSpecialChoice(choiceId) {
+  if (!Neo.currentRoom || !Neo.player) return false;
+  if (Neo.multiplayerGameView?.active) {
+    Neo.gameSession?.sendGameCommand?.('SPECIAL_ROOM_CHOICE', { choiceId });
+    return true;
+  }
+  const randomFunction = Neo.createRoomRandom?.(Neo.currentRoom, `special:${choiceId}`) || Neo.rng;
+  const result = globalThis.NeoNyke?.simulation?.applySpecialRoomChoice?.({
+    floorNumber: Neo.floor,
+    floorState: { layout: { rooms: Neo.rooms }, curses: Neo.floorRivalCurses || {} },
+    matchRules: {},
+  }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });
+  if (!result?.ok) return false;
+  consumeService(Neo.currentRoom, result.result);
+  if (result.transitionToRoomId) {
+    const target = Neo.rooms.find(room => room.id === result.transitionToRoomId);
+    if (target) Neo.enterRoom?.(target);
+  }
+  if (result.advanceFloor) {
+    Neo.floor = Math.min(Neo.MAX_FLOOR, Number(Neo.floor || 1) + 1);
+    Neo.generateFloor?.();
+  }
+  return true;
 }
 
 function renderSpecialRoomPanel() {
@@ -753,7 +778,7 @@ function handleChoiceClick(event) {
   if (!button || !isSpecialRoom() || Neo.currentRoom.serviceUsed) return;
   const choice = getChoices(Neo.currentRoom).find(entry => entry.id === button.dataset.specialChoice);
   if (!choice?.enabled) return;
-  const applied = choice.apply();
+  const applied = applySharedSpecialChoice(choice.id);
   if (applied && isSpecialRoom() && !document.getElementById('specialRoomPanel')?.classList.contains('hidden')) renderSpecialRoomPanel();
 }
 

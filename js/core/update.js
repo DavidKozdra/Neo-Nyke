@@ -56,6 +56,7 @@ export function loop(timestamp) {
 
     const updatePerfStart = Neo.perfStart();
     const canAdvanceSimulation = Neo.gameState === 'play'
+      && !Neo.multiplayerGameView?.active
       && !Neo.isWizardPawOpen()
       && !Neo.isExtraBatteryOpen?.();
     if (canAdvanceSimulation) {
@@ -113,35 +114,8 @@ export function loop(timestamp) {
     requestAnimationFrame(loop);
   }
 
-  const ENEMY_UPDATE_METHOD_BY_TYPE = {
-    god: 'updateGod',
-    queen_cult: 'updateCultQueenBoss',
-    bulk_golem: 'updateBulkGolemBoss',
-    artificer_knave: 'updateArtificerBoss',
-    bowman_bane: 'updateBowmanBane',
-    antony_blemmye: 'updateAntonyBlemmyeBoss',
-    handsome_devil: 'updateHandsomeDevilBoss',
-    mirror_knight: 'updateMirrorChampion',
-    mooggy: 'updateMooggyEnemy',
-    rival: 'updateRivalEnemy',
-    cult_mage: 'updateCultMageEnemy',
-    knave: 'updateKnaveEnemy',
-    sniper: 'updateSniperEnemy',
-    machine_gunner: 'updateMachineGunnerEnemy',
-    golem: 'updateGolemEnemy',
-    summoner: 'updateSummonerEnemy',
-    shield_unit: 'updateShieldUnitEnemy',
-    healer: 'updateHealerEnemy',
-    boss_spawner: 'updateBossSpawnerEnemy',
-    laser: 'updateLaserEnemy',
-    charger: 'updateChargerEnemy',
-  };
-
   function updateEnemyByType(enemy, dt) {
-    if (Neo.updateEnemyProjectileEvade?.(enemy, dt)) return;
-    const methodName = ENEMY_UPDATE_METHOD_BY_TYPE[String(enemy?.type || '').toLowerCase()] || 'updateHunterEnemy';
-    const handler = Neo[methodName];
-    if (typeof handler === 'function') handler(enemy, dt);
+    simulationApi.invokeCampaignEnemyAI(enemy, dt, Neo);
   }
 
   // Enemy shield decay: mirrors the player overheal shield. Once a barrier has

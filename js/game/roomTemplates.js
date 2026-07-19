@@ -1,3 +1,15 @@
+(function initializeRoomTemplates(root, factory) {
+  const install = context => factory(context || {});
+  const Neo = root.Neo = root.Neo || {};
+  const api = install(Neo);
+  api.createRoomTemplateApi = install;
+  const namespace = root.NeoNyke = root.NeoNyke || {};
+  namespace.content = namespace.content || {};
+  Object.assign(namespace.content, api);
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createRoomTemplateApi(Neo) {
+'use strict';
+
 // roomTemplates.js — data-driven room interior templates.
 //
 // A template is pure data describing one room's interior: walls (destructible
@@ -864,3 +876,14 @@
   Neo.applyRoomTemplate = applyRoomTemplate;
   Neo.propRules = PROP_RULES;
   Neo.populateRoomProps = populateRoomProps;
+
+  return {
+    ROOM_TEMPLATES,
+    PROP_RULES,
+    eligibleRoomTemplates,
+    roomTemplateById,
+    pickRoomTemplate,
+    applyRoomTemplate,
+    populateRoomProps,
+  };
+});

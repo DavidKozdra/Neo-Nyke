@@ -16,127 +16,29 @@ export function countOwnedToolStacks(items = null, itemDefs = null) {
 }
 
 export function getArtificerLevelGains(stacks = 0) {
-  const active = Math.max(0, Number(stacks) || 0) > 0;
-  return {
-    maxHp: active ? 16 : 15,
-    attackPower: active ? 4 : 3,
-    attackSpeed: active ? 0.02 : 0.01,
-  };
+  return globalThis.NeoNyke?.simulation?.getArtificerLevelGains?.(stacks)
+    || { maxHp: 15, attackPower: 3, attackSpeed: 0.01 };
 }
 
-// ---------------------------------------------------------------------------
-// Level milestone registry
-// ---------------------------------------------------------------------------
-// Charges and move/combat stats grow on an every-7-levels cadence. A milestone
-// is keyed by level and can carry any of:
-//   moveCharge: a MOVE_SLOTS slot ('dash' | 'laser' | ...) — the move currently
-//               equipped in that slot gains +1 max charge while this level is
-//               reached. Charge bonuses are cumulative across milestones.
-//   stat:       a one-time bump applied on the level-up that crosses it, ON TOP
-//               of the normal per-level gains (maxHp / attackPower / attackSpeed).
-//   moveSpeed:  additive bonus to the move-speed multiplier, cumulative.
-//   label:      feedback shown when the milestone is crossed.
-// Not every milestone grants a charge — charges land on 7 and 21, while 14 and
-// 28 are stat/speed spikes, so each milestone feels distinct yet impactful.
-//
-// DEFAULT_LEVEL_MILESTONES applies to every character. CHARACTER_LEVEL_MILESTONES
-// overrides per character (a per-level entry there fully replaces the default
-// entry for that level), letting signature moves get the charge instead of the
-// generic equipped mobility move.
-const DEFAULT_LEVEL_MILESTONES = {
-  7:  { moveCharge: 'dash',  stat: { maxHp: 10, attackPower: 2 },                   label: '+1 MOBILITY CHARGE' },
-  14: { stat: { maxHp: 20, attackPower: 3, attackSpeed: 0.03 }, moveSpeed: 0.03,    label: 'STAT SURGE' },
-  21: { moveCharge: 'laser', stat: { maxHp: 14, attackPower: 3 },                   label: '+1 LASER CHARGE' },
-  28: { stat: { maxHp: 30, attackPower: 5, attackSpeed: 0.04 }, moveSpeed: 0.04,    label: 'MAJOR STAT SURGE' },
-};
-
-// Per-character milestone identity. Only the *charge* milestones (7 = signature
-// mobility/burst, 21 = signature laser) are redirected at each character's iconic
-// move so the banner reads as "their" perk; the stat surges at 14/28 stay the
-// generic defaults so the power backbone is identical for everyone.
-//
-// Level-7 charges target the move that defines each hero's fantasy (the dash slot
-// for evasion/speed heroes; gelleh keeps Zip Lightning). Level-21 charges use the
-// { slot, moveKey } form so the laser charge only lands when that signature laser
-// is actually equipped — a character running an alt-kit laser doesn't get it.
-const CHARACTER_LEVEL_MILESTONES = {
-  // Princess: the "untouchable" evasion fantasy — Flying (Unhittable) gains a
-  // charge, then her Petal/Love Beam at 21.
-  princess: {
-    7:  { moveCharge: { slot: 'dash', moveKey: 'flying_unhitable' }, stat: { maxHp: 10, attackPower: 2 }, label: 'FLYING +1 CHARGE' },
-    21: { moveCharge: { slot: 'laser', moveKey: 'love_beam' },       stat: { maxHp: 14, attackPower: 3 }, label: 'PETAL BEAM +1 CHARGE' },
-  },
-  // Thorn Knight's mobility (dash slot) gains an explicit +1 charge at level 7;
-  // his bleed laser (Blood Beam) gains a charge at 21.
-  thorn_knight: {
-    7:  { moveCharge: 'dash',                                       stat: { maxHp: 10, attackPower: 2 }, label: 'DASH +1 CHARGE' },
-    21: { moveCharge: { slot: 'laser', moveKey: 'blood_beam' },     stat: { maxHp: 14, attackPower: 3 }, label: 'BLOOD BEAM +1 CHARGE' },
-  },
-  // Metao the wizard: Warp blink at 7, his wide-AoE Power Disks laser at 21.
-  metao: {
-    7:  { moveCharge: { slot: 'dash', moveKey: 'warp' },            stat: { maxHp: 10, attackPower: 2 }, label: 'WARP +1 CHARGE' },
-    21: { moveCharge: { slot: 'laser', moveKey: 'power_disks' },    stat: { maxHp: 14, attackPower: 3 }, label: 'POWER DISKS +1 CHARGE' },
-  },
-  // Preserves the original Gelleh mastery: Zip Lightning gains a charge — now on
-  // the unified 7-level cadence instead of the old hardcoded level-5 check. His
-  // Blade Justice laser gains a charge at 21.
-  gelleh: {
-    7:  { moveCharge: { slot: 'dash', moveKey: 'zip_lightning' },   stat: { maxHp: 10, attackPower: 2 }, label: 'ZIP LIGHTNING +1 CHARGE' },
-    21: { moveCharge: { slot: 'laser', moveKey: 'blade_justice' },  stat: { maxHp: 14, attackPower: 3 }, label: 'BLADE JUSTICE +1 CHARGE' },
-  },
-  // Mooggy the speedster: Zoomies dash at 7, Nail Shot laser at 21.
-  mooggy: {
-    7:  { moveCharge: { slot: 'dash', moveKey: 'mooggy_zoomies' },  stat: { maxHp: 10, attackPower: 2 }, label: 'ZOOMIES +1 CHARGE' },
-    21: { moveCharge: { slot: 'laser', moveKey: 'nail_shot' },      stat: { maxHp: 14, attackPower: 3 }, label: 'NAIL SHOT +1 CHARGE' },
-                                                                                                                                                          },
-                                                                                                                                                        };
-
-export const LEVEL_MILESTONE_LEVELS = Object.keys(DEFAULT_LEVEL_MILESTONES)
-  .map(Number)
-  .sort((a, b) => a - b);
+// Browser helpers delegate to the DOM-free campaign progression registry used
+// by authority. The definitions live only in SharedProgressionSystem.
+export const LEVEL_MILESTONE_LEVELS = globalThis.NeoNyke?.simulation?.LEVEL_MILESTONE_LEVELS || [];
 
 // Resolve the milestone entry for a given level/character (override beats
 // default). Returns null when the level is not a milestone boundary.
 export function getLevelMilestone(level, characterKey) {
-  const lvl = Math.floor(Number(level) || 0);
-  const override = CHARACTER_LEVEL_MILESTONES[characterKey]?.[lvl];
-  if (override) return override;
-  return DEFAULT_LEVEL_MILESTONES[lvl] || null;
-}
-
-// A milestone's moveCharge may be a bare slot name (the equipped move in that
-// slot gets the charge) or { slot, moveKey } (only that specific move does).
-function milestoneChargesMove(milestone, slot, moveKey) {
-  const target = milestone?.moveCharge;
-  if (!target) return false;
-  if (typeof target === 'string') return target === slot;
-  if (target.slot && target.slot !== slot) return false;
-  if (target.moveKey && target.moveKey !== moveKey) return false;
-  return true;
+  return globalThis.NeoNyke?.simulation?.getLevelMilestone?.(level, characterKey) || null;
 }
 
 // Cumulative bonus charges a given equipped move has earned from every milestone
 // at or below the player's current level. Replaces the old inline Gelleh check.
 export function getMilestoneChargeBonus(slot, moveKey, characterKey, level) {
-  const lvl = Math.floor(Number(level) || 1);
-  let bonus = 0;
-  for (const milestoneLevel of LEVEL_MILESTONE_LEVELS) {
-    if (lvl < milestoneLevel) break;
-    const milestone = getLevelMilestone(milestoneLevel, characterKey);
-    if (milestoneChargesMove(milestone, slot, moveKey)) bonus += 1;
-  }
-  return bonus;
+  return globalThis.NeoNyke?.simulation?.getMilestoneChargeBonus?.(slot, moveKey, characterKey, level) || 0;
 }
 
 // Cumulative move-speed bonus from milestones at or below the current level.
 export function getLevelMoveSpeedBonus(characterKey, level) {
-  const lvl = Math.floor(Number(level) || 1);
-  let bonus = 0;
-  for (const milestoneLevel of LEVEL_MILESTONE_LEVELS) {
-    if (lvl < milestoneLevel) break;
-    bonus += Number(getLevelMilestone(milestoneLevel, characterKey)?.moveSpeed || 0);
-  }
-  return bonus;
+  return globalThis.NeoNyke?.simulation?.getLevelMoveSpeedBonus?.(characterKey, level) || 0;
 }
 
 export function getCloakFlatDamageReduction(stacks = 0, ownedToolStacks = 0) {
@@ -706,6 +608,18 @@ export function triggerChronoSpringBuff() {
 
 export function getItemStats() {
     if (Neo.itemStatsCacheFrame === Neo.simulationTick && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
+    const deriveSharedItemStats = globalThis.NeoNyke?.simulation?.deriveCampaignItemStats;
+    if (typeof deriveSharedItemStats === 'function') {
+      const characterDef = Neo.getCharacterDef?.() || {};
+      Neo.itemStatsCacheValue = deriveSharedItemStats(Neo.player, {
+        currentTick: Neo.simulationTick,
+        lowerCombatCurse: !!Neo.floorRivalCurses?.lowerCombat,
+        aoeRadiusMultiplier: Number(characterDef.aoeRadiusMultiplier || 1),
+        aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
+      });
+      Neo.itemStatsCacheFrame = Neo.simulationTick;
+      return Neo.itemStatsCacheValue;
+    }
     if (!Neo.godItemKeysCache) {
       Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => (
         Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity) && !Neo.ITEM_DEFS[key]?.voucher

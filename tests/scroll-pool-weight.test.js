@@ -25,7 +25,7 @@ function extractFunction(source, functionName, dependencies = {}) {
 describe('Scroll of Pool Weight', () => {
   const playerSource = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
-  const inputSource = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
+const inputSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedItemDefinitions.js'), 'utf8');
 
   test('offers exactly four distinct seeded relic choices', () => {
     const choices = ['a', 'b', 'c', 'd', 'e', 'f'].map(key => ({ key }));

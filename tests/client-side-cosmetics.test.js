@@ -41,7 +41,7 @@ describe('client-side cosmetics (colours derived on the client, not sent by the 
       players: {
         p1: {
           id: 'player-1', slotIndex: 0, characterKey: 'thorn_knight', roomId,
-          x: 300, y: 350, radius: 18, moveSpeed: 180, maxHealth: 100, health: 100,
+          x: 300, y: 350, radius: 18, moveSpeed: 180, maxHp: 100, hp: 100,
           attackCooldownUntilTick: 0, equippedWeapon: 'thorns_bleed_blade', equippedMoves: {},
         },
       },

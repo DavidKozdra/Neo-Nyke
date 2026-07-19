@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { getCampaignEnemyDamageTakenMultiplier } = require('../js/simulation/SharedDamageSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -110,14 +111,10 @@ describe('mirror champion exact copy', () => {
   });
 
   test('does not apply generic enemy progression resistance to an exact mirror', () => {
-    const getEnemyDamageTakenMultiplier = new Function(
-      'Neo',
-      `${extractFunction(combatSource, 'getEnemyDamageTakenMultiplier')}; return getEnemyDamageTakenMultiplier;`,
-    )({
-      getDifficultyDef: () => ({ enemyLoopDamageReduction: 0.1 }),
-    });
-
-    expect(getEnemyDamageTakenMultiplier({ mirrorExactCopy: true })).toBe(1);
+    expect(getCampaignEnemyDamageTakenMultiplier({ mirrorExactCopy: true }, {
+      loopNumber: 10,
+      enemyLoopDamageReduction: 0.1,
+    })).toBe(1);
 
     const getEnemyCcLevel = new Function(
       'Neo',
