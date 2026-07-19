@@ -41,6 +41,7 @@
     MOVE_BASE_STATS = {},
     MOVE_PRESENTATION_DEFS = {},
     MOVE_SLOT_BY_KEY = {},
+    KIT_ALTERNATIVES = {},
     getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
     createPowerDiskBurstDescriptors = () => [],
     ENEMY_CATALOG = {},
@@ -115,7 +116,24 @@
     return !!collectSharedCampaignItem(player, itemKey)?.ok;
   }
 
-  function applyNetworkHeroProfile(player, characterKey) {
+  // Kit picks come from untrusted clients: keep only slots this character has
+  // alternatives for, and only moves from that slot's KIT_ALTERNATIVES list.
+  // Returns null when any provided entry is invalid so callers can reject the
+  // message instead of silently applying a different kit than the client chose.
+  function sanitizeKitChoices(characterKey, kitChoices) {
+    if (kitChoices === undefined || kitChoices === null) return {};
+    if (typeof kitChoices !== 'object' || Array.isArray(kitChoices)) return null;
+    const alternatives = KIT_ALTERNATIVES[characterKey] || {};
+    const sanitized = {};
+    for (const [slot, moveKey] of Object.entries(kitChoices)) {
+      const options = alternatives[slot];
+      if (!Array.isArray(options) || !options.includes(moveKey)) return null;
+      if (moveKey !== options[0]) sanitized[slot] = moveKey;
+    }
+    return sanitized;
+  }
+
+  function applyNetworkHeroProfile(player, characterKey, kitChoices) {
     const key = HERO_BASE_STATS[characterKey] ? characterKey : 'thorn_knight';
     const profile = HERO_BASE_STATS[key];
     const previousMaximum = Math.max(1, Number(player.maxHp || profile.maxHp));
@@ -124,6 +142,8 @@
     player.character = key;
     player.equippedWeapon = getCharacterDefaultWeapon(key);
     player.equippedMoves = getDefaultMoveLoadout(key);
+    player.kitChoices = sanitizeKitChoices(key, kitChoices) || {};
+    Object.assign(player.equippedMoves, player.kitChoices);
     player.ownedWeapons = { [player.equippedWeapon]: true };
     player.ownedMoves = Object.fromEntries(Object.values(player.equippedMoves).map(moveKey => [moveKey, true]));
     player.items = { ...(CHARACTER_STARTING_ITEMS[key] || {}) };
@@ -2077,6 +2097,7 @@
     ENEMY_ARCHETYPES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
+    sanitizeKitChoices,
     ensureNetworkEncounter,
     ensureNetworkRoomReward,
     ensureCampaignShop,

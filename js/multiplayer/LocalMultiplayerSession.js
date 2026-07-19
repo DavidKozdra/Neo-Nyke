@@ -24,7 +24,7 @@
     CAMPAIGN_CONTENT_VERSION,
   } = campaignApi;
   const { generateFloorLayout } = floorApi;
-  const { applyNetworkHeroProfile, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
+  const { applyNetworkHeroProfile, sanitizeKitChoices, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -34,10 +34,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v21';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v22';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v21';
-  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v21';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v22';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v22';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -476,7 +476,10 @@
       const player = record?.playerId && this.simulation.state.players[record.playerId];
       if (!player || this.simulation.state.status !== 'waiting') return;
       if (!SELECTABLE_CHARACTERS.includes(payload.characterKey)) return this._rejectInvalidMessage(peerId, ['character is unavailable']);
-      applyNetworkHeroProfile(player, payload.characterKey);
+      if (sanitizeKitChoices(payload.characterKey, payload.kitChoices) === null) {
+        return this._rejectInvalidMessage(peerId, ['kit choice is unavailable']);
+      }
+      applyNetworkHeroProfile(player, payload.characterKey, payload.kitChoices);
       record.ready = false;
       this._broadcastLobbyState();
     }
@@ -622,6 +625,7 @@
         playerId,
         displayName: this.simulation.state.players[playerId]?.displayName || peerId,
         characterKey: this.simulation.state.players[playerId]?.characterKey || 'thorn_knight',
+        kitChoices: { ...(this.simulation.state.players[playerId]?.kitChoices || {}) },
         ready: !!this.peerRecords.get(peerId)?.ready,
       }));
       this._broadcast('LOBBY_STATE', {
@@ -859,9 +863,13 @@
       this._send('PLAYER_READY', { ready: !!ready });
     }
 
-    sendCharacter(characterKey) {
+    sendCharacter(characterKey, kitChoices) {
       if (!this.playerId) throw new Error('Client has not joined the match');
-      this._send('PLAYER_CHARACTER', { characterKey: String(characterKey || '') });
+      const payload = { characterKey: String(characterKey || '') };
+      if (kitChoices && typeof kitChoices === 'object' && !Array.isArray(kitChoices) && Object.keys(kitChoices).length) {
+        payload.kitChoices = { ...kitChoices };
+      }
+      this._send('PLAYER_CHARACTER', payload);
     }
 
     sendInput(input = {}) {
