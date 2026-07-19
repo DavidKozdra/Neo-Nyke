@@ -21,7 +21,7 @@
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner', 'golem',
     'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
     'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye',
-    'handsome_devil', 'god', 'mooggy',
+    'handsome_devil', 'god', 'mooggy', 'mirror_knight', 'rival',
   ]);
 
   // Queen finisher tuning (verbatim from game/enemies.js).
@@ -2069,6 +2069,56 @@
       );
     }
 
+    // Phase-shift reset: clear the active attack, grant 1-3s of invulnerability,
+    // and reposition away from the player to reset spacing (verbatim from
+    // triggerGodPhase in game/enemies.js, minus the SP-only particles/shake).
+    function triggerGodPhase(enemy, phase) {
+      enemy.phase = phase;
+      enemy.windup = 0;
+      enemy.beamTime = 0;
+      enemy.beamTick = 0;
+      enemy.dashTime = 0;
+      enemy.swingTime = 0;
+      enemy.partitionAngles = [];
+      enemy.attackCd = Math.min(enemy.attackCd || 99, 0.7);
+      const phaseInv = 1 + random('encounter') * 2;
+      enemy.inv = Math.max(enemy.inv || 0, phaseInv);
+      const player = ctx.getPlayer(enemy);
+      if (player) {
+        const bounds = ctx.bounds(enemy);
+        const gx = enemy.x - player.x;
+        const gy = enemy.y - player.y;
+        const len = Math.hypot(gx, gy) || 1;
+        const jumpDistance = randRange(200, 320, 'encounter');
+        const landing = findSafeLanding(
+          enemy,
+          enemy.x + (gx / len) * jumpDistance,
+          enemy.y + (gy / len) * jumpDistance,
+          Math.max(18, enemy.r || 18),
+        );
+        if (landing) {
+          enemy.x = landing.x;
+          enemy.y = landing.y;
+          enemy.vx = 0;
+          enemy.vy = 0;
+        }
+      }
+      enemy.state = `godPhase${phase}`;
+      ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: `god_phase_${phase}` });
+    }
+
+    function spawnGodCouncil(enemy) {
+      const bossTypes = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
+      const spawnAngles = [-Math.PI * 0.5, 0, Math.PI * 0.5, Math.PI];
+      bossTypes.forEach((type, index) => {
+        const angle = spawnAngles[index] || ((Math.PI * 2 * index) / bossTypes.length);
+        ctx.spawnMinion?.(enemy, type, enemy.x + Math.cos(angle) * 220, enemy.y + Math.sin(angle) * 220, {
+          healthScale: 0.85,
+          hastened: true,
+        });
+      });
+    }
+
     function tickGodPartitionLasers(enemy, dt, runPressure, phaseLevel, tuning, cadenceMult) {
       const bounds = ctx.bounds(enemy);
       enemy.beamTime -= dt;
@@ -2113,6 +2163,44 @@
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const distance = Math.hypot(dx, dy) || 1;
+      const hpPct = enemy.hp / enemy.max;
+
+      // HP-threshold late phases (after the death-rebirth into phase 2): the
+      // council of bosses, holy onslaught, and last judgement. Each fires once
+      // and hands the tick back so the phase-shift reposition takes hold.
+      if (enemy.rebirthUsed && !enemy.phase3Triggered && hpPct <= 0.2) {
+        enemy.phase3Triggered = true;
+        enemy.dmg = Math.round(enemy.dmg * 1.2);
+        enemy.contactDamage = enemy.dmg;
+        enemy.speed *= 1.08;
+        enemy.novaCd = 1.9 * runPressure.cadenceMultiplier;
+        triggerGodPhase(enemy, 3);
+        spawnGodCouncil(enemy);
+        ctx.speak?.(enemy, 'COUNCIL OF BOSSES');
+        return;
+      } else if (enemy.rebirthUsed && enemy.phase3Triggered && !enemy.phase4Triggered && hpPct <= 0.12) {
+        enemy.phase4Triggered = true;
+        enemy.dmg = Math.round(enemy.dmg * 1.16);
+        enemy.contactDamage = enemy.dmg;
+        enemy.speed *= 1.06;
+        enemy.novaCd = 1.25 * runPressure.cadenceMultiplier;
+        enemy.judgementCd = 2.7 * runPressure.cadenceMultiplier;
+        triggerGodPhase(enemy, 4);
+        spawnGodSwordRing(enemy, 24, Math.round(enemy.dmg * 1.05));
+        ctx.speak?.(enemy, 'HOLY ONSLAUGHT');
+        return;
+      } else if (enemy.rebirthUsed && enemy.phase4Triggered && !enemy.phase5Triggered && hpPct <= 0.06) {
+        enemy.phase5Triggered = true;
+        enemy.dmg = Math.round(enemy.dmg * 1.22);
+        enemy.contactDamage = enemy.dmg;
+        enemy.speed *= 1.08;
+        enemy.novaCd = 0.78 * runPressure.cadenceMultiplier;
+        enemy.judgementCd = 1.45 * runPressure.cadenceMultiplier;
+        triggerGodPhase(enemy, 5);
+        spawnGodSwordRing(enemy, 32, Math.round(enemy.dmg * 1.15));
+        ctx.speak?.(enemy, 'LAST JUDGEMENT');
+        return;
+      }
 
       const phaseLevel = enemy.phase || 1;
       const phaseTwo = phaseLevel >= 2;
@@ -2123,6 +2211,24 @@
       const reactionMult = phaseFive ? 1.45 : phaseFour ? 1.34 : phaseLevel >= 3 ? 1.28 : phaseTwo ? 1.22 : 1;
       const desired = phaseFive ? 138 : phaseFour ? 146 : phaseTwo ? 156 : 190;
       enemy.stun = Math.min(Number(enemy.stun || 0), Number(enemy.maxStunDuration || 0.18));
+
+      // Phase 4+ keeps a background sword-ring on a timer; phase 5 layers a
+      // converging judgement ring on top.
+      if (phaseFour) {
+        enemy.novaCd = Math.max(0, Number(enemy.novaCd || 0) - dt);
+        if (enemy.novaCd <= 0) {
+          const swordCount = phaseFive ? 20 : 14;
+          spawnGodSwordRing(enemy, swordCount, Math.round(enemy.dmg * (phaseFive ? 1.08 : 0.92)));
+          enemy.novaCd = (phaseFive ? 0.78 : 1.25) * runPressure.cadenceMultiplier;
+        }
+      }
+      if (phaseFive) {
+        enemy.judgementCd = Math.max(0, Number(enemy.judgementCd || 0) - dt);
+        if (enemy.judgementCd <= 0) {
+          spawnPhaseSwords(enemy, 16, Math.round(enemy.dmg * 0.82));
+          enemy.judgementCd = 1.45 * runPressure.cadenceMultiplier;
+        }
+      }
 
       if (enemy.windup > 0) {
         enemy.windup -= dt;
@@ -2322,6 +2428,375 @@
       }
     }
 
+    // --- mirror champion ----------------------------------------------------
+    // The challenge-room boss that fights with the triggering player's own kit.
+    // The authority prepares the mirror snapshot (mirrorMoves/mirrorCooldowns/
+    // mirrorMoveStats/mirrorItemStats/mirrorWeapon/mirrorWeaponStats/dmg/speed)
+    // from that player's authoritative loadout; this body drives the SP decision
+    // loop against it. Weapon-specific volleys collapse to representative shots.
+    const MIRROR_MELEE_RANGE = 96;
+    const MIRROR_MELEE_ARC = 0.9;
+
+    function getMirrorMove(enemy, slot) {
+      const fallback = slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : slot === 'smash' ? 'crimson_smash' : 'dash';
+      return enemy?.mirrorMoves?.[slot] || fallback;
+    }
+    function getMirrorSkillCooldown(enemy, slot) {
+      const cooldowns = enemy?.mirrorCooldowns || {};
+      if (Number.isFinite(cooldowns[slot])) return Math.max(0.12, cooldowns[slot]);
+      const attackSpeed = Math.max(0.5, enemy?.attackSpeed || 1);
+      if (slot === 'laser') return Math.max(0.75, 3.2 / attackSpeed);
+      if (slot === 'smash') return Math.max(1.1, 4.2 / attackSpeed);
+      if (slot === 'dash') return Math.max(0.55, 1.8 / attackSpeed);
+      return Math.max(0.18, 0.42 / attackSpeed);
+    }
+    function getMirrorMoveDamage(enemy, moveKey, fallback) {
+      if (Number.isFinite(enemy?.mirrorMoveStats?.[moveKey]?.damage)) {
+        return Math.max(1, Math.round(enemy.mirrorMoveStats[moveKey].damage));
+      }
+      const powerBonus = Math.max(0, Number(enemy?.dmg || 0) - 18) * 0.35;
+      return Math.max(1, Math.round(Number(fallback || 18) + powerBonus));
+    }
+    function mirrorStatusEffects(enemy, options = {}) {
+      const stats = enemy?.mirrorItemStats || {};
+      const effects = [];
+      const bleedChance = Number(options.bleedChance || 0) + Number(stats.bleedChance || 0);
+      if (bleedChance > 0) effects.push({ key: 'bleed', chance: bleedChance, stacks: 1, duration: 4.2 });
+      if (Number(options.fireStacks || 0) > 0) {
+        effects.push({ key: 'fire', chance: 1, stacks: Number(options.fireStacks || 1), duration: Number(options.fireDuration || 3.2) });
+      }
+      return Array.isArray(options.statusEffects) ? options.statusEffects : effects;
+    }
+    function mirrorDamagePlayers(enemy, angle, range, arc, damage, knockback, source, options = {}) {
+      let anyHit = false;
+      (ctx.getPlayers?.(enemy) || []).forEach(player => {
+        const d = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (d > range + player.r) return;
+        const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        if (Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle))) > arc) return;
+        anyHit = true;
+        ctx.damagePlayer(enemy, player, damage, targetAngle, knockback, source);
+        mirrorStatusEffects(enemy, options).forEach(effect => {
+          if (effect.key && (Number(effect.chance ?? 1) >= 1 || random('encounter') < Number(effect.chance))) {
+            ctx.applyPlayerStatus(enemy, player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+          }
+        });
+      });
+      return anyHit;
+    }
+    function mirrorBlastPlayers(enemy, radius, damage, knockback, source, options = {}) {
+      let anyHit = false;
+      (ctx.getPlayers?.(enemy) || []).forEach(player => {
+        if (Math.hypot(player.x - enemy.x, player.y - enemy.y) > radius + player.r) return;
+        anyHit = true;
+        const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        ctx.damagePlayer(enemy, player, damage, angle, knockback, source);
+        mirrorStatusEffects(enemy, options).forEach(effect => {
+          if (effect.key && (Number(effect.chance ?? 1) >= 1 || random('encounter') < Number(effect.chance))) {
+            ctx.applyPlayerStatus(enemy, player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+          }
+        });
+      });
+      return anyHit;
+    }
+    function fireMirrorProjectiles(enemy, angle, count, spread, speed, damage, options = {}) {
+      for (let index = 0; index < count; index += 1) {
+        const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
+        const a = angle + offset;
+        ctx.spawnProjectile(enemy, {
+          x: enemy.x + Math.cos(a) * (enemy.r + 7),
+          y: enemy.y + Math.sin(a) * (enemy.r + 7),
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          r: options.r || 6,
+          life: options.life || 1.25,
+          kind: options.kind || 'mirror_shot',
+          source: options.source || 'mirror_knight_projectile',
+          damage,
+          knockback: options.knockback || 120,
+          statusEffects: options.statusEffects || mirrorStatusEffects(enemy, options),
+          ...(options.homing ? {
+            homing: true,
+            homingSpeed: options.homingSpeed,
+            homingTurnRate: options.homingTurnRate,
+            homingAccel: options.homingAccel,
+          } : {}),
+        });
+      }
+    }
+
+    function startMirrorMelee(enemy, angleToPlayer) {
+      const weaponKey = enemy.mirrorWeapon || '';
+      const weaponStats = enemy.mirrorWeaponStats || {};
+      enemy.swingTime = 0.17;
+      enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
+      if (weaponKey) {
+        const damage = Math.max(1, Math.round(weaponStats.damage || enemy.dmg || 24));
+        const range = Math.max(40, Number(weaponStats.range || MIRROR_MELEE_RANGE));
+        const knockback = Math.max(0, Number(weaponStats.knockback || 140));
+        const rangedWeapons = new Set(['hunters_bow', 'magenta_degale', 'void_piercer', 'gelleh_lightning_spear', 'princess_wand', 'metao_fire_staff', 'magenta_p90', 'lazer_glasses']);
+        if (rangedWeapons.has(weaponKey)) {
+          if (weaponKey === 'metao_fire_staff') {
+            fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.18, 345, damage, { kind: 'fireball', r: 8, life: 1.4, knockback, fireStacks: 1, fireDuration: 3.2 });
+          } else if (weaponKey === 'magenta_p90') {
+            fireMirrorProjectiles(enemy, angleToPlayer, 5, 0.08, 880, Math.max(6, damage), { kind: 'magenta_p90', r: 4, life: 0.75, knockback });
+          } else if (weaponKey === 'lazer_glasses') {
+            enemy.state = 'mirrorLaser';
+            enemy.windup = 0.22;
+            enemy.beamAngle = angleToPlayer;
+            enemy.beamDamage = Math.max(enemy.beamDamage || 0, Math.round(damage * 0.55));
+          } else {
+            fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, weaponKey === 'magenta_degale' ? 880 : 760, damage, { kind: weaponKey, r: 6, life: 0.9, knockback });
+          }
+          return;
+        }
+        mirrorDamagePlayers(enemy, angleToPlayer, range + 10, weaponKey === 'excalibur' ? Math.PI : MIRROR_MELEE_ARC + 0.18, damage, knockback, `mirror_${weaponKey}`, {
+          bleedChance: weaponKey === 'thorns_bleed_blade' ? 0.1 : 0,
+        });
+        return;
+      }
+      const move = getMirrorMove(enemy, 'melee');
+      const damage = getMirrorMoveDamage(enemy, move, enemy.dmg || 24);
+      if (move === 'fire_balls') {
+        fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.16, 340, Math.max(14, damage - 4), { kind: 'fireball', r: 8, life: 1.45, knockback: 110, fireStacks: 1, fireDuration: 3.2 });
+        return;
+      }
+      mirrorDamagePlayers(enemy, angleToPlayer, MIRROR_MELEE_RANGE + 10, MIRROR_MELEE_ARC + 0.12, damage, 140, `mirror_${move}`);
+    }
+
+    function startMirrorLaser(enemy, angleToPlayer, distance) {
+      const move = getMirrorMove(enemy, 'laser');
+      enemy.attackCd = 0.42;
+      enemy.mirrorLaserCd = getMirrorSkillCooldown(enemy, 'laser');
+      if (move === 'power_disks') {
+        for (let index = 0; index < 8; index += 1) {
+          fireMirrorProjectiles(enemy, index * (Math.PI * 2 / 8), 1, 0, 300, getMirrorMoveDamage(enemy, move, 20), { kind: 'disk', r: 7, life: 1.1, knockback: 110 });
+        }
+        return;
+      }
+      if (move === 'blade_justice') {
+        mirrorDamagePlayers(enemy, angleToPlayer, 124, 1.35, getMirrorMoveDamage(enemy, move, 34), 280, 'mirror_blade');
+        return;
+      }
+      if (move === 'lightning_columns') {
+        const player = ctx.getPlayer(enemy);
+        [-38, 38].forEach(offset => {
+          const ox = Math.cos(angleToPlayer + Math.PI / 2) * offset;
+          const oy = Math.sin(angleToPlayer + Math.PI / 2) * offset;
+          ctx.spawnHazard?.(enemy, {
+            kind: 'lightning_column', enemy: true, source: 'mirror_lightning',
+            x: (player?.x ?? enemy.x) + ox, y: (player?.y ?? enemy.y) + oy,
+            r: 48, ttl: 3.6, tick: 0.18, interval: 0.42, damage: getMirrorMoveDamage(enemy, move, 18),
+          });
+        });
+        return;
+      }
+      enemy.state = 'mirrorLaser';
+      enemy.windup = move === 'god_sweep' ? 0.36 : distance < 150 ? 0.34 : 0.46;
+      enemy.beamAngle = angleToPlayer + rollEnemyBeamBias(enemy, move === 'god_sweep' ? 0.08 : 0.1);
+    }
+
+    function startMirrorSmash(enemy, angleToPlayer) {
+      const move = getMirrorMove(enemy, 'smash');
+      const damage = getMirrorMoveDamage(enemy, move, enemy.smashDamage || 40);
+      enemy.attackCd = 0.6;
+      enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
+      if (move === 'kicky_kick') {
+        mirrorBlastPlayers(enemy, 142, Math.max(damage, 84), 680, 'mirror_kick', { aoe: true });
+        enemy.vx -= Math.cos(angleToPlayer) * 210;
+        enemy.vy -= Math.sin(angleToPlayer) * 210;
+        return;
+      }
+      if (move === 'healing_zone') {
+        ctx.healEnemy(enemy, enemy, enemy.max * 0.08);
+        mirrorBlastPlayers(enemy, 118, Math.max(10, damage), 120, 'mirror_zone', { aoe: true });
+        return;
+      }
+      if (move === 'fire_circle' || move === 'floor_lava') {
+        mirrorBlastPlayers(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, 'mirror_fire', {
+          aoe: true, fireStacks: move === 'floor_lava' ? 2 : 1, fireDuration: 3.2,
+        });
+        return;
+      }
+      enemy.state = 'mirrorSmash';
+      enemy.windup = 0.38;
+    }
+
+    function startMirrorDash(enemy, angleToPlayer, distance) {
+      const move = getMirrorMove(enemy, 'dash');
+      const player = ctx.getPlayer(enemy);
+      enemy.attackCd = 0.34;
+      enemy.mirrorDashCd = getMirrorSkillCooldown(enemy, 'dash');
+      if (move === 'warp' && player) {
+        const backAngle = angleToPlayer + Math.PI;
+        const landing = findSafeLanding(enemy, player.x + Math.cos(backAngle) * 72, player.y + Math.sin(backAngle) * 72, enemy.r);
+        if (landing) {
+          enemy.x = landing.x;
+          enemy.y = landing.y;
+          enemy.inv = Math.max(enemy.inv || 0, 0.22);
+        }
+        return;
+      }
+      if (move === 'nimrod_stomp' && player) {
+        const landing = findSafeLanding(enemy, player.x, player.y, enemy.r);
+        if (landing) { enemy.x = landing.x; enemy.y = landing.y; }
+        mirrorBlastPlayers(enemy, 112, getMirrorMoveDamage(enemy, move, 46), 310, 'mirror_stomp');
+        return;
+      }
+      if (move === 'zip_lightning') {
+        enemy.dashAngle = angleToPlayer;
+        enemy.dashTime = 0.16;
+        enemy.dashHit = false;
+        enemy.mirrorDashMove = 'zip_lightning';
+        return;
+      }
+      if (move === 'cowards_way' || move === 'flying_unhitable') {
+        enemy.inv = Math.max(enemy.inv || 0, move === 'flying_unhitable' ? 1.2 : 0.7);
+        enemy.speed = Math.max(enemy.speed || 0, 260);
+        return;
+      }
+      enemy.state = 'mirrorDash';
+      enemy.windup = distance > 260 ? 0.08 : 0.14;
+      enemy.dashAngle = angleToPlayer;
+    }
+
+    function updateMirrorChampion(enemy, dt) {
+      const player = ctx.getPlayer(enemy);
+      if (!player) return;
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const angleToPlayer = Math.atan2(dy, dx);
+
+      enemy.mirrorLaserCd = Math.max(0, Number(enemy.mirrorLaserCd || 0) - dt);
+      enemy.mirrorSmashCd = Math.max(0, Number(enemy.mirrorSmashCd || 0) - dt);
+      enemy.mirrorDashCd = Math.max(0, Number(enemy.mirrorDashCd || 0) - dt);
+
+      if (enemy.windup > 0) {
+        enemy.windup -= dt;
+        enemy.vx *= 0.78;
+        enemy.vy *= 0.78;
+        if (enemy.state === 'mirrorLaser') aimEnemyBeam(enemy, dt, 3.4);
+        if (enemy.windup <= 0) {
+          if (enemy.state === 'mirrorLaser') {
+            const laserMove = getMirrorMove(enemy, 'laser');
+            enemy.beamTime = laserMove === 'god_sweep' ? 1.05 : laserMove === 'turtle_wave' ? 0.86 : laserMove === 'love_beam' ? 0.92 : 0.64;
+            enemy.beamTick = 0;
+          } else if (enemy.state === 'mirrorDash') {
+            enemy.dashTime = 0.18;
+            enemy.dashHit = false;
+          } else if (enemy.state === 'mirrorSmash') {
+            mirrorBlastPlayers(enemy, 148, enemy.smashDamage || enemy.dmg + 18, 300, 'mirror_smash', { aoe: true });
+            enemy.attackCd = 0.75;
+          }
+        }
+        return;
+      }
+
+      if (enemy.beamTime > 0) {
+        const laserMove = getMirrorMove(enemy, 'laser');
+        tickEnemyBeam(enemy, dt, {
+          tick: laserMove === 'god_sweep' ? 0.06 : laserMove === 'love_beam' ? 0.07 : 0.08,
+          range: laserMove === 'god_sweep' ? 360 : laserMove === 'turtle_wave' ? 440 : 430,
+          knockback: laserMove === 'turtle_wave' ? 145 : 95,
+          damage: laserMove === 'turtle_wave'
+            ? Math.max(enemy.beamDamage || enemy.dmg, 32)
+            : laserMove === 'god_sweep'
+              ? Math.max(10, Math.round((enemy.beamDamage || enemy.dmg) * 0.55))
+              : enemy.beamDamage || enemy.dmg,
+          speedDamp: 0.84,
+          turnRate: laserMove === 'god_sweep' ? 5.8 : 3.5,
+          onTick: activeEnemy => { if (laserMove === 'god_sweep') activeEnemy.beamAngle += 4.4 * dt; },
+          onEnd: activeEnemy => {
+            activeEnemy.attackCd = 0.62;
+            activeEnemy.mirrorLaserCd = getMirrorSkillCooldown(activeEnemy, 'laser');
+          },
+        });
+        return;
+      }
+
+      if (enemy.dashTime > 0) {
+        enemy.dashTime -= dt;
+        const dashMove = enemy.mirrorDashMove || getMirrorMove(enemy, 'dash');
+        const dashSpeed = dashMove === 'zip_lightning' ? 700 : 600;
+        enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+        enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
+        if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 6) {
+          enemy.dashHit = true;
+          ctx.damagePlayer(enemy, player, enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type);
+        }
+        if (enemy.dashTime <= 0) {
+          enemy.attackCd = 0.45;
+          enemy.mirrorDashCd = getMirrorSkillCooldown(enemy, 'dash');
+          enemy.mirrorDashMove = '';
+        }
+        return;
+      }
+
+      if (enemy.stun > 0) {
+        enemy.vx *= 0.88;
+        enemy.vy *= 0.88;
+        return;
+      }
+
+      const laserMove = getMirrorMove(enemy, 'laser');
+      const smashMove = getMirrorMove(enemy, 'smash');
+      const desiredRange = enemy.mirrorSmashCd <= 0
+        ? (smashMove === 'kicky_kick' ? 126 : 118)
+        : enemy.mirrorLaserCd <= 0 && laserMove !== 'blade_justice'
+          ? 230
+          : 112;
+      const preferred = distance > desiredRange + 24 ? 1 : distance < desiredRange - 26 ? -1 : 0.2;
+      const strafe = distance < 300 ? 0.34 : 0;
+      steerEnemy(
+        enemy,
+        dx / distance * preferred + -dy / distance * strafe,
+        dy / distance * preferred + dx / distance * strafe,
+        enemy.speed,
+        6.2,
+        dt,
+      );
+
+      if (enemy.attackCd > 0) return;
+
+      const dashMove = getMirrorMove(enemy, 'dash');
+      if (enemy.mirrorSmashCd <= 0 && distance < 178) { startMirrorSmash(enemy, angleToPlayer); return; }
+      if (enemy.mirrorLaserCd <= 0 && (distance > 96 || laserMove === 'blade_justice')) { startMirrorLaser(enemy, angleToPlayer, distance); return; }
+      if (enemy.mirrorDashCd <= 0 && (distance > 170 || dashMove === 'warp')) { startMirrorDash(enemy, angleToPlayer, distance); return; }
+
+      const mirrorWeapon = enemy.mirrorWeapon || '';
+      const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'gelleh_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
+      const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
+      if (mirrorWeapon && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + player.r + 14)) { startMirrorMelee(enemy, angleToPlayer); return; }
+      if (distance < MIRROR_MELEE_RANGE + player.r + 6) { startMirrorMelee(enemy, angleToPlayer); return; }
+      enemy.attackCd = 0.18;
+    }
+
+    // --- rival --------------------------------------------------------------
+    // A shared-roster rival: a slain character that returns to hunt the party.
+    // It fights with a mirrored kit (same body as the mirror champion) and
+    // hunts the NEAREST living player. A befriended rival never attacks and
+    // shadows the party; a vendetta rival always closes in. Its curse/loot/
+    // overworld-roaming meta is handled by the authority's run-service layer.
+    function updateRivalEnemy(enemy, dt) {
+      if (enemy.rivalFriend) {
+        // Befriended: loosely shadow the nearest player, never attack.
+        enemy.beamTime = 0;
+        const player = ctx.getPlayer(enemy);
+        if (!player) { enemy.vx *= 0.9; enemy.vy *= 0.9; return; }
+        const fdx = player.x - enemy.x;
+        const fdy = player.y - enemy.y;
+        const fdist = Math.hypot(fdx, fdy) || 1;
+        if (fdist > 170) steerEnemy(enemy, fdx / fdist, fdy / fdist, enemy.speed * 0.8, 3.4, dt);
+        else if (fdist < 70) steerEnemy(enemy, -(fdx / fdist), -(fdy / fdist), enemy.speed * 0.5, 3.0, dt);
+        else { enemy.vx *= 0.9; enemy.vy *= 0.9; }
+        return;
+      }
+      // Hostile rivals fight with the mirrored kit. The vendetta flag just keeps
+      // them from ever disengaging — the mirror body already closes distance.
+      updateMirrorChampion(enemy, dt);
+    }
+
     return {
       steerEnemy,
       trySteerEnemyToCover,
@@ -2353,6 +2828,8 @@
       updateHandsomeDevilBoss,
       updateGod,
       updateMooggyEnemy,
+      updateMirrorChampion,
+      updateRivalEnemy,
     };
   }
 

@@ -64,6 +64,7 @@
     createCampaignItemChoices = () => [],
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
+    ITEM_DEFS = {},
     rollCampaignItem = () => '',
     applyForgeCommand = () => ({ ok: false, reason: 'FORGE_UNAVAILABLE' }),
     collectCampaignItem: collectSharedCampaignItem = () => ({ ok: false }),
@@ -221,6 +222,22 @@
     return state.floorState?.layout?.rooms?.find(room => room.id === roomId) || null;
   }
 
+  // God mode: collecting every relic grants a 12s "godTimer" window that boosts
+  // damage/speed and slashes cooldowns, exactly like the campaign. On the
+  // authority the window end tick lives on the player as `godUntilTick`.
+  const RELIC_KEYS = Object.freeze(Object.keys(ITEM_DEFS));
+  function godModeActive(state, player) {
+    return Number(state?.tick || 0) < Number(player?.godUntilTick || 0);
+  }
+  function maybeGrantGodMode(state, player, emitEvent) {
+    if (godModeActive(state, player)) return;
+    if (!RELIC_KEYS.length) return;
+    const items = player.items || {};
+    if (!RELIC_KEYS.every(key => Number(items[key] || 0) > 0)) return;
+    player.godUntilTick = state.tick + Math.round(12 * 20);
+    emitEvent('GOD_MODE_GRANTED', { playerId: player.id, untilTick: player.godUntilTick });
+  }
+
   function livingEncounterEnemies(state, roomId = state.floorState?.currentRoomId) {
     return Object.values(state.enemies || {}).filter(enemy => (
       enemy && enemy.roomId === roomId && !enemy.dead && Number(enemy.health) > 0
@@ -259,6 +276,162 @@
     return pool.filter(type => STANDARD_ENEMY_TYPES.includes(type));
   }
 
+  // Build a mirror-kit snapshot from the source player's authoritative loadout
+  // and spawn a mirror champion that fights with it (the challenge-room boss).
+  function spawnMirrorChampionEncounter(state, room, emitEvent) {
+    const source = state.players?.[room.mirrorSourcePlayerId]
+      || Object.values(state.players || {}).find(player => !player?.disconnected && player.roomId === room.id);
+    if (!source) return null;
+    const definition = getEnemyDefinition('mirror_knight');
+    const itemStats = source.itemStats || {};
+    const attackSpeed = Math.max(0.3, Number(itemStats.attackSpeedMultiplier || 1) * Number(source.attackSpeed || 1) || 1);
+    const damageMult = Math.max(0.1, Number(source.damageMultiplier || 1));
+    const baseDamage = Math.max(1, Math.round(24 * damageMult + Number(source.attackPower || 0)));
+    const equippedMoves = { ...(source.equippedMoves || {}) };
+    const moveStats = {};
+    Object.entries(equippedMoves).forEach(([, moveKey]) => {
+      const base = MOVE_BASE_STATS[moveKey];
+      if (!base) return;
+      moveStats[moveKey] = {
+        damage: Math.max(1, Math.round((Number(base.damage || baseDamage)) * damageMult + Number(source.attackPower || 0))),
+      };
+    });
+    const weaponKey = source.equippedWeapon || '';
+    const weaponBase = WEAPON_BASE_STATS[weaponKey] || {};
+    const weaponStats = weaponKey ? {
+      damage: Math.max(1, Math.round((Number(weaponBase.damage || 24)) * damageMult + Number(source.attackPower || 0))),
+      range: Math.max(40, Number(weaponBase.range || 90)),
+      knockback: Math.max(0, Number(weaponBase.knockback || 140)),
+    } : null;
+    // Match the campaign's mirror HP/speed: the champion carries the source
+    // hero's max HP (min 180) and the campaign 228 base speed.
+    const maxHealth = Math.max(180, Math.round(Number(source.maxHp || 120)));
+    const enemyId = state.allocateEntityId('enemy');
+    state.enemies[enemyId] = {
+      id: enemyId,
+      type: 'mirror_knight',
+      spriteKey: source.characterKey || definition.spriteKey,
+      behavior: 'mirror',
+      roomId: room.id,
+      x: Number(state.floorState.width || 900) / 2,
+      y: Number(state.floorState.height || 700) / 2 - 150,
+      vx: 0, vy: 0,
+      radius: definition.radius,
+      moveSpeed: 228,
+      maxHealth, health: maxHealth,
+      contactDamage: baseDamage,
+      projectileDamage: baseDamage,
+      elite: false, eliteTypes: [], elitePowers: [], patterns: [],
+      boss: true, mirrorExactCopy: true,
+      bleedImmune: false,
+      statuses: createCampaignStatusMap(),
+      contactCooldownUntilTick: 0,
+      attackCooldownUntilTick: state.tick + 16,
+      attackWindupUntilTick: 0,
+      state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
+      attackCd: 0.5,
+      // Mirror kit read by updateMirrorChampion.
+      attackSpeed,
+      mirrorMoves: equippedMoves,
+      mirrorMoveStats: moveStats,
+      mirrorItemStats: {
+        beamDamageMultiplier: Number(itemStats.beamDamageMultiplier || 1),
+        aoeDamageMultiplier: Number(itemStats.aoeDamageMultiplier || 1),
+        bleedChance: Number(itemStats.bleedChance || 0),
+      },
+      mirrorWeapon: weaponKey,
+      mirrorWeaponStats: weaponStats,
+      mirrorCooldowns: {
+        melee: Math.max(0.18, 0.4 / attackSpeed),
+        laser: Math.max(0.75, 3.2 / attackSpeed),
+        smash: Math.max(1.1, 4.2 / attackSpeed),
+        dash: Math.max(0.55, 1.8 / attackSpeed),
+      },
+      beamDamage: Math.max(1, Math.round((moveStats[equippedMoves.laser]?.damage || baseDamage) * Number(itemStats.beamDamageMultiplier || 1))),
+      smashDamage: Math.max(1, Math.round((moveStats[equippedMoves.smash]?.damage || baseDamage) * Number(itemStats.aoeDamageMultiplier || 1))),
+    };
+    const encounter = {
+      roomId: room.id,
+      roomType: room.type,
+      status: 'active',
+      enemyIds: [enemyId],
+      startedTick: state.tick,
+    };
+    state.floorState.encounters[room.id] = encounter;
+    emitEvent('ENEMY_SPAWNED', { enemyId, roomId: room.id, enemyType: 'mirror_knight', mirrorSourcePlayerId: source.id });
+    return encounter;
+  }
+
+  // Spawn any rivals marked to return this floor into the given combat room,
+  // mirroring the slain character's default kit. Rivals hunt the nearest player.
+  function spawnPendingRivals(state, room, emitEvent) {
+    if (!room || !ENCOUNTER_ROOM_TYPES.has(room.type) || room.type === 'start') return;
+    const roster = Array.isArray(state.rivalRoster) ? state.rivalRoster : [];
+    roster.forEach(entry => {
+      if (!entry.pendingSpawn || entry.dead || entry.friend) return;
+      entry.pendingSpawn = false;
+      entry.spawnedInRoomId = room.id;
+      const definition = getEnemyDefinition('rival');
+      const characterKey = entry.characterKey;
+      const equippedMoves = getDefaultMoveLoadout(characterKey);
+      const weaponKey = getCharacterDefaultWeapon(characterKey);
+      const profile = HERO_BASE_STATS[characterKey] || HERO_BASE_STATS.thorn_knight;
+      const floorScale = 1 + (Number(state.floorNumber || 1) - 1) * 0.12;
+      const baseDamage = Math.max(1, Math.round(24 * Number(profile.damageMultiplier || 1) * floorScale));
+      const maxHealth = Math.max(220, Math.round(Number(profile.maxHp || 120) * 1.4 * floorScale));
+      const enemyId = state.allocateEntityId('enemy');
+      const moveStats = {};
+      Object.values(equippedMoves).forEach(moveKey => {
+        const base = MOVE_BASE_STATS[moveKey];
+        if (base) moveStats[moveKey] = { damage: Math.max(1, Math.round(Number(base.damage || baseDamage) * Number(profile.damageMultiplier || 1) * floorScale)) };
+      });
+      const weaponBase = WEAPON_BASE_STATS[weaponKey] || {};
+      state.enemies[enemyId] = {
+        id: enemyId,
+        type: 'rival',
+        spriteKey: characterKey,
+        behavior: 'mirror',
+        roomId: room.id,
+        rivalCharacterKey: characterKey,
+        rivalFriend: !!entry.friend,
+        rivalVendetta: !!entry.vendetta,
+        x: Number(state.floorState.width || 900) / 2 + (Math.random() - 0.5) * 120,
+        y: Number(state.floorState.height || 700) / 2 - 120,
+        vx: 0, vy: 0,
+        radius: definition.radius,
+        moveSpeed: 228,
+        maxHealth, health: maxHealth,
+        contactDamage: baseDamage,
+        projectileDamage: baseDamage,
+        elite: false, eliteTypes: [], elitePowers: [], patterns: [],
+        boss: true, bleedImmune: false,
+        statuses: createCampaignStatusMap(),
+        contactCooldownUntilTick: 0,
+        attackCooldownUntilTick: state.tick + 16,
+        attackWindupUntilTick: 0,
+        state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+        stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
+        attackCd: 0.5, attackSpeed: 1,
+        mirrorMoves: equippedMoves,
+        mirrorMoveStats: moveStats,
+        mirrorItemStats: { beamDamageMultiplier: 1, aoeDamageMultiplier: 1, bleedChance: 0 },
+        mirrorWeapon: weaponKey,
+        mirrorWeaponStats: weaponKey ? {
+          damage: Math.max(1, Math.round(Number(weaponBase.damage || 24) * Number(profile.damageMultiplier || 1) * floorScale)),
+          range: Math.max(40, Number(weaponBase.range || 90)),
+          knockback: Math.max(0, Number(weaponBase.knockback || 140)),
+        } : null,
+        mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+        beamDamage: Math.max(1, Math.round((moveStats[equippedMoves.laser]?.damage || baseDamage))),
+        smashDamage: Math.max(1, Math.round((moveStats[equippedMoves.smash]?.damage || baseDamage))),
+      };
+      const encounter = state.floorState.encounters[room.id];
+      if (encounter && Array.isArray(encounter.enemyIds)) encounter.enemyIds.push(enemyId);
+      emitEvent('ENEMY_SPAWNED', { enemyId, roomId: room.id, enemyType: 'rival', rivalCharacterKey: characterKey, vendetta: !!entry.vendetta });
+    });
+  }
+
   function ensureNetworkEncounter(state, random, emitEvent = () => {}, roomId = null) {
     const occupiedRoomId = roomId || Object.values(state.players || {}).find(player => !player?.disconnected)?.roomId || state.floorState?.currentRoomId;
     const room = currentRoom(state, occupiedRoomId);
@@ -284,7 +457,18 @@
       }
     }
     state.floorState.encounters = state.floorState.encounters || {};
-    if (state.floorState.encounters[room.id]) return state.floorState.encounters[room.id];
+    if (state.floorState.encounters[room.id]) {
+      // A returning rival joins the party's current fight in progress.
+      spawnPendingRivals(state, room, emitEvent);
+      return state.floorState.encounters[room.id];
+    }
+
+    // A started mirror challenge fields a single mirror champion mirroring the
+    // activating player's kit, instead of the generic wave plan.
+    if (room.type === 'challenge' && room.challengeType === 'mirror' && room.challengeStarted) {
+      const encounter = spawnMirrorChampionEncounter(state, room, emitEvent);
+      if (encounter) return encounter;
+    }
 
     const stream = random.scoped(`enemy-spawning:${state.floorNumber}:${room.id}`);
     const plan = getCampaignEncounterPlan(room, {
@@ -374,6 +558,8 @@
       clearedTick: null,
     };
     state.floorState.encounters[room.id] = encounter;
+    // A rival scheduled to return this floor joins the first fight it reaches.
+    spawnPendingRivals(state, room, emitEvent);
     return encounter;
   }
 
@@ -614,6 +800,56 @@
 
   function defeatEnemy(state, enemy, playerId, emitEvent) {
     if (enemy.dead) return;
+    // The god cheats death once: instead of dying it revives at 90% HP with 3x
+    // damage and enters phase 2 (Divine Rebirth), exactly like onEnemyDie. The
+    // shared updateGod body drives phases 3-5 from there.
+    if (enemy.type === 'god' && !enemy.rebirthUsed) {
+      enemy.rebirthUsed = true;
+      enemy.health = Math.max(1, Math.round(Number(enemy.maxHealth || 1) * 0.9));
+      enemy.hp = enemy.health;
+      enemy.contactDamage = Math.round(Number(enemy.contactDamage || 40) * 3);
+      enemy.dmg = enemy.contactDamage;
+      enemy.moveSpeed = Number(enemy.moveSpeed || 108) * 1.18;
+      enemy.speed = enemy.moveSpeed;
+      enemy.phase = 2;
+      enemy.windup = 0;
+      enemy.beamTime = 0;
+      enemy.dashTime = 0;
+      enemy.state = 'godPhase2';
+      enemy.invulnerableUntilTick = state.tick + Math.round(1.5 * 20);
+      enemy.stunnedUntilTick = 0;
+      emitEvent('ENEMY_SPOKE', { enemyId: enemy.id, roomId: enemy.roomId, text: 'DIVINE REBIRTH' });
+      emitEvent('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: 'god_rebirth' });
+      return;
+    }
+    // The Cult Queen cheats death once too, into her finisher windup (the
+    // updateCultQueenBoss body root-holds her and detonates). If she hasn't yet
+    // entered it via the HP threshold, start it here.
+    if (enemy.type === 'queen_cult' && !enemy.queenFinisherDone && !enemy.queenFinisherActive) {
+      enemy.queenFinisherActive = true;
+      enemy.queenFinisherTimer = 1.6;
+      enemy.health = 1;
+      enemy.hp = 1;
+      emitEvent('ENEMY_SPOKE', { enemyId: enemy.id, roomId: enemy.roomId, text: 'Then burn with me!' });
+      return;
+    }
+    // Rivals have an extra life: the first kill sends them back to hunt the
+    // party on a later floor and arms their curse; the second kill is final.
+    if (enemy.type === 'rival') {
+      const entry = getRosterEntry(state, enemy.rivalCharacterKey);
+      queuePartyRivalCurse(state, enemy.rivalCharacterKey, { descended: false });
+      if (entry && Number(entry.lives || 2) > 1) {
+        entry.lives = Number(entry.lives || 2) - 1;
+        entry.dead = false;
+        entry.returnFloor = Math.min(MAX_FLOOR, Number(state.floorNumber || 1) + 1);
+        entry.pendingSpawn = false;
+        emitEvent('RIVAL_DOWNED', { characterKey: enemy.rivalCharacterKey, returnFloor: entry.returnFloor, final: false });
+      } else if (entry) {
+        entry.dead = true;
+        entry.lives = 0;
+        emitEvent('RIVAL_DOWNED', { characterKey: enemy.rivalCharacterKey, final: true });
+      }
+    }
     enemy.dead = true;
     enemy.state = 'dead';
     enemy.vx = 0;
@@ -673,6 +909,14 @@
 
   function damageEnemy(state, enemy, damage, playerId, emitEvent, details = {}) {
     if (!enemy || enemy.dead) return false;
+    // Befriended rivals are fully invulnerable (they fight for the party).
+    if (enemy.rivalFriend) return false;
+    // Boss invulnerability windows (god phase-shift/rebirth reposition) shrug off
+    // damage entirely unless the caller forces it (the finisher self-kill does).
+    if (!details.ignoreInv && state.tick < Number(enemy.invulnerableUntilTick || 0)) {
+      emitEvent('ENEMY_HIT', { enemyId: enemy.id, playerId, damage: 0, absorbed: 0, health: enemy.health, blocked: true });
+      return false;
+    }
     const sparkleMultiplier = state.tick < Number(enemy.critSparkleUntilTick || 0) ? 2 : 1;
     const attacker = state.players?.[playerId];
     const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
@@ -701,6 +945,12 @@
     });
     if (crit.isCrit) incoming = Math.round(incoming * crit.critMultiplier);
     if (canCrit && attacker?.elBartoAmbushReady && capeActive) attacker.elBartoAmbushReady = false;
+    // God-mode attackers hit harder for the duration of their window.
+    if (attacker && godModeActive(state, attacker)) incoming = Math.round(incoming * 1.4);
+    // Rivals shrug off a flat 20% of every hit (they're tougher than a normal
+    // enemy of the same stats); the god takes 5% off the top like the campaign.
+    if (enemy.type === 'rival') incoming = Math.max(1, Math.round(incoming * 0.8));
+    else if (enemy.type === 'god') incoming = Math.max(1, Math.round(incoming * 0.95));
     const absorbed = Math.min(incoming, Math.max(0, Number(enemy.barrier || 0)));
     enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - absorbed);
     const dealt = incoming - absorbed;
@@ -708,6 +958,25 @@
     enemy.hitTick = state.tick;
     // Campaign parity: a hit shield unit cannot re-shield for a moment.
     if (enemy.type === 'shield_unit') enemy._shieldHitLockout = 1.1;
+    // Knockback + heavy-hit stun, mirroring hitEnemy in combat.js. Bosses and
+    // elites resist crowd control (they're shoved less and stun-gate higher);
+    // the impulse pushes the enemy away along the hit angle so the world's
+    // physics carries the shove, then the client shakes on the ENEMY_HIT event.
+    const knockback = Number(details.knockback || 0);
+    if (knockback > 0 && Number.isFinite(Number(details.angle))) {
+      const ccLevel = enemy.boss || enemy.type === 'god' ? 0.6 : enemy.elite ? 0.3 : 0;
+      const resistFactor = 1 / (1 + ccLevel + Math.max(0, Number(enemy.stunResistance || 0)));
+      const applied = knockback * resistFactor;
+      applyCampaignImpulse(enemy, Number(details.angle), applied);
+      enemy._lastHitAngle = Number(details.angle);
+      // Heavy hits briefly stun: lost ≥40% max HP in one blow, or a big shove.
+      const heavyHit = dealt >= Math.max(1, Number(enemy.maxHealth || 1)) * 0.4;
+      const heavyKnockback = applied >= 260;
+      if (heavyHit || heavyKnockback) {
+        const stunTicks = Math.max(2, Math.round((heavyHit ? 0.32 : 0.18) * 20 * Math.max(0.28, 1 - ccLevel * 0.4)));
+        enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + stunTicks);
+      }
+    }
     emitEvent('ENEMY_HIT', {
       enemyId: enemy.id,
       playerId,
@@ -718,6 +987,8 @@
       projectileId: details.projectileId,
       strike: details.strike,
       crit: crit.isCrit,
+      // Impact weight drives the client's screenshake/hitstop on this hit.
+      knockback: knockback > 0 ? knockback : undefined,
     });
     if (enemy.health <= 0) defeatEnemy(state, enemy, playerId, emitEvent);
     return true;
@@ -1139,10 +1410,13 @@
 
   function resolveSweep(state, player, definition, angle, emitEvent, random, strike = 0) {
     const targets = targetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
+    const sweepKnockback = Number(definition.knockback || 140);
     targets.forEach(candidate => {
       damageEnemy(state, candidate.enemy, definition.damage, player.id, emitEvent, {
         attackKind: definition.weaponKey,
         strike,
+        angle: Math.atan2(candidate.enemy.y - player.y, candidate.enemy.x - player.x),
+        knockback: sweepKnockback,
       });
       if (!candidate.enemy.dead) applyAuthorityOnHitStatusProcs(state, candidate.enemy, player, {
         ...definition,
@@ -1243,7 +1517,9 @@
       segments = result.segments;
     }
 
-    player.attackCooldownUntilTick = state.tick + Math.max(1, Math.ceil(Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS)
+    // God mode drops the melee cadence to a 0.2s cooldown (4 ticks).
+    const godMeleeTicks = godModeActive(state, player) ? 4 : Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS);
+    player.attackCooldownUntilTick = state.tick + Math.max(1, Math.ceil(godMeleeTicks
       * Math.max(0.45, Number(player.cooldownMultiplier || 1))
       / Math.max(0.2, Number(player.itemStats?.attackSpeedMultiplier || 1))));
     player.action = 'attack';
@@ -1393,6 +1669,7 @@
         * forgeScale * turtleMult * Math.max(0, Number(itemStats.beamDamageMultiplier || 1));
       const padding = Math.max(1, Number(profile.padding || 6)) * Math.max(0.1, Number(itemStats.beamWidthMultiplier || 1));
       const range = Number(profile.range || 430);
+      const beamKnockback = Number(profile.knockback || 60);
       const fan = Array.isArray(profile.fan) ? profile.fan : [0];
       const targetIds = [];
       const hitThisTick = new Set();
@@ -1402,7 +1679,7 @@
           // An enemy straddling two fanned beams still takes one hit per tick.
           if (hitThisTick.has(enemy.id)) return;
           hitThisTick.add(enemy.id);
-          damageEnemy(state, enemy, tickDamage, player.id, emitEvent, { attackKind: channel.moveKey });
+          damageEnemy(state, enemy, tickDamage, player.id, emitEvent, { attackKind: channel.moveKey, angle: beamAngle, knockback: beamKnockback });
           targetIds.push(enemy.id);
           if (enemy.dead) return;
           if (channel.moveKey === 'blood_beam' && roll() < 0.05) {
@@ -1444,7 +1721,11 @@
     if (state.tick < Number(cooldowns[moveKey] || 0)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
-    const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20));
+    // God mode slashes ability cooldowns (laser 2.8s, smash 2s, dash 0.7x).
+    const godCooldownMult = godModeActive(state, player)
+      ? (slot === 'laser' ? 2.8 / Math.max(0.5, Number(stats.cooldown || 3.2)) : slot === 'smash' ? 2 / Math.max(0.5, Number(stats.cooldown || 4.2)) : 0.7)
+      : 1;
+    const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20 * godCooldownMult));
     const projectileIds = [];
     const spawnedProjectiles = [];
     const abilityEntityIds = [];
@@ -1465,7 +1746,22 @@
       } else if (moveKey === 'princess_shield') {
         player.barrier = Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4);
         mode = 'shield';
+      } else if (moveKey === 'dash') {
+        // Plain dash is a 0.16s velocity glide with i-frames, exactly like the
+        // campaign's castDashBurst — NOT a teleport. The movement system honors
+        // dashUntilTick/dashVx/dashVy and holds the hero invulnerable.
+        const dashSpeed = (520 + Number(player.attackSpeed || 0) * 28) * (godModeActive(state, player) ? 1.1 : 1);
+        const dashTicks = Math.max(1, Math.round(0.16 * 20));
+        player.dashUntilTick = state.tick + dashTicks;
+        player.dashVx = Math.cos(angle) * dashSpeed;
+        player.dashVy = Math.sin(angle) * dashSpeed;
+        player.vx = player.dashVx;
+        player.vy = player.dashVy;
+        player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), state.tick + Math.round(0.18 * 20));
+        mode = 'dash';
       } else {
+        // Blink-strike dashes (warp, zip_lightning, knight_slash_dash) teleport
+        // and slash the line they cross — they are teleports in the campaign too.
         const distance = moveKey === 'warp' ? 300 : moveKey === 'zip_lightning' ? 230 : 170;
         const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
         const before = { x: player.x, y: player.y };
@@ -1564,7 +1860,11 @@
         const width = 24;
         effectRadius = range;
         abilityTargetsInBeam(state, player, angle, range, width).forEach(enemy => {
-          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, {
+            attackKind: moveKey,
+            angle: Math.atan2(enemy.y - player.y, enemy.x - player.x),
+            knockback: 90,
+          });
           targetIds.push(enemy.id);
         });
         damageRivalsInBeam(state, player, angle, range, width, stats.damage, emitEvent, moveKey, targetIds);
@@ -1610,7 +1910,12 @@
         effectRadius = Number(stats.range || 140);
         chipDestructiblesInRadius(state, player, centerX, centerY, effectRadius, Number(stats.damage || 1), emitEvent, random);
         abilityTargetsInRadius(state, player, centerX, centerY, Number(stats.range || 140)).forEach(enemy => {
-          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+          // Smash AoE shoves enemies outward from the impact center.
+          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, {
+            attackKind: moveKey,
+            angle: Math.atan2(enemy.y - centerY, enemy.x - centerX),
+            knockback: 260,
+          });
           if (moveKey === 'hammer_smash' && !enemy.dead) {
             enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 14);
           }
@@ -1674,6 +1979,8 @@
       destinationY,
       effectRadius,
       sweepDirection,
+      // Dash-glide velocity so the local caster can start the glide immediately.
+      ...(moveKey === 'dash' ? { dashVx: Number(player.dashVx || 0), dashVy: Number(player.dashVy || 0) } : {}),
       projectileIds,
       spawnedProjectiles,
       abilityEntityIds,
@@ -1684,6 +1991,43 @@
       effectRadius, projectileIds, spawnedProjectiles, targetIds,
       abilityEntityIds,
     };
+  }
+
+  // Drink a stored potion. At full HP, a potion is instead shared with a nearby
+  // wounded rival — healing it and befriending it for the rest of the run,
+  // exactly like tryUsePotion in the campaign.
+  function resolveUsePotion(state, player, emitEvent) {
+    if (!player || player.downed) return;
+    const stored = Number(player.storedPotions || 0);
+    if (stored <= 0) {
+      emitEvent('POTION_EMPTY', { playerId: player.id });
+      return;
+    }
+    if (Number(player.hp || 0) >= Number(player.maxHp || 100)) {
+      const woundedRival = livingEncounterEnemies(state, player.roomId).find(enemy => (
+        enemy.type === 'rival' && !enemy.rivalFriend
+          && Number(enemy.health || 0) < Number(enemy.maxHealth || 1)
+          && Math.hypot(enemy.x - player.x, enemy.y - player.y) < 140
+      ));
+      if (woundedRival) {
+        player.storedPotions = stored - 1;
+        woundedRival.health = Number(woundedRival.maxHealth || 1);
+        woundedRival.hp = woundedRival.health;
+        woundedRival.rivalFriend = true;
+        const entry = getRosterEntry(state, woundedRival.rivalCharacterKey);
+        if (entry) { entry.friend = true; entry.vendetta = false; entry.relationship = Math.max(10, Number(entry.relationship || 0) + 10); }
+        emitEvent('RIVAL_BEFRIENDED', { playerId: player.id, enemyId: woundedRival.id, characterKey: woundedRival.rivalCharacterKey });
+        return;
+      }
+      emitEvent('POTION_FULL_HP', { playerId: player.id });
+      return;
+    }
+    player.storedPotions = stored - 1;
+    const itemStats = player.itemStats || {};
+    const heal = 40 * Math.max(1, Number(itemStats.storedPotionHealingMultiplier || 1)) * Math.max(1, Number(itemStats.healingMultiplier || 1));
+    const before = Number(player.hp || 0);
+    player.hp = Math.min(Number(player.maxHp || 100), before + heal);
+    emitEvent('POTION_USED', { playerId: player.id, healedAmount: Math.max(0, player.hp - before), storedPotions: player.storedPotions });
   }
 
   function resolvePlayerInteraction(state, player, action, emitEvent, random) {
@@ -1817,6 +2161,8 @@
         .forEach(action => resolvePlayerAbility(state, player, action, emitEvent, random));
       actions.filter(action => action?.action === 'INTERACT')
         .forEach(action => resolvePlayerInteraction(state, player, action, emitEvent, random));
+      actions.filter(action => action?.action === 'USE_POTION')
+        .forEach(() => resolveUsePotion(state, player, emitEvent));
       actions.filter(action => action?.action === 'UPGRADE')
         .forEach(action => resolveUpgradeSelection(state, player, action, emitEvent, random));
       actions.filter(action => action?.action === 'SHOP_PURCHASE')
@@ -2289,7 +2635,12 @@
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
       summonedBy: summoner.id,
       stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
-      attackCd: Number(definition.attackCooldown || 1),
+      attackCd: options.hastened ? Math.min(0.8, Number(definition.attackCooldown || 1)) : Number(definition.attackCooldown || 1),
+      // Council bosses need their own kit seeds so their authored bodies run.
+      ...(definition.type === 'queen_cult' ? { summonCd: 2.4, novaCd: 3, novaTimer: 0 } : {}),
+      ...(definition.type === 'bulk_golem' ? { splitReady: true, aoeTime: 3, jumpCd: 1.2 } : {}),
+      ...(definition.type === 'artificer_knave' ? { phase: 1 } : {}),
+      ...(definition.type === 'antony_blemmye' ? { phase: 1, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 } : {}),
     };
     state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
     emitEvent('ENEMY_SPAWNED', { enemyId, roomId: summoner.roomId, enemyType: definition.type, summonedBy: summoner.id, elite });
@@ -2551,6 +2902,28 @@
       room.hazards = Array.isArray(room.hazards) ? room.hazards : [];
       room.hazards.push({ ...hazard, ownerId: enemy.id });
     },
+    spawnLightningColumns(enemy, playerRef, damage) {
+      // Elite Lightning Columns mode: two pillars land near the target and
+      // pulse a few times, matching the SP elite trait's authored hazard.
+      const state = behaviorRuntime.state;
+      const bounds = {
+        wall: Number(state.floorState?.wallThickness || 28),
+        width: Number(state.floorState?.width || 900),
+        height: Number(state.floorState?.height || 700),
+      };
+      const service = combatRandomByState.get(state);
+      const rand = (min, max) => min + (service ? service.next('encounter') : Math.random()) * (max - min);
+      for (let index = 0; index < 2; index += 1) {
+        this.spawnHazard(enemy, {
+          kind: 'lightning_column',
+          enemy: true,
+          source: enemy.type || 'lightning_column',
+          x: Math.max(bounds.wall + 60, Math.min(bounds.width - bounds.wall - 60, Number(playerRef.x) + rand(-70, 70))),
+          y: Math.max(bounds.wall + 60, Math.min(bounds.height - bounds.wall - 60, Number(playerRef.y) + rand(-70, 70))),
+          r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(damage),
+        });
+      }
+    },
     getElapsedSeconds() {
       return Number(behaviorRuntime.state.elapsedSeconds || Number(behaviorRuntime.state.tick || 0) / 20);
     },
@@ -2588,6 +2961,12 @@
     enemy.max = Math.max(1, Number(enemy.maxHealth || 1));
     enemy.stun = Math.max(0, (Number(enemy.stunnedUntilTick || 0) - state.tick) / 20);
     enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - fixedDelta);
+    const foldGodInvulnerability = () => {
+      if (Number(enemy.inv || 0) > 0) {
+        enemy.invulnerableUntilTick = Math.max(Number(enemy.invulnerableUntilTick || 0), state.tick + Math.round(Number(enemy.inv) * 20));
+        enemy.inv = 0;
+      }
+    };
     if (state.tick < Number(enemy.confusedBlindUntilTick || 0)) {
       enemy.vx *= 0.8;
       enemy.vy *= 0.8;
@@ -2611,6 +2990,9 @@
         }
       }
     }
+    // The god body sets `inv` in seconds during phase shifts; fold that into the
+    // authoritative invulnerability tick so damageEnemy honors it this same tick.
+    foldGodInvulnerability();
     if (enemy.dead || !state.enemies[enemy.id]) return;
     decayAuthorityEnemyBarrier(enemy, fixedDelta);
     const slowMultiplier = getCampaignSlowMultiplier(getCampaignStatusStacks(enemy, 'slow'));
@@ -2632,7 +3014,9 @@
     enemy.x = collision.x;
     enemy.y = collision.y;
     if (Math.abs(enemy.vx) > 1) enemy.facing = enemy.vx < 0 ? -1 : 1;
-    enemy.hp = Number(enemy.health || 0);
+    // Bodies that self-modify hp (Queen finisher hold-at-1, Antony bite-heal)
+    // write the alias; fold it back to authoritative health.
+    if (Number(enemy.hp) !== Number(enemy.health)) enemy.health = Math.max(0, Number(enemy.hp || 0));
   }
 
   function updateEnemies(state, fixedDelta, emitEvent) {
@@ -2917,6 +3301,9 @@
       damageEnemy(state, enemy, projectile.damage, projectile.ownerId, emitEvent, {
         projectileId,
         attackKind: projectile.attackKind,
+        // Player shots shove along their travel direction.
+        angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
+        knockback: Number(projectile.knockback || 120),
       });
       const projectileOwner = state.players?.[projectile.ownerId];
       if (!enemy.dead && projectileOwner) {
@@ -2967,6 +3354,8 @@
         room.challengeStarted = true;
         room.challengeLifecycleState = 'active';
         room.challengeFailed = false;
+        // A mirror challenge reflects the activating player's own kit.
+        if ((room.challengeType || pickup.trial) === 'mirror') room.mirrorSourcePlayerId = player.id;
         delete state.pickups[pickupId];
         emitEvent('CHALLENGE_STARTED', { playerId: player.id, roomId: room.id, challengeType: room.challengeType || pickup.trial });
         return;
@@ -3023,6 +3412,8 @@
           });
           emitEvent('JESTER_GATE_PENDING', { playerId: player.id, skipFloors: acquisition.jester.skipFloors });
         }
+        // Owning every relic ignites the 12s god-mode window.
+        maybeGrantGodMode(state, player, emitEvent);
       } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
         const room = currentRoom(state, pickup.roomId);
         const gardenRandom = random?.scoped?.(`garden:respawn:${state.floorNumber}:${pickup.roomId}:${pickup.gardenNodeId}:${state.tick}`);
@@ -3039,13 +3430,10 @@
       }
       let healedAmount = 0;
       if (pickup.type === 'potion') {
-        const doubled = Number(player.itemStats?.potionDoubleChance || 0) > 0
-          && random.stream('loot').chance(Number(player.itemStats.potionDoubleChance));
-        amount = doubled ? 2 : 1;
-        const before = Number(player.hp || 0);
-        player.hp = Math.min(Number(player.maxHp || 100), before
-          + 40 * amount * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
-        healedAmount = Math.max(0, player.hp - before);
+        // Potions are STORED, not drunk on pickup — the campaign keeps them for
+        // a deliberate Q-press (heal, or share-to-befriend a wounded rival).
+        amount = 1;
+        player.storedPotions = Math.min(9, Number(player.storedPotions || 0) + 1);
       }
       delete state.pickups[pickupId];
       emitEvent('PICKUP_COLLECTED', {
@@ -3205,7 +3593,93 @@
       player.vx = 0;
       player.vy = 0;
     });
+    applyPartyRivalCurses(state, emitEvent);
+    scheduleRivalReturns(state, emitEvent);
     emitEvent('FLOOR_ADVANCED', { floorNumber: nextFloorNumber, floorSeed, startRoomId: layout.startRoomId });
+  }
+
+  // Party-wide rival curses (shared-roster model): each defeated/alive-descended
+  // rival arms a curse on the party's NEXT floor, keyed by character. On floor
+  // advance the queued curses land on matchRules so the whole party feels them,
+  // then clear. Mirrors queueRivalCurse -> seedRivalCurses in the campaign.
+  function getRosterEntry(state, characterKey) {
+    if (!characterKey) return null;
+    const roster = Array.isArray(state.rivalRoster) ? state.rivalRoster : (state.rivalRoster = []);
+    let entry = roster.find(candidate => candidate.characterKey === characterKey);
+    if (!entry) {
+      entry = { characterKey, lives: 2, relationship: 0, friend: false, vendetta: false, dead: false, returnFloor: 0, pendingSpawn: false };
+      roster.push(entry);
+    }
+    return entry;
+  }
+
+  // Add a character to the shared rival roster so it will return to hunt the
+  // party. Called by the run-service layer when a rival character is introduced.
+  function addPartyRival(state, characterKey, options = {}) {
+    const entry = getRosterEntry(state, characterKey);
+    if (!entry) return null;
+    entry.lives = Math.max(1, Math.trunc(Number(options.lives ?? entry.lives ?? 2)));
+    entry.returnFloor = Math.min(MAX_FLOOR, Math.max(1, Number(options.returnFloor ?? (Number(state.floorNumber || 1) + 1))));
+    entry.dead = false;
+    entry.friend = !!options.friend;
+    entry.vendetta = !!options.vendetta;
+    entry.pendingSpawn = false;
+    return entry;
+  }
+
+  function queuePartyRivalCurse(state, characterKey, options = {}) {
+    if (!characterKey) return;
+    const curses = state.pendingRivalCurses || (state.pendingRivalCurses = {});
+    const descended = !!options.descended;
+    switch (characterKey) {
+      case 'princess':
+        if (!curses.obscureMap) curses.obscureMap = true;
+        break;
+      case 'thorn_knight':
+        curses.lowerCombat = true;
+        break;
+      case 'metao':
+        curses.reducePotions = true;
+        break;
+      case 'gelleh':
+        curses.gellehTurrets = Math.max(Number(curses.gellehTurrets || 0), descended ? 4 : 3);
+        break;
+      case 'mooggy':
+        curses.mooggyTraps = Math.max(Number(curses.mooggyTraps || 0), descended ? 20 : 15);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function applyPartyRivalCurses(state, emitEvent) {
+    const curses = state.pendingRivalCurses;
+    if (!curses || Object.keys(curses).length === 0) return;
+    const rules = state.matchRules || (state.matchRules = {});
+    rules.rivalCurses = { ...curses };
+    // Wire the mechanically-simple curses straight into matchRules so the shared
+    // systems already reading those flags apply them party-wide.
+    if (curses.reducePotions) rules.potionDropMultiplier = 0.4;
+    if (curses.lowerCombat) rules.rivalCombatCurse = true;
+    if (curses.obscureMap) rules.obscureMap = true;
+    if (Number(curses.mooggyTraps || 0) > 0) rules.pendingMooggyTraps = Number(curses.mooggyTraps);
+    if (Number(curses.gellehTurrets || 0) > 0) rules.pendingGellehTurrets = Number(curses.gellehTurrets);
+    emitEvent('RIVAL_CURSES_APPLIED', { floorNumber: state.floorNumber, curses: { ...curses } });
+    state.pendingRivalCurses = {};
+  }
+
+  // Rivals that lost a life earlier return on their scheduled floor and are
+  // injected into that floor's first combat room mirroring the slain character.
+  function scheduleRivalReturns(state, emitEvent) {
+    const roster = Array.isArray(state.rivalRoster) ? state.rivalRoster : [];
+    roster.forEach(entry => {
+      if (entry.dead || entry.friend) return;
+      if (Number(entry.returnFloor || 0) !== Number(state.floorNumber || 1)) return;
+      entry.pendingSpawn = true;
+      // A grudge (negative relationship) arms a permanent vendetta hunt.
+      if (Number(entry.relationship || 0) < 0) entry.vendetta = true;
+      emitEvent('RIVAL_RETURNING', { characterKey: entry.characterKey, floorNumber: state.floorNumber, vendetta: !!entry.vendetta });
+    });
   }
 
   // A player standing on the stairs charges a dwell timer; once it fills the
@@ -3382,6 +3856,9 @@
     createNetworkCombatSystem,
     createFloorProgressionSystem,
     advanceToNextFloor,
+    addPartyRival,
+    queuePartyRivalCurse,
+    spawnMirrorChampionEncounter,
     MAX_FLOOR,
   };
 });

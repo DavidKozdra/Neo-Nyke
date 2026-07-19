@@ -335,3 +335,231 @@ describe('authored boss behaviors on the authority', () => {
     expect(sawPattern).toBe(true);
   });
 });
+
+describe('player hits shove and stun enemies (game feel)', () => {
+  test('a beam tick knocks the enemy back along the beam and heavy hits stun', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const enemy = injectEnemy(state, 'hunter', player.x + 60, player.y, { attackCd: 9 });
+    const startX = enemy.x;
+
+    // Fire blood_beam straight at the enemy (+x) and let it tick.
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
+    for (let step = 0; step < 3; step += 1) {
+      simulation.updateGame({ p1: { moveX: 0, moveY: 0, aimDirection: 0, buttons: 1 } }, 0.05);
+    }
+    // Enemy shoved forward (+x) by the beam knockback, not standing still.
+    expect(enemy.x).toBeGreaterThan(startX + 5);
+    // The ENEMY_HIT events carry an impact weight for the client's screenshake.
+    expect(events.some(event => event.eventType === 'ENEMY_HIT' && Number(event.data.knockback) > 0)).toBe(true);
+  });
+
+  test('a smash detonation shoves enemies outward and stuns them', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    // crimson_smash is thorn_knight's default smash (radius AoE around the hero).
+    // A golem is heavy enough to survive the blast and read the shove/stun.
+    const enemy = injectEnemy(state, 'golem', player.x + 40, player.y, { attackCd: 9, health: 5000, maxHealth: 5000 });
+    const startX = enemy.x;
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'crimson_smash', aimDirection: 0 }] } }, 0.05);
+    // The heavy blast stuns the enemy this tick; while stunned it can't re-steer,
+    // so the outward impulse carries it over the next few movement ticks.
+    expect(enemy.stunnedUntilTick).toBeGreaterThan(state.tick);
+    tick(simulation, 3);
+    expect(enemy.x).toBeGreaterThan(startX); // shoved away from the blast center
+  });
+});
+
+describe('the god cheats death and escalates through phases', () => {
+  test('lethal damage revives the god at 90% HP in phase 2, then it climbs to phase 5', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const god = injectEnemy(state, 'god', player.x + 250, player.y, {
+      phase: 1, partitionAngles: [], partitionAngle: 0, partitionRotationDir: 1, partitionRotationSpeed: 0, attackCd: 9,
+    });
+    god.maxHealth = 4600;
+    god.health = 4600;
+
+    // A killing blow -> Divine Rebirth instead of death.
+    god.health = 1;
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
+    for (let step = 0; step < 3; step += 1) {
+      simulation.updateGame({ p1: { moveX: 0, moveY: 0, aimDirection: 0, buttons: 1 } }, 0.05);
+    }
+    expect(god.dead).toBe(false);
+    expect(god.rebirthUsed).toBe(true);
+    expect(god.phase).toBe(2);
+    expect(god.health).toBe(Math.round(4600 * 0.9));
+    expect(events.some(event => event.eventType === 'ENEMY_SPOKE' && /REBIRTH/.test(event.data.text))).toBe(true);
+
+    // Drop to 20% -> phase 3 spawns the boss council.
+    god.invulnerableUntilTick = 0;
+    god.health = Math.round(god.maxHealth * 0.19);
+    tick(simulation, 2);
+    expect(god.phase3Triggered).toBe(true);
+    const council = Object.values(state.enemies).filter(enemy => enemy.summonedBy === god.id && enemy.boss && !enemy.dead);
+    expect(council.length).toBe(4);
+
+    // 12% -> phase 4, 6% -> phase 5.
+    god.invulnerableUntilTick = 0;
+    god.health = Math.round(god.maxHealth * 0.11);
+    tick(simulation, 1);
+    expect(god.phase4Triggered).toBe(true);
+    god.invulnerableUntilTick = 0;
+    god.health = Math.round(god.maxHealth * 0.05);
+    tick(simulation, 1);
+    expect(god.phase5Triggered).toBe(true);
+  });
+
+  test('the god is untouchable during its phase-shift reposition', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const god = injectEnemy(state, 'god', player.x + 250, player.y, {
+      phase: 2, rebirthUsed: true, attackCd: 9,
+      partitionAngles: [], partitionAngle: 0, partitionRotationDir: 1, partitionRotationSpeed: 0,
+    });
+    god.maxHealth = 4600;
+    god.health = Math.round(god.maxHealth * 0.19);
+
+    tick(simulation, 1); // triggers phase 3 -> sets invulnerability window
+    expect(god.invulnerableUntilTick).toBeGreaterThan(state.tick);
+    const hpAfterPhase = god.health;
+    // Beam it while invulnerable: no health lost.
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
+    simulation.updateGame({ p1: { moveX: 0, moveY: 0, aimDirection: 0, buttons: 1 } }, 0.05);
+    expect(god.health).toBe(hpAfterPhase);
+  });
+});
+
+describe('the mirror champion fights with the triggering player\'s kit', () => {
+  function injectMirror(state, player, overrides = {}) {
+    return injectEnemy(state, 'mirror_knight', player.x + 220, player.y, {
+      boss: true, mirrorExactCopy: true,
+      maxHealth: 400, health: 400, moveSpeed: 228,
+      attackSpeed: 1,
+      mirrorMoves: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+      mirrorMoveStats: { blood_beam: { damage: 20 }, crimson_smash: { damage: 40 } },
+      mirrorItemStats: { beamDamageMultiplier: 1, aoeDamageMultiplier: 1, bleedChance: 0 },
+      mirrorWeapon: '',
+      mirrorWeaponStats: null,
+      mirrorCooldowns: { melee: 0.4, laser: 0.01, smash: 0.01, dash: 0.01 },
+      beamDamage: 20, smashDamage: 40, dmg: 24, contactDamage: 24,
+      attackCd: 0,
+      ...overrides,
+    });
+  }
+
+  test('a started mirror challenge spawns one champion mirroring the activator', () => {
+    const { state, events } = behaviorHarness();
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.type = 'challenge';
+    room.challengeType = 'mirror';
+    room.challengeStarted = true;
+    room.mirrorSourcePlayerId = 'p1';
+    player.equippedMoves = { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'warp' };
+    player.equippedWeapon = 'thorns_bleed_blade';
+    player.maxHp = 260;
+    delete state.floorState.encounters[room.id];
+
+    const { ensureNetworkEncounter } = require('../js/simulation/NetworkCombatSystem');
+    const random = new (require('../js/simulation/RandomService').RandomService)({ matchSeed: 'mirror' });
+    ensureNetworkEncounter(state, random, (t, d) => events.push({ eventType: t, data: d }), room.id);
+
+    const champion = Object.values(state.enemies).find(enemy => enemy.type === 'mirror_knight' && !enemy.dead);
+    expect(champion).toBeTruthy();
+    expect(champion.mirrorMoves).toEqual(player.equippedMoves);
+    expect(champion.mirrorWeapon).toBe('thorns_bleed_blade');
+    expect(champion.maxHealth).toBe(260); // mirrors the source hero's HP
+    expect(events.some(event => event.eventType === 'ENEMY_SPAWNED' && event.data.mirrorSourcePlayerId === 'p1')).toBe(true);
+  });
+
+  test('the champion deploys mirrored skills against the player', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    injectMirror(state, player);
+
+    let usedSkill = false;
+    for (let step = 0; step < 40 && !usedSkill; step += 1) {
+      simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+      usedSkill = ['mirrorLaser', 'mirrorSmash', 'mirrorDash'].includes(
+        Object.values(state.enemies).find(enemy => enemy.type === 'mirror_knight')?.state,
+      ) || player.hp < 1000;
+    }
+    expect(usedSkill).toBe(true);
+  });
+
+  test('the champion mirrors a ranged weapon into projectile volleys', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    injectMirror(state, player, {
+      x: player.x + 300, y: player.y,
+      mirrorWeapon: 'magenta_p90',
+      mirrorWeaponStats: { damage: 12, range: 90, knockback: 60 },
+      mirrorLaserCd: 9, mirrorSmashCd: 9, mirrorDashCd: 9,
+    });
+
+    let firedP90 = false;
+    for (let step = 0; step < 30 && !firedP90; step += 1) {
+      simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+      firedP90 = Object.values(state.projectiles).some(projectile => projectile.type === 'magenta_p90');
+    }
+    expect(firedP90).toBe(true);
+  });
+});
+
+describe('shared-roster rivals hunt the party and curse the next floor', () => {
+  const { addPartyRival, queuePartyRivalCurse } = require('../js/simulation/NetworkCombatSystem');
+
+  test('a downed rival returns a floor later with an extra life and hunts the party', () => {
+    const { state, simulation } = behaviorHarness();
+    const entry = addPartyRival(state, 'thorn_knight', { returnFloor: 2, lives: 2 });
+    expect(entry.lives).toBe(2);
+    expect(entry.returnFloor).toBe(2);
+    // The rival hunts the nearest player using the mirror body; verify it closes.
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 320, player.y, {
+      boss: true, rivalCharacterKey: 'thorn_knight', rivalFriend: false,
+      maxHealth: 400, health: 400, moveSpeed: 228, attackSpeed: 1,
+      mirrorMoves: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+      mirrorMoveStats: { blood_beam: { damage: 20 } },
+      mirrorItemStats: { beamDamageMultiplier: 1, aoeDamageMultiplier: 1, bleedChance: 0 },
+      mirrorWeapon: '', mirrorWeaponStats: null,
+      mirrorCooldowns: { melee: 0.4, laser: 9, smash: 9, dash: 9 },
+      beamDamage: 20, smashDamage: 40, dmg: 24, contactDamage: 24, attackCd: 0,
+    });
+    const startDistance = rival.x - player.x;
+    for (let step = 0; step < 8; step += 1) simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+    // Rival should have closed the gap toward its target (mirror body strafes/approaches).
+    expect(rival.x - player.x).toBeLessThan(startDistance);
+  });
+
+  test('befriended rivals are invulnerable and never attack', () => {
+    const { state, simulation, events } = behaviorHarness();
+    const player = state.players.p1;
+    const friend = injectEnemy(state, 'rival', player.x + 80, player.y, {
+      boss: true, rivalCharacterKey: 'princess', rivalFriend: true,
+      maxHealth: 300, health: 300, moveSpeed: 228,
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 0.01, smash: 0.01, dash: 0.01 },
+      dmg: 24, contactDamage: 24, attackCd: 0,
+    });
+    const startHp = player.hp;
+    for (let step = 0; step < 20; step += 1) simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+    expect(player.hp).toBe(startHp); // a friend never hurt the player
+
+    // A friend shrugs off all incoming damage.
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
+    for (let step = 0; step < 4; step += 1) simulation.updateGame({ p1: { moveX: 0, aimDirection: 0, buttons: 1 } }, 0.05);
+    expect(friend.health).toBe(300);
+  });
+
+  test('rivals arm a party-wide curse on the next floor', () => {
+    const { state } = behaviorHarness();
+    queuePartyRivalCurse(state, 'metao', { descended: false });
+    queuePartyRivalCurse(state, 'gelleh', { descended: true });
+    expect(state.pendingRivalCurses.reducePotions).toBe(true);
+    expect(state.pendingRivalCurses.gellehTurrets).toBe(4);
+  });
+});
