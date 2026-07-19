@@ -22,7 +22,12 @@
   const { GameSimulation } = gameSimulationApi;
   const { GameState } = gameStateApi;
   const { generateFloorLayout } = floorApi;
-  const { applyResponsiveVelocity, getCampaignPlayerMovementSpeed } = movementRulesApi;
+  const {
+    applyResponsiveVelocity,
+    getCampaignPlayerMovementSpeed,
+    isCampaignPlayerDashing,
+    applyCampaignDashVelocity,
+  } = movementRulesApi;
   const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
@@ -150,10 +155,24 @@
         const minimum = wall + radius;
         const maximumX = width - minimum;
         const maximumY = height - minimum;
-        // Match the campaign's acceleration/deceleration rather than snapping
-        // an online player directly to an input-derived velocity.
-        player.vx = applyResponsiveVelocity(player.vx, moveX * speed, fixedDelta);
-        player.vy = applyResponsiveVelocity(player.vy, moveY * speed, fixedDelta);
+        const dashing = isCampaignPlayerDashing?.(player, state.tick);
+        if (dashing) {
+          // A dashing hero glides at its locked dash velocity and ignores input
+          // steering, exactly like the campaign's dashTime branch. Movement
+          // moves are the ones that reach here (warp/shield resolve instantly in
+          // the combat system); this covers the plain dash-burst glides.
+          applyCampaignDashVelocity(player);
+        } else {
+          if (Number(player.dashUntilTick || 0) && state.tick >= Number(player.dashUntilTick)) {
+            player.dashUntilTick = 0;
+            player.dashVx = 0;
+            player.dashVy = 0;
+          }
+          // Match the campaign's acceleration/deceleration rather than snapping
+          // an online player directly to an input-derived velocity.
+          player.vx = applyResponsiveVelocity(player.vx, moveX * speed, fixedDelta);
+          player.vy = applyResponsiveVelocity(player.vy, moveY * speed, fixedDelta);
+        }
         const desiredX = player.x + player.vx * fixedDelta;
         const desiredY = player.y + player.vy * fixedDelta;
         const halfDoor = Math.max(radius * 1.5, doorWidth / 2 + radius);

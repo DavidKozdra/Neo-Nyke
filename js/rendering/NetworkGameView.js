@@ -188,8 +188,16 @@
     const width = Math.max(1, Number(floorState.width) || 900);
     const height = Math.max(1, Number(floorState.height) || 700);
     const minimum = wall + radius;
-    const vx = movementRules.applyResponsiveVelocity?.(player.vx, movement.moveX * speed, fixedDelta) ?? movement.moveX * speed;
-    const vy = movementRules.applyResponsiveVelocity?.(player.vy, movement.moveY * speed, fixedDelta) ?? movement.moveY * speed;
+    // A dashing hero glides at its locked dash velocity and ignores input,
+    // matching the authority's movement resolution so prediction doesn't fight
+    // the dash and snap the hero back mid-glide.
+    const dashing = movementRules.isCampaignPlayerDashing?.(player, currentTick);
+    const vx = dashing
+      ? Number(player.dashVx || 0)
+      : (movementRules.applyResponsiveVelocity?.(player.vx, movement.moveX * speed, fixedDelta) ?? movement.moveX * speed);
+    const vy = dashing
+      ? Number(player.dashVy || 0)
+      : (movementRules.applyResponsiveVelocity?.(player.vy, movement.moveY * speed, fixedDelta) ?? movement.moveY * speed);
     const desiredX = clamp(Number(player.x || 0) + vx * fixedDelta, minimum, width - minimum);
     const desiredY = clamp(Number(player.y || 0) + vy * fixedDelta, minimum, height - minimum);
     const room = floorState.layout?.rooms?.find(candidate => candidate.id === player.roomId);
@@ -792,6 +800,23 @@
           : data.attackKind === 'bleed' ? '#ff536d' : '#ffffff';
         this.neo.spawnDamagePopup?.(entity.x, entity.y - Number(entity.radius || 18) - 12, Number(data.damage || 0), { color, size: 18 });
         this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 18) + 5, color, 0.28);
+        // Campaign hit feel: directional screenshake scaled to impact weight,
+        // driven off the authoritative ENEMY_HIT/PLAYER_HIT event (matches
+        // applyHitFeel in combat.js). Chip/DoT ticks (no knockback, tiny damage)
+        // are skipped so a held beam doesn't jitter the camera every frame.
+        const localPlayerId = this.session.snapshot?.()?.playerId;
+        const maxHp = Math.max(1, Number(entity.maxHealth || entity.maxHp || Number(data.damage || 0) * 6));
+        const ratio = clamp(Number(data.damage || 0) / maxHp, 0, 1);
+        const isPlayerHit = event.eventType === 'PLAYER_HIT';
+        const relevant = isPlayerHit ? data.playerId === localPlayerId : true;
+        if (relevant && (data.crit || ratio >= 0.04 || Number(data.knockback || 0) >= 120)) {
+          const heavy = clamp(ratio * 2.4, 0, 1);
+          const trauma = (data.crit ? 0.32 : 0.16) + heavy * 0.3;
+          const kick = (data.crit ? 5 : 2.5) + heavy * 6;
+          const angle = Math.atan2(entity.y - (this.localPredictedPlayer?.y ?? entity.y), entity.x - (this.localPredictedPlayer?.x ?? entity.x));
+          this.neo.addTrauma?.(trauma, isPlayerHit ? angle + Math.PI : angle, kick);
+          if (data.crit || heavy > 0.6) this.neo.addHitstop?.(0.04);
+        }
       } else if (event.eventType === 'ENEMY_DEFEATED') {
         this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 20) + 8, '#ff7592', 0.48);
         this.neo.playSfx?.('enemy_hit');
@@ -818,9 +843,17 @@
         const destinationY = Number.isFinite(Number(data.destinationY)) ? Number(data.destinationY) : Number(entity.y);
         const radius = Math.max(1, Number(data.effectRadius || (data.slot === 'smash' ? 140 : 34)));
         const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
-        if (data.playerId === this.session.snapshot?.()?.playerId
-          && this.localPredictedPlayer
-          && ['dash', 'warp', 'dash_aoe'].includes(kind)) {
+        const isLocalCaster = data.playerId === this.session.snapshot?.()?.playerId && this.localPredictedPlayer;
+        // The plain glide dash isn't a teleport: it moves the hero over ~0.16s
+        // via dashUntilTick/dashVx/dashVy, which prediction already integrates.
+        // Snapping to destination here would freeze it at its start point, so we
+        // start the glide locally and let predictPosition carry it instead.
+        if (isLocalCaster && data.abilityId === 'dash') {
+          const serverTick = Number(this.currentSample?.state?.tick || 0);
+          this.localPredictedPlayer.dashUntilTick = serverTick + Math.round(0.16 * 20);
+          this.localPredictedPlayer.dashVx = Number(data.dashVx || 0);
+          this.localPredictedPlayer.dashVy = Number(data.dashVy || 0);
+        } else if (isLocalCaster && ['dash', 'warp', 'dash_aoe'].includes(kind)) {
           this.localPredictedPlayer.x = destinationX;
           this.localPredictedPlayer.y = destinationY;
           this.localPredictedPlayer.vx = 0;

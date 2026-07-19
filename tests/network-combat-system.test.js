@@ -176,7 +176,12 @@ describe('authoritative network combat system', () => {
     ] } }, 0.05);
 
     expect(enemy.health).toBeLessThan(enemy.maxHealth);
-    expect(state.players.p1.y).toBeGreaterThan(350);
+    // Plain dash is a velocity glide, not a teleport: it arms dashUntilTick +
+    // a downward (+y) dash velocity and i-frames, so the hero glides over the
+    // next ~0.16s of movement ticks rather than jumping instantly.
+    expect(state.players.p1.dashUntilTick).toBeGreaterThan(state.tick);
+    expect(state.players.p1.dashVy).toBeGreaterThan(0);
+    expect(state.players.p1.invulnerableUntilTick).toBeGreaterThan(state.tick);
     expect(state.players.p1.moveCooldownUntilTick).toEqual(expect.objectContaining({
       blood_beam: expect.any(Number), crimson_smash: expect.any(Number), dash: expect.any(Number),
     }));

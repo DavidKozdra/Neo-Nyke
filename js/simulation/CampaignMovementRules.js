@@ -38,11 +38,14 @@
     const timedMultiplier = Number(currentTick) < Number(statusUntil.mooggy_zoomies || 0) ? 5
       : Number(currentTick) < Number(statusUntil.turtle_powerup || 0) ? 1.3 : 1;
     const flightBoost = Number(currentTick) < Number(statusUntil.flying_unhitable || 0) ? 2 : 1;
+    // God mode (all relics collected) boosts move speed 1.25x for its window.
+    const godBoost = Number(currentTick) < Number(player?.godUntilTick || 0) ? 1.25 : 1;
     const laserWeight = Math.max(0, Number(player?.itemStats?.laserWeightMultiplier ?? 1));
     const laserSlow = player?.beamChannel ? Math.max(0, 1 - 0.6 * laserWeight) : 1;
     return Math.max(0, Number(player?.moveSpeed) || 228)
       * timedMultiplier
       * flightBoost
+      * godBoost
       * laserSlow
       * Math.max(0.1, Number(player?.itemStats?.moveSpeedMultiplier || 1))
       * (status.getCampaignSlowMultiplier?.(
@@ -51,5 +54,28 @@
       ) ?? 1);
   }
 
-  return { applyResponsiveVelocity, applyCampaignImpulse, getCampaignPlayerMovementSpeed };
+  // A dashing player glides at its locked dash velocity (dashVx/dashVy) instead
+  // of the input-derived velocity, and stays invulnerable, exactly like the
+  // campaign's dashTime branch in update.js. `dashUntilTick` bounds the glide;
+  // the invulnerability floor comes from `invulnerableUntilTick`, which the
+  // authority sets at cast. Returns whether the player is mid-dash so both the
+  // authority and client prediction resolve movement the same way.
+  function isCampaignPlayerDashing(player, currentTick = 0) {
+    return Number(currentTick) < Number(player?.dashUntilTick || 0);
+  }
+
+  function applyCampaignDashVelocity(player) {
+    if (!player) return { vx: 0, vy: 0 };
+    player.vx = Number(player.dashVx || 0);
+    player.vy = Number(player.dashVy || 0);
+    return { vx: player.vx, vy: player.vy };
+  }
+
+  return {
+    applyResponsiveVelocity,
+    applyCampaignImpulse,
+    getCampaignPlayerMovementSpeed,
+    isCampaignPlayerDashing,
+    applyCampaignDashVelocity,
+  };
 });
