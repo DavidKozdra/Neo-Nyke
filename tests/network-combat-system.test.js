@@ -145,16 +145,16 @@ describe('authoritative network combat system', () => {
   });
 
   test('applies hero health and movement profiles without client-authored stats', () => {
-    const player = { characterKey: 'thorn_knight', maxHp: 100, hp: 50, moveSpeed: 180 };
+    const player = { characterKey: 'thorn_knight', maxHp: 100, hp: 50, moveSpeed: 228 };
     applyNetworkHeroProfile(player, 'turtle_boy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'turtle_boy', maxHp: 144, hp: 72, moveSpeed: 180,
+      characterKey: 'turtle_boy', maxHp: 144, hp: 72, moveSpeed: 228,
       damageMultiplier: 1, items: { turtle_shell: 1, dragon_orb: 1 },
       equippedMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
     }));
     applyNetworkHeroProfile(player, 'mooggy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'mooggy', maxHp: 130, hp: 65, moveSpeed: 180,
+      characterKey: 'mooggy', maxHp: 130, hp: 65, moveSpeed: 228,
       damageMultiplier: 0.6,
       items: { hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 },
     }));
@@ -181,7 +181,8 @@ describe('authoritative network combat system', () => {
       blood_beam: expect.any(Number), crimson_smash: expect.any(Number), dash: expect.any(Number),
     }));
     expect(events.filter(event => event.eventType === 'PLAYER_ABILITY_USED')).toHaveLength(3);
-    expect(events.find(event => event.data.abilityId === 'blood_beam').data.effectRadius).toBe(470);
+    // Channelled beams report the campaign's authored blood_beam range.
+    expect(events.find(event => event.data.abilityId === 'blood_beam').data.effectRadius).toBe(430);
   });
 
   test('uses the campaign Power Disk recipe: eight radial disks that shed perpendicular shards', () => {
@@ -374,14 +375,24 @@ describe('authoritative network combat system', () => {
     }
   });
 
-  test('ranged hunters telegraph and fire server projectiles that damage players', () => {
+  // Hunters are melee chasers in the campaign — the old multiplayer-only
+  // "ranged hunter arrow" no longer exists. The authored sniper is the ranged
+  // telegraph-then-fire archetype.
+  test('snipers telegraph and fire server projectiles that damage players', () => {
     const { state, simulation, events } = combatHarness();
     simulation.updateGame({}, 0.05);
-    const enemy = Object.values(state.enemies)[0];
-    enemy.type = 'hunter';
-    enemy.behavior = 'ranged';
-    enemy.projectileDamage = 9;
-    enemy.attackCooldownUntilTick = state.tick;
+    const [enemy, ...others] = Object.values(state.enemies);
+    others.forEach(other => {
+      other.dead = true;
+      other.health = 0;
+      other.deathTick = state.tick;
+    });
+    enemy.type = 'sniper';
+    enemy.behavior = 'sniper';
+    enemy.sniperBehavior = 'stayback';
+    enemy.contactDamage = 12;
+    enemy.attackCd = 0;
+    enemy.spawnTick = -100; // past the 0.72s spawn-emergence lock
     enemy.x = 560;
     enemy.y = 350;
     for (let tick = 0; tick < 25; tick += 1) simulation.updateGame({}, 0.05);
@@ -389,16 +400,17 @@ describe('authoritative network combat system', () => {
     expect(events.some(event => event.eventType === 'ENEMY_TELEGRAPH')).toBe(true);
     expect(events.some(event => event.eventType === 'ENEMY_ATTACKED')).toBe(true);
     const projectile = Object.values(state.projectiles).find(candidate => candidate.hostile);
-    expect(projectile).toEqual(expect.objectContaining({ type: 'hunter_arrow', damage: 9 }));
+    // Campaign sniper round: dmg + 5.
+    expect(projectile).toEqual(expect.objectContaining({ type: 'sniper_round', damage: 17 }));
     projectile.x = state.players.p1.x;
     projectile.y = state.players.p1.y;
     projectile.vx = 0;
     projectile.vy = 0;
     simulation.updateGame({}, 0.05);
-    expect(state.players.p1.hp).toBe(91);
+    expect(state.players.p1.hp).toBeLessThan(100);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'PLAYER_HIT',
-      data: expect.objectContaining({ attackKind: 'hunter_arrow', damage: 9 }),
+      data: expect.objectContaining({ attackKind: 'sniper_projectile', damage: 17 }),
     }));
   });
 

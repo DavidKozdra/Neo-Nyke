@@ -31,6 +31,7 @@ import './simulation/SharedCombatContent.js';
 import './simulation/SharedMoveContent.js';
 import './simulation/SharedEnemyContent.js';
 import './simulation/SharedEnemyAISystem.js';
+import './simulation/SharedEnemyBehaviorSystem.js';
 import './simulation/SharedEncounterSystem.js';
 import './simulation/SharedItemDefinitions.js';
 import './simulation/SharedItemContent.js';

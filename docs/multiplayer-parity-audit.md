@@ -1,3 +1,4 @@
+
 # Multiplayer parity audit
 
 Target: the server resolves authoritative outcomes and broadcasts campaign state/events; every browser uses the existing campaign presentation and UI. Multiplayer must not own reduced gameplay content or a second renderer.
@@ -38,8 +39,9 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 ## Still blocking literal 1:1 parity
 
 1. **Enemy behavior bodies**
-   - Type dispatch and encounter construction are shared, but single-player still executes the authored per-enemy handlers in `game/enemies.js` while authority executes a generic ranged/melee behavior in `NetworkCombatSystem.js`.
-   - Boss phases, elite traits, projectile evasion, obstacle breaking, hidden-player wandering, bounty control and named boss attacks are not one shared operation yet.
+   - The standard roster (hunter, charger, laser, knave, sniper, machine gunner, golem, cult mage/follower, summoner, shield unit, healer, boss spawner) now executes the authored campaign state machines on the authority via `SharedEnemyBehaviorSystem` — wind-ups, dashes, tracking beams, novas, bursts, cover-seeking, summons, shields, heals, the boss-spawner countdown, projectile evasion, elite traits (burning/bleeding/lazered) and hidden-player wander/blind-defense. No walk-over contact damage; attacks deal all damage, like the campaign. Clients render the real telegraph fields (`windup`/`beamTime`/`beamAngle`/`dashTime`/`swingTime`) from snapshots.
+   - The seven scripted bosses now also run their authored bodies on the authority: Cult Queen (missile volleys with dark-drain lifesteal, elite/golem summons, death-defying finisher with falloff blast), Bulk Golem (arcing jump-slam, nova cadence, golem kit), Artificer (three phases: knave kit → converging phase swords → heavy swings), Bowman's Bane (phases, warp evasion, thunder smash, lightning columns and the Justice-of-Sonichu strike lines), Antony (bite drain, slash, directional hammer shockwave, cold death ball), Handsome Devil (red spikes, lava grid, twin lasers, claw) and the god's pattern table (laser/sweep/partition/charge/sword rings). Boss barks ride `ENEMY_SPOKE` events into the normal campaign speech bubbles; boss hazards live in authoritative room state and render through the campaign hazard renderer.
+   - Still generic/absent on the authority: mirror champion and rivals (need mirrored-inventory policy), the god's rebirth phases 3–5 (council/onslaught/judgement gate on the single-player rebirth flow), elite `lightning_columns` mode, and boss intro cutscenes. Single-player still runs its own copies of the shared bodies — deleting them in favour of `SharedEnemyBehaviorSystem` is the remaining deletion step.
 
 2. **Remaining item procs and acquisition side effects**
    - The live campaign's 74 definitions and derived passive/stat table are now shared, but event-driven effects still need extraction.
