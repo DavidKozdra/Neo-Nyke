@@ -16,7 +16,13 @@ describe('TypewriterDialogueManager', () => {
 
     expect(manager.start([{ speaker: 'SARGE', text: 'Listen up.' }])).toBe(true);
     expect(snapshotAtStateChange).toEqual([
-      expect.objectContaining({ active: true, speaker: 'SARGE', text: 'Listen up.', index: 0 }),
+      expect.objectContaining({
+        active: true,
+        speaker: 'SARGE',
+        text: 'Listen up.',
+        visibleText: 'L',
+        index: 0,
+      }),
     ]);
   });
 
