@@ -58,10 +58,18 @@
   const PLAYER_COLORS = ['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf'];
   const ABILITY_PRESENTATIONS = moveContent.MOVE_PRESENTATION_DEFS || Object.freeze({});
   const MOVE_BASE_STATS = moveContent.MOVE_BASE_STATS || Object.freeze({});
-  const CONTINUOUS_BEAM_MOVES = new Set([
+  const CONTINUOUS_BEAM_MOVES = new Set(moveContent.CONTINUOUS_BEAM_MOVES || [
     'blood_beam', 'love_beam', 'turtle_wave', 'holy_eye_beams', 'god_sweep',
     'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer',
   ]);
+  const BUTTON_LASER_HELD = 1;
+
+  function beamChannelLaserMode(moveKey) {
+    return moveKey === 'turtle_wave' || moveKey === 'holy_eye_beams'
+      || moveKey === 'thorn_blood_beams' || moveKey === 'god_sweep'
+      ? moveKey
+      : 'beam';
+  }
   const CAMPAIGN_PRESENTATION_KEYS = Object.freeze([
     'player', 'projectiles', 'rooms', 'currentRoom', 'floor', 'floorsEntered',
     'enemies', 'chests', 'pickups', 'hazards', 'decorations', 'structures',
@@ -144,13 +152,27 @@
     };
   }
 
+  function lerpAngle(from, to, amount) {
+    let delta = (Number(to) || 0) - (Number(from) || 0);
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    return (Number(from) || 0) + delta * amount;
+  }
+
   function interpolatePlayers(previous = {}, current = {}, alpha = 1) {
     const amount = clamp(Number(alpha) || 0, 0, 1);
     return Object.fromEntries(Object.entries(current).map(([playerId, player]) => {
       const before = previous[playerId] || player;
       const changedRoom = before.roomId && player.roomId && before.roomId !== player.roomId;
+      // A channelled beam's authoritative angle only steps at snapshot rate;
+      // lerp it between samples so remote beams sweep as smoothly as local ones.
+      const beamChannel = player.beamChannel && before.beamChannel
+        && player.beamChannel.startTick === before.beamChannel.startTick
+        ? { ...player.beamChannel, angle: lerpAngle(before.beamChannel.angle, player.beamChannel.angle, amount) }
+        : player.beamChannel;
       return [playerId, {
         ...player,
+        beamChannel,
         x: changedRoom ? Number(player.x || 0) : Number(before.x || 0) + (Number(player.x || 0) - Number(before.x || 0)) * amount,
         y: changedRoom ? Number(player.y || 0) : Number(before.y || 0) + (Number(player.y || 0) - Number(before.y || 0)) * amount,
       }];
@@ -160,7 +182,7 @@
   function predictPosition(player, input, fixedDelta, floorState = {}, currentTick = floorState.tick) {
     const movement = normalizeMovement(input.moveX, input.moveY);
     const speed = movementRules.getCampaignPlayerMovementSpeed?.(player, currentTick)
-      ?? Math.max(0, Number(player.moveSpeed) || 180);
+      ?? Math.max(0, Number(player.moveSpeed) || 228);
     const radius = Math.max(1, Number(player.radius) || 18);
     const wall = Math.max(0, Number(floorState.wallThickness) || 28);
     const width = Math.max(1, Number(floorState.width) || 900);
@@ -194,6 +216,9 @@
       this.active = false;
       this.keys = new Set();
       this.aimDirection = 0;
+      this.laserHeld = false;
+      this.localBeamAngle = null;
+      this.localBeamChannelStart = -1;
       this.previousSample = null;
       this.currentSample = null;
       this.localPredictedPlayer = null;
@@ -234,10 +259,14 @@
       this.boundKeyUp = event => this._onKey(event, false);
       this.boundPointerMove = event => this._onPointerMove(event);
       this.boundPointerDown = event => this._onPointerDown(event);
+      this.boundPointerUp = event => this._onPointerUp(event);
       this.boundContextMenu = event => {
         if (this.active && event.target === this.canvas) event.preventDefault();
       };
-      this.boundBlur = () => this.keys.clear();
+      this.boundBlur = () => {
+        this.keys.clear();
+        this.laserHeld = false;
+      };
       this.boundPauseResume = event => {
         event?.preventDefault?.();
         event?.stopImmediatePropagation?.();
@@ -286,6 +315,7 @@
       root.addEventListener?.('keyup', this.boundKeyUp);
       root.addEventListener?.('pointermove', this.boundPointerMove);
       root.addEventListener?.('pointerdown', this.boundPointerDown);
+      root.addEventListener?.('pointerup', this.boundPointerUp);
       root.addEventListener?.('contextmenu', this.boundContextMenu);
       root.addEventListener?.('blur', this.boundBlur);
       this.pointerWasLocked = this.document?.pointerLockElement === this.canvas;
@@ -312,6 +342,7 @@
       root.removeEventListener?.('keyup', this.boundKeyUp);
       root.removeEventListener?.('pointermove', this.boundPointerMove);
       root.removeEventListener?.('pointerdown', this.boundPointerDown);
+      root.removeEventListener?.('pointerup', this.boundPointerUp);
       root.removeEventListener?.('contextmenu', this.boundContextMenu);
       root.removeEventListener?.('blur', this.boundBlur);
       this.document?.removeEventListener?.('pointerlockchange', this.boundPointerLockChange);
@@ -513,8 +544,18 @@
       if (!this.active || this._isInputBlocked() || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
       event.preventDefault();
       this._onPointerMove(event);
-      if (event.button === 2) this._useSlot('laser');
-      else this._attack();
+      if (event.button === 2) {
+        // Channelled beams are hold-to-maintain: the held bit rides the input
+        // stream so the authority can end the channel the moment RMB lifts.
+        this.laserHeld = true;
+        this._useSlot('laser');
+      } else {
+        this._attack();
+      }
+    }
+
+    _onPointerUp(event) {
+      if (event.button === 2) this.laserHeld = false;
     }
 
     _attack() {
@@ -754,6 +795,11 @@
       } else if (event.eventType === 'ENEMY_DEFEATED') {
         this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 20) + 8, '#ff7592', 0.48);
         this.neo.playSfx?.('enemy_hit');
+      } else if (event.eventType === 'ENEMY_SPOKE') {
+        // Boss voice lines ride authoritative events into the normal campaign
+        // speech bubbles (Queen's finisher bark, Bowman's SONICHU, etc.).
+        const speaker = this.presentationEnemyActors.get(String(data.enemyId)) || entity;
+        if (speaker && data.text) this.neo.sayOverEntity?.(speaker, String(data.text), { holdTime: 1.6 });
       } else if (event.eventType === 'PICKUP_COLLECTED') {
         // Match the campaign's per-type pickup presentation: coins ring and
         // chime, potions show the heal popup, items only play item_collect
@@ -880,7 +926,7 @@
       // direction to authority instead of the stale top-down pointer angle.
       const firstPersonYaw = this.neo.getFirstPersonYaw?.();
       if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
-      const input = { ...movement, aimDirection: this.aimDirection, buttons: 0 };
+      const input = { ...movement, aimDirection: this.aimDirection, buttons: this.laserHeld ? BUTTON_LASER_HELD : 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
           this.localPredictedPlayer,
@@ -1048,33 +1094,49 @@
       this._syncSpecialMovePresentation(now);
     }
 
-    _projectActivePlayerEffects(now = root.performance?.now?.() || Date.now()) {
-      const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
-      return this.combatEffects.flatMap(effect => {
-        const data = effect.data || {};
-        if (effect.eventType !== 'PLAYER_ABILITY_USED' || !CONTINUOUS_BEAM_MOVES.has(data.abilityId)) return [];
-        const duration = Math.max(0.05, Number(MOVE_BASE_STATS[data.abilityId]?.duration || 0.52));
-        const ageSeconds = Math.max(0, now - Number(effect.startedAt || now)) / 1000;
-        const slot = slotsById.get(data.playerId);
-        if (!slot || slot.getDead?.() || ageSeconds >= duration) return [];
-        const mode = data.abilityId === 'turtle_wave' ? 'turtle_wave'
-          : data.abilityId === 'holy_eye_beams' ? 'holy_eye_beams'
-            : data.abilityId === 'thorn_blood_beams' ? 'thorn_blood_beams'
-              : data.abilityId === 'god_sweep' ? 'god_sweep'
-                : 'beam';
-        const sweepSpeed = Number(data.sweepDirection || 1) * 4.6;
+    // Steer the local hero's beam against the live cursor every frame with the
+    // same shared rule the authority applies to our streamed aim. The server
+    // stays authoritative for damage; this only removes the network hop from
+    // what the caster sees.
+    _updateLocalBeamAngle(localPlayer, frameDelta) {
+      const channel = localPlayer?.beamChannel;
+      if (!channel) {
+        this.localBeamAngle = null;
+        this.localBeamChannelStart = -1;
+        return;
+      }
+      if (this.localBeamChannelStart !== Number(channel.startTick)) {
+        this.localBeamAngle = Number(channel.angle || 0);
+        this.localBeamChannelStart = Number(channel.startTick);
+      }
+      this.localBeamAngle = moveContent.steerBeamChannelAngle?.(
+        channel.moveKey,
+        this.localBeamAngle,
+        this.aimDirection,
+        frameDelta,
+        { sweepDirection: channel.sweepDirection, laserWeightMultiplier: localPlayer.itemStats?.laserWeightMultiplier },
+      ) ?? Number(channel.angle || 0);
+    }
+
+    _projectActivePlayerEffects() {
+      const localPlayerId = this.session.snapshot?.()?.playerId;
+      const serverTick = Number(this.currentSample?.state?.tick || 0);
+      return this.presentationPlayerSlots.flatMap(slot => {
+        const actor = slot.getEntity?.();
+        const channel = actor?.beamChannel;
+        if (!channel || slot.getDead?.()) return [];
+        const isLocal = slot.id === localPlayerId;
         return [{
-          player: slot.getEntity(),
-          abilityId: data.abilityId,
-          equippedLaser: data.abilityId,
+          player: actor,
+          abilityId: channel.moveKey,
+          equippedLaser: channel.moveKey,
           laserActive: true,
-          laserTime: duration - ageSeconds,
+          laserTime: Math.max(0.05, (Number(channel.untilTick || 0) - serverTick) / 20),
           laserTick: 0,
-          laserMode: mode,
-          laserAngle: Number(data.aimDirection || 0)
-            + (data.abilityId === 'god_sweep' ? sweepSpeed * ageSeconds : 0),
-          laserSweepSpeed: sweepSpeed,
-          loveBeamCasting: data.abilityId === 'love_beam',
+          laserMode: beamChannelLaserMode(channel.moveKey),
+          laserAngle: isLocal && this.localBeamAngle != null ? this.localBeamAngle : Number(channel.angle || 0),
+          laserSweepSpeed: Number(channel.sweepDirection || 1) * 4.6,
+          loveBeamCasting: channel.moveKey === 'love_beam',
           activeBeamPaths: null,
         }];
       });
@@ -1175,25 +1237,16 @@
       localPlayer.dashTime = localPlayer.action === 'dash' && serverTick - Number(localPlayer.actionTick || 0) <= 4 ? 0.2 : 0;
       localPlayer.cowardsWayTime = Math.max(0, Number(localPlayer.statusUntilTick?.cowards_way || 0) - serverTick) / 20;
       localPlayer.princessFlightTime = Math.max(0, Number(localPlayer.statusUntilTick?.flying_unhitable || 0) - serverTick) / 20;
-      const now = root.performance?.now?.() || Date.now();
-      const beam = [...this.combatEffects].reverse().find(effect => {
-        if (effect.eventType !== 'PLAYER_ABILITY_USED' || effect.data?.playerId !== localPlayer.id) return false;
-        if (!CONTINUOUS_BEAM_MOVES.has(effect.data?.abilityId)) return false;
-        const duration = Math.max(0.05, Number(MOVE_BASE_STATS[effect.data.abilityId]?.duration || 0.52));
-        return now - Number(effect.startedAt || 0) < duration * 1000;
-      });
-      const beamAge = beam ? Math.max(0, now - Number(beam.startedAt || now)) / 1000 : 0;
-      const beamDuration = beam ? Math.max(0.05, Number(MOVE_BASE_STATS[beam.data?.abilityId]?.duration || 0.52)) : 0;
-      this.neo.laserActive = !!beam;
-      this.neo.laserTime = Math.max(0, beamDuration - beamAge);
+      const channel = localPlayer.beamChannel;
+      this.neo.laserActive = !!channel;
+      this.neo.laserTime = channel ? Math.max(0, (Number(channel.untilTick || 0) - serverTick) / 20) : 0;
       this.neo.laserTick = 0;
-      this.neo.laserMode = beam?.data?.abilityId === 'turtle_wave' ? 'turtle_wave'
-        : beam?.data?.abilityId === 'holy_eye_beams' ? 'holy_eye_beams'
-          : beam?.data?.abilityId === 'thorn_blood_beams' ? 'thorn_blood_beams'
-            : beam?.data?.abilityId === 'god_sweep' ? 'god_sweep'
-              : 'beam';
-      this.neo.loveBeamCasting = beam?.data?.abilityId === 'love_beam';
-      this.neo.laserAngle = Number(beam?.data?.aimDirection || localPlayer.aimDirection || 0);
+      this.neo.laserMode = channel ? beamChannelLaserMode(channel.moveKey) : 'beam';
+      this.neo.loveBeamCasting = channel?.moveKey === 'love_beam';
+      this.neo.laserSweepSpeed = channel ? Number(channel.sweepDirection || 1) * 4.6 : 0;
+      this.neo.laserAngle = channel
+        ? (this.localBeamAngle ?? Number(channel.angle || 0))
+        : Number(localPlayer.aimDirection || 0);
       this.neo.activeBeamPaths = null;
     }
 
@@ -1237,6 +1290,7 @@
       const ctx = this.ctx;
 
       this._updateUpgradeDwell(localPlayer, state, frameDelta);
+      this._updateLocalBeamAngle(localPlayer, frameDelta);
       this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state);
@@ -1325,9 +1379,17 @@
             // durations and proc power as local play; never reconstruct a
             // network-only approximation from legacy bleed/fire fields.
             statuses: enemy.statuses || root.NeoNyke?.simulation?.createCampaignStatusMap?.() || {},
-            swingTime: enemy.state === 'attacking' ? 0.2 : 0,
-            windup: enemy.state === 'aiming' ? 0.35 : 0,
-            beamAngle: Number(enemy.aimDirection || enemy.beamAngle || 0),
+            // Authored-behavior enemies carry the campaign's real telegraph
+            // timers (windup/swingTime/beamTime/dashTime); pass those through
+            // so the normal renderer draws the exact same wind-ups and beams.
+            // Only the generic legacy types reconstruct them from `state`.
+            swingTime: Number.isFinite(Number(enemy.swingTime)) && Number(enemy.swingTime) > 0
+              ? Number(enemy.swingTime)
+              : (enemy.state === 'attacking' ? 0.2 : 0),
+            windup: Number.isFinite(Number(enemy.windup)) && Number(enemy.windup) > 0
+              ? Number(enemy.windup)
+              : (enemy.state === 'aiming' ? 0.35 : 0),
+            beamAngle: Number(enemy.beamAngle ?? enemy.aimDirection ?? 0),
           };
           this.neo.ensureStatuses?.(adapted);
           return adapted;

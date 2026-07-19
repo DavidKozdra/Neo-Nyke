@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v84';
+const CACHE_VERSION = 'neonyke-v85';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -17,6 +17,7 @@ const PRECACHE = [
   '/js/simulation/SharedMoveContent.js',
   '/js/simulation/SharedEnemyContent.js',
   '/js/simulation/SharedEnemyAISystem.js',
+  '/js/simulation/SharedEnemyBehaviorSystem.js',
   '/js/simulation/SharedEncounterSystem.js',
   '/js/simulation/SharedItemContent.js',
   '/js/simulation/SharedItemDefinitions.js',

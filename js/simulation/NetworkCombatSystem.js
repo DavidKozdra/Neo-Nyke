@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./CampaignMovementRules.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -42,6 +42,13 @@
     MOVE_PRESENTATION_DEFS = {},
     MOVE_SLOT_BY_KEY = {},
     KIT_ALTERNATIVES = {},
+    CONTINUOUS_BEAM_MOVES = [],
+    SHARED_BEHAVIOR_TYPES = [],
+    createCampaignEnemyBehaviors = null,
+    BEAM_CHANNEL_PROFILES = {},
+    BEAM_RECOIL_ACCEL = 45,
+    WIZARD_LAZER_EXTRA_RECOIL = 220,
+    steerBeamChannelAngle = (_moveKey, angle) => Number(angle) || 0,
     getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
     createPowerDiskBurstDescriptors = () => [],
     ENEMY_CATALOG = {},
@@ -50,6 +57,9 @@
     ELITE_POWER_TYPES = [],
     getEnemyDefinition = type => ENEMY_CATALOG[type],
     getCampaignEncounterPlan = () => [],
+    getCampaignFloorBossType = () => 'queen_cult',
+    invokeCampaignEnemyAI = () => false,
+    segmentHitsCircle = () => null,
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
     createCampaignItemChoices = () => [],
     createTreasureChestPlan = () => [],
@@ -112,6 +122,12 @@
     applyCampaignImpulse = () => ({ ok: false, reason: 'MOVEMENT_UNAVAILABLE' }),
   } = contentApi || {};
   const combatRandomByState = new WeakMap();
+  const CONTINUOUS_BEAM_MOVE_SET = new Set(CONTINUOUS_BEAM_MOVES);
+  // Input button bit the client holds while its laser button is down. A channel
+  // that has seen the bit ends as soon as it clears (release-to-stop, like the
+  // campaign); a channel that never sees it simply runs its full duration.
+  const BUTTON_LASER_HELD = 1;
+  const TURTLE_WAVE_HP_PER_SECOND = 2;
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
     Object.entries(CHARACTER_DEFAULT_WEAPONS).map(([characterKey, weaponKey]) => [characterKey, Object.freeze({
       characterKey,
@@ -128,13 +144,13 @@
   // Keep the authority's selected hero identical to createDefaultPlayer(),
   // rather than maintaining a separate multiplayer balance table.
   const HERO_BASE_STATS = Object.freeze({
-    princess: Object.freeze({ maxHp: 138, moveSpeed: 180, damageMultiplier: 1.2 }),
-    thorn_knight: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 1 }),
-    metao: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 0.5 }),
-    gelleh: Object.freeze({ maxHp: 120, moveSpeed: 180, damageMultiplier: 1 }),
-    mooggy: Object.freeze({ maxHp: 130, moveSpeed: 180, damageMultiplier: 0.6 }),
-    turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 180, damageMultiplier: 1 }),
-    sarge: Object.freeze({ maxHp: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
+    princess: Object.freeze({ maxHp: 138, moveSpeed: 228, damageMultiplier: 1.2 }),
+    thorn_knight: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
+    metao: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 0.5 }),
+    gelleh: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
+    mooggy: Object.freeze({ maxHp: 130, moveSpeed: 228, damageMultiplier: 0.6 }),
+    turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 228, damageMultiplier: 1 }),
+    sarge: Object.freeze({ maxHp: 108, moveSpeed: 228, damageMultiplier: 1.05 }),
   });
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
@@ -310,6 +326,7 @@
         eliteTypes: elite ? ['knight', elitePower] : [],
         elitePowers: elite ? [elitePower] : [],
         patterns: archetype.patterns || [],
+        boss: !!archetype.boss,
         bleedImmune: !!archetype.bleedImmune,
         fireImmune: !!archetype.fireImmune,
         poisonImmune: !!archetype.poisonImmune,
@@ -322,6 +339,27 @@
         spawnTick: state.tick,
         hitTick: -1,
         dead: false,
+        // Campaign behavior state: seconds-based timers driven by the shared
+        // authored bodies, seeded exactly like spawnEnemy() in game/enemies.js.
+        stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0,
+        swingTime: 0, dashTime: 0,
+        attackCd: Math.max(0, Number(archetype.attackCooldown || 1)) + stream.next() * 0.3,
+        ...(type === 'sniper'
+          ? { sniperBehavior: (roll => (roll < 1 / 3 ? 'aggressive' : roll < 2 / 3 ? 'stayback' : 'melee'))(stream.next()) }
+          : {}),
+        ...(type === 'summoner' ? { summonCd: 4.4 } : {}),
+        ...(type === 'shield_unit' ? { supportCd: 2.8 } : {}),
+        ...(type === 'healer' ? { supportCd: 3 } : {}),
+        ...(type === 'boss_spawner' ? { bossSpawnTimer: 30, bossSpawnWarnAt: 30, shoveCd: 3, shoveTimer: 0 } : {}),
+        ...(type === 'cult_mage' ? { novaCd: 3, novaTimer: 0 } : {}),
+        // Boss kits: seeded exactly like ENEMY_STATS in game/enemies.js.
+        ...(type === 'queen_cult' ? { summonCd: 2.4, novaCd: 3, novaTimer: 0 } : {}),
+        ...(type === 'bulk_golem' ? { splitReady: true, aoeTime: 3, jumpCd: 1.2 } : {}),
+        ...(type === 'artificer_knave' ? { phase: 1 } : {}),
+        ...(type === 'bowman_bane' ? { phase: 1, columnCd: 0, burstCd: 0, bowmanWarpCd: 2.8, thunderSmashCd: 0.6 } : {}),
+        ...(type === 'antony_blemmye' ? { phase: 1, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 } : {}),
+        ...(type === 'handsome_devil' ? { phase: 1, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, clawCd: 0.4, giantLaserCd: 3.6, beamRange: 560 } : {}),
+        ...(type === 'god' ? { phase: 1, partitionAngles: [], partitionAngle: 0, partitionRotationDir: 1, partitionRotationSpeed: 0 } : {}),
       };
       state.enemies[enemyId] = enemy;
       enemyIds.push(enemyId);
@@ -668,6 +706,8 @@
     const dealt = incoming - absorbed;
     enemy.health = Math.max(0, Number(enemy.health || 0) - dealt);
     enemy.hitTick = state.tick;
+    // Campaign parity: a hit shield unit cannot re-shield for a moment.
+    if (enemy.type === 'shield_unit') enemy._shieldHitLockout = 1.1;
     emitEvent('ENEMY_HIT', {
       enemyId: enemy.id,
       playerId,
@@ -1278,6 +1318,119 @@
     });
   }
 
+  function endBeamChannel(state, player) {
+    const channel = player?.beamChannel;
+    if (!channel) return;
+    // The campaign starts the laser cooldown when the beam ENDS (held skills
+    // recharge on release), so an early release must pull the cooldown forward
+    // from the full-duration estimate written at cast time.
+    const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
+    cooldowns[channel.moveKey] = state.tick + Math.max(1, Number(channel.cooldownTicks || 1));
+    player.beamChannel = null;
+  }
+
+  function updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent) {
+    const randomService = combatRandomByState.get(state);
+    const roll = () => (randomService ? randomService.next('encounter') : 1);
+    for (const player of Object.values(state.players || {})) {
+      const channel = player?.beamChannel;
+      if (!channel) continue;
+      if (player.downed || player.disconnected || state.tick >= Number(channel.untilTick || 0)) {
+        endBeamChannel(state, player);
+        continue;
+      }
+      const input = inputs?.[player.id] || {};
+      const buttons = Math.trunc(Number(input.buttons) || 0);
+      if (buttons & BUTTON_LASER_HELD) channel.heldSeen = true;
+      else if (channel.heldSeen) {
+        endBeamChannel(state, player);
+        continue;
+      }
+      const profile = BEAM_CHANNEL_PROFILES[channel.moveKey] || {};
+      const itemStats = player.itemStats || {};
+      // Steer toward the freshest aim available: this tick's input stream when
+      // present, otherwise the last aim the movement system recorded.
+      const aimTarget = Number.isFinite(Number(input.aimDirection))
+        ? Number(input.aimDirection)
+        : Number(player.aimDirection) || 0;
+      channel.angle = steerBeamChannelAngle(channel.moveKey, channel.angle, aimTarget, fixedDelta, {
+        sweepDirection: channel.sweepDirection,
+        laserWeightMultiplier: itemStats.laserWeightMultiplier,
+      });
+      const weight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
+      const recoil = BEAM_RECOIL_ACCEL * weight + (channel.moveKey === 'wizard_lazer' ? WIZARD_LAZER_EXTRA_RECOIL : 0);
+      if (recoil > 0) {
+        player.vx = Number(player.vx || 0) - Math.cos(channel.angle) * recoil * fixedDelta;
+        player.vy = Number(player.vy || 0) - Math.sin(channel.angle) * recoil * fixedDelta;
+      }
+      if (channel.moveKey === 'turtle_wave') {
+        channel.turtleHpTimer = Number(channel.turtleHpTimer || 0) + fixedDelta;
+        let exhausted = false;
+        while (channel.turtleHpTimer >= 1) {
+          channel.turtleHpTimer -= 1;
+          const drain = Math.min(TURTLE_WAVE_HP_PER_SECOND, Math.max(0, Number(player.hp || 0) - 1));
+          if (drain <= 0) { exhausted = true; break; }
+          player.hp = Math.max(1, Number(player.hp || 0) - drain);
+          if (player.hp <= 1) { exhausted = true; break; }
+        }
+        if (exhausted) {
+          endBeamChannel(state, player);
+          continue;
+        }
+      }
+      channel.tickTimer = Number(channel.tickTimer || 0) - fixedDelta;
+      if (channel.tickTimer > 0) continue;
+      channel.tickTimer += Math.max(0.02, Number(profile.tickInterval || 0.08));
+      const baseStats = MOVE_BASE_STATS[channel.moveKey] || {};
+      const forged = applyForgeStats(player, 'move', channel.moveKey, baseStats);
+      const forgeScale = Number(baseStats.damage || 0) > 0
+        ? Math.max(0, Number(forged.damage || 0)) / Number(baseStats.damage)
+        : 1;
+      const turtleMult = (player.characterKey || player.character) === 'turtle_boy'
+        ? 1 + Math.max(0, Number(player.turtleLaserSteps || 0)) * 0.15
+        : 1;
+      const tickDamage = Math.max(1, Number(profile.tickDamage || 10))
+        * forgeScale * turtleMult * Math.max(0, Number(itemStats.beamDamageMultiplier || 1));
+      const padding = Math.max(1, Number(profile.padding || 6)) * Math.max(0.1, Number(itemStats.beamWidthMultiplier || 1));
+      const range = Number(profile.range || 430);
+      const fan = Array.isArray(profile.fan) ? profile.fan : [0];
+      const targetIds = [];
+      const hitThisTick = new Set();
+      fan.forEach(offset => {
+        const beamAngle = channel.angle + offset;
+        abilityTargetsInBeam(state, player, beamAngle, range, padding).forEach(enemy => {
+          // An enemy straddling two fanned beams still takes one hit per tick.
+          if (hitThisTick.has(enemy.id)) return;
+          hitThisTick.add(enemy.id);
+          damageEnemy(state, enemy, tickDamage, player.id, emitEvent, { attackKind: channel.moveKey });
+          targetIds.push(enemy.id);
+          if (enemy.dead) return;
+          if (channel.moveKey === 'blood_beam' && roll() < 0.05) {
+            applyAuthorityStatus(state, enemy, 'bleed', 1, 3.2, player.id);
+          }
+          if (channel.moveKey === 'thorn_blood_beams' && roll() < 0.35) {
+            applyAuthorityStatus(state, enemy, 'bleed', 1, 3.6, player.id);
+          }
+          if (channel.moveKey === 'mooggy_blood_beam') {
+            if (roll() < 0.5) applyPoisonStatus(state, enemy, 2, 5, player.id);
+            if (roll() < 0.18) enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 28);
+          }
+        });
+        damageRivalsInBeam(state, player, beamAngle, range, padding, tickDamage, emitEvent, channel.moveKey, targetIds);
+        chipDestructiblesAlongBeam(state, player, beamAngle, range, padding, emitEvent, roll);
+      });
+      if (channel.moveKey === 'love_beam' && targetIds.length > 0) {
+        player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + Math.min(5, targetIds.length * 0.8));
+      }
+      if (channel.moveKey === 'holy_eye_beams' && targetIds.length > 0 && !channel.healRolled) {
+        channel.healRolled = true;
+        if (roll() < 0.25) {
+          player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + Number(player.maxHp || 100) * 0.05);
+        }
+      }
+    }
+  }
+
   function resolvePlayerAbility(state, player, action, emitEvent, random) {
     if (player.downed) return null;
     const moveKey = String(action.abilityId || '');
@@ -1384,10 +1537,31 @@
           targetIds.push(target.id);
         });
         mode = 'cross';
-      } else {
+      } else if (CONTINUOUS_BEAM_MOVE_SET.has(moveKey)) {
+        // Channelled beam: nothing is damaged at cast time. The channel below
+        // is advanced by updatePlayerBeamChannels every tick — it steers toward
+        // the player's live aim, deals its damage on the campaign's tick
+        // cadence, and ends on release or when the duration runs out.
+        if (moveKey === 'turtle_wave' && Number(player.hp || 0) <= 1) return null;
         if (moveKey === 'god_sweep') sweepDirection = (typeof random === 'function' ? random() : 0.5) < 0.5 ? -1 : 1;
+        const profile = BEAM_CHANNEL_PROFILES[moveKey] || {};
+        effectRadius = Number(profile.range || stats.range || 430);
+        player.beamChannel = {
+          moveKey,
+          angle,
+          sweepDirection,
+          startTick: state.tick,
+          untilTick: state.tick + Math.max(1, Math.round(Math.max(0.1, Number(profile.duration || stats.duration || 0.58)) * 20)),
+          tickTimer: 0,
+          turtleHpTimer: 0,
+          healRolled: false,
+          heldSeen: false,
+          cooldownTicks: 0,
+        };
+        mode = 'beam';
+      } else {
         const range = Number(stats.range || (moveKey === 'blade_justice' ? 90 : 470));
-        const width = moveKey === 'god_sweep' ? 120 : moveKey === 'turtle_wave' || moveKey === 'wizard_lazer' ? 48 : 24;
+        const width = 24;
         effectRadius = range;
         abilityTargetsInBeam(state, player, angle, range, width).forEach(enemy => {
           damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
@@ -1395,9 +1569,6 @@
         });
         damageRivalsInBeam(state, player, angle, range, width, stats.damage, emitEvent, moveKey, targetIds);
         chipDestructiblesAlongBeam(state, player, angle, range, width, emitEvent, random);
-        if (moveKey === 'love_beam' || moveKey === 'holy_eye_beams') {
-          player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + Math.max(1, targetIds.length * 4));
-        }
         mode = 'beam';
       }
     } else if (slot === 'smash') {
@@ -1473,7 +1644,16 @@
       }
     }
 
-    cooldowns[moveKey] = state.tick + Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
+    const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
+    if (player.beamChannel?.moveKey === moveKey && player.beamChannel.startTick === state.tick) {
+      // Held beams recharge from the moment the channel ends, like the
+      // campaign's queueHeldSkillRecharge. Assume the full duration here;
+      // endBeamChannel rewrites this if the beam is released early.
+      player.beamChannel.cooldownTicks = scaledCooldownTicks;
+      cooldowns[moveKey] = player.beamChannel.untilTick + scaledCooldownTicks;
+    } else {
+      cooldowns[moveKey] = state.tick + scaledCooldownTicks;
+    }
     const destinationX = Number(player.x);
     const destinationY = Number(player.y);
     setPlayerAction(state, player, slot, moveKey, angle);
@@ -1724,12 +1904,90 @@
       <= radius + Number(hazard.triggerRadius || hazard.r || 16);
   }
 
+  // Boss-authored transient hazards (Bowman lightning columns/strike lines,
+  // Devil red spikes and lava grid). Same shapes and cadence the campaign
+  // pushes into Neo.hazards; ttl-limited and removed on expiry.
+  function updateTransientEnemyHazards(state, room, players, fixedDelta, emitEvent) {
+    let expired = false;
+    room.hazards.forEach(hazard => {
+      if (!hazard.enemy) return;
+      hazard.ttl = Number(hazard.ttl || 0) - fixedDelta;
+      if (hazard.ttl <= 0) {
+        expired = true;
+        return;
+      }
+      if (hazard.kind === 'lightning_column') {
+        hazard.tick = Number(hazard.tick || 0) - fixedDelta;
+        if (hazard.tick <= 0) {
+          hazard.tick = Number(hazard.interval || 0.38);
+          players.forEach(player => {
+            if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 44) + Number(player.radius || 18)) return;
+            damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'lightning_column', {
+              angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
+              knockback: 120,
+            });
+          });
+        }
+        return;
+      }
+      if (hazard.kind === 'lightning_strike_line') {
+        if (Number(hazard.warn || 0) > 0) {
+          hazard.warn = Number(hazard.warn || 0) - fixedDelta;
+          return;
+        }
+        hazard.tick = Number(hazard.tick || 0) - fixedDelta;
+        if (hazard.tick <= 0) {
+          hazard.tick = Number(hazard.interval || 0.12);
+          players.forEach(player => {
+            const hit = segmentHitsCircle(hazard.x1, hazard.y1, hazard.x2, hazard.y2, player.x, player.y, Number(hazard.r || 30) + Number(player.radius || 18));
+            if (!hit) return;
+            damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'lightning_strike', {
+              angle: hit.angle,
+              knockback: 150,
+            });
+          });
+        }
+        return;
+      }
+      if (hazard.kind === 'red_spikes') {
+        hazard.armTime = Number(hazard.armTime || 0) - fixedDelta;
+        if (hazard.armTime > 0 || hazard.hit) return;
+        players.forEach(player => {
+          if (hazard.hit) return;
+          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 34) + Number(player.radius || 18)) return;
+          hazard.hit = true;
+          damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'red_spikes', {
+            angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
+            knockback: 170,
+          });
+          if (hazard.statusKey) {
+            applyAuthorityStatus(state, player, hazard.statusKey, Number(hazard.statusStacks || 1), Number(hazard.statusDuration || 3), hazard.ownerId);
+          }
+        });
+        return;
+      }
+      if (hazard.kind === 'lava') {
+        hazard.damageCooldownByPlayer = hazard.damageCooldownByPlayer || {};
+        players.forEach(player => {
+          if (!playerInsideRoomHazard(player, hazard)) return;
+          if (state.tick < Number(hazard.damageCooldownByPlayer[player.id] || 0)) return;
+          hazard.damageCooldownByPlayer[player.id] = state.tick + 10;
+          damagePlayer(state, player, Number(hazard.damage || 8), hazard.ownerId, emitEvent, hazard.source || 'lava', {});
+          applyAuthorityStatus(state, player, 'fire', Number(hazard.statusStacks || 1), 2.6, hazard.ownerId);
+        });
+      }
+    });
+    if (expired) room.hazards = room.hazards.filter(hazard => !hazard.enemy || Number(hazard.ttl || 0) > 0);
+  }
+
   function updateRoomHazards(state, fixedDelta, emitEvent) {
     const rooms = state.floorState?.layout?.rooms || [];
     rooms.forEach(room => {
       if (!Array.isArray(room.hazards) || room.hazards.length === 0) return;
       const players = Object.values(state.players || {}).filter(player => !player.downed && player.roomId === room.id);
+      updateTransientEnemyHazards(state, room, players, fixedDelta, emitEvent);
       room.hazards.forEach(hazard => {
+        if (hazard.enemy) return;
         if (Number(hazard.vx || 0) || Number(hazard.vy || 0)) {
           advanceCampaignMovingWorldEntity(hazard, fixedDelta, {
             width: state.floorState?.width,
@@ -1798,18 +2056,21 @@
     return projectileId;
   }
 
-  function spawnSummonedEnemy(state, summoner, emitEvent) {
-    const definition = getEnemyDefinition('cult_follower');
+  function spawnSummonedEnemy(state, summoner, emitEvent, options = {}) {
+    const definition = getEnemyDefinition(options.type || 'cult_follower');
     const enemyId = state.allocateEntityId('enemy');
     const angle = (Number(state.tick || 0) + Number(String(enemyId).replace(/\D/g, '') || 0)) * 1.7;
+    const wall = Number(state.floorState?.wallThickness || 28) + Number(definition.radius || 12);
+    const x = Number.isFinite(Number(options.x)) ? Number(options.x) : summoner.x + Math.cos(angle) * 48;
+    const y = Number.isFinite(Number(options.y)) ? Number(options.y) : summoner.y + Math.sin(angle) * 48;
     state.enemies[enemyId] = {
       id: enemyId,
       type: definition.type,
       spriteKey: definition.spriteKey,
       behavior: definition.behavior,
       roomId: summoner.roomId,
-      x: summoner.x + Math.cos(angle) * 48,
-      y: summoner.y + Math.sin(angle) * 48,
+      x: Math.max(wall, Math.min(Number(state.floorState?.width || 900) - wall, x)),
+      y: Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, y)),
       vx: 0, vy: 0,
       radius: definition.radius,
       moveSpeed: definition.moveSpeed,
@@ -1823,6 +2084,8 @@
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
       statuses: createCampaignStatusMap(),
       summonedBy: summoner.id,
+      stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
+      attackCd: Number(definition.attackCooldown || 0.85),
     };
     state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
     emitEvent('ENEMY_SPAWNED', { enemyId, roomId: summoner.roomId, enemyType: definition.type, summonedBy: summoner.id });
@@ -1936,8 +2199,446 @@
     });
   }
 
+  // --- authored campaign enemy behaviors on the authority -------------------
+  // The shared behavior bodies (SharedEnemyBehaviorSystem) are the campaign's
+  // per-enemy state machines. This context adapts them to authoritative state:
+  // players instead of Neo.player, state.projectiles instead of Neo.projectiles,
+  // gameplay events instead of particles.
+  const SHARED_ENEMY_BEHAVIOR_SET = new Set(SHARED_BEHAVIOR_TYPES);
+  const behaviorRuntime = { state: null, emitEvent: () => {} };
+
+  function livingRoomPlayers(state, roomId) {
+    return Object.values(state.players || {})
+      .filter(player => player && !player.downed && !player.disconnected && player.roomId === roomId);
+  }
+
+  function isPlayerConcealed(state, player) {
+    const statusUntil = player.statusUntilTick || {};
+    return state.tick < Number(statusUntil.cowards_way || 0)
+      || state.tick < Number(statusUntil.flying_unhitable || 0)
+      || state.tick < Number(player.equipmentEffectsUntilTick?.el_bartos_cape || 0);
+  }
+
+  function behaviorPlayerAlias(player) {
+    return { id: player.id, x: Number(player.x), y: Number(player.y), r: Number(player.radius || 18) };
+  }
+
+  function obstacleRect(obstacle) {
+    const width = Number(obstacle.w || obstacle.size || (Number(obstacle.r || 16) * 2));
+    const height = Number(obstacle.h || obstacle.size || (Number(obstacle.r || 16) * 2));
+    return { x: Number(obstacle.x) - width / 2, y: Number(obstacle.y) - height / 2, w: width, h: height };
+  }
+
+  function coverRectsForRoom(room) {
+    const rects = (room?.structures || []).map(obstacleRect);
+    (room?.destructibles || []).forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      if (prop.kind !== 'wall' && prop.kind !== 'secret_wall' && prop.kind !== 'cover_wall') return;
+      rects.push(obstacleRect(prop));
+    });
+    return rects;
+  }
+
+  function playerBeamSegment(player) {
+    const channel = player.beamChannel;
+    if (!channel) return null;
+    const range = Number(BEAM_CHANNEL_PROFILES[channel.moveKey]?.range || 430);
+    return {
+      x1: Number(player.x),
+      y1: Number(player.y),
+      x2: Number(player.x) + Math.cos(Number(channel.angle || 0)) * range,
+      y2: Number(player.y) + Math.sin(Number(channel.angle || 0)) * range,
+    };
+  }
+
+  // Boss-summoned minions (Queen's faithful, god council): full enemy records
+  // with campaign behavior seeds, optional elite tag and health scaling.
+  function spawnAuthorityMinion(state, summoner, type, x, y, options = {}, emitEvent = () => {}) {
+    const definition = getEnemyDefinition(type) || getEnemyDefinition('cult_follower');
+    const enemyId = state.allocateEntityId('enemy');
+    const wall = Number(state.floorState?.wallThickness || 28) + Number(definition.radius || 12);
+    const elite = !!options.elite;
+    const healthScale = Math.max(0.1, Number(options.healthScale || 1)) * (elite ? 1.35 : 1);
+    const health = Math.round(Number(definition.maxHealth || 40) * healthScale);
+    state.enemies[enemyId] = {
+      id: enemyId,
+      type: definition.type,
+      spriteKey: definition.spriteKey,
+      behavior: definition.behavior,
+      roomId: summoner.roomId,
+      x: Math.max(wall, Math.min(Number(state.floorState?.width || 900) - wall, Number(x))),
+      y: Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, Number(y))),
+      vx: 0, vy: 0,
+      radius: definition.radius,
+      moveSpeed: definition.moveSpeed,
+      maxHealth: health,
+      health,
+      contactDamage: Math.round(Number(definition.contactDamage || 8) * (elite ? 1.18 : 1)),
+      projectileDamage: Math.max(5, Math.round(Number(definition.contactDamage || 8) * 0.75)),
+      elite,
+      eliteTypes: elite ? ['knight'] : [],
+      elitePowers: [],
+      patterns: definition.patterns || [],
+      boss: !!definition.boss,
+      bleedImmune: !!definition.bleedImmune,
+      fireImmune: !!definition.fireImmune,
+      statuses: createCampaignStatusMap(),
+      contactCooldownUntilTick: 0,
+      attackCooldownUntilTick: state.tick + 12,
+      attackWindupUntilTick: 0,
+      state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      summonedBy: summoner.id,
+      stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
+      attackCd: Number(definition.attackCooldown || 1),
+    };
+    state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
+    emitEvent('ENEMY_SPAWNED', { enemyId, roomId: summoner.roomId, enemyType: definition.type, summonedBy: summoner.id, elite });
+    return state.enemies[enemyId];
+  }
+
+  function spawnAuthorityFloorBoss(state, spawner, emitEvent) {
+    const random = combatRandomByState.get(state);
+    const stream = random?.scoped?.(`floor-boss:type:${state.floorNumber}`);
+    const bossType = getCampaignFloorBossType(state.floorNumber, stream ? () => stream.next() : Math.random);
+    const definition = getEnemyDefinition(bossType) || getEnemyDefinition('queen_cult');
+    const encounter = state.floorState?.encounters?.[spawner.roomId];
+    delete state.enemies[spawner.id];
+    const bossId = state.allocateEntityId('enemy');
+    // The campaign spawns the summoned boss at 72% of its normal health.
+    const health = Math.round(Number(definition.maxHealth || 900) * 0.72);
+    state.enemies[bossId] = {
+      id: bossId,
+      type: definition.type,
+      spriteKey: definition.spriteKey,
+      behavior: definition.behavior,
+      roomId: spawner.roomId,
+      x: spawner.x,
+      y: spawner.y,
+      vx: 0, vy: 0,
+      radius: definition.radius,
+      moveSpeed: definition.moveSpeed,
+      maxHealth: health,
+      health,
+      contactDamage: definition.contactDamage,
+      projectileDamage: Math.max(5, Math.round(Number(definition.contactDamage || 12) * 0.75)),
+      elite: false, eliteTypes: [], elitePowers: [],
+      patterns: definition.patterns || [],
+      boss: true,
+      bleedImmune: !!definition.bleedImmune,
+      fireImmune: !!definition.fireImmune,
+      statuses: createCampaignStatusMap(),
+      contactCooldownUntilTick: 0,
+      attackCooldownUntilTick: state.tick + 20,
+      attackWindupUntilTick: 0,
+      state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
+      attackCd: Number(definition.attackCooldown || 1.2),
+    };
+    encounter?.enemyIds?.push(bossId);
+    emitEvent('ENEMY_SPAWNED', { enemyId: bossId, roomId: spawner.roomId, enemyType: definition.type, summonedBy: spawner.id, boss: true });
+  }
+
+  const enemyBehaviors = typeof createCampaignEnemyBehaviors === 'function' ? createCampaignEnemyBehaviors({
+    getPlayer(enemy) {
+      const players = livingRoomPlayers(behaviorRuntime.state, enemy.roomId)
+        .filter(player => !isPlayerConcealed(behaviorRuntime.state, player));
+      if (!players.length) return null;
+      players.sort((first, second) => (
+        Math.hypot(first.x - enemy.x, first.y - enemy.y) - Math.hypot(second.x - enemy.x, second.y - enemy.y)
+      ));
+      return behaviorPlayerAlias(players[0]);
+    },
+    getPlayers(enemy) {
+      return livingRoomPlayers(behaviorRuntime.state, enemy.roomId).map(behaviorPlayerAlias);
+    },
+    getAllies(enemy) {
+      return livingEncounterEnemies(behaviorRuntime.state, enemy.roomId)
+        .filter(candidate => candidate.id !== enemy.id)
+        .map(ally => {
+          // The authored bodies read the campaign's hp/max aliases; allies that
+          // have not run their own authored tick yet may not carry them.
+          ally.hp = Number(ally.health || 0);
+          ally.max = Math.max(1, Number(ally.maxHealth || 1));
+          return ally;
+        });
+    },
+    getTuning() {
+      const difficulty = behaviorRuntime.state.matchRules?.difficulty || {};
+      return {
+        reaction: Number(difficulty.enemyReactionMultiplier || 1),
+        rangedCadence: Number(difficulty.rangedCadenceMultiplier || 1),
+        supportPower: Number(difficulty.supportPowerMultiplier || 1),
+      };
+    },
+    getEvadeDifficultyRank() {
+      // Campaign easy=0 … god=4; co-op defaults to medium's rank so plain
+      // enemies keep a small juke chance like the campaign's standard runs.
+      return Math.max(0, Math.trunc(Number(behaviorRuntime.state.matchRules?.difficulty?.evadeRank ?? 1)));
+    },
+    getFloor() {
+      return Math.max(1, Number(behaviorRuntime.state.floorNumber || 1));
+    },
+    random(scope) {
+      const service = combatRandomByState.get(behaviorRuntime.state);
+      return service ? service.next(scope || 'encounter') : 0.5;
+    },
+    getSlowMultiplier(enemy) {
+      return getCampaignSlowMultiplier(getCampaignStatusStacks(enemy, 'slow'));
+    },
+    bounds() {
+      const floor = behaviorRuntime.state.floorState || {};
+      return {
+        wall: Number(floor.wallThickness || 28),
+        width: Number(floor.width || 900),
+        height: Number(floor.height || 700),
+      };
+    },
+    isBlocked(enemy, x, y, r) {
+      const room = currentRoom(behaviorRuntime.state, enemy.roomId);
+      return (room?.structures || []).some(obstacle => circleIntersectsRoomObstacle(x, y, r, obstacle))
+        || (room?.destructibles || []).some(obstacle => (
+          !obstacle.broken && !obstacle.hidden && circleIntersectsRoomObstacle(x, y, r, obstacle)
+        ));
+    },
+    getCoverRects(enemy) {
+      return coverRectsForRoom(currentRoom(behaviorRuntime.state, enemy.roomId));
+    },
+    getHostileThreat(enemy, padding = 30) {
+      const state = behaviorRuntime.state;
+      for (const player of livingRoomPlayers(state, enemy.roomId)) {
+        const segment = playerBeamSegment(player);
+        if (!segment) continue;
+        if (segmentHitsCircle(segment.x1, segment.y1, segment.x2, segment.y2, enemy.x, enemy.y, Number(enemy.radius || 18) + padding)) {
+          return { segment, sourceId: `beam:${player.id}:${player.beamChannel.startTick}` };
+        }
+      }
+      let best = null;
+      Object.values(state.projectiles || {}).forEach(projectile => {
+        if (projectile.hostile || projectile.roomId !== enemy.roomId) return;
+        const vx = Number(projectile.vx || 0);
+        const vy = Number(projectile.vy || 0);
+        const speedSq = vx * vx + vy * vy;
+        if (speedSq < 1600) return;
+        const life = Math.max(0, (Number(projectile.expiresTick || 0) - state.tick) / 20);
+        if (life <= 0) return;
+        const dx = enemy.x - projectile.x;
+        const dy = enemy.y - projectile.y;
+        const toward = dx * vx + dy * vy;
+        if (toward <= 0) return;
+        const horizon = Math.min(0.7, Math.max(0.12, life));
+        const timeToImpact = Math.max(0, Math.min(horizon, toward / speedSq));
+        if (timeToImpact <= 0 || timeToImpact >= horizon) return;
+        const projectedX = projectile.x + vx * timeToImpact;
+        const projectedY = projectile.y + vy * timeToImpact;
+        const dangerRadius = Number(enemy.radius || 18) + Number(projectile.radius || 0) + padding;
+        if (Math.hypot(projectedX - enemy.x, projectedY - enemy.y) > dangerRadius) return;
+        if (!best || timeToImpact < best.timeToImpact) {
+          best = {
+            segment: { x1: projectile.x, y1: projectile.y, x2: projectile.x + vx * horizon, y2: projectile.y + vy * horizon },
+            sourceId: projectile.id,
+            timeToImpact,
+          };
+        }
+      });
+      return best;
+    },
+    isPointThreatenedByPlayerBeam(enemy, x, y, radius = 24) {
+      return livingRoomPlayers(behaviorRuntime.state, enemy.roomId).some(player => {
+        const segment = playerBeamSegment(player);
+        return segment && !!segmentHitsCircle(segment.x1, segment.y1, segment.x2, segment.y2, x, y, radius);
+      });
+    },
+    damagePlayer(enemy, playerRef, damage, angle, knockback, source) {
+      const state = behaviorRuntime.state;
+      const player = state.players?.[playerRef.id];
+      if (!player) return;
+      damagePlayer(state, player, damage, enemy.id, behaviorRuntime.emitEvent, source || enemy.type, { angle, knockback });
+    },
+    applyPlayerStatus(enemy, playerRef, key, stacks, duration) {
+      const state = behaviorRuntime.state;
+      const player = state.players?.[playerRef.id];
+      if (player) applyAuthorityStatus(state, player, key, stacks, duration, enemy.id);
+    },
+    healEnemy(enemy, target, amount) {
+      const gained = Math.min(
+        Math.max(0, Number(target.maxHealth || target.max || 0) - Number(target.health || 0)),
+        Math.max(0, Number(amount || 0)),
+      );
+      if (gained <= 0) return 0;
+      target.health = Number(target.health || 0) + gained;
+      target.hp = target.health;
+      behaviorRuntime.emitEvent('ENEMY_HEALED', { enemyId: target.id, healerEnemyId: enemy.id, amount: gained, health: target.health });
+      return gained;
+    },
+    grantBarrier(_enemy, target, amount) {
+      const next = Math.max(0, Math.round(Number(amount || 0)));
+      if (next > Number(target.barrier || 0)) {
+        target.barrier = next;
+        target.barrierAge = 0;
+      }
+    },
+    spawnProjectile(enemy, descriptor) {
+      const state = behaviorRuntime.state;
+      const projectileId = state.allocateEntityId('projectile');
+      state.projectiles[projectileId] = {
+        id: projectileId,
+        type: descriptor.kind || 'enemy_shot',
+        ownerId: enemy.id,
+        hostile: true,
+        roomId: enemy.roomId,
+        x: Number(descriptor.x), y: Number(descriptor.y),
+        vx: Number(descriptor.vx), vy: Number(descriptor.vy),
+        radius: Number(descriptor.r || 6),
+        damage: Number(descriptor.damage || enemy.projectileDamage || 9),
+        knockback: Number(descriptor.knockback || 120),
+        statusEffects: Array.isArray(descriptor.statusEffects) ? descriptor.statusEffects : undefined,
+        // Homing boss shots (Queen missiles, god swords) steer via the shared
+        // projectile system; drain shots heal their owner on hit.
+        ...(descriptor.homing ? {
+          homing: true,
+          homingTurnRate: Number(descriptor.homingTurnRate || 1.6),
+          homingSpeed: Number(descriptor.homingSpeed || 280),
+          homingAccel: Number(descriptor.homingAccel || 2.2),
+        } : {}),
+        ...(Number(descriptor.drainHeal || 0) > 0 ? { drainHeal: Number(descriptor.drainHeal) } : {}),
+        behavior: enemy.behavior,
+        attackKind: descriptor.source || enemy.type,
+        spawnTick: state.tick,
+        expiresTick: state.tick + Math.max(4, Math.round(Number(descriptor.life || 1.4) * 20)),
+      };
+      behaviorRuntime.emitEvent('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: descriptor.source || enemy.type, projectileId });
+      return projectileId;
+    },
+    blastRadius(enemy, x, y, radius, damage, knockback, options = {}) {
+      const state = behaviorRuntime.state;
+      livingRoomPlayers(state, enemy.roomId).forEach(player => {
+        const playerDistance = Math.hypot(player.x - x, player.y - y);
+        if (playerDistance > radius + Number(player.radius || 18)) return;
+        const angle = Math.atan2(player.y - y, player.x - x);
+        // Optional distance falloff (Queen finisher: 5x at center → 1x at edge).
+        const falloff = options.playerDamageFalloff;
+        const scaled = falloff
+          ? damage * (Number(falloff.centerMultiplier || 1)
+            + (Number(falloff.edgeMultiplier || 1) - Number(falloff.centerMultiplier || 1))
+            * Math.max(0, Math.min(1, playerDistance / Math.max(1, radius))))
+          : damage;
+        damagePlayer(state, player, Math.round(scaled), enemy.id, behaviorRuntime.emitEvent, `${enemy.type}_blast`, { angle, knockback });
+      });
+      behaviorRuntime.emitEvent('ENEMY_ATTACKED', {
+        enemyId: enemy.id, attackKind: `${enemy.type}_blast`, originX: x, originY: y, effectRadius: radius,
+      });
+    },
+    speak(enemy, text) {
+      behaviorRuntime.emitEvent('ENEMY_SPOKE', { enemyId: enemy.id, roomId: enemy.roomId, text: String(text || '').slice(0, 120) });
+    },
+    holdAtOneHp(enemy) {
+      enemy.health = Math.max(1, Number(enemy.health || 0));
+      enemy.hp = enemy.health;
+    },
+    killEnemy(enemy) {
+      damageEnemy(behaviorRuntime.state, enemy, Number(enemy.health || 0) + Number(enemy.barrier || 0) + 1, undefined, behaviorRuntime.emitEvent, {
+        preScaled: true,
+        canCrit: false,
+        attackKind: `${enemy.type}_finisher`,
+      });
+    },
+    spawnMinion(enemy, type, x, y, options = {}) {
+      spawnAuthorityMinion(behaviorRuntime.state, enemy, type, x, y, options, behaviorRuntime.emitEvent);
+    },
+    spawnHazard(enemy, hazard) {
+      const room = currentRoom(behaviorRuntime.state, enemy.roomId);
+      if (!room) return;
+      room.hazards = Array.isArray(room.hazards) ? room.hazards : [];
+      room.hazards.push({ ...hazard, ownerId: enemy.id });
+    },
+    getElapsedSeconds() {
+      return Number(behaviorRuntime.state.elapsedSeconds || Number(behaviorRuntime.state.tick || 0) / 20);
+    },
+    spawnSummon(enemy, type, x, y) {
+      spawnSummonedEnemy(behaviorRuntime.state, enemy, behaviorRuntime.emitEvent, { type, x, y });
+    },
+    spawnFloorBoss(enemy) {
+      spawnAuthorityFloorBoss(behaviorRuntime.state, enemy, behaviorRuntime.emitEvent);
+    },
+    emit(eventType, data) {
+      const roomId = behaviorRuntime.state?.enemies?.[data?.enemyId]?.roomId;
+      behaviorRuntime.emitEvent(eventType, roomId ? { roomId, ...data } : data);
+    },
+  }) : null;
+
+  // Enemy shield decay, mirroring the campaign: after 5s a barrier bleeds away
+  // at 20 points per second. Age resets whenever the barrier grows.
+  function decayAuthorityEnemyBarrier(enemy, fixedDelta) {
+    if (Number(enemy.barrier || 0) <= 0) {
+      enemy.barrierAge = 0;
+      return;
+    }
+    enemy.barrierAge = Number(enemy.barrierAge || 0) + fixedDelta;
+    if (enemy.barrierAge > 5) {
+      enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - 20 * fixedDelta);
+    }
+  }
+
+  function updateAuthoredEnemy(state, enemy, fixedDelta, emitEvent, floor) {
+    // Campaign alias fields + per-tick timers (mirrors update.js's enemy wrapper).
+    enemy.r = Number(enemy.radius || 18);
+    enemy.speed = Number(enemy.moveSpeed || 96);
+    enemy.dmg = Number(enemy.contactDamage || 10);
+    enemy.hp = Number(enemy.health || 0);
+    enemy.max = Math.max(1, Number(enemy.maxHealth || 1));
+    enemy.stun = Math.max(0, (Number(enemy.stunnedUntilTick || 0) - state.tick) / 20);
+    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - fixedDelta);
+    if (state.tick < Number(enemy.confusedBlindUntilTick || 0)) {
+      enemy.vx *= 0.8;
+      enemy.vy *= 0.8;
+      enemy.state = 'confused';
+    } else {
+      const playersInRoom = livingRoomPlayers(state, enemy.roomId);
+      if (!playersInRoom.length) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.state = 'idle';
+        return;
+      }
+      if (playersInRoom.every(player => isPlayerConcealed(state, player))) {
+        // Every hero is hidden (cape/flight/coward's way): roam and blind-fire
+        // exactly like the campaign instead of freezing in place.
+        enemyBehaviors.wanderEnemy(enemy, fixedDelta);
+      } else {
+        const eliteControlled = enemyBehaviors.updateEliteEnemyTraits(enemy, fixedDelta);
+        if (!enemy.dead && !eliteControlled) {
+          invokeCampaignEnemyAI(enemy, fixedDelta, enemyBehaviors);
+        }
+      }
+    }
+    if (enemy.dead || !state.enemies[enemy.id]) return;
+    decayAuthorityEnemyBarrier(enemy, fixedDelta);
+    const slowMultiplier = getCampaignSlowMultiplier(getCampaignStatusStacks(enemy, 'slow'));
+    const minimum = Number(floor.wallThickness || 28) + enemy.r;
+    const maximumX = Number(floor.width || 900) - minimum;
+    const maximumY = Number(floor.height || 700) - minimum;
+    if (enemy.airborne) {
+      // Airborne bosses (Bulk Golem's jump) move on their scripted arc: clamp
+      // to bounds only, no obstacle collisions mid-flight — like moveCircle.
+      enemy.x = Math.max(minimum, Math.min(maximumX, enemy.x));
+      enemy.y = Math.max(minimum, Math.min(maximumY, enemy.y));
+      return;
+    }
+    const desiredX = Math.max(minimum, Math.min(maximumX, enemy.x + enemy.vx * fixedDelta * slowMultiplier));
+    const desiredY = Math.max(minimum, Math.min(maximumY, enemy.y + enemy.vy * fixedDelta * slowMultiplier));
+    const collision = resolveRoomObstacleMovement(currentRoom(state, enemy.roomId), enemy, desiredX, desiredY);
+    if (collision.blockedX) enemy.vx *= -0.4;
+    if (collision.blockedY) enemy.vy *= -0.4;
+    enemy.x = collision.x;
+    enemy.y = collision.y;
+    if (Math.abs(enemy.vx) > 1) enemy.facing = enemy.vx < 0 ? -1 : 1;
+    enemy.hp = Number(enemy.health || 0);
+  }
+
   function updateEnemies(state, fixedDelta, emitEvent) {
     const floor = state.floorState || {};
+    behaviorRuntime.state = state;
+    behaviorRuntime.emitEvent = emitEvent;
     Object.entries(state.enemies || {}).forEach(([enemyId, enemy]) => {
       if (enemy.dead) {
         if (state.tick - Number(enemy.deathTick || 0) >= ENEMY_DEATH_TICKS) delete state.enemies[enemyId];
@@ -1953,6 +2654,15 @@
         return;
       }
       if (enemy.state === 'spawning') enemy.state = 'chasing';
+      if (enemyBehaviors && SHARED_ENEMY_BEHAVIOR_SET.has(enemy.type)) {
+        // Standard-roster enemies run the campaign's authored behavior bodies —
+        // wind-ups, dashes, beams, bursts, cover, summons, shields, heals —
+        // instead of the generic chase/shoot loop below. Their attacks deal all
+        // damage themselves; there is no walk-over contact damage, exactly like
+        // the campaign.
+        updateAuthoredEnemy(state, enemy, fixedDelta, emitEvent, floor);
+        return;
+      }
       if (state.tick < Number(enemy.stunnedUntilTick || 0)) {
         enemy.vx = 0;
         enemy.vy = 0;
@@ -2168,6 +2878,17 @@
           angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
           knockback: Number(projectile.knockback || 120),
         });
+        // Authored enemy shots can carry status payloads (e.g. golem spit poison).
+        (Array.isArray(projectile.statusEffects) ? projectile.statusEffects : []).forEach(effect => {
+          const chance = Math.max(0, Math.min(1, Number(effect.chance ?? 1)));
+          if (chance < 1 && random.next('encounter') >= chance) return;
+          applyAuthorityStatus(state, player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), projectile.ownerId);
+        });
+        // Drain shots (Queen's missiles) siphon HP back to their owner on hit.
+        const drainOwner = Number(projectile.drainHeal || 0) > 0 ? state.enemies?.[projectile.ownerId] : null;
+        if (drainOwner && !drainOwner.dead) {
+          drainOwner.health = Math.min(Number(drainOwner.maxHealth || 1), Number(drainOwner.health || 0) + Number(projectile.drainHeal));
+        }
         return;
       }
       if (state.matchRules?.friendlyFire) {
@@ -2627,6 +3348,7 @@
       updateAuthorityGardenGrowth(state, emitEvent);
       updateChestProximity(state, emitEvent, random);
       updatePlayerActions(state, inputs, emitEvent, random);
+      updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
       updateAbilityEntities(state, emitEvent, random);
       updateRoomHazards(state, fixedDelta, emitEvent);

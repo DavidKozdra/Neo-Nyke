@@ -107,7 +107,7 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.simulation.state.players[client.playerId]).toEqual(expect.objectContaining({
       maxHp: 108,
       hp: 108,
-      moveSpeed: 180,
+      moveSpeed: 228,
       damageMultiplier: 1.05,
       items: { copper_penny: 1 },
     }));

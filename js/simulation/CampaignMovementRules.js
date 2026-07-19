@@ -37,8 +37,13 @@
     const statusUntil = player?.statusUntilTick || {};
     const timedMultiplier = Number(currentTick) < Number(statusUntil.mooggy_zoomies || 0) ? 5
       : Number(currentTick) < Number(statusUntil.turtle_powerup || 0) ? 1.3 : 1;
-    return Math.max(0, Number(player?.moveSpeed) || 180)
+    const flightBoost = Number(currentTick) < Number(statusUntil.flying_unhitable || 0) ? 2 : 1;
+    const laserWeight = Math.max(0, Number(player?.itemStats?.laserWeightMultiplier ?? 1));
+    const laserSlow = player?.beamChannel ? Math.max(0, 1 - 0.6 * laserWeight) : 1;
+    return Math.max(0, Number(player?.moveSpeed) || 228)
       * timedMultiplier
+      * flightBoost
+      * laserSlow
       * Math.max(0.1, Number(player?.itemStats?.moveSpeedMultiplier || 1))
       * (status.getCampaignSlowMultiplier?.(
         status.getCampaignStatusStacks?.(player, 'slow') || 0,

@@ -13,8 +13,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v25');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v25');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v26');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v26');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -290,24 +290,26 @@ describe('network multiplayer game view', () => {
     expect(firstProjectile.x).toBe(3);
   });
 
-  test('projects authoritative beams as ordinary client presentation effects', () => {
+  test('projects authoritative beam channels as ordinary client presentation effects', () => {
     const neo = {};
-    const actor = { id: 'p1', equippedMoves: { laser: 'turtle_wave' }, items: {} };
+    // The authority's live channel state drives the beam — angle updates every
+    // tick as the caster steers, instead of freezing at the cast direction.
+    const actor = {
+      id: 'p1', equippedMoves: { laser: 'turtle_wave' }, items: {},
+      beamChannel: { moveKey: 'turtle_wave', angle: 1.25, startTick: 40, untilTick: 67, sweepDirection: 0 },
+    };
     const view = new NetworkGameView({ session: {}, neo });
+    view.currentSample = { tick: 45, state: { tick: 45 } };
     view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
-    view.combatEffects = [{
-      eventType: 'PLAYER_ABILITY_USED',
-      startedAt: performance.now() - 100,
-      data: { playerId: 'p1', abilityId: 'turtle_wave', aimDirection: 1.25 },
-    }];
 
-    const effects = view._projectActivePlayerEffects(performance.now());
+    const effects = view._projectActivePlayerEffects();
 
     expect(effects).toEqual([expect.objectContaining({
       player: actor,
       laserActive: true,
       laserMode: 'turtle_wave',
       laserAngle: 1.25,
+      laserTime: (67 - 45) / 20,
     })]);
   });
 

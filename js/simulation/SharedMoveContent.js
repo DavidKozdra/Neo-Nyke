@@ -158,6 +158,47 @@
   const MOVE_SLOT_BY_KEY = Object.freeze(Object.fromEntries(
     Object.entries(MOVE_SLOT_KEYS).flatMap(([slot, keys]) => keys.map(key => [key, slot])),
   ));
+
+  // Channelled laser beams. These moves are NOT one-shot casts: the campaign
+  // holds them active for `duration` seconds, steers the beam toward the
+  // player's live aim each frame (3.5 rad/s, slowed by laser weight), and deals
+  // `tickDamage` to everything in the beam every `tickInterval` seconds. The
+  // numbers mirror js/game/combat.js updatePlayerLaser exactly — that file is
+  // the source of truth for how a beam must feel.
+  const CONTINUOUS_BEAM_MOVES = Object.freeze([
+    'blood_beam', 'love_beam', 'turtle_wave', 'holy_eye_beams', 'god_sweep',
+    'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer',
+  ]);
+  const BEAM_CHANNEL_PROFILES = Object.freeze({
+    blood_beam: Object.freeze({ duration: 0.58, tickDamage: 10, tickInterval: 0.08, range: 430, padding: 6, knockback: 60 }),
+    love_beam: Object.freeze({ duration: 1.275, tickDamage: 14, tickInterval: 0.06, range: 500, padding: 6, knockback: 52 }),
+    turtle_wave: Object.freeze({ duration: 1.35, tickDamage: 34, tickInterval: 0.08, range: 620, padding: 14, knockback: 155 }),
+    holy_eye_beams: Object.freeze({ duration: 1.2, tickDamage: 13, tickInterval: 0.08, range: 430, padding: 6, knockback: 70, fan: Object.freeze([-0.07, 0.07]) }),
+    god_sweep: Object.freeze({ duration: 1.45, tickDamage: 12, tickInterval: 0.05, range: 560, padding: 6, knockback: 120, sweep: 4.6 }),
+    mooggy_blood_beam: Object.freeze({ duration: 0.58, tickDamage: 12, tickInterval: 0.08, range: 430, padding: 12, knockback: 60 }),
+    thorn_blood_beams: Object.freeze({ duration: 0.58, tickDamage: 8, tickInterval: 0.08, range: 520, padding: 6, knockback: 60, fan: Object.freeze([-0.32, -0.11, 0.11, 0.32]) }),
+    wizard_lazer: Object.freeze({ duration: 0.58, tickDamage: 30, tickInterval: 0.08, range: 560, padding: 22, knockback: 150 }),
+  });
+  const BEAM_TURN_RATE = 3.5;             // rad/s the beam steers toward the aim
+  const BEAM_RECOIL_ACCEL = 45;           // base backwards push while channelling
+  const WIZARD_LAZER_EXTRA_RECOIL = 220;  // wizard's heavy beam shoves much harder
+
+  // Advance a channelled beam's angle by one step, exactly like the campaign:
+  // god_sweep rotates on its own; everything else turns toward the aim at a
+  // weight-scaled rate, taking the short way around the circle.
+  function steerBeamChannelAngle(moveKey, currentAngle, targetAngle, dt, options = {}) {
+    const profile = BEAM_CHANNEL_PROFILES[moveKey];
+    const angle = Number(currentAngle) || 0;
+    const delta = Math.max(0, Number(dt) || 0);
+    if (profile?.sweep) return angle + Number(options.sweepDirection || 1) * profile.sweep * delta;
+    const weight = Math.max(0, Number(options.laserWeightMultiplier ?? 1));
+    const turnRate = weight > 0 ? BEAM_TURN_RATE / weight : BEAM_TURN_RATE * 100;
+    const maxStep = turnRate * delta;
+    let offset = (Number(targetAngle) || 0) - angle;
+    while (offset > Math.PI) offset -= Math.PI * 2;
+    while (offset < -Math.PI) offset += Math.PI * 2;
+    return angle + Math.max(-maxStep, Math.min(maxStep, offset));
+  }
   const MOVE_EXCLUSIVE_CHARACTERS = Object.freeze({
     narwal_fight: 'princess', mooggy_swipe: 'mooggy', love_beam: 'princess', love_bomb_laser: 'princess',
     ghost_ball: 'turtle_boy', hammer_throw: 'sarge', lightning_cross: 'sarge', holy_eye_beams: 'gelleh',
@@ -225,6 +266,11 @@
     MOVE_PRESENTATION_DEFS,
     DEFAULT_MOVE_LOADOUTS,
     KIT_ALTERNATIVES,
+    CONTINUOUS_BEAM_MOVES,
+    BEAM_CHANNEL_PROFILES,
+    BEAM_RECOIL_ACCEL,
+    WIZARD_LAZER_EXTRA_RECOIL,
+    steerBeamChannelAngle,
     getDefaultMoveLoadout,
     getMoveSlot,
     isMoveAllowedForCharacter,
