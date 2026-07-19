@@ -64,7 +64,11 @@ describe('challenge circuit and protect trial', () => {
     const pressChallengeCircuitSwitch = extractFunction(
       enemiesSource,
       'pressChallengeCircuitSwitch',
-      { Neo, completeChallengeTrial },
+      {
+        Neo,
+        completeChallengeTrial,
+        globalThis: { NeoNyke: { simulation: require('../js/simulation/SharedRoomLifecycleSystem') } },
+      },
     );
 
     pressChallengeCircuitSwitch({ type: 'challengeSwitch', switchIndex: 0, x: 10, y: 10, color: '#fff' });

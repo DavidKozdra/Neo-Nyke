@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./CampaignMovementRules.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -99,6 +99,17 @@
     createCampaignSubSpawnDescriptors = () => [],
     applyCampaignDestructibleDamage = () => ({ ok: false, drops: [] }),
     applyCampaignLevelUp = () => null,
+    finishCampaignChallenge = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    resolveCampaignChallengePickup = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    updateCampaignGardenNode = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    collectCampaignGardenFruit = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    advanceCampaignMovingWorldEntity = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    purchaseCampaignSecretVendor = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    lootCampaignSecretBossChest = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    useCampaignLadder = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
+    rollCampaignChallengeType = () => 'mirror',
+    createCampaignSecretRoomPlan = () => ({ ok: false, pickups: [] }),
+    applyCampaignImpulse = () => ({ ok: false, reason: 'MOVEMENT_UNAVAILABLE' }),
   } = contentApi || {};
   const combatRandomByState = new WeakMap();
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
@@ -236,6 +247,26 @@
     const occupiedRoomId = roomId || Object.values(state.players || {}).find(player => !player?.disconnected)?.roomId || state.floorState?.currentRoomId;
     const room = currentRoom(state, occupiedRoomId);
     if (!room || !ENCOUNTER_ROOM_TYPES.has(room.type)) return null;
+    if (room.type === 'challenge') {
+      room.challengeType = room.challengeType || rollCampaignChallengeType(
+        state.floorNumber,
+        () => random.scoped(`challenge:type:${state.floorNumber}:${room.id}`).next(),
+      );
+      if (!room.challengeStarted) {
+        const existingStarter = Object.values(state.pickups || {}).find(pickup => pickup.type === 'challengeStarter' && pickup.roomId === room.id);
+        if (!existingStarter) {
+          const pickupId = state.allocateEntityId('pickup');
+          state.pickups[pickupId] = {
+            id: pickupId, type: 'challengeStarter', trial: room.challengeType, roomId: room.id,
+            x: Number(state.floorState.width || 900) / 2,
+            y: Number(state.floorState.height || 700) / 2,
+            radius: 24, spawnTick: state.tick,
+          };
+          emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: 'challengeStarter', roomId: room.id, trial: room.challengeType });
+        }
+        return null;
+      }
+    }
     state.floorState.encounters = state.floorState.encounters || {};
     if (state.floorState.encounters[room.id]) return state.floorState.encounters[room.id];
 
@@ -340,6 +371,29 @@
     });
     state.floorState.rewards[room.id] = { interactableIds, status: 'available' };
     return state.interactables[interactableIds[0]];
+  }
+
+  function ensureAuthoritySpecialRoomContent(state, random, emitEvent, roomId) {
+    const room = currentRoom(state, roomId);
+    if (!room?.secret || room.type !== 'secret' || room.secretLifecycleInitialized) return;
+    const stream = random.scoped(`secret:lifecycle:${state.floorNumber}:${room.id}`);
+    const plan = createCampaignSecretRoomPlan(room, {
+      floorNumber: state.floorNumber,
+      maxFloor: MAX_FLOOR,
+      width: state.floorState?.width,
+      height: state.floorState?.height,
+      random: () => stream.next(),
+      xpCost: 30,
+      xpValue: 40 + Number(state.floorNumber || 1) * 5,
+      rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
+    });
+    if (!plan.ok) return;
+    room.secretLifecycleInitialized = true;
+    plan.pickups.forEach(descriptor => {
+      const pickupId = state.allocateEntityId('pickup');
+      state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId: room.id, radius: 22, spawnTick: state.tick };
+      emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: descriptor.type, roomId: room.id });
+    });
   }
 
   function scaleCampaignShopPrice(state, player, baseCost) {
@@ -1623,6 +1677,9 @@
     const dealt = incoming - absorbed;
     player.hp = Math.max(0, Number(player.hp || 0) - dealt);
     player.hitTick = state.tick;
+    const impulse = dealt > 0 && Number(options.knockback || 0) > 0
+      ? applyCampaignImpulse(player, Number(options.angle || 0), Number(options.knockback || 0), Number(itemStats.anchorKnockbackResist || 0))
+      : null;
     const newlyDowned = player.hp <= 0;
     if (newlyDowned) {
       player.downed = true;
@@ -1649,6 +1706,8 @@
       absorbed,
       health: player.hp,
       attackKind,
+      knockbackAngle: impulse?.angle,
+      knockbackMagnitude: impulse?.magnitude,
     });
   }
 
@@ -1671,6 +1730,13 @@
       if (!Array.isArray(room.hazards) || room.hazards.length === 0) return;
       const players = Object.values(state.players || {}).filter(player => !player.downed && player.roomId === room.id);
       room.hazards.forEach(hazard => {
+        if (Number(hazard.vx || 0) || Number(hazard.vy || 0)) {
+          advanceCampaignMovingWorldEntity(hazard, fixedDelta, {
+            width: state.floorState?.width,
+            height: state.floorState?.height,
+            margin: Number(hazard.boundaryMargin || hazard.r || 0),
+          });
+        }
         hazard.damageCooldownByPlayer = hazard.damageCooldownByPlayer || {};
         if (hazard.kind === 'lava') {
           players.forEach(player => {
@@ -1697,7 +1763,10 @@
         hazard.exploded = true;
         players.forEach(player => {
           if (Math.hypot(Number(player.x) - Number(hazard.x), Number(player.y) - Number(hazard.y)) > Number(hazard.blastRadius || 88) + Number(player.radius || 18)) return;
-          damagePlayer(state, player, Number(hazard.baseDamage || 18), `room-hazard:${room.id}`, emitEvent, 'explosive_trap');
+          damagePlayer(state, player, Number(hazard.baseDamage || 18), `room-hazard:${room.id}`, emitEvent, 'explosive_trap', {
+            angle: Math.atan2(Number(player.y) - Number(hazard.y), Number(player.x) - Number(hazard.x)),
+            knockback: Number(hazard.knockback || 220),
+          });
         });
         emitEvent('ROOM_HAZARD_EXPLODED', { roomId: room.id, hazardKind: hazard.kind, x: hazard.x, y: hazard.y, blastRadius: hazard.blastRadius });
       });
@@ -1955,7 +2024,10 @@
       }
       if (target.distance <= contactDistance && state.tick >= Number(enemy.contactCooldownUntilTick || 0)) {
         enemy.contactCooldownUntilTick = state.tick + 16;
-        damagePlayer(state, target.player, enemy.contactDamage, enemyId, emitEvent, 'contact');
+        damagePlayer(state, target.player, enemy.contactDamage, enemyId, emitEvent, 'contact', {
+          angle: Math.atan2(Number(target.player.y) - Number(enemy.y), Number(target.player.x) - Number(enemy.x)),
+          knockback: Number(enemy.contactKnockback || 120),
+        });
       }
     });
   }
@@ -1981,6 +2053,25 @@
     if (livingEncounterEnemies(state, roomId).length > 0) return;
     encounter.status = 'cleared';
     encounter.clearedTick = state.tick;
+    const room = currentRoom(state, roomId);
+    if (room?.type === 'challenge') {
+      const result = finishCampaignChallenge(room, 'completed', { text: 'TRIAL CLEARED' });
+      if (result.ok && !room.challengeRewardSpawned) {
+        room.challengeRewardSpawned = true;
+        const random = combatRandomByState.get(state)?.scoped?.(`challenge:reward:${state.floorNumber}:${roomId}`);
+        const rewardKey = result.rewardKey || rollCampaignItem(random ? () => random.next() : Math.random, { elite: true });
+        const descriptors = [
+          { type: 'item', key: rewardKey, x: Number(state.floorState.width || 900) / 2, y: Number(state.floorState.height || 700) / 2 - 16 },
+          { type: 'potion', x: Number(state.floorState.width || 900) / 2, y: Number(state.floorState.height || 700) / 2 + 36 },
+          { type: 'coin', amount: 75 + Number(state.floorNumber || 1) * 15, x: Number(state.floorState.width || 900) / 2, y: Number(state.floorState.height || 700) / 2 + 4 },
+        ];
+        descriptors.forEach(descriptor => {
+          const pickupId = state.allocateEntityId('pickup');
+          state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId, radius: 13, spawnTick: state.tick };
+        });
+        emitEvent('CHALLENGE_COMPLETED', { roomId, ...result });
+      }
+    }
     emitEvent('ROOM_CLEARED', { roomId });
   }
 
@@ -2073,7 +2164,10 @@
         ));
         if (!player) return;
         delete state.projectiles[projectileId];
-        damagePlayer(state, player, projectile.damage, projectile.ownerId, emitEvent, projectile.attackKind);
+        damagePlayer(state, player, projectile.damage, projectile.ownerId, emitEvent, projectile.attackKind, {
+          angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
+          knockback: Number(projectile.knockback || 120),
+        });
         return;
       }
       if (state.matchRules?.friendlyFire) {
@@ -2084,7 +2178,10 @@
               <= Number(candidate.radius || 18) + Number(projectile.radius || 8)
         ));
         if (rival) {
-          damagePlayer(state, rival, playerDamage(state, projectile.ownerId, projectile.damage), projectile.ownerId, emitEvent, projectile.attackKind);
+          damagePlayer(state, rival, playerDamage(state, projectile.ownerId, projectile.damage), projectile.ownerId, emitEvent, projectile.attackKind, {
+            angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
+            knockback: Number(projectile.knockback || 120),
+          });
           delete state.projectiles[projectileId];
           return;
         }
@@ -2143,6 +2240,46 @@
         advanceToNextFloor(state, emitEvent, transition.skipFloors);
         return;
       }
+      if (pickup.type === 'challengeStarter') {
+        const room = currentRoom(state, pickup.roomId);
+        if (!room || room.type !== 'challenge' || room.challengeStarted) return;
+        room.challengeStarted = true;
+        room.challengeLifecycleState = 'active';
+        room.challengeFailed = false;
+        delete state.pickups[pickupId];
+        emitEvent('CHALLENGE_STARTED', { playerId: player.id, roomId: room.id, challengeType: room.challengeType || pickup.trial });
+        return;
+      }
+      if (pickup.type === 'secretWarp') {
+        const targetFloor = Math.max(1, Math.min(MAX_FLOOR, Number(pickup.targetFloor || state.floorNumber)));
+        const steps = targetFloor - Number(state.floorNumber || 1);
+        if (steps === 0) return;
+        delete state.pickups[pickupId];
+        emitEvent('SECRET_WARP_USED', { playerId: player.id, roomId: pickup.roomId, targetFloor });
+        advanceToNextFloor(state, emitEvent, steps);
+        return;
+      }
+      if (pickup.type === 'secretVendor') {
+        const vendorState = { floorNumber: state.floorNumber, loopCrystals: Number(player.loopCrystals || 0) };
+        const room = currentRoom(state, pickup.roomId);
+        const purchase = purchaseCampaignSecretVendor(vendorState, room, player, pickup);
+        if (!purchase.ok) return;
+        player.loopCrystals = Number(vendorState.loopCrystals || 0);
+        if (purchase.rewardKey) {
+          const loot = random.stream('loot');
+          collectCampaignPickup(state, player, purchase.rewardKey, {
+            duplicateChance: player.itemStats?.itemDuplicateChance,
+            random: () => loot.next(),
+            rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+          });
+        } else if (purchase.offerKind === 'vitality') {
+          player.hp = Math.min(player.maxHp, Number(player.hp || 0) + purchase.heal * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
+        } else if (purchase.offerKind === 'xp') player.xp = Number(player.xp || 0) + purchase.xp;
+        else player.coins = Number(player.coins || 0) + purchase.coins;
+        delete state.pickups[pickupId];
+        emitEvent('SECRET_VENDOR_PURCHASED', { playerId: player.id, roomId: pickup.roomId, ...purchase });
+        return;
+      }
       let amount = Math.max(0, Number(pickup.amount || 0));
       if (pickup.type === 'coin') {
         amount = Math.round(Math.max(1, amount || 1) * Math.max(1, Number(player.itemStats?.coinPickupMultiplier || 1)))
@@ -2165,6 +2302,19 @@
           });
           emitEvent('JESTER_GATE_PENDING', { playerId: player.id, skipFloors: acquisition.jester.skipFloors });
         }
+      } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
+        const room = currentRoom(state, pickup.roomId);
+        const gardenRandom = random?.scoped?.(`garden:respawn:${state.floorNumber}:${pickup.roomId}:${pickup.gardenNodeId}:${state.tick}`);
+        const collected = collectCampaignGardenFruit(room, pickup, state.elapsedSeconds, {
+          random: gardenRandom ? () => gardenRandom.next() : Math.random,
+          minimumRespawnSeconds: 12,
+          respawnSpreadSeconds: 10,
+        });
+        if (!collected.ok) return;
+        amount = collected.heal * Math.max(1, Number(player.itemStats?.healingMultiplier || 1));
+        const before = Number(player.hp || 0);
+        player.hp = Math.min(Number(player.maxHp || 100), before + amount);
+        amount = Math.max(0, player.hp - before);
       }
       let healedAmount = 0;
       if (pickup.type === 'potion') {
@@ -2187,6 +2337,34 @@
         itemKey: pickup.key || '',
         roomId: pickup.roomId,
       });
+    });
+  }
+
+  function updateMovingWorldPickups(state, fixedDelta) {
+    Object.values(state.pickups || {}).forEach(pickup => {
+      if (!(Number(pickup.vx || 0) || Number(pickup.vy || 0))) return;
+      advanceCampaignMovingWorldEntity(pickup, fixedDelta, {
+        width: state.floorState?.width,
+        height: state.floorState?.height,
+        margin: pickup.type === 'challengeBomb' ? 90 : Number(pickup.radius || 0),
+      });
+    });
+  }
+
+  function updateAuthorityGardenGrowth(state, emitEvent) {
+    if (Number(state.floorNumber || 1) <= 5) return;
+    const occupied = new Set(activePlayers(state).map(player => player.roomId));
+    (state.floorState?.layout?.rooms || []).filter(room => occupied.has(room.id)).forEach(room => {
+      if (!Array.isArray(room.gardenFruitNodes)) return;
+      room.pickups = Object.values(state.pickups || {}).filter(pickup => pickup.roomId === room.id);
+      room.gardenFruitNodes.forEach(node => {
+        const result = updateCampaignGardenNode(room, node, state.elapsedSeconds);
+        if (!result.spawned) return;
+        const pickupId = state.allocateEntityId('pickup');
+        state.pickups[pickupId] = { id: pickupId, ...result.pickup, roomId: room.id, radius: 13, spawnTick: state.tick };
+        emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: result.pickup.type, roomId: room.id, gardenNodeId: node.id });
+      });
+      delete room.pickups;
     });
   }
 
@@ -2262,7 +2440,8 @@
   // room. Enemies, projectiles, pickups and interactables are cleared; the
   // floor seed is derived deterministically from the match seed.
   function advanceToNextFloor(state, emitEvent, floorSteps = 1) {
-    const nextFloorNumber = Math.min(MAX_FLOOR, Number(state.floorNumber || 1) + Math.max(1, Math.floor(Number(floorSteps || 1))));
+    const steps = Math.trunc(Number(floorSteps || 1)) || 1;
+    const nextFloorNumber = Math.max(1, Math.min(MAX_FLOOR, Number(state.floorNumber || 1) + steps));
     const floorSeed = `${state.matchSeed}|floor:${nextFloorNumber}`;
     const layout = typeof generateFloorLayout === 'function'
       ? generateFloorLayout({
@@ -2439,11 +2618,13 @@
         .filter(player => player && !player.disconnected)
         .map(player => player.roomId));
       occupiedRoomIds.forEach(roomId => {
+        ensureAuthoritySpecialRoomContent(state, random, emitEvent, roomId);
         ensureNetworkEncounter(state, random, emitEvent, roomId);
         ensureNetworkRoomReward(state, random, emitEvent, roomId);
         ensureCampaignShop(state, random, emitEvent, roomId);
       });
       ensureJesterGate(state, emitEvent);
+      updateAuthorityGardenGrowth(state, emitEvent);
       updateChestProximity(state, emitEvent, random);
       updatePlayerActions(state, inputs, emitEvent, random);
       updatePlayerEquipmentEffects(state, emitEvent);
@@ -2452,6 +2633,7 @@
       updateAuthorityStatuses(state, fixedDelta, emitEvent);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random);
+      updateMovingWorldPickups(state, fixedDelta);
       updatePickups(state, emitEvent, random);
     };
   }

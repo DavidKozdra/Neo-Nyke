@@ -55,20 +55,20 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
    - Scroll selection, Wizard's Paw, Extra Battery and duplicate pickup collection use shared transactions. Secret vendor/boss rewards and several named selection events still need the same treatment.
 
 5. **Special/challenge/secret/garden rooms**
-   - Seven service-room choices share an outcome resolver.
-   - Challenge trial lifecycles, secret bosses/warp/vendor state, garden fruit growth, treasure-hunt state, ladder charge/warp and several named room interactions remain campaign-only.
+   - Seven service-room choices share an outcome resolver. Challenge type selection, starter gating, completion/failure, circuit/rune/bomb pickup mutations and rewards now use `SharedRoomLifecycleSystem` from campaign and authority.
+   - Secret vendor/warp plans and purchases, secret-boss chest claims, garden fruit growth/collection/respawn and normal/treasure-hunt ladder outcomes are shared. The authority still needs the complete authored per-tick Protect/Storm/Rune/Bomb enemy-pressure bodies and Bowman Bane encounter/escape construction.
 
 6. **World mutation**
    - Pots, barrels, breakable walls and hidden-prop reveals now share an authoritative break lifecycle with campaign loot/blast outcomes.
-   - Secret-wall break intent, cover HP, reveals and post-loop green drops are shared. Garden nodes and room-projectile lifecycles do not yet share the full campaign mutation lifecycle.
+   - Secret-wall break intent, cover HP, reveals, post-loop green drops, garden nodes and moving pickup/hazard boundary reflection are shared. Remaining named room-projectile dispositions are covered by the broader combat-execution blocker above.
 
 7. **Remaining run services**
-   - XP, canonical level-up gains, coins, floors and revive have authority state.
-   - Achievements, unlocks, tutorial progression, run-save/meta progression, difficulty/challenge modifiers and all alternate campaign modes are not yet authoritative multiplayer services.
+   - XP, canonical level-up gains, coins, floors and revive have authority state. Authority events now update serialized achievement/tutorial/unlock service state; matching clients feed those events into the existing campaign achievement/tutorial presentation. Cloudflare Durable Objects checkpoint the complete serialized simulation and random-stream state every second.
+   - Account-level meta merging and the complete mechanics of every alternate campaign mode still require explicit multiplayer policy; they are not silently written through the legacy single-player save schema.
 
 8. **Prediction/reconciliation coverage**
    - Player obstacle prediction, responsive velocity, timed speed boosts, item speed and status slow math are shared between authority and client prediction. Accepted dash/warp destinations are applied immediately to the local predicted hero.
-   - Knockback, doors during transitions and moving-hazard reconciliation still need exact prediction/replay coverage.
+   - Knockback uses the same resisted impulse operation in campaign, authority and local prediction. Authoritative room/floor transitions snap prediction to the canonical entrance, and moving pickups/hazards consume the shared reflection operation.
 
 ## Deletion rule for remaining work
 

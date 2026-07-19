@@ -13,6 +13,7 @@
   const campaignApi = typeof require === 'function' ? require('../simulation/CampaignSimulation.js') : browserSimulationApi;
   const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
   const combatApi = typeof require === 'function' ? require('../simulation/NetworkCombatSystem.js') : browserSimulationApi;
+  const runServiceApi = typeof require === 'function' ? require('../simulation/SharedRunServiceSystem.js') : browserSimulationApi;
   const worldContentApi = typeof require === 'function' ? require('../simulation/SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
@@ -25,6 +26,7 @@
   } = campaignApi;
   const { generateFloorLayout } = floorApi;
   const { applyNetworkHeroProfile, sanitizeKitChoices, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
+  const { applyAuthorityRunEvent = () => ({ ok: false }) } = runServiceApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -34,10 +36,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v24';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v25';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v24';
-  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v24';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v25';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v25';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -568,6 +570,7 @@
     }
 
     _queueGameplayEvent(eventType, data = {}) {
+      applyAuthorityRunEvent(this.simulation.state, eventType, data);
       // The floor-progression system signals a finished run via a RUN_ENDED
       // sim event; capture its details so step() can send the dedicated
       // authoritative RUN_ENDED message (schema-validated, terminal for clients).

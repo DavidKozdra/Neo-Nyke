@@ -147,9 +147,12 @@ export function updatePointerAimWorld(options = {}) {
 // given magnitude pointing along `angle` (radians). Centralizes the knockback
 // idiom that was hand-written as cos/sin pairs at every hit site.
 export function applyImpulse(entity, angle, magnitude) {
-  if (!entity || !Number.isFinite(angle) || !Number.isFinite(magnitude)) return;
+  const shared = globalThis.NeoNyke?.simulation?.applyCampaignImpulse;
+  if (shared) return shared(entity, angle, magnitude);
+  if (!entity || !Number.isFinite(angle) || !Number.isFinite(magnitude)) return undefined;
   entity.vx += Math.cos(angle) * magnitude;
   entity.vy += Math.sin(angle) * magnitude;
+  return undefined;
 }
 
 // Crit roll-back: once crit chance reaches 100% it can't climb higher, so the

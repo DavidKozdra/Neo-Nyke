@@ -3,6 +3,8 @@ import '../js/simulation/SharedCombatContent.js';
 import '../js/simulation/SharedMoveContent.js';
 import '../js/simulation/SharedEnemyContent.js';
 import '../js/simulation/SharedItemContent.js';
+import '../js/simulation/SharedRoomLifecycleSystem.js';
+import '../js/simulation/SharedRunServiceSystem.js';
 import '../js/simulation/GameState.js';
 import '../js/simulation/GameSimulation.js';
 import '../js/simulation/DeterministicFloorGenerator.js';
@@ -34,6 +36,7 @@ const protocolApi = globalThis.NeoNyke?.protocol || {};
 const { NetworkTransport } = multiplayerApi;
 const { MultiplayerRoomAuthority } = multiplayerApi;
 const { getDeliveryIntent } = protocolApi;
+const { GameState } = globalThis.NeoNyke?.simulation || {};
 
 function normalizeRoomCode(value) {
   const code = String(value || '').trim().toUpperCase();
@@ -134,11 +137,37 @@ export class MultiplayerRoom {
     });
     this.startPromise = null;
     this.tickTimer = null;
+    this.checkpointLoaded = false;
+    this.checkpointWrite = null;
   }
 
   async ensureStarted() {
-    if (!this.startPromise) this.startPromise = this.authority.start();
+    if (!this.startPromise) this.startPromise = (async () => {
+      if (!this.checkpointLoaded) {
+        this.checkpointLoaded = true;
+        const checkpoint = await this.ctx.storage.get('checkpoint');
+        if (checkpoint?.serialized && GameState) {
+          const restored = GameState.deserialize(checkpoint.serialized);
+          this.authority.simulation.state = restored;
+          if (restored.randomState) this.authority.simulation.random.restore(restored.randomState);
+        }
+      }
+      return this.authority.start();
+    })();
     await this.startPromise;
+  }
+
+  persistCheckpoint() {
+    if (this.checkpointWrite) return this.checkpointWrite;
+    const serialized = this.authority.simulation.serialize();
+    this.checkpointWrite = this.ctx.storage.put('checkpoint', {
+      serialized,
+      tick: this.authority.simulation.state.tick,
+      saveRevision: this.authority.simulation.state.runServices?.saveRevision || 0,
+      updatedAt: Date.now(),
+    }).finally(() => { this.checkpointWrite = null; });
+    this.ctx.waitUntil(this.checkpointWrite);
+    return this.checkpointWrite;
   }
 
   async fetch(request) {
@@ -227,6 +256,7 @@ export class MultiplayerRoom {
         return;
       }
       this.authority.step(1);
+      if (this.authority.simulation.state.tick % 20 === 0) this.persistCheckpoint();
     }, ROOM_TICK_INTERVAL_MS);
   }
 }

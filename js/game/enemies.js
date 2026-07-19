@@ -331,11 +331,9 @@
     return globalThis.NeoNyke.simulation.getCampaignFloorBossType(Neo.floor, bossRandom);
   }
 
-  function rollChallengeTrialType() {
-    const pool = Neo.CHALLENGE_TRIAL_TYPES.slice();
-    if (Neo.floor <= 2) return pool[Neo.irand(0, 2, 'world')];
-    if (Neo.floor <= 4) return pool[Neo.irand(0, 4, 'world')];
-    return pool[Neo.irand(0, pool.length - 1, 'world')];
+  function rollChallengeTrialType(room = Neo.currentRoom) {
+    const random = room ? Neo.createRoomRandom(room, 'challenge:type') : () => Neo.nextRandom('world');
+    return globalThis.NeoNyke.simulation.rollCampaignChallengeType(Neo.floor, random);
   }
 
   function getChallengeTrialLabel(type) {
@@ -1816,26 +1814,16 @@
     const room = Neo.currentRoom;
     if (!room || room.type !== 'challenge' || !['circuit', 'stillness'].includes(room.challengeType || 'mirror')) return false;
     if (!room.challengeStarted || room.cleared || pickup?.type !== 'challengeSwitch') return false;
-    const sequence = Array.isArray(room.challengeData?.sequence) ? room.challengeData.sequence : [];
-    const progress = Math.max(0, Number(room.challengeData?.progress || 0));
-    if (sequence.length === 0 || !Number.isInteger(pickup.switchIndex)) return false;
-
-    pickup.armed = false;
-    if (pickup.switchIndex === sequence[progress]) {
-      room.challengeData.progress = progress + 1;
-      room.challengeData.flash = 0.28;
-      Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.45, text: `${progress + 1}/${sequence.length}`, c: pickup.color });
-      if (room.challengeData.progress >= sequence.length) {
+    const result = globalThis.NeoNyke.simulation.resolveCampaignChallengePickup(room, pickup);
+    if (!result.ok) return false;
+    if (result.type === 'CHALLENGE_SWITCH_CORRECT') {
+      Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.45, text: `${result.progress}/${result.total}`, c: pickup.color });
+      if (result.complete) {
         completeChallengeTrial('CIRCUIT SOLVED');
       }
       return true;
     }
-
-    const penalty = Math.max(0, Number(room.challengeData?.wrongPressPenalty || 2));
-    room.challengeData.progress = 0;
-    room.challengeData.wrongFlash = 0.5;
-    room.challengeTimer = Math.max(0, Number(room.challengeTimer || 0) - penalty);
-    Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.65, text: `WRONG -${penalty}S`, c: '#ff667d' });
+    Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.65, text: `WRONG -${result.penalty}S`, c: '#ff667d' });
     return true;
   }
 
@@ -1953,14 +1941,14 @@
     return available[Math.floor(challengeRandom() * available.length)];
   }
 
-  function spawnChallengeReward(text = 'TRIAL CLEARED') {
+  function spawnChallengeReward(text = 'TRIAL CLEARED', authoredRewardKey = '') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.challengeRewardSpawned) return;
     Neo.currentRoom.challengeRewardSpawned = true;
     const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
     const scrollRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:scroll-reward');
     const challengeData = Neo.currentRoom.challengeData || {};
     const scrollReward = Neo.floor > 3 && scrollRandom() < 0.2 ? Neo.rollScrollOfControl?.(scrollRandom) : '';
-    const rewardKey = challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
+    const rewardKey = authoredRewardKey || challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
@@ -1978,23 +1966,20 @@
   function completeChallengeTrial(text = 'TRIAL CLEARED') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge') return;
     if ((Neo.currentRoom.challengeType || 'mirror') === 'storm') Neo.stopSfxLoop?.('lightning_storm_loop');
-    Neo.currentRoom.cleared = true;
-    Neo.currentRoom.challengeFailed = false;
-    Neo.currentRoom.challengeTimer = 0;
-    Neo.currentRoom.challengeTick = 0;
-    const completedType = Neo.currentRoom.challengeType || 'mirror';
+    const result = globalThis.NeoNyke.simulation.finishCampaignChallenge(Neo.currentRoom, 'completed', { text });
+    if (!result.ok) return;
+    const completedType = result.challengeType;
     Neo.gameEvents.emit('challenge:completed', {
       room: Neo.currentRoom,
       challengeType: completedType,
-      text,
+      text: result.text,
     });
     // 'stillness' is a legacy alias for the circuit trial — normalize so the
     // Trial Master achievement counts it as the same type.
     window.achievementEvents?.emit('challenge:beaten', {
-      challengeType: completedType === 'stillness' ? 'circuit' : completedType,
+      challengeType: result.achievementType,
     });
-    spawnChallengeReward(text);
-    Neo.currentRoom.challengeData = {};
+    spawnChallengeReward(result.text, result.rewardKey);
     Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
     Neo.updateObjective();
     Neo.scheduleRunSave();
@@ -2003,20 +1988,16 @@
   function failChallengeTrial(text = 'TRIAL FAILED') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge') return;
     if ((Neo.currentRoom.challengeType || 'mirror') === 'storm') Neo.stopSfxLoop?.('lightning_storm_loop');
-    Neo.currentRoom.cleared = true;
-    Neo.currentRoom.challengeFailed = true;
-    Neo.currentRoom.challengeRewardSpawned = true;
-    Neo.currentRoom.challengeTimer = 0;
-    Neo.currentRoom.challengeTick = 0;
+    const result = globalThis.NeoNyke.simulation.finishCampaignChallenge(Neo.currentRoom, 'failed', { text });
+    if (!result.ok) return;
     Neo.gameEvents.emit('challenge:failed', {
       room: Neo.currentRoom,
-      challengeType: Neo.currentRoom.challengeType || 'mirror',
-      text,
+      challengeType: result.challengeType,
+      text: result.text,
     });
-    Neo.currentRoom.challengeData = {};
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
+    Neo.pickups = Neo.pickups.filter(pickup => !result.removePickupTypes.includes(pickup?.type));
     Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
-    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text: result.text, c: '#ff8b98' });
     Neo.updateObjective();
     Neo.scheduleRunSave();
   }
@@ -4962,16 +4943,13 @@
     if (type === 'bomb') {
       Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
       Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
-      // Drift each bomb slowly along its set path, bouncing off the room edges.
-      const margin = 90;
+      // Drift each bomb through the shared world-entity operation so authority
+      // snapshots and local campaign use identical boundary reflection.
       for (const pickup of Neo.pickups) {
         if (pickup?.type !== 'challengeBomb' || pickup.vx === undefined) continue;
-        pickup.x += pickup.vx * dt;
-        pickup.y += pickup.vy * dt;
-        if (pickup.x < margin) { pickup.x = margin; pickup.vx = Math.abs(pickup.vx); }
-        else if (pickup.x > Neo.ROOM_W - margin) { pickup.x = Neo.ROOM_W - margin; pickup.vx = -Math.abs(pickup.vx); }
-        if (pickup.y < margin) { pickup.y = margin; pickup.vy = Math.abs(pickup.vy); }
-        else if (pickup.y > Neo.ROOM_H - margin) { pickup.y = Neo.ROOM_H - margin; pickup.vy = -Math.abs(pickup.vy); }
+        globalThis.NeoNyke.simulation.advanceCampaignMovingWorldEntity(pickup, dt, {
+          width: Neo.ROOM_W, height: Neo.ROOM_H, margin: 90,
+        });
       }
       if (Neo.currentRoom.challengeTick <= 0) {
         Neo.currentRoom.challengeTick = Math.max(1.1, Number(getChallengeTrialTuning('bomb').tick || 1.8));

@@ -23,6 +23,16 @@
     return Math.abs(next) < 4 ? 0 : next;
   }
 
+  function applyCampaignImpulse(entity, angle, magnitude, resistance = 0) {
+    const direction = Number(angle);
+    const force = Number(magnitude);
+    if (!entity || !Number.isFinite(direction) || !Number.isFinite(force)) return { ok: false, reason: 'INVALID_IMPULSE' };
+    const resistedForce = force * (1 - Math.max(0, Math.min(1, Number(resistance || 0))));
+    entity.vx = Number(entity.vx || 0) + Math.cos(direction) * resistedForce;
+    entity.vy = Number(entity.vy || 0) + Math.sin(direction) * resistedForce;
+    return { ok: true, angle: direction, magnitude: resistedForce, vx: entity.vx, vy: entity.vy };
+  }
+
   function getCampaignPlayerMovementSpeed(player, currentTick = 0) {
     const statusUntil = player?.statusUntilTick || {};
     const timedMultiplier = Number(currentTick) < Number(statusUntil.mooggy_zoomies || 0) ? 5
@@ -36,5 +46,5 @@
       ) ?? 1);
   }
 
-  return { applyResponsiveVelocity, getCampaignPlayerMovementSpeed };
+  return { applyResponsiveVelocity, applyCampaignImpulse, getCampaignPlayerMovementSpeed };
 });

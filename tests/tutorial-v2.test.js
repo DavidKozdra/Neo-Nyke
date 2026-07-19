@@ -99,7 +99,8 @@ describe('Sarge tutorial v2', () => {
     expect(enemies).toContain('const safeCount = tutorialBombs ? 2');
     expect(enemies).toContain("for (let index = 0; index < (tutorialBombs ? 0 : 5)");
     expect(world).toContain("tutorialBomb ? 'RED = DANGER' : 'WRONG'");
-    expect(world).toContain('if (tutorialBomb) {');
+    expect(world).toContain('tutorial: tutorialBomb');
+    expect(world).toContain('if (result.removePickup) removePickupAt(index)');
   });
 
   test('precaches all new tutorial assets', () => {

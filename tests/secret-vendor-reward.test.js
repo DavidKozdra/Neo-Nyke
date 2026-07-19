@@ -1,18 +1,7 @@
-const fs = require('node:fs');
-const path = require('node:path');
-
-function loadDistinctRewardRoller() {
-  const source = fs.readFileSync(path.join(__dirname, '../js/game/rooms.js'), 'utf8');
-  const match = source.match(
-    /export function rollDistinctSecretVendorReward\(rollReward, previousRewardKey = '', maxRerolls = 6\) \{[\s\S]*?\n  \}/,
-  );
-  if (!match) throw new Error('Could not find rollDistinctSecretVendorReward');
-  const functionSource = match[0].replace('export function', 'function');
-  return new Function(`${functionSource}; return rollDistinctSecretVendorReward;`)();
-}
+const { rollDistinctCampaignReward } = require('../js/simulation/SharedRoomLifecycleSystem');
 
 describe('secret vendor elite relic selection', () => {
-  const rollDistinctSecretVendorReward = loadDistinctRewardRoller();
+  const rollDistinctSecretVendorReward = rollDistinctCampaignReward;
 
   test('keeps the first roll when it differs from the last purchased reward', () => {
     const rollReward = jest.fn(() => 'chrono_spring');
