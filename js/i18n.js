@@ -39,7 +39,12 @@
   async function loadLanguage(language) {
     const resolved = resolveLanguage(language);
     if (dictionaries[resolved]) return dictionaries[resolved];
-    const response = await fetch(`assets/i18n/${resolved}.json`, { cache: 'no-store' });
+    // Plain fetch (no `cache: 'no-store'`): the service worker precaches every
+    // locale and owns freshness (network-first for code, message-driven refresh
+    // for assets). `no-store` forced a network hit and could bypass the SW cache
+    // match, so the UI failed to translate offline. Let the SW serve the cached
+    // copy when there is no network.
+    const response = await fetch(`assets/i18n/${resolved}.json`);
     if (!response.ok) throw new Error(`Could not load language ${resolved}`);
     dictionaries[resolved] = await response.json();
     return dictionaries[resolved];
