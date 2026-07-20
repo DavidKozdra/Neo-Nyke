@@ -788,6 +788,32 @@
     );
   }
 
+  // Encounter level is cumulative-floor pressure plus a small deterministic XP
+  // roll from elapsed run time. Time grants XP, not raw levels, so slow runs get
+  // variation without suddenly jumping dozens of levels.
+  function rollEnemyEncounterLevel(baseLevel) {
+    let level = Math.max(1, Math.floor(Number(baseLevel || 1)));
+    let xp = Neo.nextRandom('encounter') * Math.max(0, Neo.gameElapsedTime / 60) * 8;
+    while (xp >= 8 + level * 2) {
+      xp -= 8 + level * 2;
+      level += 1;
+    }
+    return level;
+  }
+
+  function getBossTier(enemy, interval = 5) {
+    return Math.max(0, Math.floor(Math.max(1, Number(enemy?.level || 1)) / interval));
+  }
+
+  // Status growth is deliberately linear: base, 2x at level 3, 3x at level 6.
+  // Exponential repeated doubling would make late status hits unsurvivable.
+  function getBossStatusStacks(enemy, baseStacks = 1) {
+    if (!enemy || enemy.type === 'god') return Math.max(1, Math.round(baseStacks));
+    return Math.max(1, Math.round(baseStacks * (1 + Math.floor(Math.max(1, Number(enemy.level || 1)) / 3))));
+  }
+  Neo.getBossTier = getBossTier;
+  Neo.getBossStatusStacks = getBossStatusStacks;
+
   function getBossTimeHpMultiplier(gameMinutes, difficulty = Neo.getDifficultyDef()) {
     const minutes = Math.max(0, Number(gameMinutes || 0));
     const difficultyGrowth = Math.max(0.25, Number(difficulty?.bossHpGrowthMultiplier ?? 1));
@@ -844,7 +870,12 @@
     const enemyLevel = Math.max(1, Number(baseStats?.level || progressionDepth));
     const isBoss = isBossType(type);
     const levelMultipliers = isBoss
-      ? { hp: getBossLevelHpMultiplier(enemyLevel, difficulty), damage: 1, speed: 1, attackSpeed: 1 }
+      ? {
+        hp: getBossLevelHpMultiplier(enemyLevel, difficulty),
+        damage: type === 'god' ? 1 : softCapEnemyScale(Math.pow(1.05, Math.max(0, enemyLevel - 1)), 2.15, 0.22),
+        speed: 1,
+        attackSpeed: type === 'god' ? 1 : Math.min(1.35, Math.pow(1.02, Math.max(0, enemyLevel - 1))),
+      }
       : getEnemyLevelStatMultipliers(enemyLevel);
     const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
     const floorsCleared = progressionDepth - 1;
@@ -1039,7 +1070,7 @@
       type,
       x,
       y,
-      level: Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1),
+      level: rollEnemyEncounterLevel(Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1)),
       vx: 0,
       vy: 0,
       r: 15,
@@ -1101,6 +1132,7 @@
     base.max = scaled.max;
     base.dmg = scaled.dmg;
     base.speed = scaled.speed;
+    base.enemyLevelAttackSpeedMultiplier = scaled.enemyLevelAttackSpeedMultiplier;
 
     const difficultyTuning = Neo.getEnemyDifficultyTuning();
     if (!isBossType(type) && Neo.floor >= 4) {
@@ -2932,7 +2964,7 @@
       Neo.ringBurst(enemy.x, enemy.y, 120, '#ff9b5e', 0.8);
       if (safeSpawn) {
         const spawnedBoss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-        spawnedBoss.hp = Math.round(spawnedBoss.hp * 0.72);
+        spawnedBoss.hp = Math.round(spawnedBoss.hp * (enemy.queenSummon ? 0.65 : 0.72));
         spawnedBoss.max = spawnedBoss.hp;
         Neo.spawnParticle({ x: spawnedBoss.x, y: spawnedBoss.y - 24, life: 1, text: 'BOSS SPAWNED', c: '#ffb07b' });
       }
@@ -2965,6 +2997,7 @@
 
   function updateCultQueenBoss(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
+    const bossTier = getBossTier(enemy);
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -3030,9 +3063,7 @@
     enemy.queenMissileCd = Math.max(0, Number(enemy.queenMissileCd || 0) - dt);
     if (enemy.queenMissileCd <= 0 && distance > 95 && distance < 580 && enemy.stun <= 0) {
       spawnCultQueenMissile(enemy, tuning);
-      // Deeper-floor Queens fire missile volleys more frequently.
-      const floorCadence = Math.max(0.5, 1 - Math.max(0, Neo.floor - 5) * 0.1);
-      enemy.queenMissileCd = 3.4 * Math.max(0.78, tuning.rangedCadence) * floorCadence;
+      enemy.queenMissileCd = 3.4 * Math.max(0.78, tuning.rangedCadence) * Math.max(0.52, 1 - bossTier * 0.08);
     }
 
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
@@ -3043,19 +3074,31 @@
         sayOverEntity(enemy, 'Come forth, faithful.', { holdTime: 1.7 });
       }
       const summonCount = tuning.supportPower >= 1.22 ? 4 : 3;
-      // Deeper-floor Queens have a chance to call up a heavy golem instead of a follower,
-      // and her summoned faithful can come through as elites.
-      const golemChance = Neo.clamp(0.12 + Math.max(0, Neo.floor - 5) * 0.06, 0.12, 0.4);
-      const eliteChance = Neo.clamp(0.18 + Math.max(0, Neo.floor - 5) * 0.07, 0.18, 0.5);
+      const golemChance = Neo.clamp(0.12 + bossTier * 0.05, 0.12, 0.4);
+      const eliteChance = Neo.clamp(0.18 + bossTier * 0.06, 0.18, 0.5);
+      const summonerChance = enemy.level >= 10 ? Math.min(0.45, 0.15 + Math.floor((enemy.level - 10) / 5) * 0.05) : 0;
+      const spawnerChance = enemy.level >= 20 ? Math.min(0.22, 0.10 + Math.floor((enemy.level - 20) / 5) * 0.03) : 0;
+      const hasQueenSpawner = Neo.enemies.some(active => active.type === 'boss_spawner' && active.queenSummon);
+      let specialType = null;
+      const specialRoll = Neo.nextRandom('encounter');
+      if (!hasQueenSpawner && specialRoll < spawnerChance) specialType = 'boss_spawner';
+      else if (specialRoll < spawnerChance + summonerChance) specialType = 'summoner';
       for (let index = 0; index < summonCount; index += 1) {
-        const angle = (Math.PI * 2 * index) / 3 + Neo.rng() * 0.8;
+        const angle = (Math.PI * 2 * index) / summonCount + Neo.rng() * 0.8;
         const px = enemy.x + Math.cos(angle) * 54;
         const py = enemy.y + Math.sin(angle) * 54;
         const safeSpawn = findSafeSummonSpawnPoint(px, py);
         if (!safeSpawn) continue;
-        const summonType = Neo.nextRandom('encounter') < golemChance ? 'golem' : 'cult_follower';
+        const summonType = index === 0 && specialType
+          ? specialType
+          : Neo.nextRandom('encounter') < golemChance ? 'golem' : 'cult_follower';
         const summonElite = Neo.nextRandom('encounter') < eliteChance;
-        spawnEnemy(summonType, safeSpawn.x, safeSpawn.y, summonElite);
+        const summoned = spawnEnemy(summonType, safeSpawn.x, safeSpawn.y, summonElite && !specialType);
+        if (summoned && summonType === 'boss_spawner') {
+          summoned.queenSummon = true;
+          summoned.bossSpawnTimer = 35;
+          summoned.bossSpawnWarnAt = 35;
+        }
       }
     }
 
@@ -3069,12 +3112,11 @@
 
   function spawnCultQueenMissile(enemy, tuning = Neo.getEnemyDifficultyTuning()) {
     if (!enemy || !Neo.player) return;
-    // Higher-floor Queens fire more homing missiles per volley.
-    const floorBonus = Math.max(0, Math.floor((Neo.floor - 5) / 2));
-    const count = (tuning.supportPower >= 1.22 ? 2 : 1) + floorBonus;
+    const tier = getBossTier(enemy);
+    const count = Math.min(6, (tuning.supportPower >= 1.22 ? 2 : 1) + tier);
     // Missiles get faster with each floor (the Queen's "level"), capped so they
     // stay dodgeable. Scales both travel speed and homing pursuit speed.
-    const floorSpeed = 1 + Math.max(0, Neo.floor - 5) * 0.08;
+    const floorSpeed = Math.min(1.65, 1 + tier * 0.1);
     const travelSpeed = 165 * floorSpeed;
     const damage = Math.round(enemy.dmg * 0.78);
     const baseAngle = Neo.angleBetween(enemy, Neo.player);
@@ -3104,14 +3146,15 @@
         // (mirrors Thorn's lifesteal). Heal scales with the missile's damage.
         owner: enemy,
         drainHeal: Math.max(2, Math.round(damage * 0.5)),
-        statusEffects: [{ key: 'dark_drain', stacks: 1, duration: 3.5, chance: 1 }],
+        statusEffects: [{ key: 'dark_drain', stacks: getBossStatusStacks(enemy, 1), duration: 3.5, chance: 1 }],
       });
     }
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: 'MISSILE', c: '#d59bff' });
   }
 
   function updateBulkGolemBoss(enemy, dt) {
-    enemy.speed = 78;
+    const tier = getBossTier(enemy);
+    enemy.speed = 78 * Math.min(1.2, 1 + tier * 0.025);
     enemy.jumpCd = Math.max(0, Number(enemy.jumpCd || 0) - dt);
 
     if (enemy.bulkJumpTime > 0) {
@@ -3136,12 +3179,20 @@
         enemy.airborne = false;
         enemy.bulkJumpWarned = false;
         enemy.jumpCd = 2.4;
-        const impactRadius = 150;
+        const impactRadius = Math.min(215, 150 + tier * 10);
         Neo.ringBurst(enemy.x, enemy.y, impactRadius, '#ff8844', 0.55);
         Neo.shake = Math.max(Neo.shake, 10);
         Neo.shakeT = Math.max(Neo.shakeT, 0.18);
         if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < impactRadius + Neo.player.r) {
           Neo.damagePlayer(Math.round(enemy.dmg * 0.85), Neo.angleBetween(enemy, Neo.player), 330, enemy.type);
+        }
+        if (enemy.level >= 10) {
+          Neo.hazards.push({
+            kind: 'bomb_aoe', enemy: true, source: enemy.type,
+            x: enemy.x, y: enemy.y, blastRadius: impactRadius + 24,
+            fuse: 0.55, fuseDuration: 0.55, ttl: 0.7,
+            baseDamage: Math.round(enemy.dmg * 0.62), sparkTick: 0,
+          });
         }
       }
       return;
@@ -3156,7 +3207,7 @@
         enemy.bulkNovaLineShown = true;
         sayOverEntity(enemy, 'Break under the weight.', { holdTime: 1.7 });
       }
-      const aoeRadius = 173;
+      const aoeRadius = Math.min(225, 173 + tier * 9);
       const aoeDamage = Math.round(enemy.dmg * 0.864);
       Neo.ringBurst(enemy.x, enemy.y, aoeRadius, '#ff8844', 0.5);
       Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
@@ -3354,6 +3405,7 @@
 
   function updateArtificerBoss(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
+    const tier = getBossTier(enemy);
     const hpPct = enemy.hp / enemy.max;
     const previousPhase = enemy.phase || 1;
     if (hpPct < 0.34) enemy.phase = 3;
@@ -3368,6 +3420,14 @@
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
 
+    if (enemy.artificerEchoSwords) {
+      enemy.artificerEchoSwords.timer -= dt;
+      if (enemy.artificerEchoSwords.timer <= 0) {
+        spawnPhaseSwords(enemy.artificerEchoSwords.count, Math.round(enemy.dmg * 0.52), 'artificer_knave_projectile');
+        enemy.artificerEchoSwords = null;
+      }
+    }
+
     if (enemy.phase === 1) {
       enemy.speed = 132;
       updateKnaveEnemy(enemy, dt);
@@ -3377,7 +3437,9 @@
     if (enemy.phase === 2) {
       enemy.speed = 120;
       if (enemy.attackCd <= 0) {
-        spawnPhaseSwords(8, Math.round(enemy.dmg * 0.7), 'artificer_knave_projectile');
+        const swordCount = Math.min(16, 8 + tier * 2);
+        spawnPhaseSwords(swordCount, Math.round(enemy.dmg * 0.7), 'artificer_knave_projectile');
+        if (enemy.level >= 10) enemy.artificerEchoSwords = { timer: 0.55, count: swordCount };
         enemy.attackCd = 2.35 * tuning.rangedCadence;
       }
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
@@ -3485,6 +3547,7 @@
 
   function updateBowmanBane(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
+    const tier = getBossTier(enemy);
     const hpPct = enemy.hp / enemy.max;
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
@@ -3533,7 +3596,7 @@
     enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
     if (enemy.columnCd <= 0 && enemy.stun <= 0) {
       enemy.columnCd = enemy.phase >= 3 ? 2.0 * tuning.rangedCadence : enemy.phase >= 2 ? 2.8 * tuning.rangedCadence : 4.2 * tuning.rangedCadence;
-      const columnCount = enemy.phase >= 3 ? 5 : enemy.phase >= 2 ? 4 : 2;
+      const columnCount = Math.min(8, (enemy.phase >= 3 ? 5 : enemy.phase >= 2 ? 4 : 2) + tier);
       const predicted = { x: Neo.player.x + (Neo.player.vx || 0) * 0.55, y: Neo.player.y + (Neo.player.vy || 0) * 0.55 };
       for (let index = 0; index < columnCount; index += 1) {
         const spread = (index - (columnCount - 1) / 2) * 72;
@@ -3615,7 +3678,7 @@
     const cy = Neo.ROOM_H / 2;
     // Long enough to always span the whole room from the center pivot.
     const reach = Math.hypot(Neo.ROOM_W, Neo.ROOM_H);
-    const boltCount = 5;
+    const boltCount = Math.min(9, 5 + getBossTier(enemy));
     const aimAngle = Math.atan2(Neo.player.y - cy, Neo.player.x - cx);
     for (let index = 0; index < boltCount; index += 1) {
       // Spread the bolts evenly around the room, anchored on the player's bearing.
@@ -3759,36 +3822,26 @@
 
   // Charged "cold death ball": a fast, heavy frost orb fired after a windup.
   function spawnAntonyDeathBall(enemy) {
-    const angle = Number.isFinite(enemy.antonyDeathBallAngle)
+    const baseAngle = Number.isFinite(enemy.antonyDeathBallAngle)
       ? enemy.antonyDeathBallAngle
       : Neo.angleBetween(enemy, Neo.player);
-    Neo.spawnProjectile({
-      x: enemy.x + Math.cos(angle) * (enemy.r + 14),
-      y: enemy.y + Math.sin(angle) * (enemy.r + 14),
-      vx: Math.cos(angle) * 525,
-      vy: Math.sin(angle) * 525,
-      r: 38,
-      life: 3.4,
-      enemy: true,
-      owner: enemy,
-      bossProjectile: true,
-      kind: 'cold_death',
-      source: 'antony_death_ball',
-      damage: Math.round(enemy.dmg * 1.1),
-      knockback: 230,
-      color: '#9fe8ff',
-      // The icy "cold" debuff is the `slow` status: it slows movement AND makes
-      // the player brittle (strips defense per stack via getBrittleDefenseMultiplier).
-      // Cold lifetime on the player is auto-scaled to 15s per stack in applyStatus,
-      // so the duration passed here is only a floor for non-player targets.
-      statusEffects: [{ key: 'slow', chance: 1, stacks: 1, duration: 4 }],
-      // AOE frost burst when the ball lands (wall, expiry, or hitting player).
-      enemyBlast: { radius: 120, damage: Math.round(enemy.dmg * 0.65), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
-      homing: true,
-      homingTurnRate: 0.65,
-      homingSpeed: 570,
-      homingAccel: 1.1,
-    });
+    const count = enemy.level >= 25 ? 3 : enemy.level >= 10 ? 2 : 1;
+    for (let index = 0; index < count; index += 1) {
+      const angle = baseAngle + (index - (count - 1) / 2) * 0.24;
+      const coldStacks = getBossStatusStacks(enemy, 1);
+      Neo.spawnProjectile({
+        x: enemy.x + Math.cos(angle) * (enemy.r + 14),
+        y: enemy.y + Math.sin(angle) * (enemy.r + 14),
+        vx: Math.cos(angle) * 525,
+        vy: Math.sin(angle) * 525,
+        r: 38, life: 3.4, enemy: true, owner: enemy, bossProjectile: true,
+        kind: 'cold_death', source: 'antony_death_ball',
+        damage: Math.round(enemy.dmg * 1.1), knockback: 230, color: '#9fe8ff',
+        statusEffects: [{ key: 'slow', chance: 1, stacks: coldStacks, duration: 4 }],
+        enemyBlast: { radius: enemy.level >= 5 ? 145 : 120, damage: Math.round(enemy.dmg * 0.65), color: '#9fe8ff', statusKey: 'slow', statusStacks: coldStacks, statusDuration: 3 },
+        homing: true, homingTurnRate: 0.65, homingSpeed: 570, homingAccel: 1.1,
+      });
+    }
     Neo.ringBurst(enemy.x, enemy.y, 46, '#9fe8ff', 0.45);
     Neo.shake = Math.max(Neo.shake, 9);
     Neo.shakeT = Math.max(Neo.shakeT, 0.16);
@@ -3804,6 +3857,27 @@
     enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
     enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
     enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
+    enemy.antonyComboTimer = Math.max(0, Number(enemy.antonyComboTimer || 0) - dt);
+
+    if (enemy.beamTime > 0 && enemy.state === 'antonyMouthBeam') {
+      Neo.tickEnemyBeam(enemy, dt, {
+        tick: 0.085 * Math.max(0.7, tuning.rangedCadence), range: 610,
+        knockback: 210, damage: Math.round(enemy.dmg * 0.72), speedDamp: 0.8,
+        turnRate: 1.45 * tuning.reaction, damageSource: 'antony_mouth_beam',
+        onHit: () => {
+          if (Neo.nextRandom('encounter') < 0.28) Neo.applyFire?.(Neo.player, getBossStatusStacks(enemy, 1), 3.2, enemy.type);
+        },
+        onEnd: activeEnemy => { activeEnemy.state = null; activeEnemy.attackCd = 1.2; },
+      });
+      return;
+    }
+
+    if (enemy.level >= 20 && enemy.antonyComboTimer <= 0 && enemy.antonyComboQueued) {
+      enemy.antonyComboQueued = false;
+      enemy.state = 'antonyMouthBeam';
+      enemy.windup = 0.62 / tuning.reaction;
+      enemy.beamAngle = Neo.angleBetween(enemy, Neo.player);
+    }
 
     // Drive an in-flight directional hammer shockwave independent of windup.
     if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
@@ -3828,6 +3902,10 @@
         } else if (enemy.state === 'antonyDeathBall') {
           spawnAntonyDeathBall(enemy);
           enemy.attackCd = 1.2 * tuning.rangedCadence;
+        } else if (enemy.state === 'antonyMouthBeam') {
+          enemy.beamTime = 1.05;
+          enemy.beamTick = 0;
+          return;
         }
         enemy.state = null;
       }
@@ -3850,6 +3928,10 @@
       const biteDamage = Math.round(enemy.dmg * 0.82);
       enemy.attackAnimT = 0.28;
       Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
+      if (enemy.level >= 20) {
+        enemy.antonyComboQueued = true;
+        enemy.antonyComboTimer = 0.48;
+      }
       if (Neo.nextRandom('encounter') < 0.35) {
         // Owner reference lets the dark_drain DoT siphon HP back to Antony over
         // its duration (mirrors how the player's drain heals off the DoT).
@@ -3936,7 +4018,7 @@
       if (delta > Math.PI) delta = Math.PI * 2 - delta;
       if (pDist <= reach && delta <= halfArc) {
         Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 260, enemy.type, { attacker: enemy });
-        Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
+        Neo.applyFire?.(Neo.player, getBossStatusStacks(enemy, 1), 2.8, enemy.type);
       }
     }
     Neo.shake = Math.max(Neo.shake, 7);
@@ -3965,7 +4047,7 @@
         armTime: 0.48,
         damage: Math.round(enemy.dmg * 1.1),
         statusKey: 'bleed',
-        statusStacks: 6,
+        statusStacks: getBossStatusStacks(enemy, 2),
         statusDuration: 3.4,
         hit: false,
       });
@@ -3974,11 +4056,14 @@
   }
 
   function spawnDevilLavaGrid(enemy) {
+    const tier = getBossTier(enemy);
     const tile = 64;
     const thickness = 22;
     const margin = Neo.WALL + 38;
-    const verticals = [-1, 0, 1].map(offset => Neo.clamp(Neo.player.x + offset * 150 + Neo.rand(-34, 34, 'encounter'), margin, Neo.ROOM_W - margin));
-    const horizontals = [-1, 1].map(offset => Neo.clamp(Neo.player.y + offset * 110 + Neo.rand(-28, 28, 'encounter'), margin, Neo.ROOM_H - margin));
+    const verticalOffsets = tier >= 3 ? [-1.5, -0.5, 0.5, 1.5] : [-1, 0, 1];
+    const horizontalOffsets = tier >= 3 ? [-1, 0, 1] : [-1, 1];
+    const verticals = verticalOffsets.map(offset => Neo.clamp(Neo.player.x + offset * 120 + Neo.rand(-34, 34, 'encounter'), margin, Neo.ROOM_W - margin));
+    const horizontals = horizontalOffsets.map(offset => Neo.clamp(Neo.player.y + offset * 110 + Neo.rand(-28, 28, 'encounter'), margin, Neo.ROOM_H - margin));
     verticals.forEach((x, index) => {
       const top = Neo.WALL + tile;
       const h = Neo.ROOM_H - Neo.WALL * 2 - tile * 2;
@@ -3996,7 +4081,7 @@
         ttl: 4.2,
         phase: index * 0.7,
         pulse: 1.9,
-        statusStacks: 5,
+        statusStacks: getBossStatusStacks(enemy, 1),
       });
     });
     horizontals.forEach((y, index) => {
@@ -4016,7 +4101,7 @@
         ttl: 4.2,
         phase: index * 0.9 + 1.3,
         pulse: 1.9,
-        statusStacks: 5,
+        statusStacks: getBossStatusStacks(enemy, 1),
       });
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.58, text: 'LAVA GRID', c: '#ff7a32' });
@@ -4024,6 +4109,7 @@
 
   function updateHandsomeDevilBoss(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
+    const tier = getBossTier(enemy);
     const hpPct = enemy.hp / enemy.max;
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
@@ -4075,7 +4161,7 @@
         turnRate: (isGiant ? 0.4 : 1.8) * tuning.reaction,
         damageSource: 'handsome_devil',
         onHit: () => {
-          Neo.applyFire?.(Neo.player, isGiant ? 3 : 1, isGiant ? 3.6 : 2.8, enemy.type);
+          Neo.applyFire?.(Neo.player, getBossStatusStacks(enemy, isGiant ? 2 : 1), isGiant ? 3.6 : 2.8, enemy.type);
         },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = (isGiant ? 1.4 : 1.1) * tuning.rangedCadence;
@@ -4116,7 +4202,7 @@
 
     if (enemy.phase === 1) {
       if (enemy.spikeCd <= 0) {
-        spawnDevilRedSpikes(enemy, 5);
+        spawnDevilRedSpikes(enemy, Math.min(9, 5 + tier));
         enemy.spikeCd = 2.2 * tuning.rangedCadence;
       }
       if (enemy.lavaGridCd <= 0) {
@@ -4146,7 +4232,7 @@
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
       Neo.damagePlayer(enemy.dmg, angle, 210, enemy.type, { attacker: enemy });
-      Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
+      Neo.applyFire?.(Neo.player, getBossStatusStacks(enemy, 1), 2.8, enemy.type);
       enemy.attackAnimT = 0.24;
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
