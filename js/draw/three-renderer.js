@@ -312,6 +312,13 @@ function makeGroundedBillboard(texture, shadowRadius = 16) {
   const group = new THREE.Group();
   const sprite = makeBillboard(texture);
   sprite.name = 'body';
+  // makeBillboard anchors sprites by their feet (center 0.5/0), but chests and
+  // forges are drawn *centered* on the simulation point in 2D (drawImage at
+  // -h/2). Anchoring those by the feet lifted them a half sprite off the floor.
+  // Sink them so the art sits on the ground the way the 2D renderer draws it,
+  // while keeping a little of the frame's transparent base below the contact
+  // point so they still read as resting on the floor rather than sunk into it.
+  sprite.center.set(0.5, 0.2);
   sprite.position.y = 0.6;
   group.add(sprite);
   const shadow = makeShadowMesh(shadowRadius);
