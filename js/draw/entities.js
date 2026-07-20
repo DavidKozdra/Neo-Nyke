@@ -1628,51 +1628,9 @@
     // half of its duration); after the midpoint they fade back into view.
     const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
       && (Neo.isPlayerHidden?.(Neo.player) ?? true);
-    let playerRingIndex = 0;
-    for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
-      const key = Neo.STATUS_KEYS[s];
-      if (Neo.getStatusStacks(Neo.player, key) <= 0) continue;
-      const style = Neo.STATUS_STYLES[key];
-      Neo.ctx.save();
-      Neo.ctx.translate(Neo.player.x, Neo.player.y);
-      Neo.ctx.strokeStyle = style.color;
-      Neo.ctx.lineWidth = 2;
-      Neo.ctx.shadowColor = style.color;
-      Neo.ctx.shadowBlur = 10;
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, Neo.player.r + 6 + playerRingIndex * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + playerRingIndex * 40)) * 2), 0, Math.PI * 2);
-      Neo.ctx.stroke();
-      Neo.ctx.restore();
-      playerRingIndex += 1;
-    }
+    drawActorStatusRings(Neo.player);
     drawWarpPreview();
-    if (Number(Neo.player.overhealBarrier || 0) > 0) {
-      const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
-      const barrierMax = Math.max(Number(Neo.player.overhealBarrier || 0), Number(Neo.player.overhealBarrierMax) || 0, 1);
-      const barrierPct = Neo.clamp(Number(Neo.player.overhealBarrier || 0) / barrierMax, 0, 1);
-      const pulse = _reduceFlash ? 0 : Math.sin(Date.now() / 180) * 2;
-      const radius = Neo.player.r + 12 + pulse;
-      Neo.ctx.save();
-      Neo.ctx.translate(Neo.player.x, Neo.player.y);
-      Neo.ctx.rotate(Math.PI / 4);
-      Neo.ctx.strokeStyle = barrierColor;
-      Neo.ctx.lineWidth = 2.5;
-      Neo.ctx.shadowColor = barrierColor;
-      Neo.ctx.shadowBlur = 14;
-      Neo.ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
-      Neo.ctx.restore();
-      Neo.ctx.save();
-      Neo.ctx.translate(Neo.player.x, Neo.player.y);
-      Neo.ctx.fillStyle = 'rgba(8, 15, 24, 0.74)';
-      Neo.ctx.fillRect(-20, -Neo.player.r - 27, 40, 5);
-      Neo.ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
-      Neo.ctx.fillRect(-19, -Neo.player.r - 26, 38, 3);
-      Neo.ctx.fillStyle = barrierColor;
-      Neo.ctx.shadowColor = barrierColor;
-      Neo.ctx.shadowBlur = 8;
-      Neo.ctx.fillRect(-19, -Neo.player.r - 26, 38 * barrierPct, 3);
-      Neo.ctx.restore();
-    }
+    drawActorOverhealBarrier(Neo.player);
     const playerSpriteScale = Number(Neo.getItemStats?.()?.playerSpriteScale || 1);
     const playerSize = Math.max(34, Neo.player.r * 2.5) * playerSpriteScale;
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
@@ -1716,6 +1674,62 @@
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
+  // Status rings and the overheal barrier used to be inlined in drawPlayer, so
+  // only the local hero showed them. Every other player -- split-screen co-op
+  // partners and networked teammates alike -- draws through drawPlayerSlot and
+  // showed nothing, hiding whether an ally was burning, poisoned or shielded.
+  // Both paths now share these.
+  function drawActorStatusRings(actor) {
+    const reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    let ringIndex = 0;
+    for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+      const key = Neo.STATUS_KEYS[s];
+      if (Neo.getStatusStacks(actor, key) <= 0) continue;
+      const style = Neo.STATUS_STYLES[key];
+      Neo.ctx.save();
+      Neo.ctx.translate(actor.x, actor.y);
+      Neo.ctx.strokeStyle = style.color;
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.shadowColor = style.color;
+      Neo.ctx.shadowBlur = 10;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, actor.r + 6 + ringIndex * 4 + (reduceFlash ? 0 : Math.sin(Date.now() / (160 + ringIndex * 40)) * 2), 0, Math.PI * 2);
+      Neo.ctx.stroke();
+      Neo.ctx.restore();
+      ringIndex += 1;
+    }
+  }
+
+  function drawActorOverhealBarrier(actor) {
+    if (!(Number(actor.overhealBarrier || 0) > 0)) return;
+    const reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const barrierColor = actor.overhealBarrierColor || '#9cefff';
+    const barrierMax = Math.max(Number(actor.overhealBarrier || 0), Number(actor.overhealBarrierMax) || 0, 1);
+    const barrierPct = Neo.clamp(Number(actor.overhealBarrier || 0) / barrierMax, 0, 1);
+    const pulse = reduceFlash ? 0 : Math.sin(Date.now() / 180) * 2;
+    const radius = actor.r + 12 + pulse;
+    Neo.ctx.save();
+    Neo.ctx.translate(actor.x, actor.y);
+    Neo.ctx.rotate(Math.PI / 4);
+    Neo.ctx.strokeStyle = barrierColor;
+    Neo.ctx.lineWidth = 2.5;
+    Neo.ctx.shadowColor = barrierColor;
+    Neo.ctx.shadowBlur = 14;
+    Neo.ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+    Neo.ctx.restore();
+    Neo.ctx.save();
+    Neo.ctx.translate(actor.x, actor.y);
+    Neo.ctx.fillStyle = 'rgba(8, 15, 24, 0.74)';
+    Neo.ctx.fillRect(-20, -actor.r - 27, 40, 5);
+    Neo.ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
+    Neo.ctx.fillRect(-19, -actor.r - 26, 38, 3);
+    Neo.ctx.fillStyle = barrierColor;
+    Neo.ctx.shadowColor = barrierColor;
+    Neo.ctx.shadowBlur = 8;
+    Neo.ctx.fillRect(-19, -actor.r - 26, 38 * barrierPct, 3);
+    Neo.ctx.restore();
+  }
+
   function drawPlayerSlot(slot) {
     const pn = slot?.getEntity?.();
     if (!pn) return;
@@ -1727,6 +1741,8 @@
       : Math.atan2(pn.vy || 0, pn.vx || 1);
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
+    drawActorStatusRings(pn);
+    drawActorOverhealBarrier(pn);
     drawActorSprite(pn, spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
       alpha: pn.inv > 0 ? 0.55 : 1,
       flipX: facing < 0,
@@ -1742,6 +1758,8 @@
         seedKey: label || charKey,
       },
     });
+    drawStunStars(pn, pn.y);
+    drawEnemyStatusIconRow(pn, pn.y);
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
     drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing, {

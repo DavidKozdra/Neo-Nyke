@@ -1135,6 +1135,16 @@
             armRecoilA: Number(player.aimDirection || 0),
             armRecoilFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
           } : {}),
+          // Status rings, dash squash and flight are drawn by the shared
+          // drawPlayer/drawPlayerSlot path for every hero, but these render
+          // fields used to be derived only for the local player further down in
+          // _syncCampaignHudState. Teammates therefore never showed that they
+          // were burning, poisoned or dashing. Derive them per actor instead, so
+          // the same authority tick counters animate everyone identically.
+          statuses: player.statuses || root.NeoNyke?.simulation?.createCampaignStatusMap?.() || {},
+          dashTime: player.action === 'dash' && serverTick - Number(player.actionTick || 0) <= 4 ? 0.2 : 0,
+          cowardsWayTime: Math.max(0, Number(player.statusUntilTick?.cowards_way || 0) - serverTick) / 20,
+          princessFlightTime: Math.max(0, Number(player.statusUntilTick?.flying_unhitable || 0) - serverTick) / 20,
           overhealBarrier: Number(player.barrier || 0),
           overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4),
         });
@@ -1311,9 +1321,8 @@
           holding: 0,
         };
       });
-      localPlayer.dashTime = localPlayer.action === 'dash' && serverTick - Number(localPlayer.actionTick || 0) <= 4 ? 0.2 : 0;
-      localPlayer.cowardsWayTime = Math.max(0, Number(localPlayer.statusUntilTick?.cowards_way || 0) - serverTick) / 20;
-      localPlayer.princessFlightTime = Math.max(0, Number(localPlayer.statusUntilTick?.flying_unhitable || 0) - serverTick) / 20;
+      // dashTime/cowardsWayTime/princessFlightTime are derived per actor in
+      // _syncCampaignPresentationEntities so remote heroes animate too.
       const channel = localPlayer.beamChannel;
       this.neo.laserActive = !!channel;
       this.neo.laserTime = channel ? Math.max(0, (Number(channel.untilTick || 0) - serverTick) / 20) : 0;
