@@ -265,12 +265,9 @@ export function bindInput() {
         Neo.skipFirstRunTutorial();
       },
       onPlayTutorial() {
-        try {
-          localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
-        } catch {}
-        // Session-only marker distinguishes the dedicated Tutorial route from a
-        // replay checkbox intentionally saved in Settings. Backing out should
-        // cancel this route, not leave a surprise tutorial armed indefinitely.
+        // The dedicated menu route is session state, not a persisted "next
+        // run" setting. Keeping it out of localStorage means browser Back,
+        // another mode, or a reload cannot leave a surprise tutorial armed.
         Neo.tutorialLaunchPending = true;
         Neo.gameMode = 'normal';
         Neo.practiceVariant = 'standard';
@@ -292,7 +289,6 @@ export function bindInput() {
       },
       onOpenCharacterSelect() {
         if (Neo.tutorialLaunchPending) {
-          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
           Neo.tutorialLaunchPending = false;
         }
         Neo.gameMode = 'normal';
@@ -310,7 +306,6 @@ export function bindInput() {
           return;
         }
         if (Neo.tutorialLaunchPending) {
-          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
           Neo.tutorialLaunchPending = false;
         }
         Neo.charSelectPhase = null;
@@ -318,7 +313,6 @@ export function bindInput() {
       },
       onOpenAltModeCharSelect(mode) {
         if (Neo.tutorialLaunchPending) {
-          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
           Neo.tutorialLaunchPending = false;
         }
         const challengePractice = mode === 'challenge_practice';
@@ -334,7 +328,6 @@ export function bindInput() {
       },
       onStartSandbox() {
         if (Neo.tutorialLaunchPending) {
-          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
           Neo.tutorialLaunchPending = false;
         }
         Neo.gameMode = 'sandbox';

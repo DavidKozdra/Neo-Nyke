@@ -1694,8 +1694,31 @@
     }
     const margin = 90;
     safeFlags.forEach(safe => {
-      const x = Neo.rand(Neo.ROOM_W - margin, margin, 'loot');
-      const y = Neo.rand(Neo.ROOM_H - margin, margin, 'loot');
+      let x = Neo.ROOM_W / 2;
+      let y = Neo.ROOM_H / 2;
+      // Bombs have a real pickup radius and must not overlap solid pillars,
+      // walls, furniture, the player, or one another. Probe deterministic
+      // random candidates before falling back to the shared safe-point search.
+      const bombRadius = 22;
+      let found = false;
+      for (let attempt = 0; attempt < 32; attempt += 1) {
+        const candidateX = Neo.rand(Neo.ROOM_W - margin, margin, 'loot');
+        const candidateY = Neo.rand(Neo.ROOM_H - margin, margin, 'loot');
+        const overlapsBomb = Neo.pickups.some(pickup => pickup?.type === 'challengeBomb'
+          && Math.hypot(pickup.x - candidateX, pickup.y - candidateY) < bombRadius * 3);
+        const overlapsPlayer = Neo.player
+          && Math.hypot(Neo.player.x - candidateX, Neo.player.y - candidateY) < bombRadius + Neo.player.r + 36;
+        if (!Neo.isBlocked(candidateX, candidateY, bombRadius) && !overlapsBomb && !overlapsPlayer) {
+          x = candidateX;
+          y = candidateY;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const fallback = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, bombRadius);
+        if (fallback) ({ x, y } = fallback);
+      }
       const heading = Neo.nextRandom('loot') * Math.PI * 2;
       Neo.pickups.push({
         x,
@@ -4947,9 +4970,30 @@
       // snapshots and local campaign use identical boundary reflection.
       for (const pickup of Neo.pickups) {
         if (pickup?.type !== 'challengeBomb' || pickup.vx === undefined) continue;
+        const previousX = pickup.x;
+        const previousY = pickup.y;
         globalThis.NeoNyke.simulation.advanceCampaignMovingWorldEntity(pickup, dt, {
           width: Neo.ROOM_W, height: Neo.ROOM_H, margin: 90,
         });
+        // Boundary reflection alone lets drifting bombs pass through pillars.
+        // Resolve each axis against the same collision geometry the player uses,
+        // then reverse the blocked velocity component.
+        if (Neo.isBlocked(pickup.x, pickup.y, 22)) {
+          const canMoveX = !Neo.isBlocked(pickup.x, previousY, 22);
+          const canMoveY = !Neo.isBlocked(previousX, pickup.y, 22);
+          if (canMoveX && !canMoveY) {
+            pickup.y = previousY;
+            pickup.vy = -pickup.vy;
+          } else if (!canMoveX && canMoveY) {
+            pickup.x = previousX;
+            pickup.vx = -pickup.vx;
+          } else {
+            pickup.x = previousX;
+            pickup.y = previousY;
+            pickup.vx = -pickup.vx;
+            pickup.vy = -pickup.vy;
+          }
+        }
       }
       if (Neo.currentRoom.challengeTick <= 0) {
         Neo.currentRoom.challengeTick = Math.max(1.1, Number(getChallengeTrialTuning('bomb').tick || 1.8));

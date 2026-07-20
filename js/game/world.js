@@ -2475,13 +2475,9 @@
       rollItem: random => Neo.rollItemDrop({ random }),
     });
     if (!result.ok) return;
-    if (dealt > 0 && !isWallLikeDestructible(prop) && prop.kind !== 'barrel') {
-      spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
-        color: prop.kind === 'barrel' ? '#ff9f1c' : prop.reinforced ? '#b8c0ca' : '#ffd27d',
-        size: 14,
-        outline: prop.reinforced ? '#11151c' : '#2a1800',
-      });
-    }
+    // Furniture durability is intentionally communicated by hit/break effects,
+    // not combat damage numbers. Repeated "-1" popups over pots and chairs read
+    // like the player was losing health.
     if (dealt > 0) spawnDestructibleHitFx(prop, dealt, hit);
     if (!result.broken) return;
     Neo.invalidateBeamReflectGeometry?.();

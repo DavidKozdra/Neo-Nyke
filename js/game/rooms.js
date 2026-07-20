@@ -1681,8 +1681,8 @@
   // Every rival carries one extra life: the first kill only drives them off to
   // a later floor; only the second kill is final.
   const RIVAL_STARTING_LIVES = 2;
-  const RIVAL_HP_PER_LEVEL = 0.20;
-  const RIVAL_RETURN_HP_MULTIPLIER = 2;
+  const RIVAL_HP_PER_LEVEL = 0.12;
+  const RIVAL_RETURN_HP_MULTIPLIER = 1.35;
 
   function rollRandomRivalItemKey(godTier = false) {
     return Neo.rollItemDrop({
@@ -1944,18 +1944,18 @@
       : 0;
     const normalGear = Math.max(0, carriedItems - godGear);
     // Rivals gain more durability than damage as they level. Once their first
-    // life is spent, the remaining-life state supplies a stable 2x max-HP boost
+    // life is spent, the remaining-life state supplies a modest max-HP boost
     // for the return encounter. Deriving it from lives prevents save restores or
     // repeated floor transitions from multiplying the bonus more than once.
     const hasReturned = Number(rival.lives ?? RIVAL_STARTING_LIVES) < RIVAL_STARTING_LIVES;
     const returnHpScale = hasReturned ? RIVAL_RETURN_HP_MULTIPLIER : 1;
     const hpScale = (1 + (level - 1) * RIVAL_HP_PER_LEVEL)
-      * (1 + normalGear * 0.025 + godGear * 0.06) * returnHpScale;
-    const dmgScale = (1 + (level - 1) * 0.11)
-      * (1 + normalGear * 0.02 + godGear * 0.08);
-    const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
-    const attackCdScale = 1 - Math.min(0.28, (level - 1) * 0.018);
-    const moveScale = 1 - Math.min(0.38, (level - 1) * 0.022);
+      * (1 + normalGear * 0.015 + godGear * 0.035) * returnHpScale;
+    const dmgScale = (1 + (level - 1) * 0.07)
+      * (1 + normalGear * 0.012 + godGear * 0.045);
+    const speedScale = 1 + Math.min(0.16, (level - 1) * 0.014);
+    const attackCdScale = 1 - Math.min(0.18, (level - 1) * 0.012);
+    const moveScale = 1 - Math.min(0.25, (level - 1) * 0.015);
 
     rival.max = Math.max(20, Math.round(Number(rival.baseHp || rival.max || oldMax) * hpScale));
     rival.dmg = Math.max(4, Math.round(Number(rival.baseDmg || rival.dmg || 4) * dmgScale));
@@ -2193,7 +2193,7 @@
     });
 
     const nonStartRooms = Neo.rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
-    const floorScale = 1 + (Neo.floor - 1) * 0.12;
+    const floorScale = 1 + (Neo.floor - 1) * 0.08;
 
     Neo.rivals = [];
     Neo.pendingRivalDescends = [];
@@ -2286,7 +2286,7 @@
         // Reputation nudges fresh rivals up a little, but cap the bonus so a
         // veteran player who's slain many rivals doesn't spawn near-max-level ones.
         const reputationBonus = Math.min(
-          Number(Neo.RIVAL_REPUTATION_LEVEL_CAP || 4),
+          Math.min(2, Number(Neo.RIVAL_REPUTATION_LEVEL_CAP || 4)),
           Math.max(0, Math.floor(Number(Neo.player?.rivalReputation || 0) / 2)),
         );
         const startingLevel = Neo.clamp(1 + reputationBonus, 1, Number(Neo.RIVAL_LEVEL_CAP || 9));

@@ -3,15 +3,19 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     const isDying = Neo.gameState === 'dying';
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    // Random jitter (magnitude from the trauma² curve) + a directional kick that
-    // shoves the camera away from the impact source, then springs back.
+    // Smooth impact oscillation (magnitude from the trauma² curve) plus a
+    // directional kick. Per-frame random offsets made the camera buzz and made
+    // shake strength depend on render rate.
     // Neo.shake decays asymptotically and is only snapped to 0 once trauma fully
     // clears, so without a deadzone it keeps re-randomising the view by a
     // sub-pixel amount indefinitely after an impact.
     const _rawShake = _shakeOn && pLabel === 'P1' ? (Neo.shake || 0) : 0;
     const _shake = _rawShake > 0.05 ? _rawShake : 0;
-    const sX = _shake ? (Neo.nextRandom('fx') - 0.5) * _shake * 2 + (Neo.shakeKickX || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickX || 0) : 0);
-    const sY = _shake ? (Neo.nextRandom('fx') - 0.5) * _shake * 2 + (Neo.shakeKickY || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickY || 0) : 0);
+    const _shakePhase = performance.now() * 0.018;
+    const _waveX = Math.sin(_shakePhase) * 0.72 + Math.sin(_shakePhase * 1.73 + 0.8) * 0.28;
+    const _waveY = Math.cos(_shakePhase * 1.19 + 0.35) * 0.7 + Math.sin(_shakePhase * 1.91) * 0.3;
+    const sX = _shake ? _waveX * _shake + (Neo.shakeKickX || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickX || 0) : 0);
+    const sY = _shake ? _waveY * _shake + (Neo.shakeKickY || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickY || 0) : 0);
     Neo.ctx.save();
     Neo.ctx.beginPath();
     Neo.ctx.rect(vpX, vpY, vpW, vpH);
