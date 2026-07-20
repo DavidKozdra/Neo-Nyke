@@ -1631,24 +1631,29 @@ function syncProjectiles() {
   );
 }
 
+// Glow colors for GLOW_ONLY_PICKUP_TYPES. Types with authored 2D art bake it
+// instead, so they intentionally have no entry here.
 const PICKUP_STYLES = {
-  potion: '#ff5d6f',
-  coin: '#ffd23f',
-  item: '#9fe8ff',
   crystal: '#58b7ff',
   key: '#ffe07a',
-  treasureKey: '#ffe07a',
 };
 
-// Pickup types drawn as real props by the 2D renderer rather than as glows.
-// PICKUP_STYLES has no entry for any of these, so the generic path collapsed
-// them to a plain white blob — trial altars lost their plinth, screen, trial
-// glyph and label entirely.
-// 'specialChoice' is the pedestal used by every special room — shrine, bounty,
-// reliquary, oracle, portal, prison and wishing well.
-const BAKED_2D_PICKUP_TYPES = new Set([
-  'challengeStarter', 'challengePracticePortal', 'challengeSwitch', 'specialChoice',
-]);
+// Pickups bake their real 2D art by DEFAULT. The renderer used to work the
+// other way around -- only a hand-listed set was baked and everything else fell
+// through to a generic glow blob -- which meant every prop the 2D renderer drew
+// as real art silently degraded, and each one had to be discovered by eye
+// (ladders, bombs, trial altars and shrines were all found that way). Inverting
+// it makes the failure mode safe: a pickup type nobody has thought about yet
+// renders as its authored art instead of a nondescript blob, so new types can
+// never regress this way again.
+//
+// Only types the 2D renderer has no case for at all stay on the glow path:
+// they fall through drawPickups' if/else chain to its own generic blob, so
+// baking would just reproduce the same glow at the cost of a canvas each.
+// Everything with a real 2D branch bakes -- including coins (four value tiers
+// with distinct colors and shapes) and potions (pixel-art sprites), which look
+// like glow candidates but are authored art.
+const GLOW_ONLY_PICKUP_TYPES = new Set(['crystal', 'key']);
 // The challenge switch is a floor plate (a rounded pad with bolts, drawn lying
 // on the ground in 2D), so it bakes onto a flat quad. The altars are upright
 // consoles and bake onto billboards — standing the switch up, or laying the
@@ -1656,6 +1661,10 @@ const BAKED_2D_PICKUP_TYPES = new Set([
 const FLAT_BAKED_PICKUP_TYPES = new Set(['challengeSwitch']);
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
+// Sized from each type's actual draw extents in drawPickups, doubled (the bake
+// is centered on the pickup origin, so the band must cover the largest
+// coordinate in BOTH directions) with headroom for shadowBlur bleed. Too small
+// clips the art; too large just wastes canvas resolution.
 const BAKED_PICKUP_WORLD_SIZE = {
   challengeStarter: 150,
   challengePracticePortal: 150,
@@ -1663,7 +1672,50 @@ const BAKED_PICKUP_WORLD_SIZE = {
   // Pedestal art runs about y=-57 (top of the screen panel) to y=+35 (title),
   // so a 140-unit band clears it with room for the glow.
   specialChoice: 140,
+  // A plain item drop is just an 8x8 pixel icon drawn at px * 3 - 12, i.e. it
+  // only spans about -12..+12. Sizing this for the charger's warning text (see
+  // pickupBakeWorldSize) rendered ordinary drops at ~7% of the sprite -- a
+  // speck floating in mostly-empty canvas, which is why drops looked missing.
+  item: 44,
+  // The portal disc tops out at portalR ~27 plus its label; a wider band just
+  // wastes bake resolution and renders it soft.
+  adapterPortal: 90,
+  jesterPortal: 90,
+  rewardChoice: 90,
+  challengeItemChoice: 90,
+  secretVendor: 90,
+  secret_boss_chest: 90,
+  coin: 60,
+  potion: 60,
+  apple: 60,
+  fruit: 60,
+  treasureKey: 60,
+  crown: 60,
+  descend: 70,
+  returnGate: 70,
+  fightGod: 70,
+  secretWarp: 80,
+  challengeBomb: 70,
+  challengeRune: 70,
 };
+// Fallback for a type with no measured entry -- deliberately roomy, since
+// clipping authored art is worse than a slightly soft bake.
+const DEFAULT_BAKED_PICKUP_WORLD_SIZE = 120;
+
+// A duplicate Artificer's Charger draws a dwell meter plus the
+// 'NO LOOP CRYSTALS: LETHAL' warning down to y=+44, so that one pickup needs a
+// far wider band than the icon it shares a type with. Widen only while the
+// warning is actually on screen; every other item drop keeps the tight band
+// that renders its 8x8 icon sharply.
+const OVERCHARGE_ITEM_WORLD_SIZE = 110;
+function pickupBakeWorldSize(pickup) {
+  if (pickup.type === 'item'
+    && pickup.key === 'artificer_charger'
+    && (Neo.getItemCount?.('artificer_charger') || 0) > 0) {
+    return OVERCHARGE_ITEM_WORLD_SIZE;
+  }
+  return BAKED_PICKUP_WORLD_SIZE[pickup.type] || DEFAULT_BAKED_PICKUP_WORLD_SIZE;
+}
 // Where the prop's contact point sits in the baked canvas, as a fraction from
 // the bottom. The bake is centered on the pickup origin, which in 2D is the
 // altar's base, so the origin lands at the canvas midpoint.
@@ -1706,30 +1758,28 @@ function syncPickups() {
         group.add(ring);
         return group;
       }
-      if (BAKED_2D_PICKUP_TYPES.has(pickup.type)) {
-        // Trial altars and challenge switches are authored props in 2D, not
-        // glows. Bake the real art (see rasterizePickup2D) so they read the
-        // same in 3D.
-        if (FLAT_BAKED_PICKUP_TYPES.has(pickup.type)) {
-          const plate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
-          plate.rotation.x = -Math.PI / 2;
-          plate.renderOrder = 2;
-          plate.name = 'baked2dFlat';
-          return plate;
-        }
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
-        sprite.center.set(0.5, BAKED_PICKUP_BASE_FRACTION);
-        sprite.name = 'baked2d';
-        return sprite;
+      if (GLOW_ONLY_PICKUP_TYPES.has(pickup.type)) {
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        glow.center.set(0.5, 0);
+        return glow;
       }
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      sprite.center.set(0.5, 0);
+      // Everything else bakes its real 2D art (see rasterizePickup2D).
+      if (FLAT_BAKED_PICKUP_TYPES.has(pickup.type)) {
+        const plate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+        plate.rotation.x = -Math.PI / 2;
+        plate.renderOrder = 2;
+        plate.name = 'baked2dFlat';
+        return plate;
+      }
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+      sprite.center.set(0.5, BAKED_PICKUP_BASE_FRACTION);
+      sprite.name = 'baked2d';
       return sprite;
     },
     (pickup, obj) => {
       obj.position.set(pickup.x, 0, pickup.y);
       if (obj.name === 'baked2d' || obj.name === 'baked2dFlat') {
-        const worldSize = BAKED_PICKUP_WORLD_SIZE[pickup.type] || 200;
+        const worldSize = pickupBakeWorldSize(pickup);
         rasterizeWorldDrawIntoSprite(obj, pickup, worldSize);
         // Flat plates hug the floor; upright props stand just above it.
         obj.position.y = obj.name === 'baked2dFlat' ? 2 : 1;
@@ -1833,10 +1883,36 @@ function syncDestructibles() {
 const HAZARD_STYLES = {
   lava: { color: 0xff7a2e, opacity: 0.85 },
   healing_zone: { color: 0x35ff6f, opacity: 0.78 },
-  red_spikes: { color: 0xc7ccd6, opacity: 0.9 },
-  thorn_mine: { color: 0xc22a3f, opacity: 0.85 },
   lightning_column: { color: 0x8dd4ff, opacity: 0.85 },
 };
+
+// Hazards the 2D renderer draws as authored props. Like pickups, anything not
+// handled explicitly above fell through to a flat tinted disc (or the purple
+// 0xa46bff fallback for kinds with no style at all), so holy turrets, fire
+// circles, graffiti, spikes and thorn mines all read as missing sprites. Bake
+// the real art instead.
+//
+// Spikes, mines and graffiti are floor features and bake flat; the turret and
+// fire circle stand up as billboards.
+const BAKED_2D_HAZARD_KINDS = new Set([
+  'holy_turret', 'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine',
+]);
+const FLAT_BAKED_HAZARD_KINDS = new Set(['red_spikes', 'thorn_mine', 'el_barto_graffiti']);
+// These hazards scale every stroke off hazard.r, so a fixed band would clip a
+// large instance. Size the bake as a multiple of r instead -- the widest stroke
+// each kind draws, plus headroom for shadowBlur.
+const BAKED_HAZARD_SIZE_FACTOR = {
+  holy_turret: 3.2,
+  fire_circle: 2.8,
+  // Reaches r * 2 for the paint splatter, so it needs the widest band.
+  el_barto_graffiti: 5,
+  red_spikes: 2.6,
+  thorn_mine: 2.6,
+};
+function bakedHazardWorldSize(hazard) {
+  const r = Math.max(8, Number(hazard.r) || 32);
+  return r * (BAKED_HAZARD_SIZE_FACTOR[hazard.kind] || 3);
+}
 
 // Explosive traps ("bombs") are drawn by the 2D renderer as a real prop: blast
 // and trigger rings on the floor, plus a bomb body with a lit fuse standing on
@@ -2096,6 +2172,19 @@ function syncHazards() {
       if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
       if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
       if (hazard.kind === 'explosive_trap') return makeExplosiveTrapObject();
+      if (BAKED_2D_HAZARD_KINDS.has(hazard.kind)) {
+        if (FLAT_BAKED_HAZARD_KINDS.has(hazard.kind)) {
+          const plate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+          plate.rotation.x = -Math.PI / 2;
+          plate.renderOrder = 2;
+          plate.name = 'bakedHazardFlat';
+          return plate;
+        }
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+        sprite.center.set(0.5, 0.5);
+        sprite.name = 'bakedHazard';
+        return sprite;
+      }
       const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
       let material;
       if (hazard.kind === 'lava') {
@@ -2120,6 +2209,16 @@ function syncHazards() {
       return mesh;
     },
     (hazard, mesh) => {
+      if (mesh.name === 'bakedHazard' || mesh.name === 'bakedHazardFlat') {
+        const worldSize = bakedHazardWorldSize(hazard);
+        rasterizeHazard2D(ensureBakeSurface(mesh, worldSize), hazard, worldSize, {
+          top: -worldSize / 2,
+          height: worldSize,
+          offsetY: 0,
+        });
+        mesh.position.set(hazard.x, mesh.name === 'bakedHazardFlat' ? 2 : worldSize / 2, hazard.y);
+        return;
+      }
       if (hazard.kind === 'chaos_burst') {
         updateChaosBurst(hazard, mesh);
         return;
