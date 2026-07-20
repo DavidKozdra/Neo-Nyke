@@ -104,7 +104,6 @@ async function main() {
       && globalThis.Neo.gameSession.snapshot().gameState?.floorState?.layout?.rooms?.length >= 8
       && Object.values(globalThis.Neo.gameSession.snapshot().gameState?.enemies || {}).some(enemy => !enemy.dead)
       && document.querySelector('#start')?.classList.contains('hidden')
-      && document.querySelector('#multiplayerGameHud')?.classList.contains('hidden')
       && !document.querySelector('#hud')?.classList.contains('hidden')
       && !document.querySelector('#actionBar')?.classList.contains('hidden')
     ), undefined, { timeout: 45_000 })));
@@ -348,7 +347,9 @@ async function main() {
       ]);
       report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
-    await host.evaluate(() => document.querySelector('#multiplayerLeaveGame')?.click());
+    await host.keyboard.press('Escape');
+    await host.locator('#pauseLeaveServer').waitFor({ state: 'visible' });
+    await host.locator('#pauseLeaveServer').click();
     await host.waitForFunction(() => (
       !globalThis.Neo?.multiplayerGameView
       && !document.querySelector('#start')?.classList.contains('hidden')

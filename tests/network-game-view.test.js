@@ -47,6 +47,45 @@ describe('network multiplayer game view', () => {
     expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
   });
 
+  describe('touch movement', () => {
+    afterEach(() => { delete globalThis.NeoTouch; });
+
+    function touchView() {
+      const view = new NetworkGameView({ session: {}, neo: {} });
+      view.active = true;
+      return view;
+    }
+
+    test('reads the on-screen joystick so mobile can move in a network run', () => {
+      globalThis.NeoTouch = { active: true, moveX: 1, moveY: 0 };
+      expect(touchView()._readMovement()).toEqual({ moveX: 1, moveY: 0 });
+    });
+
+    test('applies a deadzone to resting-thumb drift', () => {
+      globalThis.NeoTouch = { active: true, moveX: 0.05, moveY: -0.04 };
+      expect(touchView()._readMovement()).toEqual({ moveX: 0, moveY: 0 });
+    });
+
+    test('ignores the stick while touch controls are inactive', () => {
+      globalThis.NeoTouch = { active: false, moveX: 1, moveY: 1 };
+      expect(touchView()._readMovement()).toEqual({ moveX: 0, moveY: 0 });
+    });
+
+    test('keeps working when NeoTouch is absent entirely', () => {
+      const view = touchView();
+      view.keys.add('KeyW');
+      // No getFirstPersonYaw on this neo stub, so the vector stays unrotated:
+      // KeyW is world-up, i.e. negative Y.
+      expect(view._readMovement()).toEqual({ moveX: 0, moveY: -1 });
+    });
+
+    test('diagonal touch input is normalized like keyboard diagonals', () => {
+      globalThis.NeoTouch = { active: true, moveX: 1, moveY: 1 };
+      const movement = touchView()._readMovement();
+      expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);
+    });
+  });
+
   test('enters campaign play presentation without advancing a second browser simulation', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'js/core/update.js'), 'utf8');
     const states = [];

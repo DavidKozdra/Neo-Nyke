@@ -9890,60 +9890,8 @@ button.alt.danger {
     min-width: 0;
   }
 }
-.multiplayer-game-hud {
-  position: fixed;
-  inset: 14px 14px auto 14px;
-  z-index: 34;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.multiplayer-game-hud.hidden {
-  display: none;
-}
-
-.multiplayer-game-hud__status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding: 9px 13px;
-  border: 1px solid rgba(132, 198, 255, .42);
-  border-radius: var(--ui-control-radius);
-  background: rgba(2, 5, 12, .84);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .46);
-  color: #dceaff;
-  font-size: calc(13px * var(--font-scale, 1));
-  letter-spacing: .08em;
-}
-
-.multiplayer-game-hud__status strong,
-.multiplayer-game-hud__status b {
-  color: #83e5ff;
-}
-
-.multiplayer-leave-game {
-  width: auto;
-  min-width: 184px;
-  padding: 9px 13px;
-  pointer-events: auto;
-}
-
 body.network-multiplayer-active #c {
   cursor: crosshair;
-}
-
-@media (max-width: 640px) {
-  .multiplayer-game-hud {
-    align-items: flex-start;
-  }
-
-  .multiplayer-game-hud__status {
-    max-width: calc(100vw - 180px);
-  }
 }
 
 .competitive-screen-body {

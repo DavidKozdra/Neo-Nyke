@@ -2562,6 +2562,7 @@ function hasPointerLockBlockingUi() {
 function syncPointerLock() {
   const wantLock = isFirstPersonActive() && Neo.gameState === 'play' && !hasPointerLockBlockingUi();
   if (!wantLock && document.pointerLockElement === Neo.canvas) {
+    pointerLockReleasedByGame = true;
     document.exitPointerLock?.();
   }
 }
@@ -2572,6 +2573,9 @@ function syncPointerLock() {
 // when UI code stops a bubbling mouse event.
 let pointerLockRequested = false;
 let pointerLockPendingTimer = null;
+// Set when the game exits pointer lock on purpose, so the pointerlockchange
+// handler can tell a deliberate release from the player pressing Esc.
+let pointerLockReleasedByGame = false;
 
 function clearPointerLockPending() {
   if (pointerLockPendingTimer != null) window.clearTimeout(pointerLockPendingTimer);
@@ -2579,8 +2583,20 @@ function clearPointerLockPending() {
 }
 
 document.addEventListener('pointerlockchange', () => {
+  const wasLocked = pointerLockRequested;
   pointerLockRequested = document.pointerLockElement === Neo?.canvas;
   clearPointerLockPending();
+  // Esc while pointer-locked is consumed by the browser to exit the lock, so the
+  // keydown never reaches the pause handler in js/ui/panels.js and the player has
+  // to press it a second time. Treat that unlock as the pause request — but only
+  // when the game itself did not ask for it. syncPointerLock() and the resume
+  // click both release the lock deliberately, and pausing on those would reopen
+  // the pause menu the player just dismissed.
+  if (wasLocked && !pointerLockRequested && !pointerLockReleasedByGame
+    && isFirstPersonActive() && Neo.gameState === 'play') {
+    Neo.pauseGame?.();
+  }
+  pointerLockReleasedByGame = false;
 });
 document.addEventListener('pointerlockerror', () => {
   pointerLockRequested = false;
@@ -2613,8 +2629,8 @@ function requestGameplayPointerLock(event) {
     pointerLockRequested = true;
     clearPointerLockPending();
     // A rejected/ignored request does not reliably fire pointerlockerror in
-    // every browser. Restore the click-to-look hint shortly after it fails so
-    // the player is never left with a permanently "locking" camera.
+    // every browser. Clear the pending flag shortly after it fails so the player
+    // is never left with a permanently "locking" camera.
     pointerLockPendingTimer = window.setTimeout(() => {
       if (document.pointerLockElement !== Neo.canvas) pointerLockRequested = false;
       pointerLockPendingTimer = null;

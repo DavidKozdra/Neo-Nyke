@@ -3293,7 +3293,7 @@ export function createUIController(view) {
         view.multiplayerCharacter?.addEventListener('change', () => {
           browserMultiplayerSession?.setCharacter(view.multiplayerCharacter.value);
         });
-        view.multiplayerLeaveGame?.addEventListener('click', () => {
+        document.getElementById('pauseLeaveServer')?.addEventListener('click', () => {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
