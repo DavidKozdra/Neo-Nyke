@@ -1640,6 +1640,46 @@ const PICKUP_STYLES = {
   treasureKey: '#ffe07a',
 };
 
+// Pickup types drawn as real props by the 2D renderer rather than as glows.
+// PICKUP_STYLES has no entry for any of these, so the generic path collapsed
+// them to a plain white blob — trial altars lost their plinth, screen, trial
+// glyph and label entirely.
+// 'specialChoice' is the pedestal used by every special room — shrine, bounty,
+// reliquary, oracle, portal, prison and wishing well.
+const BAKED_2D_PICKUP_TYPES = new Set([
+  'challengeStarter', 'challengePracticePortal', 'challengeSwitch', 'specialChoice',
+]);
+// The challenge switch is a floor plate (a rounded pad with bolts, drawn lying
+// on the ground in 2D), so it bakes onto a flat quad. The altars are upright
+// consoles and bake onto billboards — standing the switch up, or laying the
+// altar down, is the same mistake as the flat ladder.
+const FLAT_BAKED_PICKUP_TYPES = new Set(['challengeSwitch']);
+// World height baked per type. The altar art runs about y=-63 (top of screen)
+// to y=+39 (below the label); the switch is a small floor pad.
+const BAKED_PICKUP_WORLD_SIZE = {
+  challengeStarter: 150,
+  challengePracticePortal: 150,
+  challengeSwitch: 90,
+  // Pedestal art runs about y=-57 (top of the screen panel) to y=+35 (title),
+  // so a 140-unit band clears it with room for the glow.
+  specialChoice: 140,
+};
+// Where the prop's contact point sits in the baked canvas, as a fraction from
+// the bottom. The bake is centered on the pickup origin, which in 2D is the
+// altar's base, so the origin lands at the canvas midpoint.
+const BAKED_PICKUP_BASE_FRACTION = 0.5;
+
+// Bake a pickup's 2D art onto its sprite, allocating the canvas/texture on
+// first use (see ensureBakeSurface for why each sprite owns its own).
+function rasterizeWorldDrawIntoSprite(sprite, pickup, worldSize) {
+  const surface = ensureBakeSurface(sprite, worldSize);
+  rasterizePickup2D(surface, pickup, worldSize, {
+    top: -worldSize / 2,
+    height: worldSize,
+    offsetY: 0,
+  });
+}
+
 function syncPickups() {
   syncPool(
     pools.pickups,
@@ -1666,12 +1706,35 @@ function syncPickups() {
         group.add(ring);
         return group;
       }
+      if (BAKED_2D_PICKUP_TYPES.has(pickup.type)) {
+        // Trial altars and challenge switches are authored props in 2D, not
+        // glows. Bake the real art (see rasterizePickup2D) so they read the
+        // same in 3D.
+        if (FLAT_BAKED_PICKUP_TYPES.has(pickup.type)) {
+          const plate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+          plate.rotation.x = -Math.PI / 2;
+          plate.renderOrder = 2;
+          plate.name = 'baked2dFlat';
+          return plate;
+        }
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+        sprite.center.set(0.5, BAKED_PICKUP_BASE_FRACTION);
+        sprite.name = 'baked2d';
+        return sprite;
+      }
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
       sprite.center.set(0.5, 0);
       return sprite;
     },
     (pickup, obj) => {
       obj.position.set(pickup.x, 0, pickup.y);
+      if (obj.name === 'baked2d' || obj.name === 'baked2dFlat') {
+        const worldSize = BAKED_PICKUP_WORLD_SIZE[pickup.type] || 200;
+        rasterizeWorldDrawIntoSprite(obj, pickup, worldSize);
+        // Flat plates hug the floor; upright props stand just above it.
+        obj.position.y = obj.name === 'baked2dFlat' ? 2 : 1;
+        return;
+      }
       if (pickup.type === 'ladder') {
         const ring = obj.getObjectByName('ring');
         if (ring) {
@@ -1772,9 +1835,151 @@ const HAZARD_STYLES = {
   healing_zone: { color: 0x35ff6f, opacity: 0.78 },
   red_spikes: { color: 0xc7ccd6, opacity: 0.9 },
   thorn_mine: { color: 0xc22a3f, opacity: 0.85 },
-  bomb: { color: 0xffa94d, opacity: 0.9 },
   lightning_column: { color: 0x8dd4ff, opacity: 0.85 },
 };
+
+// Explosive traps ("bombs") are drawn by the 2D renderer as a real prop: blast
+// and trigger rings on the floor, plus a bomb body with a lit fuse standing on
+// top. The generic hazard path here has no 'explosive_trap' style at all (the
+// unused 'bomb' key below never matched the live hazard kind), so bombs fell
+// through to the purple fallback disc and read as a missing sprite. Reuse the
+// exact 2D art instead of re-authoring it: rasterize the same draw call, then
+// split it across two quads so the rings stay flat and the bomb stands up.
+const EXPLOSIVE_TRAP_CANVAS_SIZE = 256;
+
+// Every quad needs its OWN canvas. A CanvasTexture only references its source;
+// the actual GPU upload happens during renderer.render() at the end of the
+// frame. Sharing one canvas across bombs (or across the rings/body of a single
+// bomb) would leave every texture sampling whatever the last bake wrote, so
+// two bombs would render identical, wrong art. Canvases hang off the pooled
+// Object3D so they live and die with it.
+function ensureBakeSurface(mesh, worldSize) {
+  let surface = mesh.userData.bakeSurface;
+  if (!surface) {
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = EXPLOSIVE_TRAP_CANVAS_SIZE;
+    canvasEl.height = EXPLOSIVE_TRAP_CANVAS_SIZE;
+    surface = { canvas: canvasEl, ctx: canvasEl.getContext('2d') };
+    mesh.userData.bakeSurface = surface;
+    const texture = makeCanvasTexture(canvasEl);
+    // Owned: disposed with the material when the hazard leaves the pool.
+    texture.userData.owned = true;
+    mesh.material.map = texture;
+    mesh.material.needsUpdate = true;
+  }
+  mesh.material.map.needsUpdate = true;
+  mesh.scale.set(worldSize, worldSize, 1);
+  return surface;
+}
+
+// Rasterize part of a 2D world draw into an offscreen canvas, in world units
+// centered on the prop. `clip` keeps only a horizontal band of the art, which
+// is how a single 2D drawing gets split into a floor decal and an upright
+// billboard (rings on the ground, bomb body standing on top). `draw` runs with
+// Neo.ctx pointed at the bake surface and the origin at the prop.
+function rasterizeWorldDraw(surface, worldSize, clip, draw) {
+  const { canvas: bakeCanvas, ctx: g } = surface;
+  const size = EXPLOSIVE_TRAP_CANVAS_SIZE;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, size, size);
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  try {
+    Neo.ctx = g;
+    // Scale world units into the canvas and center the prop, then offset so the
+    // requested band lands in frame.
+    const scale = size / worldSize;
+    g.setTransform(scale, 0, 0, scale, size / 2, size / 2 - clip.offsetY * scale);
+    g.save();
+    g.beginPath();
+    g.rect(-worldSize / 2, clip.top, worldSize, clip.height);
+    g.clip();
+    draw();
+    g.restore();
+  } catch { /* a failed bake should not break the frame */ }
+  Neo.ctx = realCtx;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  return bakeCanvas;
+}
+
+// Bake one hazard through the shared 2D prop pass. Swapping Neo.hazards to a
+// single centered copy keeps the pass to just the prop we want (drawWorldProps
+// also draws the shop sign, which early-returns outside shop rooms).
+function rasterizeHazard2D(surface, hazard, worldSize, clip) {
+  if (typeof Neo.drawWorldProps !== 'function') return null;
+  const realHazards = Neo.hazards;
+  const result = rasterizeWorldDraw(surface, worldSize, clip, () => {
+    Neo.hazards = [{ ...hazard, x: 0, y: 0 }];
+    Neo.drawWorldProps();
+  });
+  Neo.hazards = realHazards;
+  return result;
+}
+
+// Bake one pickup through the shared 2D pickup pass. Trial altars, challenge
+// switches and practice portals are authored there as full props (plinth,
+// screen, trial glyph, label); the generic 3D pickup path collapsed them to a
+// colored glow blob because PICKUP_STYLES has no entry for those types.
+function rasterizePickup2D(surface, pickup, worldSize, clip) {
+  if (typeof Neo.drawPickups !== 'function') return null;
+  const realPickups = Neo.pickups;
+  const realPlayer = Neo.player;
+  const result = rasterizeWorldDraw(surface, worldSize, clip, () => {
+    Neo.pickups = [{ ...pickup, x: 0, y: 0 }];
+    // The altar draws a proximity info panel ~170px above itself when the
+    // player is near. Baked into a billboard that panel would scale with camera
+    // distance and sit far outside the prop's own footprint; 3D surfaces the
+    // same information through drawPrompts instead. Park the player far away
+    // for the bake so only the prop itself is drawn.
+    Neo.player = null;
+    Neo.drawPickups();
+  });
+  Neo.pickups = realPickups;
+  Neo.player = realPlayer;
+  return result;
+}
+
+function makeExplosiveTrapObject() {
+  const group = new THREE.Group();
+  // Floor decal: blast radius + trigger rings, lying flat like they do in 2D.
+  const rings = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
+    transparent: true, depthWrite: false,
+  }));
+  rings.rotation.x = -Math.PI / 2;
+  rings.position.y = 2;
+  rings.renderOrder = 2;
+  rings.name = 'rings';
+  group.add(rings);
+  // The bomb itself stands upright facing the camera.
+  const body = new THREE.Sprite(new THREE.SpriteMaterial({
+    transparent: true, depthWrite: false,
+  }));
+  body.center.set(0.5, 0.06); // sit the base on the floor
+  body.name = 'body';
+  group.add(body);
+  return group;
+}
+
+function updateExplosiveTrap(hazard, group) {
+  group.position.set(hazard.x, 0, hazard.y);
+  const blastR = Number(hazard.blastRadius || 88);
+  const r = Number(hazard.r || 14);
+  const rings = group.getObjectByName('rings');
+  const body = group.getObjectByName('body');
+
+  // Rings span the full blast radius and live at/below the hazard center.
+  const ringWorld = blastR * 2 + 16;
+  rasterizeHazard2D(ensureBakeSurface(rings, ringWorld), hazard, ringWorld, {
+    top: -2, height: ringWorld, offsetY: 0,
+  });
+
+  // The bomb body/fuse occupies roughly r*1.2 above the center in 2D.
+  const bodyWorld = r * 4;
+  rasterizeHazard2D(ensureBakeSurface(body, bodyWorld), hazard, bodyWorld, {
+    top: -bodyWorld / 2, height: bodyWorld / 2 + 2, offsetY: -bodyWorld / 4,
+  });
+  body.position.set(0, 1, 0);
+}
 
 const LIGHTNING_COLUMN_HEIGHT = 150; // tall enough to read as a floor-to-ceiling bolt
 
@@ -1890,6 +2095,7 @@ function syncHazards() {
       if (hazard.kind === 'healing_zone') return makeHealingZoneObject();
       if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
       if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
+      if (hazard.kind === 'explosive_trap') return makeExplosiveTrapObject();
       const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
       let material;
       if (hazard.kind === 'lava') {
@@ -1928,6 +2134,10 @@ function syncHazards() {
       }
       if (hazard.kind === 'lightning_strike_line') {
         updateLightningLine(hazard, mesh);
+        return;
+      }
+      if (hazard.kind === 'explosive_trap') {
+        updateExplosiveTrap(hazard, mesh);
         return;
       }
       const w = hazard.shape === 'rect' ? hazard.w : (hazard.r || 24) * 2;
