@@ -425,6 +425,53 @@
   font-size: calc(12px * var(--font-scale, 1));
 }
 
+/* Compact starting-charge readout beside the hovered move's name. Filled pips
+   mirror the in-run cooldown cards without crowding every kit button. */
+#charSelect .hero-detail-charge-meter {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px;
+  border: 1px solid rgba(130, 225, 255, .42);
+  border-radius: 999px;
+  background: rgba(30, 135, 175, .16);
+  color: #bcefff;
+  font-size: calc(8px * var(--font-scale, 1));
+  line-height: 1;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+
+#charSelect .hero-detail-charge-meter[hidden] {
+  display: none;
+}
+
+#charSelect .hero-detail-charge-pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+#charSelect .hero-detail-charge-pip {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #e8fbff;
+  border-radius: 50%;
+  background: #55dfff;
+  box-shadow: 0 0 5px rgba(85, 223, 255, .9);
+}
+
+#charSelect .hero-detail-skill-copy {
+  min-width: 0;
+}
+
+#charSelect .hero-detail-skill-readout-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 21px;
+}
+
 #charSelect .hero-detail-skill-pip:focus-visible,
 #charSelect .hero-detail-kit-option:focus-visible {
   outline: 2px solid #fff;

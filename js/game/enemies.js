@@ -479,7 +479,7 @@
     // Optional template-authored encounter (see roomTemplates.js spawnHint). When
     // absent, every branch below collapses to the original behaviour and draws the
     // exact same 'encounter' RNG sequence, so non-hinted rooms are unchanged.
-    const hint = (Neo.currentRoom && Neo.currentRoom.spawnHint) || null;
+    const hint = options.ignoreSpawnHint ? null : ((Neo.currentRoom && Neo.currentRoom.spawnHint) || null);
     const effectiveCount = hint && Number.isFinite(hint.count) ? Math.max(1, Math.floor(hint.count)) : count;
     const plan = hint && Array.isArray(hint.types) && hint.types.length
       ? buildHintedWavePlan(effectiveCount, hint.types)
@@ -495,7 +495,7 @@
         + getEliteLoopBonus();
       const baseElite = options.forceElite
         ? true
-        : canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+        : !options.suppressElite && canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
       const eliteRoll = options.forceElite ? true : (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + Neo.nextRandom('encounter') * 170;
@@ -515,7 +515,7 @@
       // Deep-loop danger: a regular wave enemy can spawn as a random boss instead
       // (loop 5+, see rollWaveBossUpgrade). A boss-upgraded spawn is never also an
       // elite — boss stat code handles its scaling on its own.
-      const bossUpgrade = options.forceElite ? null : rollWaveBossUpgrade(type);
+      const bossUpgrade = options.forceElite || options.suppressBossUpgrade ? null : rollWaveBossUpgrade(type);
       if (bossUpgrade) {
         spawnEnemy(bossUpgrade, safeSpawn.x, safeSpawn.y, false);
       } else {

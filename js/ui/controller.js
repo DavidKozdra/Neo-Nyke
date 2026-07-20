@@ -279,6 +279,13 @@ export function createUIController(view) {
       const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
       const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
       const slots = ['melee', 'laser', 'smash', 'dash'];
+      // Feed the actual starting charge pool into the compact hover readout.
+      // Thorn's regular Dash starts with two; Blade Filled Dash starts with one.
+      const startingChargeCount = moveKey => {
+        const moveDef = Neo.MOVE_DEFS[moveKey] || {};
+        const fallback = Math.max(1, Number(moveDef.stackOverrides?.[selected] || moveDef.maxStacks || 1));
+        return Math.max(1, Number(Neo.getMoveMaxStacks?.(moveKey, selected, null) || fallback));
+      };
       const skillsHtml = slots.map(slot => {
         const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
         // The melee (M1) slot is driven by the equipped weapon — characters
@@ -312,6 +319,7 @@ export function createUIController(view) {
             return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
               data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
               data-skill-name="${safeOptName}" data-skill-desc="${safeDesc}"
+              data-starting-charges="${startingChargeCount(optKey)}"
               data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(optKey)}"
               title="${safeDesc}" aria-pressed="${isSel}"${kitLocked ? ' disabled' : ''}>
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
@@ -326,7 +334,7 @@ export function createUIController(view) {
         const moveDesc = moveDef.desc || '';
         const safeMoveDesc = Neo.escapeHtml(moveDesc);
         const safeMoveName = Neo.escapeHtml(moveLabel);
-        return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}" data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(moveKey)}">
+        return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}" data-starting-charges="${startingChargeCount(moveKey)}" data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(moveKey)}">
           <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
           <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeMoveName}</span>
         </span>`;
@@ -369,7 +377,7 @@ export function createUIController(view) {
         `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
         `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>` +
         `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
-        `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>`;
+        `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
       const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
       Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 104, {
         tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
@@ -400,6 +408,9 @@ export function createUIController(view) {
       const readout = detail.querySelector('[data-skill-readout]');
       const readoutName = readout?.querySelector('[data-skill-readout-name]');
       const readoutDesc = readout?.querySelector('[data-skill-readout-desc]');
+      const readoutCharges = readout?.querySelector('[data-skill-readout-charges]');
+      const readoutChargePips = readout?.querySelector('[data-skill-readout-charge-pips]');
+      const readoutChargeLabel = readout?.querySelector('[data-skill-readout-charge-label]');
       if (readout && readoutName && readoutDesc) {
         const previewCanvas = readout.querySelector('[data-skill-preview]');
         const showSkill = (el) => {
@@ -408,6 +419,16 @@ export function createUIController(view) {
           if (!name && !desc) return;
           readoutName.textContent = name;
           readoutDesc.textContent = desc || 'No description available.';
+          const chargeCount = Math.max(0, Number(el?.dataset.startingCharges || 0));
+          if (readoutCharges && readoutChargePips && readoutChargeLabel) {
+            readoutCharges.hidden = chargeCount < 1;
+            readoutChargePips.replaceChildren(...Array.from({ length: chargeCount }, () => {
+              const pip = document.createElement('i');
+              pip.className = 'hero-detail-charge-pip';
+              return pip;
+            }));
+            readoutChargeLabel.textContent = chargeCount === 1 ? '1 CHARGE' : `${chargeCount} CHARGES`;
+          }
           // Live in-game demo of the hovered move next to its description.
           // Pass the character key: the sim builds a real player from it.
           if (previewCanvas && el.dataset.previewSlot) {

@@ -1508,8 +1508,11 @@
     if (room.type === 'ladder') {
       if (!room.cleared && Neo.enemies.length === 0) {
         const tutorialExit = Neo.isTutorialRun?.() && room.tutorialLesson === 'ladder';
-        Neo.spawnWave(Neo.getWaveCount(tutorialExit ? 3 : 4), tutorialExit ? 'combat' : 'ladder', {
+        Neo.spawnWave(tutorialExit ? 3 : Neo.getWaveCount(4), tutorialExit ? 'combat' : 'ladder', {
           suppressMiniBoss: tutorialExit,
+          suppressElite: tutorialExit,
+          suppressBossUpgrade: tutorialExit,
+          ignoreSpawnHint: tutorialExit,
         });
         if (tutorialExit) {
           Neo.enemies.forEach(enemy => { if (enemy) enemy.tutorialExitEnemy = true; });
