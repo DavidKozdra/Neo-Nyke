@@ -47,6 +47,23 @@ describe('3D props bake their 2D art by default', () => {
     });
   });
 
+  // The counterpart of the pickup sweep above. Anything drawWorldProps draws as
+  // a hazard must be named somewhere in the 3D renderer -- a bespoke object, a
+  // bake, or an explicit HAZARD_STYLES disc. A kind mentioned nowhere is the
+  // purple-fallback bug (holy_turret, fire_circle, el_barto_graffiti).
+  test('every hazard kind drawn in 2D is handled somewhere in 3D', () => {
+    // Destructible props share drawWorldProps' `.kind ===` shape but are synced
+    // by syncDestructibles, not syncHazards.
+    const destructibleKinds = new Set(['wall', 'cover_wall', 'secret_wall', 'pot', 'barrel']);
+    const drawn = new Set(
+      [...props.matchAll(/\.kind === '([a-z_]+)'/g)].map(match => match[1]),
+    );
+    const uncovered = [...drawn].filter(kind => (
+      !destructibleKinds.has(kind) && !source.includes(`'${kind}'`)
+    ));
+    expect(uncovered).toEqual([]);
+  });
+
   // A plain item drop is an 8x8 icon spanning only about -12..+12 world units,
   // but a duplicate Artificer's Charger draws a dwell warning down to y=+44.
   // One band cannot serve both: sizing for the warning shrank ordinary drops to

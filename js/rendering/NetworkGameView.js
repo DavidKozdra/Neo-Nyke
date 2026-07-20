@@ -1142,6 +1142,10 @@
           // were burning, poisoned or dashing. Derive them per actor instead, so
           // the same authority tick counters animate everyone identically.
           statuses: player.statuses || root.NeoNyke?.simulation?.createCampaignStatusMap?.() || {},
+          // The authority tracks the all-relics god window per player as
+          // godUntilTick, but nothing projected it, so the golden tint never
+          // appeared in a network run -- for teammates OR for you.
+          godTimer: Math.max(0, Number(player.godUntilTick || 0) - serverTick) / 20,
           dashTime: player.action === 'dash' && serverTick - Number(player.actionTick || 0) <= 4 ? 0.2 : 0,
           cowardsWayTime: Math.max(0, Number(player.statusUntilTick?.cowards_way || 0) - serverTick) / 20,
           princessFlightTime: Math.max(0, Number(player.statusUntilTick?.flying_unhitable || 0) - serverTick) / 20,
