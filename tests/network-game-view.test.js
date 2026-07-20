@@ -252,6 +252,82 @@ describe('network multiplayer game view', () => {
     expect(neo.currentRoom.cleared).toBe(true);
   });
 
+  // The protocol never sends vx/vy, but every movement animation in
+  // drawActorSprite is gated on hypot(vx, vy). Without a derived velocity,
+  // networked heroes slide across the floor in a permanent idle pose.
+  describe('derives networked player velocity from interpolated position deltas', () => {
+    const step = (view, actor, x, y, frameDelta) => {
+      const derived = view._deriveActorVelocity(actor, { x, y }, frameDelta);
+      return { x, y, ...derived };
+    };
+
+    test('converges on the authoritative move speed and decays back to idle', () => {
+      const view = new NetworkGameView({ session: {}, neo: {} });
+      const frameDelta = 1 / 60;
+      // Walk right at the authority's 228px/s (CampaignSimulation moveSpeed).
+      let actor = { x: 100, y: 100, vx: 0, vy: 0 };
+      for (let frame = 0; frame < 60; frame += 1) {
+        actor = step(view, actor, actor.x + 228 * frameDelta, 100, frameDelta);
+      }
+      expect(Math.hypot(actor.vx, actor.vy)).toBeCloseTo(228, 0);
+
+      // Standing still has to fall back under the `moving` threshold of 8px/s,
+      // or the walk cycle would keep animating in place.
+      for (let frame = 0; frame < 30; frame += 1) actor = step(view, actor, actor.x, 100, frameDelta);
+      expect(Math.hypot(actor.vx, actor.vy)).toBeLessThan(8);
+    });
+
+    test('is framerate independent', () => {
+      const view = new NetworkGameView({ session: {}, neo: {} });
+      const settle = fps => {
+        let actor = { x: 0, y: 0, vx: 0, vy: 0 };
+        for (let frame = 0; frame < fps; frame += 1) actor = step(view, actor, actor.x + 228 / fps, 0, 1 / fps);
+        return Math.hypot(actor.vx, actor.vy);
+      };
+      expect(settle(144)).toBeCloseTo(settle(60), 0);
+    });
+
+    test('ignores teleports so room changes do not spike into a sprint', () => {
+      const view = new NetworkGameView({ session: {}, neo: {} });
+      expect(view._deriveActorVelocity({ x: 100, y: 100, vx: 50, vy: 0 }, { x: 800, y: 600 }, 1 / 60))
+        .toEqual({ vx: 0, vy: 0 });
+    });
+
+    test('holds the last velocity when a frame reports no elapsed time', () => {
+      const view = new NetworkGameView({ session: {}, neo: {} });
+      expect(view._deriveActorVelocity({ x: 10, y: 10, vx: 42, vy: -7 }, { x: 12, y: 10 }, 0))
+        .toEqual({ vx: 42, vy: -7 });
+    });
+  });
+
+  // These render fields used to be derived only for the local player, so
+  // teammates never showed that they were burning, poisoned or dashing.
+  test('derives status, dash and flight render fields for remote players too', () => {
+    const neo = {};
+    const view = new NetworkGameView({ session: { snapshot: () => ({ playerId: 'p1' }) }, neo });
+    const burning = { fire: { stacks: 3, duration: 2, tick: 0 } };
+    view._syncCampaignPresentationEntities({
+      p1: { id: 'p1', x: 10, y: 10, action: 'idle' },
+      p2: {
+        id: 'p2', x: 50, y: 50, action: 'dash', actionTick: 100,
+        statuses: burning, statusUntilTick: { flying_unhitable: 140 },
+      },
+    }, {}, 'p1', { tick: 100 }, 1 / 60);
+
+    const remote = view.presentationPlayerSlots.find(slot => slot.id === 'p2').getEntity();
+    expect(remote.statuses).toEqual(burning);
+    expect(remote.dashTime).toBe(0.2);
+    expect(remote.princessFlightTime).toBeCloseTo(2);
+
+    // The local hero keeps the values the HUD block used to set by hand.
+    const local = view.presentationPlayerSlots.find(slot => slot.id === 'p1').getEntity();
+    expect(local.dashTime).toBe(0);
+    expect(local.princessFlightTime).toBe(0);
+    // A player the authority sent no statuses for still gets a zeroed map, so
+    // drawPlayer's getStatusStacks reads never hit an undefined.
+    expect(Object.values(local.statuses).every(state => state.stacks === 0)).toBe(true);
+  });
+
   test('projects authority-owned shop stock into the normal campaign shop UI state', () => {
     const neo = {};
     const view = new NetworkGameView({ session: {}, neo });
