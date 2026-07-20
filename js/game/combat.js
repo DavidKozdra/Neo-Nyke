@@ -3599,10 +3599,9 @@
     if (!(drainChance > 0)) return;
     if (!Neo.player) return;
     if (Neo.nextRandom('encounter') >= drainChance) return;
-    // Instant steal: the flat 1 HP plus 1% of the drained enemy's max HP, so the
-    // bite scales against tankier foes instead of being a flat trickle.
+    // Instant steal: a small 1%-of-enemy-max bite, granted free on the proc.
     const enemyMax = Math.max(1, Number(enemy?.max || enemy?.hp || 1));
-    const bite = 1 + enemyMax * 0.01;
+    const bite = enemyMax * 0.01;
     const heal = Neo.scalePlayerHealing(bite, 1);
     const gained = Neo.applyPlayerHealing(heal);
     // Always show that the proc landed. At full HP there is no green heal number,
@@ -3611,13 +3610,16 @@
     if (gained > 0) {
       Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
     }
-    // …then a lingering bleed-out: heal a little of the same bite each second for
-    // a couple of seconds. Procs refresh the window and stack the per-second rate
-    // up to a cap so chaining drains keeps the trickle topped up.
+    // …then a lingering bleed-out. The rate is flat and comes from how much drain
+    // is stacked, NOT from the target's max HP: the old cap of enemyMax * 0.04 let
+    // a boss fight trickle 16 HP/s indefinitely, because every proc also refreshed
+    // the window. Tying it to stacks keeps drain a steady over-time payoff that
+    // scales with investment instead of with whatever happens to be in front of you.
     // Arm the lingering heal even at full HP, so a proc can still pay off if the
     // player takes damage during the next couple of seconds.
+    const drainStacks = Math.max(1, Number(Neo.getItemCount?.('tooth_of_thorn')) || 1);
     Neo.player.thornDrainTime = 2.5;
-    Neo.player.thornDrainRate = Math.min(enemyMax * 0.04, Number(Neo.player.thornDrainRate || 0) + bite * 0.5);
+    Neo.player.thornDrainRate = drainStacks * 1.5;
   }
 
   function applyStatusPower(entity, key, multiplier) {

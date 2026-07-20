@@ -38,11 +38,12 @@ describe('drain balance', () => {
       `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
     )(Neo);
 
-    // Proc steals a flat 1 HP plus 1% of the enemy's max HP (200 -> +2 -> 3 total).
+    // The instant proc steals 1% of the enemy's max HP (200 -> +2). The bulk of
+    // the drain is the lingering over-time heal armed below, not this bite.
     rollToothOfThornDrain({ type: 'hunter', max: 200 });
 
-    expect(Neo.applyPlayerHealing).toHaveBeenCalledWith(3);
-    expect(Neo.player.hp).toBe(8);
+    expect(Neo.applyPlayerHealing).toHaveBeenCalledWith(2);
+    expect(Neo.player.hp).toBe(7);
     // The proc also arms the lingering per-second drain heal.
     expect(Neo.player.thornDrainTime).toBeGreaterThan(0);
     expect(Neo.player.thornDrainRate).toBeGreaterThan(0);
