@@ -13,6 +13,72 @@ Neo.simulationTick = Math.max(0, Number(Neo.simulationTick) || 0);
 Neo.simulationInterpolationAlpha = 0;
 Neo.fixedSimulationRunner = legacyFixedTickRunner;
 
+// --- Render-rate entity interpolation -------------------------------------
+//
+// The simulation steps at a fixed 20Hz but we draw at 60-144Hz, so without
+// interpolation every entity holds one position for 3-7 frames and then jumps.
+// That is the stutter you see on anything that moves; simulationInterpolationAlpha
+// was already computed for exactly this and simply never consumed.
+//
+// Rather than rewrite ~180 `entity.x` reads across the draw layer, interpolate
+// centrally: remember where each entity was before the last tick, then just
+// before drawing shift every entity to its blended position and restore the
+// authoritative one immediately after. The simulation therefore never observes
+// a blended coordinate -- only the frame does -- so gameplay stays exactly as
+// it was and any draw code (2D, 3D, minimap) benefits without knowing about it.
+const INTERPOLATED_LISTS = ['enemies', 'projectiles', 'particles', 'deadBodies'];
+// A jump this large is a teleport/respawn/room change, not motion. Blending
+// across it would drag the entity through the room over several frames.
+const INTERPOLATION_TELEPORT_DISTANCE = 260;
+const interpPrev = new WeakMap();
+const interpRestore = [];
+
+function eachInterpolatedEntity(visit) {
+  if (Neo.player) visit(Neo.player);
+  INTERPOLATED_LISTS.forEach(key => {
+    const list = Neo[key];
+    if (Array.isArray(list)) list.forEach(entity => { if (entity) visit(entity); });
+  });
+}
+
+// Called right before each fixed tick: the positions here are the "from" end of
+// the blend the following frames will draw.
+function captureInterpolationSnapshot() {
+  eachInterpolatedEntity(entity => {
+    if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+    interpPrev.set(entity, { x: entity.x, y: entity.y });
+  });
+}
+
+function applyInterpolation(alpha) {
+  if (!(alpha > 0) || !Number.isFinite(alpha)) return;
+  const t = Math.min(1, alpha);
+  eachInterpolatedEntity(entity => {
+    const prev = interpPrev.get(entity);
+    if (!prev || !Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+    const dx = entity.x - prev.x;
+    const dy = entity.y - prev.y;
+    if (!dx && !dy) return;
+    if (Math.hypot(dx, dy) > INTERPOLATION_TELEPORT_DISTANCE) return;
+    interpRestore.push({ entity, x: entity.x, y: entity.y });
+    // Blend backwards from the authoritative position: at alpha 0 we show the
+    // previous tick, at alpha 1 the current one.
+    entity.x = prev.x + dx * t;
+    entity.y = prev.y + dy * t;
+  });
+}
+
+function restoreInterpolation() {
+  for (let i = interpRestore.length - 1; i >= 0; i -= 1) {
+    const entry = interpRestore[i];
+    entry.entity.x = entry.x;
+    entry.entity.y = entry.y;
+  }
+  interpRestore.length = 0;
+}
+
+Neo.captureInterpolationSnapshot = captureInterpolationSnapshot;
+
 export function updateEnemyLostSightState(enemy, playerHidden, dt = 0) {
   if (!enemy) return false;
 
@@ -62,6 +128,8 @@ export function loop(timestamp) {
     if (canAdvanceSimulation) {
       const advanceResult = legacyFixedTickRunner
         ? legacyFixedTickRunner.advance(elapsedSeconds, fixedDelta => {
+          // Snapshot before the step so the frames after it can blend from here.
+          captureInterpolationSnapshot();
           Neo.simulationTick += 1;
           // Hitstop is simulation time, not render time. Its duration and all
           // authoritative updates therefore advance in identical 20 Hz steps.
@@ -109,9 +177,26 @@ export function loop(timestamp) {
     // Track the camera at render rate (see trackCameras) so the view eases
     // smoothly between the simulation's 20Hz position updates. Skipped while
     // paused/dying so the camera holds still exactly as before.
-    if (canAdvanceSimulation) trackCameras(dt);
     const drawPerfStart = Neo.perfStart();
-    if (Neo.gameState !== 'pause') Neo.draw();
+    // canAdvanceSimulation already implies gameState === 'play', so this guard
+    // is exactly the old `!== 'pause'` condition for both draw and camera.
+    if (Neo.gameState !== 'pause') {
+      // Draw at the blended position, then hand the authoritative one straight
+      // back so nothing downstream ever reads an interpolated coordinate.
+      // Networked play interpolates in NetworkGameView instead (its positions
+      // arrive already smoothed between authority samples), so skip it there.
+      const interpolate = canAdvanceSimulation && !Neo.multiplayerGameView?.active;
+      if (interpolate) applyInterpolation(Neo.simulationInterpolationAlpha);
+      try {
+        // Track the camera inside the blended window: it follows the player's
+        // drawn position, so reading the raw 20Hz one here would leave the view
+        // a frame behind the sprite it is centred on.
+        if (canAdvanceSimulation) trackCameras(dt);
+        if (Neo.gameState !== 'pause') Neo.draw();
+      } finally {
+        if (interpolate) restoreInterpolation();
+      }
+    }
     Neo.perfEnd('Neo.draw', drawPerfStart);
     Neo.updateRewardChoiceTooltip?.();
     Neo.perfEndFrame(framePerfStart);

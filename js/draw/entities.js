@@ -1622,7 +1622,8 @@
       : armRecoilRemaining > 0 && Number(Neo.player.armRecoilFacing || 0)
         ? (Neo.player.armRecoilFacing < 0 ? -1 : 1)
         : getFacingDirection(Neo.player, currentAimAngle);
-    const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
+    const godTime = getActorGodTime(Neo.player);
+    const shadowColor = godTime > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     // The cape only renders the player near-invisible while actually concealed (first
     // half of its duration); after the midpoint they fade back into view.
@@ -1631,14 +1632,13 @@
     drawActorStatusRings(Neo.player);
     drawWarpPreview();
     drawActorOverhealBarrier(Neo.player);
-    const playerSpriteScale = Number(Neo.getItemStats?.()?.playerSpriteScale || 1);
-    const playerSize = Math.max(34, Neo.player.r * 2.5) * playerSpriteScale;
+    const playerSize = Math.max(34, Neo.player.r * 2.5) * getActorSpriteScale(Neo.player);
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
       alpha: capeActive ? 0.34 : (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
       shadowColor,
-      shadowBlur: Neo.godTimer > 0 ? 18 : 6,
-      tint: Neo.godTimer > 0 ? 'rgba(255,245,220,0.6)' : null,
+      shadowBlur: godTime > 0 ? 18 : 6,
+      tint: godTime > 0 ? 'rgba(255,245,220,0.6)' : null,
       animation: {
         maxSpeed: Neo.player.mooggyZoomiesTime > 0 ? 640 : Neo.player.princessFlightTime > 0 ? 420 : 260,
         stepRate: Neo.player.mooggyZoomiesTime > 0 ? 11 : 7.5,
@@ -1658,7 +1658,7 @@
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
     });
     drawPlayerWeaponAnimation(Neo.player, Neo.getEquippedWeapon(), aimAngle, facing, {
-      godActive: Neo.godTimer > 0,
+      godActive: godTime > 0,
       showRangePreview: true,
       previewAngle: currentAimAngle,
     });
@@ -1730,6 +1730,32 @@
     Neo.ctx.restore();
   }
 
+  // Sprite scale is an item effect, but getItemStats() derives it from the
+  // GLOBAL Neo.player. Every non-local hero therefore rendered at the local
+  // player's size: your Artificer's Charger inflated a teammate who did not
+  // have one, and theirs did nothing. Read the actor's own item map instead --
+  // networked players carry it (NetworkGameView copies player.items) and local
+  // co-op entities keep theirs on the entity too.
+  function getActorSpriteScale(actor) {
+    if (!actor) return 1;
+    if (actor === Neo.player) return Number(Neo.getItemStats?.()?.playerSpriteScale || 1);
+    const stats = actor.itemStats;
+    if (stats && Number.isFinite(Number(stats.playerSpriteScale))) return Number(stats.playerSpriteScale);
+    // Mirrors the playerSpriteScale rule in getItemStats/SharedItemEffectSystem.
+    const charger = Number(actor.items?.artificer_charger || 0);
+    return charger > 0 ? 1.267 : 1;
+  }
+
+  // Neo.godTimer is a single global, so in a network run it is only ever the
+  // local campaign's value (zero there, since the authority owns the window).
+  // Prefer the actor's own projected timer when it has one.
+  function getActorGodTime(actor) {
+    const own = Number(actor?.godTimer);
+    if (Number.isFinite(own) && own > 0) return own;
+    if (actor === Neo.player) return Number(Neo.godTimer || 0);
+    return 0;
+  }
+
   function drawPlayerSlot(slot) {
     const pn = slot?.getEntity?.();
     if (!pn) return;
@@ -1743,12 +1769,16 @@
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
     drawActorStatusRings(pn);
     drawActorOverhealBarrier(pn);
-    drawActorSprite(pn, spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
+    const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
+    const slotGodTime = getActorGodTime(pn);
+    drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
       alpha: pn.inv > 0 ? 0.55 : 1,
       flipX: facing < 0,
-      shadowColor: hexToRgba(tintColor, 0.45),
-      shadowBlur: 10,
-      tint: hexToRgba(tintColor, 0.25),
+      // A god-mode teammate keeps the golden glow drawPlayer gives the local
+      // hero, rather than reading as an ordinary player.
+      shadowColor: slotGodTime > 0 ? 'rgba(255,248,210,0.65)' : hexToRgba(tintColor, 0.45),
+      shadowBlur: slotGodTime > 0 ? 18 : 10,
+      tint: slotGodTime > 0 ? 'rgba(255,245,220,0.6)' : hexToRgba(tintColor, 0.25),
       animation: {
         maxSpeed: 260,
         stepRate: 7.5,
@@ -1762,10 +1792,10 @@
     drawEnemyStatusIconRow(pn, pn.y);
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
-    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing, {
+    drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
     });
-    drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing);
+    drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
     Neo.ctx.restore();
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;

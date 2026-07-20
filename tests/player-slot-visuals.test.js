@@ -43,4 +43,38 @@ describe('player slot status visuals', () => {
       expect(bodyOf(helper)).not.toContain('Neo.player');
     });
   });
+
+  // getItemStats() and Neo.godTimer are derived from the GLOBAL Neo.player, so
+  // reading them for a non-local hero rendered teammates with the local
+  // player's item stats: your Artificer's Charger inflated their sprite, and a
+  // god-mode ally never showed the golden glow.
+  describe('per-player item and god state', () => {
+    test('sprite scale comes from the actor, not the global player', () => {
+      const body = bodyOf('drawPlayerSlot');
+      expect(body).toContain('getActorSpriteScale(pn)');
+      // The old global read must be gone from the shared slot path.
+      expect(body).not.toContain('Neo.getItemStats');
+    });
+
+    test('the local path shares the same scale helper', () => {
+      expect(bodyOf('drawPlayer')).toContain('getActorSpriteScale(Neo.player)');
+    });
+
+    test('god-mode visuals read per actor so teammates glow too', () => {
+      expect(bodyOf('drawPlayerSlot')).toContain('getActorGodTime(pn)');
+      // drawPlayer must not reach for the bare global any more.
+      expect(bodyOf('drawPlayer')).not.toContain('Neo.godTimer >');
+    });
+
+    test('the network view projects the authority per-player god window', () => {
+      const view = fs.readFileSync(
+        path.join(__dirname, '..', 'js/rendering/NetworkGameView.js'),
+        'utf8',
+      );
+      // godUntilTick is authoritative and per player; without projecting it the
+      // golden tint never appears in a network run for anyone.
+      expect(view).toContain('godUntilTick');
+      expect(view).toMatch(/godTimer: Math\.max\(0, Number\(player\.godUntilTick/);
+    });
+  });
 });
