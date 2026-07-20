@@ -73,6 +73,52 @@ const imageTextureCache = new Map();  // `${imgKey}|${frame}|${fw}` -> THREE.Tex
 const tileTextureCache = new Map();   // envTileKey -> THREE.Texture
 const shopOfferTextureCache = new Map();
 const statusBadgeTextureCache = new Map();
+const decorTextureCache = new Map();  // `${kind}|${r}` -> THREE.Texture
+
+// Decor kinds that are vertical objects in the fiction. The flat floor overlay
+// is right for rubble/cracks/moss (they ARE on the ground), but a candle or a
+// tree painted into it reads as a decal the camera looks down at. These get
+// baked individually and stood up as billboards instead.
+const UPRIGHT_DECOR_KINDS = new Set(['torch', 'brazier', 'tree', 'fruit_tree']);
+
+// Bake one decoration by running the 2D decor draw for that single item into an
+// offscreen canvas. Decor draws in local space around (0,0) with the object's
+// base near +r, so we translate to the canvas center and keep generous padding
+// for flames and canopies that extend above the nominal radius.
+function getDecorTexture(kind, r) {
+  const radius = Math.max(8, Math.round(Number(r) || 12));
+  const cacheKey = `${kind}|${radius}`;
+  const cached = decorTextureCache.get(cacheKey);
+  if (cached) return cached;
+  if (typeof Neo.drawRoomDecor !== 'function') return null;
+  const pad = Math.ceil(radius * 2.4);
+  const size = pad * 2;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = size;
+  canvasEl.height = size;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  const realDecorations = Neo.decorations;
+  const realStructures = Neo.structures;
+  try {
+    Neo.ctx = g;
+    // Draw exactly one decoration, centered, with no structures riding along.
+    Neo.decorations = [{ kind, x: pad, y: pad, r: radius }];
+    Neo.structures = [];
+    Neo.drawRoomDecor();
+  } catch { /* a missing decor kind should not break the room build */ }
+  Neo.decorations = realDecorations;
+  Neo.structures = realStructures;
+  Neo.ctx = realCtx;
+  const texture = makeCanvasTexture(canvasEl);
+  // Where the object's base sits inside the canvas, as a 0..1 fraction from the
+  // bottom. Decor art is centered on its point with the base around +r, so the
+  // contact point is below center. The billboard uses this as its anchor.
+  texture.userData = { baseFraction: (pad - radius) / size, worldSize: size };
+  decorTextureCache.set(cacheKey, texture);
+  return texture;
+}
 
 function makeCanvasTexture(canvasEl) {
   const texture = new THREE.CanvasTexture(canvasEl);
@@ -627,6 +673,10 @@ function buildRoom() {
   // braziers, trees, moss and candles). Rasterize that exact pass onto a thin
   // floor overlay so 3D rooms keep their familiar visual language.
   if (Array.isArray(Neo.decorations) && Neo.decorations.length && typeof Neo.drawRoomDecor === 'function') {
+    // Vertical props (candles, braziers, trees) are pulled out of the flat pass
+    // and billboarded below; only genuinely flat dressing stays in the overlay.
+    const flatDecor = Neo.decorations.filter(d => d && !UPRIGHT_DECOR_KINDS.has(d.kind));
+    const uprightDecor = Neo.decorations.filter(d => d && UPRIGHT_DECOR_KINDS.has(d.kind));
     const decorCanvas = document.createElement('canvas');
     decorCanvas.width = W;
     decorCanvas.height = H;
@@ -634,14 +684,42 @@ function buildRoom() {
     decorCtx.imageSmoothingEnabled = false;
     const realCtx = Neo.ctx;
     const realStructures = Neo.structures;
+    const realDecorations = Neo.decorations;
     try {
       Neo.ctx = decorCtx;
       // drawRoomDecor also draws structures; they already have real 3D forms.
       Neo.structures = [];
+      Neo.decorations = flatDecor;
       Neo.drawRoomDecor();
     } catch { /* decoration omission is preferable to a failed room build */ }
     Neo.structures = realStructures;
+    Neo.decorations = realDecorations;
     Neo.ctx = realCtx;
+
+    uprightDecor.forEach(decor => {
+      const radius = Math.max(8, Number(decor.r) || 12);
+      const texture = getDecorTexture(decor.kind, radius);
+      if (!texture) return;
+      const worldSize = texture.userData.worldSize;
+      const sprite = makeBillboard(texture, { depthWrite: false });
+      // Anchor the sprite at the object's baked contact point so it stands on
+      // the floor rather than floating or sinking by its transparent padding.
+      sprite.center.set(0.5, texture.userData.baseFraction);
+      sprite.scale.set(worldSize, worldSize, 1);
+      sprite.position.set(decor.x, 0.6, decor.y);
+      sprite.renderOrder = 2;
+      roomGroup.add(sprite);
+      const shadow = makeShadowMesh(radius * 0.5);
+      shadow.position.set(decor.x, 1.5, decor.y);
+      roomGroup.add(shadow);
+      // Candles and braziers are the room's light sources in 2D; give them a
+      // matching point light so 3D rooms are lit by the same fixtures.
+      if (decor.kind === 'torch' || decor.kind === 'brazier') {
+        const light = new THREE.PointLight(0xffb361, 0.9, radius * 14, 2);
+        light.position.set(decor.x, radius * 1.4, decor.y);
+        roomGroup.add(light);
+      }
+    });
     const decorTexture = makeCanvasTexture(decorCanvas);
     decorTexture.userData.owned = true;
     const decor = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ map: decorTexture, transparent: true, depthWrite: false }));
@@ -1570,16 +1648,14 @@ function syncPickups() {
       if (pickup.type === 'ladder') {
         const group = new THREE.Group();
         const texture = getImageTexture('ladder_0', 0, Neo.ENVIRONMENT_IMAGES?.ladder_0?.image?.naturalWidth || 24);
-        const plate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
-          map: texture || null,
-          color: texture ? 0xffffff : 0x224433,
-          transparent: true,
-          depthWrite: false,
-        }));
-        plate.rotation.x = -Math.PI / 2;
-        plate.scale.set(64, 64, 1);
-        plate.position.y = 1.4;
-        group.add(plate);
+        // The ladder is a vertical object: stand it up facing the camera. Laid
+        // flat it read as a hatch decal painted on the floor.
+        const body = makeBillboard(texture, { depthWrite: false });
+        if (!texture) body.material.color.setHex(0x7dff9e);
+        body.scale.set(64, 64, 1);
+        body.position.y = 0.6;
+        body.renderOrder = 2;
+        group.add(body);
         const ring = new THREE.Mesh(
           new THREE.RingGeometry(36, 42, 28),
           new THREE.MeshBasicMaterial({ color: 0x7dff9e, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }),
