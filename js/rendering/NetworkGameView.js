@@ -32,6 +32,15 @@
   const TOUCH_DEADZONE = 0.08;
   // Matches the default duration triggerArmRecoil() uses in js/game/combat.js.
   const ARM_RECOIL_DURATION = 0.16;
+  // The authority simulates player.vx/vy but the protocol never sends them, so
+  // networked actors arrive with no velocity at all. Every movement animation in
+  // drawActorSprite (footfall bob, squash, lean, shadow, idle breathe) is gated
+  // on hypot(vx, vy), so without this heroes slide along in an idle pose. Derive
+  // velocity from the interpolated position delta instead of widening the packet
+  // -- positions are already on the wire, so sending velocity too is redundant.
+  // Smoothed because a single frame's delta is noisy enough to make the step
+  // cycle stutter; the rate is a half-life in Hz, framerate-independent.
+  const NETWORK_VELOCITY_SMOOTH_HZ = 18;
   const ABILITY_KEYS = new Map([['KeyR', 'smash'], ['ShiftLeft', 'dash'], ['ShiftRight', 'dash']]);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
@@ -1057,7 +1066,27 @@
       });
     }
 
-    _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state) {
+    // Recover vx/vy from how far the interpolated position moved since the last
+    // presentation frame. `actor` still holds the previous frame's x/y; `player`
+    // carries the new one. Returns the fields to merge onto the actor.
+    _deriveActorVelocity(actor, player, frameDelta) {
+      const x = Number(player.x || 0);
+      const y = Number(player.y || 0);
+      const hadPrevious = Number.isFinite(actor.x) && Number.isFinite(actor.y);
+      if (!hadPrevious || !(frameDelta > 0)) return { vx: Number(actor.vx || 0), vy: Number(actor.vy || 0) };
+      // A room change or respawn teleports the actor; a jump that large is not
+      // movement and would spike the animation into a full sprint for a frame.
+      const jumpedX = x - actor.x;
+      const jumpedY = y - actor.y;
+      if (Math.hypot(jumpedX, jumpedY) > 240) return { vx: 0, vy: 0 };
+      const k = 1 - Math.exp(-NETWORK_VELOCITY_SMOOTH_HZ * frameDelta);
+      return {
+        vx: Number(actor.vx || 0) + (jumpedX / frameDelta - Number(actor.vx || 0)) * k,
+        vy: Number(actor.vy || 0) + (jumpedY / frameDelta - Number(actor.vy || 0)) * k,
+      };
+    }
+
+    _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta = 0) {
       const serverTick = Number(state?.tick || 0);
       const now = root.performance?.now?.() || Date.now();
       const livePlayerIds = new Set(Object.keys(players || {}));
@@ -1075,8 +1104,11 @@
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
         const actor = this.presentationPlayerActors.get(player.id) || {};
+        // Read the previous position before Object.assign overwrites it.
+        const derived = this._deriveActorVelocity(actor, player, frameDelta);
         Object.assign(actor, {
           ...player,
+          ...derived,
           character: player.characterKey || 'thorn_knight',
           r: Number(player.radius || 18),
           hp: Number(player.hp || 0),
@@ -1338,7 +1370,7 @@
       this._updateLocalBeamAngle(localPlayer, frameDelta);
       this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
-      this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state);
+      this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state, frameDelta);
       this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
       const floorTransitionAge = this.floorTransitionStartedAt > 0
         ? Math.max(0, now - this.floorTransitionStartedAt) / 1000
