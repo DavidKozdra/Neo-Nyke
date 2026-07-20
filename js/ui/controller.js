@@ -3307,6 +3307,73 @@ export function createUIController(view) {
         view.coopLobbyCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
         });
+
+        // ── Custom lobby code ────────────────────────────────────────────
+        // The pencil swaps the displayed code for an input. Committing tears
+        // the room down and creates a new one under the requested code, since
+        // a Durable Object's name IS the room code and cannot be renamed. The
+        // server claims the code or returns 409, which we surface inline
+        // rather than silently handing back a different room.
+        function setRoomCodeEditing(editing) {
+          const shell = view.coopLobbyRoomCode?.closest('.coop-lobby__code');
+          if (shell) shell.dataset.editing = String(editing);
+          if (view.coopLobbyRoomCode) view.coopLobbyRoomCode.hidden = editing;
+          if (view.coopLobbyRoomCodeInput) view.coopLobbyRoomCodeInput.hidden = !editing;
+          if (view.coopLobbyEditRoomCode) view.coopLobbyEditRoomCode.hidden = editing;
+          if (view.coopLobbyCopyRoomCode) view.coopLobbyCopyRoomCode.hidden = editing;
+          if (view.coopLobbyConfirmRoomCode) view.coopLobbyConfirmRoomCode.hidden = !editing;
+          if (view.coopLobbyCancelRoomCode) view.coopLobbyCancelRoomCode.hidden = !editing;
+          if (!editing) showRoomCodeError('');
+          if (editing && view.coopLobbyRoomCodeInput) {
+            view.coopLobbyRoomCodeInput.value = view.coopLobbyRoomCode?.textContent?.trim() || '';
+            view.coopLobbyRoomCodeInput.focus();
+            view.coopLobbyRoomCodeInput.select();
+          }
+        }
+
+        function showRoomCodeError(message) {
+          const node = view.coopLobbyRoomCodeError;
+          if (!node) return;
+          node.textContent = message || '';
+          node.hidden = !message;
+        }
+
+        async function commitRoomCode() {
+          const raw = String(view.coopLobbyRoomCodeInput?.value || '').trim().toUpperCase();
+          const current = view.coopLobbyRoomCode?.textContent?.trim() || '';
+          if (!raw || raw === current) { setRoomCodeEditing(false); return; }
+          // Mirrors the server's ROOM_CODE_PATTERN so a bad code fails here
+          // instead of after a round trip. I/O/0/1 are excluded from the
+          // alphabet because they are ambiguous when read aloud.
+          if (!/^[A-HJ-NP-Z2-9]{4,8}$/.test(raw)) {
+            showRoomCodeError('4–8 letters or numbers. No I, O, 0 or 1.');
+            return;
+          }
+          showRoomCodeError('');
+          const mode = view.multiplayerMode?.value === 'rival' ? 'rival' : 'coop';
+          // runBrowserMultiplayerAction handles its own failures (it renders a
+          // rejected snapshot rather than rethrowing), so confirm success by
+          // checking the code we actually ended up with instead of catching.
+          await runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4, roomCode: raw }));
+          const applied = String(browserMultiplayerSession?.roomCode || '').toUpperCase();
+          if (applied === raw) {
+            setRoomCodeEditing(false);
+            return;
+          }
+          const rejection = browserMultiplayerSession?.snapshot?.()?.errors?.slice(-1)[0];
+          showRoomCodeError(/in use|taken|409/i.test(rejection?.message || '')
+            ? 'That code is already in use — try another.'
+            : (rejection?.message || 'Could not claim that code.'));
+        }
+
+        view.coopLobbyEditRoomCode?.addEventListener('click', () => setRoomCodeEditing(true));
+        view.coopLobbyCancelRoomCode?.addEventListener('click', () => setRoomCodeEditing(false));
+        view.coopLobbyConfirmRoomCode?.addEventListener('click', () => { void commitRoomCode(); });
+        view.coopLobbyRoomCodeInput?.addEventListener('keydown', event => {
+          if (event.key === 'Enter') { event.preventDefault(); void commitRoomCode(); }
+          if (event.key === 'Escape') { event.preventDefault(); setRoomCodeEditing(false); }
+        });
+        view.coopLobbyRoomCodeInput?.addEventListener('input', () => showRoomCodeError(''));
         view.multiplayerBack?.addEventListener('click', () => {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);

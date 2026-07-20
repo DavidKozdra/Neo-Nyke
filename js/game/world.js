@@ -565,7 +565,7 @@
       Neo.player.thornDrainAccum = Number(Neo.player.thornDrainAccum || 0) + dt;
       while (Neo.player.thornDrainAccum >= 0.5) {
         Neo.player.thornDrainAccum -= 0.5;
-        const heal = Neo.scalePlayerHealing(Math.max(1, Neo.player.thornDrainRate * 0.5), 1);
+        const heal = Neo.scalePlayerHealing(Neo.player.thornDrainRate * 0.5, 1);
         const gained = Neo.applyPlayerHealing(heal);
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#ff8fb4', size: 12 });
       }

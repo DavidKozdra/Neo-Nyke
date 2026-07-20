@@ -3599,10 +3599,11 @@
     if (!(drainChance > 0)) return;
     if (!Neo.player) return;
     if (Neo.nextRandom('encounter') >= drainChance) return;
-    // Instant steal: a small 1%-of-enemy-max bite, granted free on the proc.
-    const enemyMax = Math.max(1, Number(enemy?.max || enemy?.hp || 1));
-    const bite = enemyMax * 0.01;
-    const heal = Neo.scalePlayerHealing(bite, 1);
+    // Instant steal: a token nibble only. Drain's payoff is the heal-over-time
+    // below, so the up-front bite stays flat and small — it used to be 1% of the
+    // target's max HP, which made a single proc on a big boss a large free chunk
+    // and let drain pay out fully before the player had committed to anything.
+    const heal = Neo.scalePlayerHealing(1, 1);
     const gained = Neo.applyPlayerHealing(heal);
     // Always show that the proc landed. At full HP there is no green heal number,
     // which previously made a working Tooth look completely inert.
@@ -3617,8 +3618,12 @@
     // scales with investment instead of with whatever happens to be in front of you.
     // Arm the lingering heal even at full HP, so a proc can still pay off if the
     // player takes damage during the next couple of seconds.
+    // Extend toward a hard 2.5s cap instead of resetting the timer. Thorn's melee
+    // procs land often enough that a plain reset chained the window forever, turning
+    // a burst of lifesteal into a permanent regen aura; capping the extension means
+    // rapid procs top the window up but can never hold it open past 2.5s of value.
     const drainStacks = Math.max(1, Number(Neo.getItemCount?.('tooth_of_thorn')) || 1);
-    Neo.player.thornDrainTime = 2.5;
+    Neo.player.thornDrainTime = Math.min(2.5, Number(Neo.player.thornDrainTime || 0) + 1);
     Neo.player.thornDrainRate = drainStacks * 1.5;
   }
 

@@ -23,6 +23,9 @@
   const runServices = typeof require === 'function'
     ? require('../simulation/SharedRunServiceSystem.js')
     : (root.NeoNyke?.simulation || {});
+  const combatSystem = typeof require === 'function'
+    ? require('../simulation/NetworkCombatSystem.js')
+    : (root.NeoNyke?.simulation || {});
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
@@ -1318,6 +1321,28 @@
         const current = slot === 'melee'
           ? Math.max(0, Number(localPlayer.attackCooldownUntilTick || 0) - serverTick) / 20
           : Math.max(0, Number(localPlayer.moveCooldownUntilTick?.[moveKey] || 0) - serverTick) / 20;
+        // Multi-charge moves (Thorn's 2-charge dash, Warp's 4, …) carry a real
+        // charge pool on the authority. Read it through readMoveChargeState rather
+        // than indexing moveChargeState directly: pools are created lazily on first
+        // cast, so a direct lookup would miss on a never-used move and render it as
+        // single-charge until the player fires it once — Thorn's dash visibly
+        // growing from 1 pip to 2 mid-fight.
+        const pool = slot === 'melee' || !moveKey || !combatSystem.readMoveChargeState
+          ? null
+          : combatSystem.readMoveChargeState(localPlayer, moveKey);
+        if (pool && pool.maxCharges > 0) {
+          const timers = pool.timers
+            .map(readyAt => Math.max(0, (Number(readyAt) - serverTick) / 20))
+            .filter(seconds => seconds > 0)
+            .sort((a, b) => a - b);
+          this.neo.cooldowns[slot] = {
+            charges: pool.charges,
+            maxCharges: pool.maxCharges,
+            timers,
+            holding: 0,
+          };
+          return;
+        }
         this.neo.cooldowns[slot] = {
           charges: current > 0 ? 0 : 1,
           maxCharges: 1,

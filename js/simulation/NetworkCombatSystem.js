@@ -50,6 +50,7 @@
     WIZARD_LAZER_EXTRA_RECOIL = 220,
     steerBeamChannelAngle = (_moveKey, angle) => Number(angle) || 0,
     getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
+    getMoveBaseCharges = () => 1,
     createPowerDiskBurstDescriptors = () => [],
     ENEMY_CATALOG = {},
     STANDARD_ENEMY_TYPES = [],
@@ -208,6 +209,9 @@
     player.items = { ...(CHARACTER_STARTING_ITEMS[key] || {}) };
     player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
+    // Charge pools are built lazily per move by moveChargeState (which reads the
+    // character's base charges), so a character swap can't strand a stale pool.
+    player.moveChargeState = {};
     player.statusUntilTick = {};
     player.statuses = createCampaignStatusMap();
     player.barrier = 0;
@@ -1594,14 +1598,134 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Move charges.
+  //
+  // The authority used to model every move as a single binary cooldown, so
+  // multi-charge moves (Thorn's 2-charge dash, Warp's 4, Zoomies/Lightning
+  // Cross/Nail Shot's 2) collapsed to one charge in multiplayer. This mirrors the
+  // campaign's { charges, maxCharges, timers[] } model from game-state.js: each
+  // spend pushes an independent recharge timer, and timers refill one charge each
+  // as they expire, so charges come back one at a time rather than all at once.
+  //
+  // Timers are absolute ticks (not countdowns) to stay consistent with the rest of
+  // the authority's *UntilTick fields and survive snapshot round-trips unchanged.
+  // moveCooldownUntilTick is kept in sync as the soonest-ready tick so existing
+  // readers (the HUD, SharedInventorySystem) keep working without knowing about
+  // charges at all.
+  // Full capacity for a move, base charges widened by any Extra Battery upgrade.
+  function moveChargeCapacity(player, moveKey) {
+    const base = getMoveBaseCharges(moveKey, player?.characterKey || player?.character);
+    const overrideMax = Math.max(0, Math.floor(Number(player?.moveStackOverrides?.[moveKey] || 0)));
+    return Math.max(1, base, overrideMax);
+  }
+
+  // Read-only view of a move's charges, safe to call before the move has ever been
+  // cast and safe to call on a client-side snapshot. Pools are created lazily by
+  // moveChargeState (so a character swap can't strand a stale pool), which means a
+  // never-cast move has no stored pool — readers must not treat that as "no
+  // charges" or they render an empty/one-pip HUD until the first cast. Always go
+  // through this instead of indexing player.moveChargeState directly.
+  function readMoveChargeState(player, moveKey) {
+    const stored = player?.moveChargeState?.[moveKey];
+    const maxCharges = moveChargeCapacity(player, moveKey);
+    if (!stored) return { charges: maxCharges, maxCharges, timers: [] };
+    // Reconcile capacity for display without mutating: a battery bought this tick
+    // should read at its new size even before the authority's next reconcile.
+    const charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(stored.charges || 0))
+      + Math.max(0, maxCharges - Math.max(1, Math.floor(Number(stored.maxCharges || 1))))));
+    return {
+      charges,
+      maxCharges,
+      timers: Array.isArray(stored.timers) ? stored.timers.slice() : [],
+    };
+  }
+
+  function moveChargeState(player, moveKey) {
+    const pools = player.moveChargeState || (player.moveChargeState = {});
+    const maxCharges = moveChargeCapacity(player, moveKey);
+    let pool = pools[moveKey];
+    if (!pool) {
+      pool = { charges: maxCharges, maxCharges, timers: [] };
+      pools[moveKey] = pool;
+    }
+    // Capacity can grow mid-run (Extra Battery). Credit new headroom as a ready
+    // charge, matching tickCooldowns' reconciliation in the campaign.
+    if (maxCharges > pool.maxCharges) {
+      pool.charges = Math.min(maxCharges, pool.charges + (maxCharges - pool.maxCharges));
+      pool.maxCharges = maxCharges;
+    }
+    return pool;
+  }
+
+  // Mirror the pool's soonest-ready tick onto moveCooldownUntilTick. A move with a
+  // charge in hand reads as "ready now" (0) so anything gating on it lets the cast
+  // through; otherwise it reads as the next timer to expire.
+  function syncMoveCooldownMirror(player, moveKey, pool) {
+    const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
+    if (pool.charges > 0) cooldowns[moveKey] = 0;
+    else if (pool.timers.length) cooldowns[moveKey] = Math.min(...pool.timers);
+    else cooldowns[moveKey] = 0;
+  }
+
+  function hasMoveCharge(player, moveKey) {
+    return moveChargeState(player, moveKey).charges > 0;
+  }
+
+  function spendMoveCharge(player, moveKey, readyAtTick) {
+    const pool = moveChargeState(player, moveKey);
+    if (pool.charges <= 0) return false;
+    pool.charges -= 1;
+    pool.timers.push(readyAtTick);
+    syncMoveCooldownMirror(player, moveKey, pool);
+    return true;
+  }
+
+  // Rewrite the most recently pushed timer — used when a held beam is released
+  // early and its recharge must be pulled forward from the full-duration estimate.
+  function rescheduleLatestMoveCharge(player, moveKey, readyAtTick) {
+    const pool = moveChargeState(player, moveKey);
+    if (!pool.timers.length) return;
+    pool.timers[pool.timers.length - 1] = readyAtTick;
+    syncMoveCooldownMirror(player, moveKey, pool);
+  }
+
+  function tickMoveCharges(state) {
+    for (const player of Object.values(state.players || {})) {
+      const pools = player?.moveChargeState;
+      if (!pools) continue;
+      for (const moveKey of Object.keys(pools)) {
+        // Re-read through moveChargeState so an Extra Battery bought while the
+        // move is idle still grows the pool — reconciling only pools with live
+        // timers would silently drop the upgrade until the next cast.
+        const pool = moveChargeState(player, moveKey);
+        if (!pool.timers.length) continue;
+        const pending = [];
+        let restored = 0;
+        for (const readyAt of pool.timers) {
+          if (state.tick >= Number(readyAt)) restored += 1;
+          else pending.push(readyAt);
+        }
+        if (restored > 0) {
+          pool.timers = pending;
+          pool.charges = Math.min(pool.maxCharges, pool.charges + restored);
+        }
+        syncMoveCooldownMirror(player, moveKey, pool);
+      }
+    }
+  }
+
   function endBeamChannel(state, player) {
     const channel = player?.beamChannel;
     if (!channel) return;
     // The campaign starts the laser cooldown when the beam ENDS (held skills
     // recharge on release), so an early release must pull the cooldown forward
     // from the full-duration estimate written at cast time.
-    const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
-    cooldowns[channel.moveKey] = state.tick + Math.max(1, Number(channel.cooldownTicks || 1));
+    rescheduleLatestMoveCharge(
+      player,
+      channel.moveKey,
+      state.tick + Math.max(1, Number(channel.cooldownTicks || 1)),
+    );
     player.beamChannel = null;
   }
 
@@ -1717,8 +1841,7 @@
     if (action.action !== expectedAction) return null;
     const stats = applyForgeStats(player, 'move', moveKey, MOVE_BASE_STATS[moveKey] || {});
     const presentation = MOVE_PRESENTATION_DEFS[moveKey] || { kind: slot, style: 'normal' };
-    const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
-    if (state.tick < Number(cooldowns[moveKey] || 0)) return null;
+    if (!hasMoveCharge(player, moveKey)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
     // God mode slashes ability cooldowns (laser 2.8s, smash 2s, dash 0.7x).
@@ -1955,9 +2078,9 @@
       // campaign's queueHeldSkillRecharge. Assume the full duration here;
       // endBeamChannel rewrites this if the beam is released early.
       player.beamChannel.cooldownTicks = scaledCooldownTicks;
-      cooldowns[moveKey] = player.beamChannel.untilTick + scaledCooldownTicks;
+      spendMoveCharge(player, moveKey, player.beamChannel.untilTick + scaledCooldownTicks);
     } else {
-      cooldowns[moveKey] = state.tick + scaledCooldownTicks;
+      spendMoveCharge(player, moveKey, state.tick + scaledCooldownTicks);
     }
     const destinationX = Number(player.x);
     const destinationY = Number(player.y);
@@ -3821,6 +3944,9 @@
       ensureJesterGate(state, emitEvent);
       updateAuthorityGardenGrowth(state, emitEvent);
       updateChestProximity(state, emitEvent, random);
+      // Refill before actions resolve so a charge whose timer expires on this tick
+      // is spendable on this tick, rather than a tick late.
+      tickMoveCharges(state);
       updatePlayerActions(state, inputs, emitEvent, random);
       updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
@@ -3853,6 +3979,8 @@
     isNetworkRoomLocked,
     livingEncounterEnemies,
     resolvePlayerAbility,
+    readMoveChargeState,
+    moveChargeCapacity,
     createNetworkCombatSystem,
     createFloorProgressionSystem,
     advanceToNextFloor,

@@ -146,6 +146,23 @@ export const MOVE_DEFS = {
     },
   };
 
+// Charge counts are owned by SharedMoveContent so the local campaign and the
+// multiplayer authority can never disagree (Thorn's 2-charge dash used to exist
+// only here, so multiplayer handed him 1). Overlay the shared values onto the
+// authored defs rather than restating them: edit MOVE_BASE_CHARGES /
+// MOVE_CHARGE_OVERRIDES over there, and both runtimes pick the change up.
+{
+  const sharedMoves = globalThis.NeoNyke?.content || {};
+  const sharedBaseCharges = sharedMoves.MOVE_BASE_CHARGES || {};
+  const sharedChargeOverrides = sharedMoves.MOVE_CHARGE_OVERRIDES || {};
+  Object.entries(sharedBaseCharges).forEach(([moveKey, charges]) => {
+    if (MOVE_DEFS[moveKey]) MOVE_DEFS[moveKey].maxStacks = Math.max(1, Number(charges) || 1);
+  });
+  Object.entries(sharedChargeOverrides).forEach(([moveKey, overrides]) => {
+    if (MOVE_DEFS[moveKey]) MOVE_DEFS[moveKey].stackOverrides = { ...overrides };
+  });
+}
+
 export const SHOP_MOVE_POOL = [
     // No melee moves are sold: the M1 slot is the bare-hands fallback (always
     // `slash`) and every "real" primary attack comes from an equipped weapon.
@@ -942,6 +959,11 @@ export const ui = {
     coopLobby: document.getElementById('coopLobby'),
     coopLobbyRoomCode: document.getElementById('coopLobbyRoomCode'),
     coopLobbyCopyRoomCode: document.getElementById('coopLobbyCopyRoomCode'),
+    coopLobbyRoomCodeInput: document.getElementById('coopLobbyRoomCodeInput'),
+    coopLobbyEditRoomCode: document.getElementById('coopLobbyEditRoomCode'),
+    coopLobbyConfirmRoomCode: document.getElementById('coopLobbyConfirmRoomCode'),
+    coopLobbyCancelRoomCode: document.getElementById('coopLobbyCancelRoomCode'),
+    coopLobbyRoomCodeError: document.getElementById('coopLobbyRoomCodeError'),
     coopLobbyStatus: document.getElementById('coopLobbyStatus'),
     coopLobbySlots: document.getElementById('coopLobbySlots'),
     coopLobbyPicker: document.getElementById('coopLobbyPicker'),
