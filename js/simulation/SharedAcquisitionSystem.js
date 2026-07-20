@@ -17,14 +17,9 @@
     voucher_purple: 'wizard',
     voucher_yellow: 'god',
   });
-  const MOVE_BASE_CHARGES = Object.freeze({
-    lightning_cross: 2,
-    nail_shot: 2,
-    dash: 1,
-    warp: 4,
-    mooggy_zoomies: 2,
-    knight_slash_dash: 1,
-  });
+  // Re-exported from SharedMoveContent, which owns move charge counts. Kept as a
+  // named export here only so existing importers of this module keep resolving.
+  const MOVE_BASE_CHARGES = moves.MOVE_BASE_CHARGES;
 
   const itemCount = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
   const SCROLL_KEYS = new Set(['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego']);
@@ -222,9 +217,11 @@
     return { ok: true, type: 'WIZARD_PAW_SELECT', picks: selected };
   }
 
+  // Defers to SharedMoveContent so base charges and per-character overrides come
+  // from one table. The old local copy dropped the character argument entirely,
+  // which is why this needed a hardcoded thorn_knight dash special case.
   function getBaseMoveCharges(moveKey, characterKey) {
-    if (moveKey === 'dash' && characterKey === 'thorn_knight') return 2;
-    return Math.max(1, Number(MOVE_BASE_CHARGES[moveKey] || 1));
+    return moves.getMoveBaseCharges(moveKey, characterKey);
   }
 
   function getBaseWeaponCharges(weaponKey) {

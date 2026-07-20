@@ -69,10 +69,19 @@
         body: JSON.stringify({
           maxPlayers: options.maxPlayers || 4,
           mode: options.mode === 'rival' ? 'rival' : 'coop',
+          // Omitted unless the host typed one, so the server keeps generating
+          // collision-retried codes for the normal path.
+          ...(options.roomCode ? { roomCode: options.roomCode } : {}),
         }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || `Room creation failed (${response.status})`);
+      if (!response.ok) {
+        // Preserve the machine-readable reason so the lobby can show "that code
+        // is taken" inline instead of a generic failure.
+        const error = new Error(payload.error || `Room creation failed (${response.status})`);
+        error.code = payload.code || (response.status === 409 ? 'ROOM_CODE_TAKEN' : 'ROOM_CREATE_FAILED');
+        throw error;
+      }
       const sessionId = normalizeRoomCode(payload.roomCode || payload.code);
       this.roomInfo = { ...payload, roomCode: sessionId };
       return { sessionId, roomCode: sessionId, authorityPeerId: this.authorityPeerId, ...payload };

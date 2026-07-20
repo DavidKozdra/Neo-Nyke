@@ -1450,11 +1450,26 @@
 
     <section class="coop-lobby__room-strip" aria-label="Players and lobby code">
       <div class="coop-lobby__share" aria-label="Lobby invite code">
-        <div class="coop-lobby__code">
-          <span class="coop-lobby__code-label">LOBBY CODE</span>
-          <code id="coopLobbyRoomCode" class="coop-lobby__roomcode"></code>
+        <span class="coop-lobby__code-label" id="coopLobbyCodeLabel">LOBBY CODE</span>
+        <div class="coop-lobby__code" data-editing="false">
+          <code id="coopLobbyRoomCode" class="coop-lobby__roomcode" aria-describedby="coopLobbyCodeLabel"></code>
+          <input id="coopLobbyRoomCodeInput" class="coop-lobby__roomcode-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Enter a custom lobby code" hidden>
+          <div class="coop-lobby__code-actions">
+            <button id="coopLobbyEditRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Edit lobby code" title="Edit lobby code">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
+            <button id="coopLobbyConfirmRoomCode" class="coop-lobby__icon-btn coop-lobby__icon-btn--confirm" type="button" aria-label="Save lobby code" title="Save lobby code" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </button>
+            <button id="coopLobbyCancelRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Cancel editing lobby code" title="Cancel" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+            <button id="coopLobbyCopyRoomCode" class="coop-lobby__icon-btn multiplayer-copy-room-code" type="button" aria-label="Copy lobby code" title="Copy lobby code">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+            </button>
+          </div>
         </div>
-        <button id="coopLobbyCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy lobby code">COPY CODE</button>
+        <p id="coopLobbyRoomCodeError" class="coop-lobby__code-error" role="alert" hidden></p>
       </div>
       <div id="coopLobbySlots" class="coop-lobby__slots" role="list" aria-label="Players in this room"></div>
     </section>

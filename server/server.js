@@ -438,6 +438,32 @@ async function handleRequest(request, env) {
     const options = await request.json().catch(() => ({}));
     const mode = options.mode === 'rival' ? 'rival' : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+
+    // A host may ask for a specific code (the lobby's pencil edit). Unlike a
+    // generated code we must NOT retry on collision: silently handing back a
+    // different code would leave the host telling friends a code that is not
+    // their room, and retrying into an existing room would drop them into a
+    // stranger's lobby. Claim it or fail loudly.
+    if (options.roomCode !== undefined && options.roomCode !== null && options.roomCode !== '') {
+      const requested = normalizeRoomCode(options.roomCode);
+      if (!requested) return json({ error: 'Invalid room code', code: 'INVALID_ROOM_CODE' }, 400);
+      const stub = getRoomStub(env, requested);
+      const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, maxPlayers }),
+      }));
+      if (initialized.status === 409) return json({ error: 'That code is already in use', code: 'ROOM_CODE_TAKEN' }, 409);
+      if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
+      return json({
+        roomCode: requested,
+        status: 'waiting',
+        maxPlayers,
+        mode,
+        socketPath: `/api/multiplayer/rooms/${requested}/socket`,
+      }, 201);
+    }
+
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const roomCode = createRoomCode();
       const stub = getRoomStub(env, roomCode);

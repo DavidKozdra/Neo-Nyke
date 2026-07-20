@@ -209,6 +209,30 @@
     mooggy_zoomies: 'mooggy', knight_slash_dash: 'thorn_knight',
   });
 
+  // Base charge counts, and the per-character overrides that bend them (Thorn's
+  // double dash). This is the single source of truth for both runtimes: the local
+  // campaign reads it through MOVE_DEFS/getMoveMaxStacks, the authority through
+  // getBaseMoveCharges. It used to be duplicated as a flat table in
+  // SharedAcquisitionSystem that had no per-character concept at all, so Thorn
+  // silently lost a dash charge in multiplayer. Add new charge counts HERE only.
+  const MOVE_BASE_CHARGES = Object.freeze({
+    lightning_cross: 2,
+    nail_shot: 2,
+    dash: 1,
+    warp: 4,
+    mooggy_zoomies: 2,
+    knight_slash_dash: 1,
+  });
+  const MOVE_CHARGE_OVERRIDES = Object.freeze({
+    dash: Object.freeze({ thorn_knight: 2 }),
+  });
+
+  function getMoveBaseCharges(moveKey, characterKey) {
+    const base = Math.max(1, Number(MOVE_BASE_CHARGES[moveKey] || 1));
+    const override = Number(MOVE_CHARGE_OVERRIDES[moveKey]?.[characterKey] || 0);
+    return Math.max(1, override || base);
+  }
+
   function isMoveAllowedForCharacter(moveKey, characterKey) {
     if (!MOVE_SLOT_BY_KEY[moveKey]) return false;
     const exclusive = MOVE_EXCLUSIVE_CHARACTERS[moveKey];
@@ -262,6 +286,9 @@
     MOVE_SLOT_KEYS,
     MOVE_SLOT_BY_KEY,
     MOVE_EXCLUSIVE_CHARACTERS,
+    MOVE_BASE_CHARGES,
+    MOVE_CHARGE_OVERRIDES,
+    getMoveBaseCharges,
     MOVE_BASE_STATS,
     MOVE_PRESENTATION_DEFS,
     DEFAULT_MOVE_LOADOUTS,

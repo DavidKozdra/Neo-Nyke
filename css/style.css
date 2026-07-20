@@ -9512,43 +9512,120 @@ button.alt.danger {
   letter-spacing: .08em;
 }
 
+/* The lobby code is the whole point of this screen -- it is the thing players
+   read aloud to each other -- but it used to render at 18px, smaller than the
+   LEAVE button, inside a cramped 172px box. Make it the hero element. */
 .coop-lobby__share {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
+  display: grid;
+  gap: 6px;
   flex: 0 0 auto;
-}
-
-#coopLobbyCopyRoomCode {
-  width: 148px;
-  min-width: 148px;
-  box-sizing: border-box;
+  min-width: 0;
 }
 
 .coop-lobby__code {
-  min-width: 172px;
-  padding: 8px 12px;
-  display: grid;
-  align-content: center;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 18px;
   box-sizing: border-box;
   border: 1px solid var(--menu-border);
-  border-radius: var(--ui-control-radius);
+  border-top-color: color-mix(in srgb, var(--menu-accent) 54%, var(--menu-border));
+  border-radius: var(--ui-frame-radius);
   background: rgba(10, 13, 16, .96);
 }
 
 .coop-lobby__code-label {
   color: var(--menu-text-soft);
-  font-size: calc(9px * var(--font-scale, 1));
+  /* Was 9px -- the smallest text on the panel. */
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .16em;
 }
 
-.coop-lobby__roomcode {
-  font-family: inherit;
-  font-weight: 950; letter-spacing: .22em;
+.coop-lobby__roomcode,
+.coop-lobby__roomcode-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-pixel, ui-monospace, monospace);
+  font-weight: 950;
+  /* Wide tracking so characters are unambiguous when read out loud. */
+  letter-spacing: .3em;
   color: var(--menu-accent-strong, #9de9ff);
-  font-size: calc(18px * var(--font-scale, 1));
+  font-size: calc(42px * var(--font-scale, 1));
+  line-height: 1.1;
+}
+
+.coop-lobby__roomcode-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid var(--menu-accent-strong, #9de9ff);
+  border-radius: 0;
+  background: transparent;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.coop-lobby__code-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* Square icon buttons: a 44px hit target, which is also the touch minimum. */
+.coop-lobby__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: rgba(255, 255, 255, .04);
+  color: var(--menu-text-soft, #dfe9ff);
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, background .18s ease;
+}
+
+.coop-lobby__icon-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.coop-lobby__icon-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--menu-accent) 62%, var(--menu-border));
+  color: var(--menu-accent-strong, #9de9ff);
+  background: rgba(120, 200, 255, .1);
+}
+
+.coop-lobby__icon-btn:focus-visible {
+  outline: 2px solid var(--menu-accent-strong, #9de9ff);
+  outline-offset: 2px;
+}
+
+.coop-lobby__icon-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.coop-lobby__icon-btn--confirm:hover:not(:disabled) {
+  border-color: rgba(125, 255, 158, .7);
+  color: #7dff9e;
+  background: rgba(125, 255, 158, .1);
+}
+
+.coop-lobby__code-error {
+  margin: 0;
+  color: #ff8a98;
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.coop-lobby__code-error[hidden] {
+  display: none;
 }
 
 .coop-lobby__status {
@@ -9583,7 +9660,7 @@ button.alt.danger {
   border-radius: var(--ui-control-radius);
   background: #ffb648;
   color: #16110a;
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(12px * var(--font-scale, 1));
   font-weight: 950;
   letter-spacing: .16em;
 }
@@ -9683,25 +9760,25 @@ button.alt.danger {
 .coop-slot__meta { display: grid; gap: 1px; min-width: 0; text-align: left; }
 
 .coop-slot__name {
-  font-weight: 800; font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 800; font-size: calc(15px * var(--font-scale, 1));
   color: var(--menu-text, #eaf1ff);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .coop-slot__hero {
-  font-size: calc(10px * var(--font-scale, 1)); letter-spacing: .1em;
+  font-size: calc(13px * var(--font-scale, 1)); letter-spacing: .06em;
   color: color-mix(in srgb, var(--slot-color, #9de9ff) 80%, #ffffff);
 }
 
 .coop-slot__status {
-  font-size: calc(10px * var(--font-scale, 1)); font-weight: 800; letter-spacing: .08em;
+  font-size: calc(13px * var(--font-scale, 1)); font-weight: 800; letter-spacing: .08em;
   color: var(--menu-text, #cfe0ff); opacity: .7;
 }
 
 .coop-slot--ready .coop-slot__status { color: #8effb2; opacity: 1; }
 
 .coop-slot__empty-label {
-  font-size: calc(11px * var(--font-scale, 1)); letter-spacing: .16em;
+  font-size: calc(14px * var(--font-scale, 1)); letter-spacing: .16em;
   color: rgba(180, 195, 225, .55);
 }
 
