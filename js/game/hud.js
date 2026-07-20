@@ -355,7 +355,12 @@
       // display, so this row stays hidden in normal play.
       const scoreText = getPlayerSlotScoreText(slot);
       const showPlayerLabel = slots.length > 1;
-      let card = Neo.ui.playerStats.querySelector(`[data-player-slot="${slot.id}"]`);
+      // Slot ids are numeric locally but arbitrary server player ids online, so
+      // match on the dataset value rather than interpolating into a selector
+      // (an id containing quotes/brackets would throw and kill the panel).
+      const slotKey = String(slot.id);
+      let card = [...Neo.ui.playerStats.querySelectorAll('[data-player-slot]')]
+        .find(node => node.dataset.playerSlot === slotKey);
       if (!card) {
         card = document.createElement('section');
         card.className = 'player-stat-card';

@@ -1221,6 +1221,16 @@ export function resumeGame() {
   }
 
   function getActivePlayerSlots() {
+    // Online multiplayer drives presentation from the authority's player list
+    // (NetworkGameView builds these), not from the local PLAYER_SLOT_CONFIG:
+    // it never sets gameMode to coop/pvp and never fills Neo.player2. Without
+    // this branch every consumer here fell through to the single-player path
+    // and reported one slot, which left the HUD unable to reconcile its cards
+    // against the real roster. Note these slots carry server player ids and
+    // have no getCamera(), so split-screen callers must stay behind
+    // isSplitScreen() (which requires Neo.player2 and is false online).
+    const presentationSlots = Neo.presentationPlayerSlots;
+    if (Array.isArray(presentationSlots) && presentationSlots.length) return presentationSlots;
     if (!isMultiplayerMode()) return Neo.player ? [Neo.PLAYER_SLOT_CONFIG[0]] : [];
     return getPlayerSlots({ includeInactive: false, includeDead: true })
       .filter(slot => slot.id <= Math.max(1, Neo.mpPlayerCount));
