@@ -24,6 +24,14 @@ let camera = null;
 let glCanvas = null;
 let ready = false;
 let failed = false;
+let failedAt = 0;
+let contextLost = false;
+let lastRenderErrorAt = -Infinity;
+
+// Context creation can fail transiently on mobile when Safari/Chrome is under
+// memory pressure. Do not retry every animation frame, but also do not latch a
+// single failure for the rest of the page lifetime.
+const WEBGL_RETRY_DELAY_MS = 5000;
 
 // Room (static) group state
 let roomGroup = null;
@@ -394,14 +402,34 @@ function disposeObject(obj) {
 // Init / resize
 // ---------------------------------------------------------------------------
 function initRenderer() {
-  if (ready || failed) return ready;
+  if (ready) return true;
+  if (failed && performance.now() - failedAt < WEBGL_RETRY_DELAY_MS) return false;
   const mainCanvas = Neo.canvas;
   if (!mainCanvas?.parentNode) return false;
+  failed = false;
   try {
+    glCanvas?.remove();
     glCanvas = document.createElement('canvas');
     glCanvas.id = 'c3d';
     mainCanvas.parentNode.insertBefore(glCanvas, mainCanvas);
-    renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false, alpha: false });
+    renderer = new THREE.WebGLRenderer({
+      canvas: glCanvas,
+      antialias: false,
+      alpha: false,
+      // Let the browser choose the most reliable GPU. Forcing high-performance
+      // can make WebGL context creation less reliable in mobile WebViews.
+      powerPreference: 'default',
+    });
+    glCanvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      contextLost = true;
+      glCanvas.style.display = 'none';
+      document.body.classList.remove('render3d');
+    });
+    glCanvas.addEventListener('webglcontextrestored', () => {
+      contextLost = false;
+      roomBuildKey = '';
+    });
     renderer.setClearColor(0x05060d, 1);
     scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x05060d, 900, 1900);
@@ -419,17 +447,49 @@ function initRenderer() {
   } catch (err) {
     console.warn('[3D] WebGL init failed, staying on 2D renderer', err);
     failed = true;
+    failedAt = performance.now();
+    ready = false;
+    renderer?.dispose?.();
+    renderer = null;
+    glCanvas?.remove();
+    glCanvas = null;
+    document.body.classList.remove('render3d');
   }
   return ready;
+}
+
+function preferredPixelRatio(width, height) {
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches;
+  // A 2x drawing buffer behind a full-bleed 3:2 canvas is several million
+  // pixels on a phone. The extra resolution is barely visible behind pixel art
+  // but substantially increases fill rate, texture pressure, and context loss.
+  let ratio = Math.min(window.devicePixelRatio || 1, coarsePointer ? 1 : 2);
+  const gl = renderer?.getContext?.();
+  if (gl) {
+    const maxBufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || Infinity;
+    const maxViewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS) || [Infinity, Infinity];
+    ratio = Math.min(
+      ratio,
+      maxBufferSize / width,
+      maxBufferSize / height,
+      maxViewport[0] / width,
+      maxViewport[1] / height,
+    );
+  }
+  return Math.max(0.5, ratio);
 }
 
 function syncSize() {
   if (!renderer || !Neo.canvas) return;
   const rect = Neo.canvas.getBoundingClientRect();
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(2, Math.round(rect.width));
   const h = Math.max(2, Math.round(rect.height));
-  if (glCanvas.width !== Math.round(w * ratio) || glCanvas.height !== Math.round(h * ratio)) {
+  const ratio = preferredPixelRatio(w, h);
+  // WebGLRenderer.setSize() floors these values. Comparing with Math.round()
+  // made fractional-DPR devices resize their drawing buffer every frame.
+  const bufferW = Math.floor(w * ratio);
+  const bufferH = Math.floor(h * ratio);
+  if (glCanvas.width !== bufferW || glCanvas.height !== bufferH) {
     renderer.setPixelRatio(ratio);
     // updateStyle=true: #c3d's CSS box mirrors #c's actual layout box, so
     // theme/media-query size overrides on #c can never desync the two layers.
@@ -3345,50 +3405,65 @@ function drawCrosshair() {
 // Public: render, toggle
 // ---------------------------------------------------------------------------
 function render() {
-  if (failed || !Neo.render3D) return false;
+  if (!Neo.render3D) return false;
   if (Neo.isSplitScreen?.()) return false;         // split-screen stays on the 2D path
   if (!Neo.SPRITE_ATLAS?.canvas) return false;      // atlas not built yet
   if (!Neo.currentRoom) return false;
   if (!initRenderer()) return false;
+  if (contextLost || renderer.getContext?.().isContextLost?.()) return false;
 
-  document.body.classList.add('render3d');
-  glCanvas.style.display = 'block';
-  syncSize();
+  try {
+    document.body.classList.add('render3d');
+    glCanvas.style.display = 'block';
+    syncSize();
 
-  const buildKey = getRoomBuildKey();
-  if (buildKey !== roomBuildKey) {
-    roomBuildKey = buildKey;
-    buildRoom();
+    const buildKey = getRoomBuildKey();
+    if (buildKey !== roomBuildKey) {
+      roomBuildKey = buildKey;
+      buildRoom();
+    }
+    syncRoomEnvironmentSprites();
+    syncWorldFxOverlay();
+
+    // Dim ambient for dark room types so lighting mood carries over.
+    const darkness = Neo.getRoomDarkness?.(Neo.currentRoom, []) || 0;
+    if (ambientLight) ambientLight.intensity = 0.92 - Math.min(0.45, darkness * 2.2);
+
+    syncPlayer();
+    syncOtherPlayers();
+    syncPlayerMeleeIndicator();
+    syncEnemies();
+    syncProjectiles();
+    syncPickups();
+    syncChests();
+    syncDestructibles();
+    syncHazards();
+    syncShopOffers();
+    syncParticles();
+    syncDeadBodies();
+    syncBeams();
+    syncJusticeBlades();
+    syncTitanHammer();
+    syncCamera();
+    scaleNameplatesToScreen();
+
+    renderer.render(scene, camera);
+    syncPointerLock();
+    drawPrompts();
+    return true;
+  } catch (err) {
+    // A mobile driver can reject a texture allocation or lose its context in
+    // the middle of a frame. Keep the game playable through the normal 2D path
+    // and allow a later frame/context restoration to recover 3D.
+    const now = performance.now();
+    if (now - lastRenderErrorAt > WEBGL_RETRY_DELAY_MS) {
+      console.warn('[3D] Frame failed, temporarily using the 2D renderer', err);
+      lastRenderErrorAt = now;
+    }
+    glCanvas.style.display = 'none';
+    document.body.classList.remove('render3d');
+    return false;
   }
-  syncRoomEnvironmentSprites();
-  syncWorldFxOverlay();
-
-  // Dim ambient for dark room types so lighting mood carries over.
-  const darkness = Neo.getRoomDarkness?.(Neo.currentRoom, []) || 0;
-  if (ambientLight) ambientLight.intensity = 0.92 - Math.min(0.45, darkness * 2.2);
-
-  syncPlayer();
-  syncOtherPlayers();
-  syncPlayerMeleeIndicator();
-  syncEnemies();
-  syncProjectiles();
-  syncPickups();
-  syncChests();
-  syncDestructibles();
-  syncHazards();
-  syncShopOffers();
-  syncParticles();
-  syncDeadBodies();
-  syncBeams();
-  syncJusticeBlades();
-  syncTitanHammer();
-  syncCamera();
-  scaleNameplatesToScreen();
-
-  renderer.render(scene, camera);
-  syncPointerLock();
-  drawPrompts();
-  return true;
 }
 
 function setRender3D(on) {
@@ -3462,6 +3537,19 @@ Neo.threeRenderer = {
   getCameraMode: () => cameraMode,
   setYaw: value => { fpYaw = Number(value) || 0; },
   _debug: () => ({
+    ready,
+    failed,
+    contextLost,
+    requested3D: !!Neo.render3D,
+    viewMode: getViewMode(),
+    coarsePointer: !!window.matchMedia?.('(pointer: coarse)')?.matches,
+    devicePixelRatio: window.devicePixelRatio || 1,
+    drawingBuffer: glCanvas ? [glCanvas.width, glCanvas.height] : null,
+    cssSize: glCanvas ? [
+      Math.round(glCanvas.getBoundingClientRect().width),
+      Math.round(glCanvas.getBoundingClientRect().height),
+    ] : null,
+    webglVersion: renderer?.getContext?.().getParameter?.(renderer.getContext().VERSION) || null,
     sceneChildren: scene?.children?.length,
     camera: camera?.position?.toArray?.().map(v => Math.round(v * 10) / 10),
     fov: camera?.fov,
@@ -3472,7 +3560,7 @@ Neo.threeRenderer = {
     otherPlayers: pools.players.size,
     beams: beamMeshes.length,
     floorHasMap: !!floorMesh?.material?.map,
-    contextLost: !!renderer?.getContext?.()?.isContextLost?.(),
+    driverContextLost: !!renderer?.getContext?.()?.isContextLost?.(),
   }),
 };
 Neo.setRender3D = setRender3D;
