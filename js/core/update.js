@@ -106,6 +106,10 @@ export function loop(timestamp) {
     Neo.uiController.tick(dt);
     Neo.tutorialController?.tick?.(dt);
     Neo.perfEnd('Neo.ui', uiPerfStart);
+    // Track the camera at render rate (see trackCameras) so the view eases
+    // smoothly between the simulation's 20Hz position updates. Skipped while
+    // paused/dying so the camera holds still exactly as before.
+    if (canAdvanceSimulation) trackCameras(dt);
     const drawPerfStart = Neo.perfStart();
     if (Neo.gameState !== 'pause') Neo.draw();
     Neo.perfEnd('Neo.draw', drawPerfStart);
@@ -113,6 +117,41 @@ export function loop(timestamp) {
     Neo.perfEndFrame(framePerfStart);
     requestAnimationFrame(loop);
   }
+
+  // Camera tracking runs at RENDER rate, not on the fixed 20Hz simulation tick.
+  // Driven from the tick, the camera itself only moved every ~50ms, so the whole
+  // scene stepped while the player moved smoothly. The player position it chases
+  // is still quantised to the tick, but easing toward it every rendered frame
+  // turns those steps back into continuous motion.
+  const CAMERA_LEAD = 0.08;
+  function trackCameras(dt) {
+    if (!Neo.canvas || !Neo.player) return;
+    const isSplit = Neo.isSplitScreen();
+    const n = isSplit ? Neo.splitPlayerCount() : 1;
+    // Viewport dimensions per slot: 2 players = left/right halves, 3-4 = quad grid
+    const slotW = n >= 2 ? Math.floor(Neo.canvas.width / 2) : Neo.canvas.width;
+    const slotH = n >= 3 ? Math.floor(Neo.canvas.height / 2) : Neo.canvas.height;
+
+    function trackCamera(cam, p, vW, vH) {
+      if (!cam || !p) return;
+      const tx = p.x - vW / 2 + p.vx * CAMERA_LEAD;
+      const ty = p.y - vH / 2 + p.vy * CAMERA_LEAD;
+      // Exponential smoothing, framerate-independent: a raw `* 8 * dt` factor
+      // overshoots (and can invert) on a long frame.
+      const k = 1 - Math.exp(-8 * dt);
+      cam.x += (tx - cam.x) * k;
+      cam.y += (ty - cam.y) * k;
+    }
+
+    if (!Neo.p1DeadInCoop) trackCamera(Neo.camera, Neo.player, slotW, slotH);
+    if (isSplit) {
+      Neo.getLivePlayerSlots().forEach(slot => {
+        if (slot.id === 1) return;
+        trackCamera(slot.getCamera(), slot.getEntity(), slotW, slotH);
+      });
+    }
+  }
+  Neo.trackCameras = trackCameras;
 
   function updateEnemyByType(enemy, dt) {
     simulationApi.invokeCampaignEnemyAI(enemy, dt, Neo);
@@ -512,27 +551,6 @@ export function loop(timestamp) {
     }
     Neo.updateChallengeRoomState(dt);
 
-    const cameraLead = 0.08;
-    const isSplit = Neo.isSplitScreen();
-    const n = isSplit ? Neo.splitPlayerCount() : 1;
-    // Viewport dimensions per slot: 2 players = left/right halves, 3-4 = quad grid
-    const slotW = n >= 2 ? Math.floor(Neo.canvas.width / 2) : Neo.canvas.width;
-    const slotH = n >= 3 ? Math.floor(Neo.canvas.height / 2) : Neo.canvas.height;
-
-    function trackCamera(cam, p, vW, vH) {
-      const tx = p.x - vW / 2 + p.vx * cameraLead;
-      const ty = p.y - vH / 2 + p.vy * cameraLead;
-      cam.x += (tx - cam.x) * 8 * dt;
-      cam.y += (ty - cam.y) * 8 * dt;
-    }
-
-    if (!Neo.p1DeadInCoop) trackCamera(Neo.camera, Neo.player, slotW, slotH);
-    if (isSplit) {
-      Neo.getLivePlayerSlots().forEach(slot => {
-        if (slot.id === 1) return;
-        trackCamera(slot.getCamera(), slot.getEntity(), slotW, slotH);
-      });
-    }
     Neo.tickGameFeel(dt);
     Neo.perfEnd('update.player', sectionPerfStart);
 
