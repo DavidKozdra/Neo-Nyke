@@ -9307,15 +9307,76 @@ button.alt.danger {
   align-self: center;
 }
 
+/* CREATE / JOIN card layout.
+   ---------------------------------------------------------------------------
+   These two cards must read as a matched pair, but they inherit .altmode-card,
+   which is `display: flex; align-items: center` and shared with 12 other cards
+   across Alt Modes. Flex centring makes each card centre its own content
+   independently, so because the two descriptions wrap to different heights the
+   icons, headings and controls all landed at different y positions -- matching
+   the control widths alone could never line them up.
+
+   Inside the multiplayer panel only, lay the cards out as an explicit grid with
+   named columns. Every card then resolves the same track sizes, so the icon,
+   text and action columns line up across cards by construction rather than by
+   coincidence. Scoped to .multiplayer-panel so Alt Modes is untouched. */
+.multiplayer-panel .altmode-card {
+  display: grid;
+  /* The action column is a FIXED width, not max-content: each card sizes a
+     max-content track to its own button label, so CREATE (wider) and JOIN
+     (narrower) produced different track widths and their buttons started at
+     different x positions. A fixed track is the same in every card. */
+  grid-template-columns: 48px minmax(0, 1fr) 150px;
+  align-items: start;
+  column-gap: 20px;
+  row-gap: 0;
+}
+
+/* Icon and button are single-line; nudge them onto the heading's baseline
+   instead of the card's top edge. The button column is max-content, so CREATE
+   and JOIN would otherwise start at different x positions purely because their
+   labels differ in length -- give them a shared floor so both left edges line
+   up while the column still hugs the wider of the two. */
+.multiplayer-panel .altmode-card__icon,
+.multiplayer-panel .altmode-card__btn {
+  align-self: center;
+}
+
+.multiplayer-panel .altmode-card__btn {
+  min-width: 132px;
+}
+
+/* Both cards' control now sits in an identical labelled wrapper, so one rule
+   sizes and positions both: same width, same gap below the description. */
+.multiplayer-panel .multiplayer-mode-picker {
+  width: min(280px, 100%);
+  margin-top: 12px;
+}
+
+/* A <select> and a <text input> with identical padding and font still resolve
+   to different heights (the select reserves room for its dropdown indicator),
+   so pin both to one explicit height rather than letting each intrinsically
+   size itself. */
+.multiplayer-panel .multiplayer-mode-picker select,
+.multiplayer-panel .multiplayer-room-code-input {
+  height: 40px;
+  line-height: 1.2;
+}
+
+/* The input is wrapped in the same .multiplayer-character-picker label as the
+   RULES select, so the wrapper owns the leading gap and the caption. The input
+   itself fills that wrapper exactly like the select does -- no width or margin
+   of its own, or it would double-count against the label's grid gap. */
 .multiplayer-room-code-input {
-  width: min(220px, 100%);
-  margin-top: 10px;
+  width: 100%;
   padding: 10px 12px;
+  box-sizing: border-box;
   border: 1px solid var(--menu-border);
   border-radius: var(--ui-control-radius);
   background: var(--menu-surface);
   color: var(--menu-text);
   font: inherit;
+  font-size: calc(15px * var(--font-scale, 1));
   letter-spacing: .18em;
   text-transform: uppercase;
 }
@@ -9391,6 +9452,7 @@ button.alt.danger {
 .multiplayer-character-picker select {
   width: 100%;
   padding: 10px 12px;
+  box-sizing: border-box;
   border: 1px solid var(--menu-border);
   border-radius: var(--ui-control-radius);
   background: var(--menu-surface);
@@ -9585,6 +9647,12 @@ button.alt.danger {
 .coop-slot {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 10px; min-width: 0;
+  /* An occupied slot carries a 42px portrait while an empty one is text only,
+     so without a floor the empty cards collapse shorter than their filled
+     neighbours and the strip reads as ragged. 42px art + 8px padding each
+     side matches the tallest state exactly. */
+  min-height: 58px;
+  box-sizing: border-box;
   border: 2px solid color-mix(in srgb, var(--slot-color, #9de9ff) 45%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--slot-color, #9de9ff) 8%, rgba(6, 10, 24, .82));
@@ -12431,7 +12499,7 @@ body.network-multiplayer-active #c {
 .credits__title {
   display: flex;
   flex-direction: column;
-  align-items: ce32'[; b/nter;
+  align-items: center;
   max-width: 100%;
 }
 .credits__title .menu-letters {

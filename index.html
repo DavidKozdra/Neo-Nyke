@@ -993,7 +993,10 @@
         <div class="altmode-card__text">
           <h3 class="altmode-card__name">JOIN ROOM</h3>
           <p class="altmode-card__desc">Enter a room code to connect to the same authoritative test room.</p>
-          <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ROOM CODE" aria-label="Multiplayer room code">
+          <label class="multiplayer-character-picker multiplayer-mode-picker">
+            <span>ROOM CODE</span>
+            <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ROOM CODE" aria-label="Multiplayer room code">
+          </label>
         </div>
         <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN</button>
       </div>
