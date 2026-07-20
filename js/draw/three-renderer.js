@@ -2572,6 +2572,18 @@ function syncJusticeBlades() {
 const CAMERA_HEIGHT = 580;
 const CAMERA_BACK = 430;
 const FP_EYE_HEIGHT = 34;
+// Below this the residual shake is sub-pixel on screen but still re-randomises
+// the camera every frame; treat it as zero so the view actually comes to rest.
+const SHAKE_EPSILON = 0.05;
+// The simulation advances on a fixed 20 Hz tick while we render at display rate,
+// so Neo.player.x/y only changes every ~50ms and the camera would visibly
+// stair-step toward it. Smoothing the *focus point* over render time turns those
+// steps back into continuous motion. Time-based so the feel is identical at 60,
+// 120 or 144Hz (a fixed per-frame lerp factor is faster on faster displays).
+const CAMERA_FOCUS_SMOOTH_HZ = 12;
+const CAMERA_FOLLOW_SMOOTH_HZ = 9;
+const camFocus = { x: 0, z: 0, valid: false };
+let lastCameraSyncAt = 0;
 const camTarget = new THREE.Vector3();
 const mouseAimNdc = new THREE.Vector2();
 const mouseAimRay = new THREE.Raycaster();
@@ -2742,36 +2754,71 @@ function syncCamera() {
     camera.fov = targetFov;
     camera.updateProjectionMatrix();
   }
+  const anim = Neo.gameState === 'dying' ? Neo.playerDeathAnim : null;
+  const rawFocusX = anim ? anim.x : (p?.x ?? Neo.ROOM_W / 2);
+  const rawFocusZ = anim ? anim.y : (p?.y ?? Neo.ROOM_H / 2);
+  // Render-time delta (not simulation dt): this smoothing exists precisely to
+  // bridge render frames between simulation ticks. Clamped so a stall or a
+  // backgrounded tab doesn't produce one huge catch-up jump.
+  const now = performance.now();
+  const frameDt = lastCameraSyncAt ? Math.min(0.1, Math.max(0, (now - lastCameraSyncAt) / 1000)) : 0;
+  lastCameraSyncAt = now;
+  // Snap on the first frame and on hard cuts (room change/respawn) rather than
+  // sliding the camera across the level.
+  if (!camFocus.valid || Math.hypot(rawFocusX - camFocus.x, rawFocusZ - camFocus.z) > 400) {
+    camFocus.x = rawFocusX;
+    camFocus.z = rawFocusZ;
+    camFocus.valid = true;
+  } else if (frameDt > 0) {
+    // First person sits at eye level with no follow lerp behind it, so it needs
+    // to track tighter than the third-person cam or aiming feels laggy.
+    const hz = isFirstPersonActive() ? CAMERA_FOCUS_SMOOTH_HZ * 2.2 : CAMERA_FOCUS_SMOOTH_HZ;
+    const k = 1 - Math.exp(-hz * frameDt);
+    camFocus.x += (rawFocusX - camFocus.x) * k;
+    camFocus.z += (rawFocusZ - camFocus.z) * k;
+  }
   if (isFirstPersonActive() && p) {
     const gp = window.NeoGamepad?.[0];
     if (gp?.active && gp.hasAim && Math.hypot(gp.aimX || 0, gp.aimY || 0) > 0.25) {
       fpYaw = Math.atan2(gp.aimY, gp.aimX);
     }
     const shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const jitter = shakeOn ? Math.min(6, (Neo.shake || 0) * 0.55) : 0;
+    const rawShake = shakeOn ? (Neo.shake || 0) : 0;
+    // Same residual-shake deadzone as third person: at eye level even a tiny
+    // offset is very visible, since there is no follow lerp to absorb it.
+    const jitter = rawShake > SHAKE_EPSILON ? Math.min(6, rawShake * 0.55) : 0;
     const jx = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
     const jy = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
-    camera.position.set(p.x + jx, FP_EYE_HEIGHT + jy, p.y + jx * 0.6);
+    const eyeX = camFocus.x;
+    const eyeZ = camFocus.z;
+    camera.position.set(eyeX + jx, FP_EYE_HEIGHT + jy, eyeZ + jx * 0.6);
     const cosPitch = Math.cos(fpPitch);
     camera.lookAt(
-      p.x + Math.cos(fpYaw) * cosPitch * 100,
+      eyeX + Math.cos(fpYaw) * cosPitch * 100,
       FP_EYE_HEIGHT + Math.sin(fpPitch) * 100,
-      p.y + Math.sin(fpYaw) * cosPitch * 100,
+      eyeZ + Math.sin(fpYaw) * cosPitch * 100,
     );
     return;
   }
-  const anim = Neo.gameState === 'dying' ? Neo.playerDeathAnim : null;
-  const focusX = anim ? anim.x : (p?.x ?? Neo.ROOM_W / 2);
-  const focusZ = anim ? anim.y : (p?.y ?? Neo.ROOM_H / 2);
+  const focusX = camFocus.x;
+  const focusZ = camFocus.z;
   // Bias the look-at toward room center so walls stay in frame at the edges.
   const cx = Neo.ROOM_W / 2;
   const cz = Neo.ROOM_H / 2;
   const lookX = focusX * 0.72 + cx * 0.28;
   const lookZ = focusZ * 0.72 + cz * 0.28;
   const shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-  const jitter = shakeOn ? (Neo.shake || 0) : 0;
-  const sx = (Neo.nextRandom?.('fx') ?? Math.random() - 0.5) - 0.5;
-  const sy = (Neo.nextRandom?.('fx') ?? Math.random() - 0.5) - 0.5;
+  // Shake decays asymptotically and is only snapped to 0 once trauma fully
+  // clears, so it lingers as a sub-pixel value long after an impact. Without a
+  // deadzone the camera keeps re-randomising around its target forever, which
+  // reads as the "random" jitter at rest.
+  const rawShake = shakeOn ? (Neo.shake || 0) : 0;
+  const jitter = rawShake > SHAKE_EPSILON ? rawShake : 0;
+  // `??` binds looser than `-`, so `a ?? b - 0.5) - 0.5` subtracted 0.5 from the
+  // whole expression: the Math.random fallback ran -1..0 instead of -0.5..+0.5,
+  // biasing every shake offset one direction. Parenthesise each fallback.
+  const sx = (Neo.nextRandom?.('fx') ?? Math.random()) - 0.5;
+  const sy = (Neo.nextRandom?.('fx') ?? Math.random()) - 0.5;
   const kickX = shakeOn ? (Neo.shakeKickX || 0) : 0;
   const kickZ = shakeOn ? (Neo.shakeKickY || 0) : 0;
   camTarget.set(
@@ -2779,8 +2826,11 @@ function syncCamera() {
     CAMERA_HEIGHT,
     lookZ + CAMERA_BACK + sy * jitter * 1.4 + kickZ,
   );
-  if (camera.position.lengthSq() === 0) camera.position.copy(camTarget);
-  camera.position.lerp(camTarget, 0.14);
+  // Framerate-independent follow. The old fixed 0.14 per-frame lerp chased the
+  // target more than twice as fast at 144Hz as at 60Hz, so the camera's trail
+  // (and any residual wobble) changed with the player's refresh rate.
+  if (camera.position.lengthSq() === 0 || frameDt <= 0) camera.position.copy(camTarget);
+  else camera.position.lerp(camTarget, 1 - Math.exp(-CAMERA_FOLLOW_SMOOTH_HZ * frameDt));
   camera.lookAt(lookX + kickX, 12, lookZ + kickZ);
 }
 

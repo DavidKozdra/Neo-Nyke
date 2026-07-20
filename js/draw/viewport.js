@@ -5,13 +5,24 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
     // Random jitter (magnitude from the trauma² curve) + a directional kick that
     // shoves the camera away from the impact source, then springs back.
-    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickX || 0) : 0;
-    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickY || 0) : 0;
+    // Neo.shake decays asymptotically and is only snapped to 0 once trauma fully
+    // clears, so without a deadzone it keeps re-randomising the view by a
+    // sub-pixel amount indefinitely after an impact.
+    const _rawShake = _shakeOn && pLabel === 'P1' ? (Neo.shake || 0) : 0;
+    const _shake = _rawShake > 0.05 ? _rawShake : 0;
+    const sX = _shake ? (Neo.nextRandom('fx') - 0.5) * _shake * 2 + (Neo.shakeKickX || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickX || 0) : 0);
+    const sY = _shake ? (Neo.nextRandom('fx') - 0.5) * _shake * 2 + (Neo.shakeKickY || 0) : (_shakeOn && pLabel === 'P1' ? (Neo.shakeKickY || 0) : 0);
     Neo.ctx.save();
     Neo.ctx.beginPath();
     Neo.ctx.rect(vpX, vpY, vpW, vpH);
     Neo.ctx.clip();
-    Neo.ctx.translate(vpX - cam.x + sX, vpY - cam.y + sY);
+    // Snap the world translation to whole pixels. Sprites are drawn with
+    // imageSmoothingEnabled=false, so a fractional camera makes each sprite
+    // snap to the pixel grid on its own schedule — the scene visibly "crawls"
+    // while moving. Rounding once here keeps the whole scene on a shared grid.
+    // Sub-pixel camera motion is still tracked in cam.x/y; only the draw
+    // transform is quantised, so movement stays smooth rather than stepping.
+    Neo.ctx.translate(Math.round(vpX - cam.x + sX), Math.round(vpY - cam.y + sY));
     Neo.drawFloor();
     Neo.drawRoomDecor();
     Neo.drawWorldProps();
