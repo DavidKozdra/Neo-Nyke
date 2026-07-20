@@ -186,7 +186,7 @@ describe('enemy loop scaling', () => {
     expect(mediumHighLevelBoss.hp).toBeGreaterThan(mediumLowLevelBoss.hp);
     expect(mediumHighLevelBoss.hp / mediumLowLevelBoss.hp).toBeGreaterThan(1.9);
     expect(mediumHighLevelBoss.max).toBe(mediumHighLevelBoss.hp);
-    expect(mediumHighLevelBoss.enemyLevelAttackSpeedMultiplier).toBe(1);
+    expect(mediumHighLevelBoss.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.02, 14));
   });
 
   test('elapsed time adds substantial boss-only HP pressure', () => {

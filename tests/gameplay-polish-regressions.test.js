@@ -30,4 +30,20 @@ describe('gameplay polish regressions', () => {
     expect(viewport).toContain('const _shakePhase = performance.now() * 0.018');
     expect(viewport).not.toMatch(/const s[XY] = \(Neo\.nextRandom/);
   });
+
+  test('non-God bosses gain level-driven attack milestones', () => {
+    expect(enemies).toContain('function rollEnemyEncounterLevel(baseLevel)');
+    expect(enemies).toContain('function getBossStatusStacks(enemy, baseStacks = 1)');
+    expect(enemies).toContain("specialType = 'boss_spawner'");
+    expect(enemies).toContain("specialType = 'summoner'");
+    expect(enemies).toContain("enemy.state = 'antonyMouthBeam'");
+    expect(enemies).toContain('const count = enemy.level >= 25 ? 3 : enemy.level >= 10 ? 2 : 1');
+    expect(enemies).toContain('const swordCount = Math.min(16, 8 + tier * 2)');
+    expect(enemies).toContain('const boltCount = Math.min(9, 5 + getBossTier(enemy))');
+  });
+
+  test('3D potions use a native bottle instead of a generic dot', () => {
+    expect(renderer3d).toContain("bottle.name = 'potion3d'");
+    expect(renderer3d).toContain('new THREE.CylinderGeometry(8, 10, 18, 10)');
+  });
 });

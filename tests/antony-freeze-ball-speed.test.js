@@ -19,7 +19,7 @@ function extractFunction(source, functionName) {
 describe("Antony's freeze ball speed", () => {
   const source = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
 
-  test('uses triple launch and homing speed', () => {
+  test('adds freeze projectiles at Antony level milestones', () => {
     const spawned = [];
     const Neo = {
       player: { x: 100, y: 0 },
@@ -31,18 +31,20 @@ describe("Antony's freeze ball speed", () => {
     };
     const spawnAntonyDeathBall = new Function(
       'Neo',
+      'getBossStatusStacks',
       `${extractFunction(source, 'spawnAntonyDeathBall')}; return spawnAntonyDeathBall;`,
-    )(Neo);
+    )(Neo, () => 1);
 
     spawnAntonyDeathBall({
       x: 0,
       y: 0,
       r: 20,
       dmg: 30,
+      level: 10,
       antonyDeathBallAngle: 0,
     });
 
-    expect(spawned).toHaveLength(1);
+    expect(spawned).toHaveLength(2);
     expect(Math.hypot(spawned[0].vx, spawned[0].vy)).toBeCloseTo(525);
     expect(spawned[0].homingSpeed).toBe(570);
   });
