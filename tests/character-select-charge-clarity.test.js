@@ -6,6 +6,7 @@ const read = relative => fs.readFileSync(path.join(__dirname, '..', relative), '
 describe('character-select kit clarity', () => {
   const controller = read('js/ui/controller.js');
   const panels = read('js/ui/panels.js');
+  const gameState = read('js/core/game-state.js');
   const css = read('css/character-select.css');
 
   test('shows the hovered move charge count compactly in the skill readout', () => {
@@ -22,9 +23,13 @@ describe('character-select kit clarity', () => {
 
   test('cancels a dedicated tutorial selection when leaving or choosing another mode', () => {
     expect(panels).toContain('Neo.tutorialLaunchPending = true');
-    expect(panels).toMatch(/onOpenCharacterSelect\(\) \{[\s\S]*?if \(Neo\.tutorialLaunchPending\)[\s\S]*?removeItem\(Neo\.REPLAY_TUTORIAL_KEY\)/);
+    expect(panels).not.toMatch(/onPlayTutorial\(\) \{[\s\S]*?localStorage\.setItem/);
+    expect(panels).toMatch(/onOpenCharacterSelect\(\) \{[\s\S]*?Neo\.tutorialLaunchPending = false/);
     expect(panels).toMatch(/onCloseCharacterSelect\(\) \{[\s\S]*?if \(Neo\.tutorialLaunchPending\)/);
-    expect(panels).toMatch(/onOpenAltModeCharSelect\(mode\) \{[\s\S]*?if \(Neo\.tutorialLaunchPending\)[\s\S]*?removeItem\(Neo\.REPLAY_TUTORIAL_KEY\)/);
-    expect(panels).toMatch(/onStartSandbox\(\) \{[\s\S]*?if \(Neo\.tutorialLaunchPending\)[\s\S]*?removeItem\(Neo\.REPLAY_TUTORIAL_KEY\)/);
+    expect(panels).toMatch(/onOpenAltModeCharSelect\(mode\) \{[\s\S]*?Neo\.tutorialLaunchPending = false/);
+    expect(panels).toMatch(/onStartSandbox\(\) \{[\s\S]*?Neo\.tutorialLaunchPending = false/);
+    expect(gameState).toContain('const menuTutorialLaunch = !resume && Neo.tutorialLaunchPending === true');
+    expect(gameState).toContain('Neo.tutorialLaunchPending = false');
+    expect(gameState).toContain('const forceTutorialReplay = menuTutorialLaunch || savedTutorialReplay');
   });
 });

@@ -2787,7 +2787,12 @@ export function resumeGame() {
     if (!resume && Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked()) {
       consumeReplayTutorialRequest();
     }
-    const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
+    const menuTutorialLaunch = !resume && Neo.tutorialLaunchPending === true;
+    // Consume the session route immediately. A failed/aborted start must never
+    // leak Tutorial into the next mode selection.
+    Neo.tutorialLaunchPending = false;
+    const savedTutorialReplay = !resume && consumeReplayTutorialRequest();
+    const forceTutorialReplay = menuTutorialLaunch || savedTutorialReplay;
     // Tutorial mode is opt-in from the dedicated Tutorial action/settings.
     // A normal New Game must stay a normal run even when the tutorial has never
     // been completed or its content version changed.
@@ -3521,7 +3526,7 @@ export function resumeGame() {
       brain: { ...Neo.createDefaultRivalBrain(resolvedKey), stance: 'hostile', intention: 'engage' },
       // 1 life either way (dies for good on this loss). Being below
       // RIVAL_STARTING_LIVES (2) is exactly the hasReturned condition
-      // applyRivalLevelStats checks for the 2x return-HP scale, so a finale
+      // applyRivalLevelStats checks for the return-HP scale, so a finale
       // rival gets that boost automatically — same mechanic a normal run's
       // returning rival gets.
       lives: 1,

@@ -35,17 +35,17 @@ describe('rival health progression', () => {
       'RIVAL_HP_PER_LEVEL',
       'RIVAL_RETURN_HP_MULTIPLIER',
       `${extractFunction(roomsSource, 'applyRivalLevelStats')}; return applyRivalLevelStats;`,
-    )(Neo, () => 0, 2, 0.20, 2);
+    )(Neo, () => 0, 2, 0.12, 1.35);
     return { Neo, applyRivalLevelStats };
   }
 
-  test('adds 20% base health for every rival level after level one', () => {
+  test('adds 12% base health for every rival level after level one', () => {
     const { applyRivalLevelStats } = makeApplyRivalLevelStats();
     const rival = { baseHp: 100, baseDmg: 10, baseSpeed: 100, baseAttackCd: 1, level: 5, lives: 2, hp: 100, max: 100 };
 
     applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
 
-    expect(rival.max).toBe(180);
+    expect(rival.max).toBe(148);
   });
 
   test('ordinary carried items contribute to rival combat stats', () => {
@@ -58,19 +58,19 @@ describe('rival health progression', () => {
 
     applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
 
-    expect(rival.max).toBe(105);
+    expect(rival.max).toBe(103);
     expect(rival.dmg).toBe(10);
   });
 
-  test('doubles returned rival max health once without compounding on recalculation', () => {
+  test('adds the reduced return health bonus once without compounding on recalculation', () => {
     const { applyRivalLevelStats } = makeApplyRivalLevelStats();
     const rival = { baseHp: 100, baseDmg: 10, baseSpeed: 100, baseAttackCd: 1, level: 5, lives: 1, hp: 100, max: 100 };
 
     applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
-    expect(rival.max).toBe(360);
+    expect(rival.max).toBe(200);
 
     applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
-    expect(rival.max).toBe(360);
+    expect(rival.max).toBe(200);
   });
 
   test('prepares returns from both direct combat and off-screen defeats', () => {

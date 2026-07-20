@@ -2944,6 +2944,16 @@ const FP_EYE_HEIGHT = 34;
 // Below this the residual shake is sub-pixel on screen but still re-randomises
 // the camera every frame; treat it as zero so the view actually comes to rest.
 const SHAKE_EPSILON = 0.05;
+// Stable, time-based shake axes. Camera code used to pull new RNG values every
+// render frame, producing high-frequency buzzing and refresh-rate-dependent
+// motion in both first-person and overhead 3D views.
+function getCameraShakeAxes(nowMs) {
+  const phase = Number(nowMs || 0) * 0.018;
+  return {
+    x: Math.sin(phase) * 0.72 + Math.sin(phase * 1.73 + 0.8) * 0.28,
+    y: Math.cos(phase * 1.19 + 0.35) * 0.7 + Math.sin(phase * 1.91) * 0.3,
+  };
+}
 // The simulation advances on a fixed 20 Hz tick while we render at display rate,
 // so Neo.player.x/y only changes every ~50ms and the camera would visibly
 // stair-step toward it. Smoothing the *focus point* over render time turns those
@@ -3155,17 +3165,19 @@ function syncCamera() {
     const rawShake = shakeOn ? (Neo.shake || 0) : 0;
     // Same residual-shake deadzone as third person: at eye level even a tiny
     // offset is very visible, since there is no follow lerp to absorb it.
-    const jitter = rawShake > SHAKE_EPSILON ? Math.min(6, rawShake * 0.55) : 0;
-    const jx = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
-    const jy = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
+    const jitter = rawShake > SHAKE_EPSILON ? Math.min(4, rawShake * 0.38) : 0;
+    const shakeAxes = getCameraShakeAxes(now);
+    const jx = shakeAxes.x * jitter;
+    const jy = shakeAxes.y * jitter * 0.55;
+    const jz = shakeAxes.y * jitter * 0.7;
     const eyeX = camFocus.x;
     const eyeZ = camFocus.z;
-    camera.position.set(eyeX + jx, FP_EYE_HEIGHT + jy, eyeZ + jx * 0.6);
+    camera.position.set(eyeX + jx, FP_EYE_HEIGHT + jy, eyeZ + jz);
     const cosPitch = Math.cos(fpPitch);
     camera.lookAt(
-      eyeX + Math.cos(fpYaw) * cosPitch * 100,
-      FP_EYE_HEIGHT + Math.sin(fpPitch) * 100,
-      eyeZ + Math.sin(fpYaw) * cosPitch * 100,
+      eyeX + jx + Math.cos(fpYaw) * cosPitch * 100,
+      FP_EYE_HEIGHT + jy + Math.sin(fpPitch) * 100,
+      eyeZ + jz + Math.sin(fpYaw) * cosPitch * 100,
     );
     return;
   }
@@ -3183,24 +3195,26 @@ function syncCamera() {
   // reads as the "random" jitter at rest.
   const rawShake = shakeOn ? (Neo.shake || 0) : 0;
   const jitter = rawShake > SHAKE_EPSILON ? rawShake : 0;
-  // `??` binds looser than `-`, so `a ?? b - 0.5) - 0.5` subtracted 0.5 from the
-  // whole expression: the Math.random fallback ran -1..0 instead of -0.5..+0.5,
-  // biasing every shake offset one direction. Parenthesise each fallback.
-  const sx = (Neo.nextRandom?.('fx') ?? Math.random()) - 0.5;
-  const sy = (Neo.nextRandom?.('fx') ?? Math.random()) - 0.5;
+  const shakeAxes = getCameraShakeAxes(now);
+  const sx = shakeAxes.x;
+  const sy = shakeAxes.y;
   const kickX = shakeOn ? (Neo.shakeKickX || 0) : 0;
   const kickZ = shakeOn ? (Neo.shakeKickY || 0) : 0;
+  const shakeX = sx * jitter * 0.85 + kickX;
+  const shakeZ = sy * jitter * 0.85 + kickZ;
   camTarget.set(
-    lookX + sx * jitter * 1.4 + kickX,
+    lookX + shakeX,
     CAMERA_HEIGHT,
-    lookZ + CAMERA_BACK + sy * jitter * 1.4 + kickZ,
+    lookZ + CAMERA_BACK + shakeZ,
   );
   // Framerate-independent follow. The old fixed 0.14 per-frame lerp chased the
   // target more than twice as fast at 144Hz as at 60Hz, so the camera's trail
   // (and any residual wobble) changed with the player's refresh rate.
   if (camera.position.lengthSq() === 0 || frameDt <= 0) camera.position.copy(camTarget);
   else camera.position.lerp(camTarget, 1 - Math.exp(-CAMERA_FOLLOW_SMOOTH_HZ * frameDt));
-  camera.lookAt(lookX + kickX, 12, lookZ + kickZ);
+  // Translate the eye and focus together. Rotating the camera toward a fixed
+  // focus while its position jittered was the source of the odd aim wobble.
+  camera.lookAt(lookX + shakeX, 12, lookZ + shakeZ);
 }
 
 // Project a world (game) position to #c canvas pixel coordinates.
