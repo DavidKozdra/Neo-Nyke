@@ -30,6 +30,8 @@
   const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
   // Matches the touch deadzone the single-player loop uses in js/core/update.js.
   const TOUCH_DEADZONE = 0.08;
+  // Matches the default duration triggerArmRecoil() uses in js/game/combat.js.
+  const ARM_RECOIL_DURATION = 0.16;
   const ABILITY_KEYS = new Map([['KeyR', 'smash'], ['ShiftLeft', 'dash'], ['ShiftRight', 'dash']]);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
@@ -1090,6 +1092,17 @@
           swing: attacking ? Math.max(0.001, activeSeconds - elapsed) : 0,
           swingA: Number(player.aimDirection || 0),
           swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
+          // Arm recoil is drawn by the shared drawPlayer path, but it reads a
+          // countdown (armRecoilUntil vs gameElapsedTime) that combat.js sets
+          // locally on fire. Nothing writes it here, so network heroes shot with
+          // stiff arms. Derive the same countdown from the authority's action
+          // tick so the shared renderer animates it exactly as in single player.
+          ...(attacking ? {
+            armRecoilUntil: Number(this.neo.gameElapsedTime || 0) + Math.max(0, ARM_RECOIL_DURATION - elapsed),
+            armRecoilDuration: ARM_RECOIL_DURATION,
+            armRecoilA: Number(player.aimDirection || 0),
+            armRecoilFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
+          } : {}),
           overhealBarrier: Number(player.barrier || 0),
           overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4),
         });

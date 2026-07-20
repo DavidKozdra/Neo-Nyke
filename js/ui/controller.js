@@ -583,6 +583,10 @@ export function createUIController(view) {
 
     function startBrowserMultiplayerGameView() {
       setCoopLobbyOpen(false);
+      // The multiplayer panel is lobby furniture: room code, status line and the
+      // member list. Once the match is running it sits on top of the real HUD as
+      // a second, stale one, so close it the same way the lobby closes.
+      setMultiplayerPanelOpen(false);
       if (browserMultiplayerGameView?.active || !browserMultiplayerSession) return;
       const GameView = globalThis.NeoNyke?.rendering?.CampaignPresentationAdapter
         || globalThis.NeoNyke?.rendering?.NetworkGameView;
