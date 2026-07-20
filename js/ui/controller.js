@@ -57,6 +57,13 @@ export function createUIController(view) {
     let browserMultiplayerUnsubscribe = null;
     let browserMultiplayerGameView = null;
     let multiplayerRequestBusy = false;
+    // True when the player has backed out of a live network match to the menu but
+    // the session is still connected. The game view is torn down (no stray HUD),
+    // yet the socket stays alive so the Multiplayer panel can offer "RETURN TO
+    // GAME". While set, snapshot-driven auto-start is suppressed so a `running`
+    // snapshot can't silently drag the player back into the match; only an
+    // explicit resume (or a full dispose) clears it.
+    let browserMultiplayerBackgrounded = false;
     try {
       orientationPromptDismissed = sessionStorage.getItem('neonyke:orientationPromptDismissed') === '1';
     } catch {
@@ -575,10 +582,62 @@ export function createUIController(view) {
         view.multiplayerReady.disabled = !canReady || localMember?.ready === true;
         view.multiplayerReady.textContent = localMember?.ready ? 'READY ✓' : 'READY';
       }
-      if (snapshot.status === 'running' && snapshot.gameState) startBrowserMultiplayerGameView();
-      else if (browserMultiplayerGameView?.active && ['disconnected', 'rejected', 'ended'].includes(snapshot.status)) {
+      if (snapshot.status === 'running' && snapshot.gameState && !browserMultiplayerBackgrounded) {
+        startBrowserMultiplayerGameView();
+      } else if (browserMultiplayerGameView?.active && ['disconnected', 'rejected', 'ended'].includes(snapshot.status)) {
         stopBrowserMultiplayerGameView();
       }
+      // A backgrounded session whose match has since ended (or dropped) is no
+      // longer resumable — drop the background flag so the resume card hides and
+      // the session can be disposed normally.
+      if (browserMultiplayerBackgrounded && ['disconnected', 'rejected', 'ended'].includes(snapshot.status)) {
+        browserMultiplayerBackgrounded = false;
+      }
+      renderMultiplayerResumeCard(snapshot);
+    }
+
+    // Is there a live network match we've backed away from that can be rejoined?
+    function hasResumableBrowserMultiplayerGame() {
+      if (!browserMultiplayerBackgrounded || !browserMultiplayerSession) return false;
+      const status = browserMultiplayerSession.snapshot?.()?.status;
+      return status === 'running' || status === 'starting';
+    }
+
+    function renderMultiplayerResumeCard(snapshot) {
+      const status = snapshot?.status || browserMultiplayerSession?.snapshot?.()?.status;
+      const resumable = hasResumableBrowserMultiplayerGame()
+        || (browserMultiplayerBackgrounded && (status === 'running' || status === 'starting'));
+      view.multiplayerResumeCard?.classList.toggle('hidden', !resumable);
+    }
+
+    // Back out of a live network match to the menu WITHOUT disconnecting. Tears
+    // the game view down (so no HUD/canvas bleeds into the menu) but keeps the
+    // session so the Multiplayer panel can offer a return. Single Player and any
+    // other non-network menu entry call this via Neo.detachBrowserMultiplayerGame
+    // so a solo run can never boot on top of a live network view.
+    function detachBrowserMultiplayerGame() {
+      if (!browserMultiplayerSession) return false;
+      const wasActive = !!browserMultiplayerGameView?.active;
+      stopBrowserMultiplayerGameView();
+      // Only mark backgrounded if there's actually a match to come back to.
+      const status = browserMultiplayerSession.snapshot?.()?.status;
+      browserMultiplayerBackgrounded = status === 'running' || status === 'starting';
+      if (!browserMultiplayerBackgrounded) {
+        // No live match — the session is just a stale lobby; dispose it outright
+        // so nothing lingers.
+        disposeBrowserMultiplayerSession();
+        return wasActive;
+      }
+      renderMultiplayerResumeCard();
+      return wasActive;
+    }
+
+    function resumeBrowserMultiplayerGame() {
+      if (!hasResumableBrowserMultiplayerGame()) return;
+      browserMultiplayerBackgrounded = false;
+      setMultiplayerPanelOpen(false);
+      startBrowserMultiplayerGameView();
+      renderMultiplayerResumeCard();
     }
 
     function startBrowserMultiplayerGameView() {
@@ -684,6 +743,7 @@ export function createUIController(view) {
 
     function disposeBrowserMultiplayerSession() {
       stopBrowserMultiplayerGameView();
+      browserMultiplayerBackgrounded = false;
       browserMultiplayerUnsubscribe?.();
       browserMultiplayerUnsubscribe = null;
       const disposedSession = browserMultiplayerSession;
@@ -693,7 +753,14 @@ export function createUIController(view) {
       setMultiplayerCopyFeedback('idle');
       setCoopLobbyOpen(false);
       renderBrowserMultiplayerState({ status: 'disconnected' });
+      renderMultiplayerResumeCard();
     }
+
+    // Exposed so core game-state (which can't see browserMultiplayerSession) can
+    // force a live network game off the screen before starting a solo run.
+    // Returns true if a game view was actually torn down.
+    Neo.detachBrowserMultiplayerGame = detachBrowserMultiplayerGame;
+    Neo.hasResumableBrowserMultiplayerGame = hasResumableBrowserMultiplayerGame;
 
     async function runBrowserMultiplayerAction(action) {
       if (multiplayerRequestBusy) return;
@@ -2276,6 +2343,7 @@ export function createUIController(view) {
       if (shouldOpen) {
         setAltModesPanelOpen(false);
         setCompetitivePanelOpen(false);
+        renderMultiplayerResumeCard();
         view.multiplayerBack?.focus?.({ preventScroll: true });
       }
     }
@@ -3301,6 +3369,9 @@ export function createUIController(view) {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
+        view.multiplayerResumeBtn?.addEventListener('click', () => {
+          resumeBrowserMultiplayerGame();
+        });
         view.multiplayerCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
         });
@@ -3374,12 +3445,18 @@ export function createUIController(view) {
           if (event.key === 'Escape') { event.preventDefault(); setRoomCodeEditing(false); }
         });
         view.coopLobbyRoomCodeInput?.addEventListener('input', () => showRoomCodeError(''));
+        // Backing out of the panel keeps a live match connected in the background
+        // (detach, don't disconnect) so the resume card can bring the player back.
+        // A stale lobby with no running match is disposed outright by detach().
+        // To fully quit a match, use the lobby's LEAVE or the pause Leave Server.
         view.multiplayerBack?.addEventListener('click', () => {
-          disposeBrowserMultiplayerSession();
+          if (browserMultiplayerSession) detachBrowserMultiplayerGame();
+          else disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
         view.multiplayerBackButton?.addEventListener('click', () => {
-          disposeBrowserMultiplayerSession();
+          if (browserMultiplayerSession) detachBrowserMultiplayerGame();
+          else disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);

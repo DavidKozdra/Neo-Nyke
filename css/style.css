@@ -9332,6 +9332,16 @@ button.alt.danger {
   row-gap: 0;
 }
 
+/* The "return to a live match" card sits above create/join and reads as the
+   active call to action, so give it a warmer accent than the neutral cards. */
+.multiplayer-panel .multiplayer-resume-card {
+  border-color: rgba(120, 255, 180, 0.45);
+  background: rgba(40, 120, 80, 0.16);
+}
+.multiplayer-panel .multiplayer-resume-card .altmode-card__name {
+  color: #8effb4;
+}
+
 /* Icon and button are single-line; nudge them onto the heading's baseline
    instead of the card's top edge. The button column is max-content, so CREATE
    and JOIN would otherwise start at different x positions purely because their

@@ -593,18 +593,14 @@
       const state = this.currentSample?.state;
       const player = state?.players?.[this.session.snapshot().playerId];
       if (!player || player.downed || player.pendingUpgrade) return;
-      if (this.neo.currentRoom?.type === 'shop') {
-        this.neo.toggleShopPanel?.();
-        return;
-      }
-      if (this.neo.currentRoom?.type === 'anvil') {
-        this.neo.toggleAnvilPanel?.();
-        return;
-      }
-      if (this.neo.isSpecialRoom?.(this.neo.currentRoom)) {
-        this.neo.toggleSpecialRoomPanel?.();
-        return;
-      }
+      // Shop / anvil / special-room panels (and the ladder) are toggled by the
+      // campaign's global window keydown handler in panels.js, which already runs
+      // in multiplayer because the co-op game state sits in `play`. Toggling them
+      // here as well made the same E press fire twice — open then instantly close,
+      // the shop panel "flickering off right away". This is the same double-listener
+      // trap the Escape handler in _onKey documents; keep this path to the one job
+      // the campaign handler can't do without a session: sending the INTERACT
+      // command for nearby chests / interactables.
       const target = Object.values(state.interactables || {})
         .filter(item => !item.opened && item.roomId === player.roomId)
         .map(item => ({ item, distance: Math.hypot(Number(item.x) - Number(player.x), Number(item.y) - Number(player.y)) }))

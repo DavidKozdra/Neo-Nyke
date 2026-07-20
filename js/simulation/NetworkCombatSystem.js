@@ -209,8 +209,8 @@
     player.items = { ...(CHARACTER_STARTING_ITEMS[key] || {}) };
     player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
-    // Charge pools are built lazily per move by moveChargeState (which reads the
-    // character's base charges), so a character swap can't strand a stale pool.
+    // Charge pools are built lazily per move by ensureMoveChargeState (which reads
+    // the character's base charges), so a character swap can't strand a stale pool.
     player.moveChargeState = {};
     player.statusUntilTick = {};
     player.statuses = createCampaignStatusMap();
@@ -1622,8 +1622,8 @@
 
   // Read-only view of a move's charges, safe to call before the move has ever been
   // cast and safe to call on a client-side snapshot. Pools are created lazily by
-  // moveChargeState (so a character swap can't strand a stale pool), which means a
-  // never-cast move has no stored pool — readers must not treat that as "no
+  // ensureMoveChargeState (so a character swap can't strand a stale pool), which
+  // means a never-cast move has no stored pool — readers must not treat that as "no
   // charges" or they render an empty/one-pip HUD until the first cast. Always go
   // through this instead of indexing player.moveChargeState directly.
   function readMoveChargeState(player, moveKey) {
@@ -1641,7 +1641,11 @@
     };
   }
 
-  function moveChargeState(player, moveKey) {
+  // MUTATING: creates the stored pool if absent and reconciles its capacity in
+  // place, then returns the live object. This writes authority state, so only the
+  // simulation may call it — never a render/read path (use readMoveChargeState for
+  // display). The `ensure` prefix marks the side effect at every call site.
+  function ensureMoveChargeState(player, moveKey) {
     const pools = player.moveChargeState || (player.moveChargeState = {});
     const maxCharges = moveChargeCapacity(player, moveKey);
     let pool = pools[moveKey];
@@ -1669,11 +1673,11 @@
   }
 
   function hasMoveCharge(player, moveKey) {
-    return moveChargeState(player, moveKey).charges > 0;
+    return ensureMoveChargeState(player, moveKey).charges > 0;
   }
 
   function spendMoveCharge(player, moveKey, readyAtTick) {
-    const pool = moveChargeState(player, moveKey);
+    const pool = ensureMoveChargeState(player, moveKey);
     if (pool.charges <= 0) return false;
     pool.charges -= 1;
     pool.timers.push(readyAtTick);
@@ -1684,7 +1688,7 @@
   // Rewrite the most recently pushed timer — used when a held beam is released
   // early and its recharge must be pulled forward from the full-duration estimate.
   function rescheduleLatestMoveCharge(player, moveKey, readyAtTick) {
-    const pool = moveChargeState(player, moveKey);
+    const pool = ensureMoveChargeState(player, moveKey);
     if (!pool.timers.length) return;
     pool.timers[pool.timers.length - 1] = readyAtTick;
     syncMoveCooldownMirror(player, moveKey, pool);
@@ -1695,10 +1699,10 @@
       const pools = player?.moveChargeState;
       if (!pools) continue;
       for (const moveKey of Object.keys(pools)) {
-        // Re-read through moveChargeState so an Extra Battery bought while the
+        // Re-read through ensureMoveChargeState so an Extra Battery bought while the
         // move is idle still grows the pool — reconciling only pools with live
         // timers would silently drop the upgrade until the next cast.
-        const pool = moveChargeState(player, moveKey);
+        const pool = ensureMoveChargeState(player, moveKey);
         if (!pool.timers.length) continue;
         const pending = [];
         let restored = 0;
