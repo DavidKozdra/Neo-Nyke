@@ -598,6 +598,10 @@ export function createUIController(view) {
       });
       Neo.multiplayerGameView = browserMultiplayerGameView;
       browserMultiplayerGameView.start();
+      // Touch, keyboard and gamepad input all gate on gameState === 'play'. The
+      // renderer keys off multiplayerGameView.active instead, so without this the
+      // network run draws correctly but accepts no input at all.
+      setNetworkGameState('play');
     }
 
     function stopBrowserMultiplayerGameView() {
@@ -605,6 +609,15 @@ export function createUIController(view) {
       browserMultiplayerGameView = null;
       gameView?.stop?.();
       if (Neo.multiplayerGameView === gameView) Neo.multiplayerGameView = null;
+      if (Neo.gameState === 'play') setNetworkGameState('menu');
+    }
+
+    // Drive the shared state machine so Neo.gameState tracks the network run.
+    // gameStateManager is the canonical writer; assigning Neo.gameState directly
+    // would be overwritten by its next onChange.
+    function setNetworkGameState(state) {
+      if (Neo.gameStateManager?.setState) Neo.gameStateManager.setState(state);
+      else Neo.gameState = state;
     }
 
     let multiplayerCopyFeedbackTimer = null;

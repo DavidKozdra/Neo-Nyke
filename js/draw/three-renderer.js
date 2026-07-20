@@ -2493,9 +2493,11 @@ const camTarget = new THREE.Vector3();
 const mouseAimNdc = new THREE.Vector2();
 const mouseAimRay = new THREE.Raycaster();
 
-// Camera mode: 'fp' (first person, the default) or 'third' (follow cam).
-let cameraMode = 'fp';
-try { cameraMode = localStorage.getItem(CAMERA_MODE_STORE_KEY) === 'third' ? 'third' : 'fp'; } catch { /* private mode */ }
+// Camera mode: 'third' (follow cam, the default) or 'fp' (first person).
+// Only an explicit stored 'fp' opts into first person, so players who turn 3D
+// on land in the follow cam rather than being dropped straight into FP.
+let cameraMode = 'third';
+try { cameraMode = localStorage.getItem(CAMERA_MODE_STORE_KEY) === 'fp' ? 'fp' : 'third'; } catch { /* private mode */ }
 let fpYaw = 0;
 let fpPitch = -0.08;
 
@@ -2740,7 +2742,6 @@ function drawPrompts() {
   if (isFirstPersonActive()) {
     drawViewmodel();
     drawCrosshair();
-    if (document.pointerLockElement !== Neo.canvas && !pointerLockRequested) drawLockHint();
   }
 }
 
@@ -2864,29 +2865,6 @@ function drawViewmodel() {
   g.restore();
 }
 
-function drawLockHint() {
-  if (Neo.gameState !== 'play') return;
-  const g = Neo.ctx;
-  const cx = Neo.canvas.width / 2;
-  const cy = Neo.canvas.height * 0.6;
-  g.save();
-  g.font = 'bold 14px monospace';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  const text = 'CLICK TO LOOK AROUND  ·  F6 = THIRD PERSON';
-  const w = g.measureText(text).width + 28;
-  g.fillStyle = 'rgba(8, 16, 26, 0.82)';
-  g.beginPath();
-  g.roundRect(cx - w / 2, cy - 15, w, 30, 8);
-  g.fill();
-  g.strokeStyle = 'rgba(141, 240, 255, 0.5)';
-  g.lineWidth = 1.5;
-  g.stroke();
-  g.fillStyle = '#8df0ff';
-  g.fillText(text, cx, cy);
-  g.restore();
-}
-
 function drawCrosshair() {
   const cx = Neo.canvas.width / 2;
   const cy = Neo.canvas.height / 2;
@@ -2962,9 +2940,12 @@ function setRender3D(on) {
   if (!Neo.render3D && glCanvas) glCanvas.style.display = 'none';
 }
 
-let storedPreference = '1';
-try { storedPreference = localStorage.getItem(RENDER3D_STORE_KEY) ?? '1'; } catch { /* private mode */ }
-Neo.render3D = storedPreference !== '0';
+// 2D is the default view: only an explicit stored '1' turns 3D on, so a first
+// time visitor always lands in the original top-down game. Existing players who
+// chose 3D keep it, and F4 still toggles.
+let storedPreference = '0';
+try { storedPreference = localStorage.getItem(RENDER3D_STORE_KEY) ?? '0'; } catch { /* private mode */ }
+Neo.render3D = storedPreference === '1';
 
 // Unified view mode: '2d' (original top-down) | 'third' | 'fp'. The settings
 // UI and the F4/F6 hotkeys all route through this so they stay in sync; a

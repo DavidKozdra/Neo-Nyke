@@ -14475,6 +14475,12 @@ body.network-multiplayer-active #c {
   backdrop-filter: none;
 }
 
+@media (max-width: 920px) {
+  #settingsModal .stab-bar {
+    width: 100%;
+  }
+}
+
 #settingsModal .stab {
   min-height: 44px;
   padding: 9px 10px;
