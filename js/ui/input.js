@@ -944,6 +944,8 @@ export const ui = {
     multiplayerBtn: document.getElementById('multiplayerBtn'),
     multiplayerPanel: document.getElementById('multiplayerPanel'),
     multiplayerDevelopmentNote: document.getElementById('multiplayerDevelopmentNote'),
+    multiplayerResumeCard: document.getElementById('multiplayerResumeCard'),
+    multiplayerResumeBtn: document.getElementById('multiplayerResumeBtn'),
     multiplayerCreateRoom: document.getElementById('multiplayerCreateRoom'),
     multiplayerMode: document.getElementById('multiplayerMode'),
     multiplayerJoinRoom: document.getElementById('multiplayerJoinRoom'),

@@ -116,6 +116,59 @@ describe('network multiplayer game view', () => {
     expect(view.paused).toBe(false);
   });
 
+  // The shop/anvil/special-room panels are toggled by the campaign's global
+  // keydown handler (panels.js), which runs in multiplayer too. _interact used to
+  // toggle them as well, so one E press fired both listeners — open then instantly
+  // close, the shop panel "flickering off right away".
+  test('does not toggle the shop panel itself — that is the campaign handler\'s job', () => {
+    const toggleShopPanel = jest.fn();
+    const toggleAnvilPanel = jest.fn();
+    const toggleSpecialRoomPanel = jest.fn();
+    const sendInteract = jest.fn();
+    const view = new NetworkGameView({
+      session: {
+        snapshot: () => ({ playerId: 'p1' }),
+        sendInteract,
+      },
+      neo: {
+        currentRoom: { type: 'shop' },
+        toggleShopPanel,
+        toggleAnvilPanel,
+        toggleSpecialRoomPanel,
+        isSpecialRoom: () => false,
+      },
+    });
+    view.active = true;
+    view.currentSample = { state: { players: { p1: { x: 450, y: 350, radius: 18 } }, interactables: {} } };
+
+    view._interact();
+
+    expect(toggleShopPanel).not.toHaveBeenCalled();
+    expect(toggleAnvilPanel).not.toHaveBeenCalled();
+    expect(toggleSpecialRoomPanel).not.toHaveBeenCalled();
+  });
+
+  test('still sends an INTERACT command for a nearby chest — the one job the campaign handler cannot do', () => {
+    const sendInteract = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1' }), sendInteract },
+      neo: { currentRoom: { type: 'combat' }, isSpecialRoom: () => false },
+    });
+    view.active = true;
+    view.currentSample = {
+      state: {
+        players: { p1: { x: 450, y: 350, radius: 18, roomId: 'r1' } },
+        interactables: {
+          chest1: { id: 'chest1', x: 455, y: 352, radius: 20, roomId: 'r1', opened: false },
+        },
+      },
+    };
+
+    view._interact();
+
+    expect(sendInteract).toHaveBeenCalledWith('chest1');
+  });
+
   test('sends lasers along campaign FPS yaw instead of overwriting aim with a top-down click angle', () => {
     const sent = [];
     const canvas = {

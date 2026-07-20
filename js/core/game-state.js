@@ -2766,6 +2766,13 @@ export function resumeGame() {
   }
 
   async function startGame(resume) {
+    // Any startGame call boots a LOCAL run (the early-return modes below are all
+    // local; browser-network multiplayer never routes through here). If a live
+    // network game is on screen, tear its view down first so a solo run can never
+    // start on top of it — the session stays connected in the background so the
+    // Multiplayer panel can still offer a return. This is the fix for Single
+    // Player re-opening the multiplayer game and its HUD bleeding into the menu.
+    Neo.detachBrowserMultiplayerGame?.();
     if (Neo.gameMode === 'endless') { startEndless(); return; }
     if (Neo.gameMode === 'practice') { startPractice(); return; }
     if (Neo.gameMode === 'boss_rush') { startBossRush(); return; }

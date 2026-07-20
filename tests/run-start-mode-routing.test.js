@@ -53,6 +53,10 @@ function createNormalStartHarness({
     generateFloor: jest.fn(),
     loop: jest.fn(),
     loopStarted: true,
+    // Any local run must first force a live browser-network game off the screen
+    // so a solo run can never boot on top of it (regression: Single Player
+    // re-opened the multiplayer game).
+    detachBrowserMultiplayerGame: jest.fn(),
   };
   const window = { achievementManager: { resetRunCounters: jest.fn() } };
   const dependencies = {
