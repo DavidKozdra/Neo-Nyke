@@ -28,6 +28,8 @@
   const INPUT_INTERVAL_MS = 50;
   const INTERPOLATION_DELAY_MS = 100;
   const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
+  // Matches the touch deadzone the single-player loop uses in js/core/update.js.
+  const TOUCH_DEADZONE = 0.08;
   const ABILITY_KEYS = new Map([['KeyR', 'smash'], ['ShiftLeft', 'dash'], ['ShiftRight', 'dash']]);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
@@ -285,7 +287,6 @@
         event?.stopImmediatePropagation?.();
         this.document?.getElementById('settingsBtn')?.click();
       };
-      this.boundPauseLeave = () => this.document?.getElementById('multiplayerLeaveGame')?.click();
       this.pointerWasLocked = false;
       this.boundPointerLockChange = () => {
         const locked = this.document?.pointerLockElement === this.canvas;
@@ -311,12 +312,6 @@
       // a second authority in the browser.
       this.neo.setGameState?.('play');
       this.document?.getElementById('start')?.classList.add('hidden');
-      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
-      multiplayerHud?.classList.add('hidden');
-      if (multiplayerHud) {
-        multiplayerHud.style.display = 'none';
-        multiplayerHud.setAttribute('aria-hidden', 'true');
-      }
       this._setCampaignHudVisible(true);
       root.document?.body?.classList.add('network-multiplayer-active');
       root.addEventListener?.('keydown', this.boundKeyDown);
@@ -330,7 +325,6 @@
       this.document?.addEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume, true);
       this.document?.getElementById('pauseSettings')?.addEventListener('click', this.boundPauseSettings, true);
-      this.document?.getElementById('pauseLeaveServer')?.addEventListener('click', this.boundPauseLeave);
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
       this._onSnapshot(this.session.snapshot());
@@ -356,17 +350,10 @@
       this.document?.removeEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume, true);
       this.document?.getElementById('pauseSettings')?.removeEventListener('click', this.boundPauseSettings, true);
-      this.document?.getElementById('pauseLeaveServer')?.removeEventListener('click', this.boundPauseLeave);
       this.keys.clear();
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
-      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
-      multiplayerHud?.classList.add('hidden');
-      if (multiplayerHud) {
-        multiplayerHud.style.display = '';
-        multiplayerHud.setAttribute('aria-hidden', 'true');
-      }
       this._togglePause(false);
       this._setCampaignHudVisible(false);
       this.document?.getElementById('start')?.classList.remove('hidden');
@@ -934,6 +921,18 @@
       } else {
         this.gamepadAttackPressed = false;
       }
+      // Touch stick, same treatment as the gamepad above: the on-screen joystick
+      // is the only movement source on mobile, and without this branch a network
+      // run reads keyboard and gamepad only, so phones cannot move at all.
+      const touch = root.NeoTouch;
+      if (touch?.active) {
+        const touchX = Math.abs(Number(touch.moveX) || 0) > TOUCH_DEADZONE ? Number(touch.moveX) : 0;
+        const touchY = Math.abs(Number(touch.moveY) || 0) > TOUCH_DEADZONE ? Number(touch.moveY) : 0;
+        if (Math.hypot(touchX, touchY) > Math.hypot(moveX, moveY)) {
+          moveX = touchX;
+          moveY = touchY;
+        }
+      }
       const movement = normalizeMovement(moveX, moveY);
       // Network input must use the same camera-relative controls as the normal
       // campaign update loop. Without this, W continued to mean world-up while
@@ -1499,14 +1498,6 @@
     }
 
     _updateHud(state, players) {
-      // The old network status panel was a second, competing HUD. Multiplayer
-      // uses the campaign HUD exclusively, just as a local run does.
-      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
-      multiplayerHud?.classList.add('hidden');
-      if (multiplayerHud) {
-        multiplayerHud.style.display = 'none';
-        multiplayerHud.setAttribute('aria-hidden', 'true');
-      }
       const localPlayer = players[this.session.snapshot().playerId];
       if (!localPlayer || !state) return;
       this._setCampaignHudVisible(true);

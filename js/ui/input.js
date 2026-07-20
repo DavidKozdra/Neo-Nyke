@@ -939,8 +939,6 @@ export const ui = {
     multiplayerCharacterPicker: document.getElementById('multiplayerCharacterPicker'),
     multiplayerCharacter: document.getElementById('multiplayerCharacter'),
     multiplayerReady: document.getElementById('multiplayerReady'),
-    multiplayerGameHud: document.getElementById('multiplayerGameHud'),
-    multiplayerLeaveGame: document.getElementById('multiplayerLeaveGame'),
     coopLobby: document.getElementById('coopLobby'),
     coopLobbyRoomCode: document.getElementById('coopLobbyRoomCode'),
     coopLobbyCopyRoomCode: document.getElementById('coopLobbyCopyRoomCode'),
