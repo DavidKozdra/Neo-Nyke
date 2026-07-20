@@ -3444,20 +3444,6 @@
         || baneActive);
   }
 
-  // The tutorial's step UI expects shop/forge to be visited before the
-  // challenge room, but nothing about room doors enforces that order — a
-  // player can walk or dash straight into the challenge room early since it's
-  // often only one or two rooms away. Block just that one door (not a general
-  // room lock) until the forge step is actually done.
-  function isTutorialDoorBlocked(direction) {
-    const state = Neo.tutorialState;
-    if (!state?.active || !state.challengeRoomKey) return false;
-    if (state.completed?.forge_confirm) return false;
-    const target = Neo.getConnectedRoom?.(Neo.currentRoom, direction);
-    if (!target) return false;
-    return `${target.gx},${target.gy}` === state.challengeRoomKey;
-  }
-
   function updateTransitions(dt) {
     const challengeActive = Neo.isChallengeRoomLocked?.(Neo.currentRoom) || false;
     const canLeaveFight = Neo.enemies.length > 0
@@ -3479,7 +3465,11 @@
         Neo.player.x < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
         Neo.player.x > Neo.ROOM_W - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
         null;
-      if (door && !isTutorialDoorBlocked(door)) startTransition(door);
+      // Tutorial navigation is intentionally never hard-gated. If the player
+      // explores out of order, the controller points them back to the unfinished
+      // lesson. Only real encounter locks (ladder/boss/active challenge) close
+      // every door, and those are explained when they happen.
+      if (door) startTransition(door);
     }
 
     stepActiveTransitionFade(dt);

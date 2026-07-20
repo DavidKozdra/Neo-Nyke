@@ -159,6 +159,12 @@
     challengeRoom.cleared = false;
     ladderRoom.type = 'ladder';
     ladderRoom.tutorialLesson = 'ladder';
+    // The exit is the tutorial's final exam. Leave it uncleared so entering it
+    // spawns a small real wave, locks only this room, and reveals the ladder on
+    // victory. The normal ladder-room boss is suppressed below for a fair first
+    // encounter.
+    ladderRoom.cleared = false;
+    ladderRoom.ladderBossPlan = { spawn: false, type: '' };
     Neo.hideLadderOnMinimap = false;
     // Anchor the secret room to a lesson room that actually has an open side.
     // The start room is central and usually fully surrounded, so prefer the
@@ -1501,9 +1507,16 @@
 
     if (room.type === 'ladder') {
       if (!room.cleared && Neo.enemies.length === 0) {
-        Neo.spawnWave(Neo.getWaveCount(4), 'ladder');
+        const tutorialExit = Neo.isTutorialRun?.() && room.tutorialLesson === 'ladder';
+        Neo.spawnWave(Neo.getWaveCount(tutorialExit ? 3 : 4), tutorialExit ? 'combat' : 'ladder', {
+          suppressMiniBoss: tutorialExit,
+        });
+        if (tutorialExit) {
+          Neo.enemies.forEach(enemy => { if (enemy) enemy.tutorialExitEnemy = true; });
+          Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 54, life: 1.4, text: 'FINAL WAVE — DOORS LOCKED', c: '#ffe66f' });
+        }
         // Almost always add a random non-god boss to ladder rooms
-        if (!room.ladderBossPlan) {
+        if (!tutorialExit && !room.ladderBossPlan) {
           const ladderRandom = Neo.createRoomRandom(room, 'ladder:boss');
           const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
           room.ladderBossPlan = {
@@ -1511,7 +1524,7 @@
             type: _ladderBossPool[Math.floor(ladderRandom() * _ladderBossPool.length)],
           };
         }
-        if (room.ladderBossPlan.spawn) {
+        if (!tutorialExit && room.ladderBossPlan.spawn) {
           const _ladderBossType = room.ladderBossPlan.type;
           const _ladderBossSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {

@@ -5,7 +5,7 @@ import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 window.NeoTutorialScenes = TUTORIAL_SCENES;
 window.NeoI18n?.localizeTutorialScenes?.(TUTORIAL_SCENES);
 
-export const TUTORIAL_VERSION = 6;
+export const TUTORIAL_VERSION = 7;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -367,16 +367,13 @@ function createSteps() {
       id: 'tools_fire',
       chapter: 'COMBAT',
       title: 'Fire your tools',
-      text: () => `Tools are activatable gear that sit in the tool bar below your moves. Each has its own key, and ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool at once. If you have one equipped, try it on the dummy.`,
+      text: () => `Tools are activatable gear, not passive relics. Your training tool is already equipped below the move bar. Use its numbered slot — or tap the tool on touch. ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool together. Fire it now.`,
       command: () => getActivateAllLabel(),
       target: targetDom('#equipmentSlots', 8),
       roomKey: 'trainingRoomKey',
-      // Manual so Continue is always available — characters that start with
-      // an empty tool bar (princess/thorn_knight) can't fire anything here and
-      // would otherwise have no way to clear this step. Firing a tool (or
-      // activating all) still sets completed.tools_fire via the signal below
-      // and auto-advances immediately, same as before.
-      manual: true,
+      // Every tutorial character is guaranteed an equipped teaching tool by
+      // grantTutorialTeachingTool(), so make this a real learn-by-doing gate.
+      complete: state => !!state.completed?.tools_fire,
     },
     {
       id: 'status_lesson',
@@ -460,6 +457,16 @@ function createSteps() {
       commandLabel: 'GOAL',
       target: targetDom('#invPanel [data-inv-tab="items"]', 8),
       complete: state => !!state.completed?.inventory_relics,
+    },
+    {
+      id: 'inventory_tools',
+      chapter: 'INVENTORY',
+      title: 'Find and arrange your tools',
+      text: () => 'Open Tools. Tools activate on command; relics are passive and always on. A tool’s position here sets its numbered hotkey. Drag it or use the arrows to reorder the tool bar.',
+      command: () => 'SELECT TOOLS',
+      commandLabel: 'GOAL',
+      target: targetDom('#invPanel [data-inv-tab="tools"]', 8),
+      complete: state => !!state.completed?.inventory_tools,
     },
     {
       id: 'inventory_moves',
@@ -675,7 +682,18 @@ function createSteps() {
       target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.ladderRoomKey)),
       roomKey: 'ladderRoomKey',
       routeStep: true,
-      completeWhen: ['ladder_use'],
+      completeWhen: ['ladder_fight', 'ladder_use'],
+    },
+    {
+      id: 'ladder_fight',
+      chapter: 'EXIT — FINAL WAVE',
+      title: 'Clear the locked Exit room',
+      text: () => 'Ladder rooms lock only while their final wave is alive. Defeat every enemy; the doors unlock and the ladder appears automatically.',
+      command: () => 'DEFEAT THE FINAL WAVE',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => Neo.enemies?.find(enemy => enemy && !enemy.dead), { padding: 24 }),
+      roomKey: 'ladderRoomKey',
+      complete: state => !!state.completed?.ladder_fight || (roomKey(Neo.currentRoom) === state.ladderRoomKey && Neo.currentRoom?.cleared),
     },
     {
       id: 'ladder_use',
@@ -963,6 +981,7 @@ export function createTutorialController() {
     if (type === 'hud-layout-edit') setCompleted('hud_layout');
     if (type === 'panel-open' && payload.panel === 'inventory') setCompleted('inventory_open');
     if (type === 'inventory-tab' && payload.tab === 'items') setCompleted('inventory_relics');
+    if (type === 'inventory-tab' && payload.tab === 'tools') setCompleted('inventory_tools');
     if (type === 'inventory-tab' && payload.tab === 'equipped') setCompleted('inventory_moves');
     if (type === 'inventory-tab' && payload.tab === 'weapons') setCompleted('inventory_weapons');
     if (type === 'move-equipped') setCompleted('moves_equip_do');
@@ -978,6 +997,8 @@ export function createTutorialController() {
     if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');
     if (type === 'challenge-started' && payload.challengeType === 'bomb') setCompleted('challenge_start');
     if (type === 'challenge-completed' && payload.challengeType === 'bomb') setCompleted('challenge_bombs');
+    if (type === 'enemy-killed' && currentRoomKey === state.ladderRoomKey
+      && Neo.currentRoom?.cleared) setCompleted('ladder_fight');
     if (type === 'room-enter') {
       if (currentRoomKey === state.trainingRoomKey) setCompleted('dwell_do');
       advanceCompletedSteps();

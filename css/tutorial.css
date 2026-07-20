@@ -58,10 +58,38 @@
 
 .tutorial-target-ring--route {
   border-color: #ffe66f;
+  border-width: 5px;
   box-shadow:
-    0 0 0 2px rgba(5, 12, 20, .92),
-    0 0 24px rgba(255, 220, 80, .95),
-    inset 0 0 18px rgba(255, 220, 80, .24);
+    0 0 0 3px rgba(5, 12, 20, .96),
+    0 0 38px 8px rgba(255, 220, 80, .98),
+    inset 0 0 28px rgba(255, 220, 80, .4);
+  background: rgba(255, 230, 80, .12);
+  animation: tutorial-door-flash .62s ease-in-out infinite;
+}
+
+.tutorial-target-ring--route::before {
+  content: "GO HERE";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+  min-width: max-content;
+  padding: 5px 9px;
+  color: #10151b;
+  background: #ffe66f;
+  border: 3px solid #fff8c8;
+  border-radius: 7px;
+  box-shadow: 0 0 0 3px rgba(3, 9, 16, .94), 0 0 18px #ffe66f;
+  font-size: calc(18px * var(--font-scale, 1));
+  font-weight: 1000;
+  letter-spacing: .08em;
+}
+
+.tutorial-target-ring--route::after {
+  top: -29px;
+  width: 21px;
+  height: 21px;
+  border-width: 6px 0 0 6px;
 }
 
 .tutorial-target-ring--offscreen {
@@ -372,6 +400,11 @@ html.princess-ui .tutorial-target-ring {
 @keyframes tutorial-target-pulse {
   0%, 100% { transform: scale(1); opacity: .86; }
   50% { transform: scale(1.035); opacity: 1; }
+}
+
+@keyframes tutorial-door-flash {
+  0%, 100% { opacity: .72; transform: scale(.94); filter: brightness(.9); }
+  50% { opacity: 1; transform: scale(1.08); filter: brightness(1.35); }
 }
 
 @keyframes tutorial-arrow-bob {

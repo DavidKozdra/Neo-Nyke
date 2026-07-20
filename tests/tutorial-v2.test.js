@@ -89,6 +89,32 @@ describe('Sarge tutorial v2', () => {
     expect(controller).toContain('const open = getOpenGamePanelInfo()');
   });
 
+  test('makes target doors unmistakable without silently gating exploration', () => {
+    expect(tutorialCss).toContain('.tutorial-target-ring--route::before');
+    expect(tutorialCss).toContain('content: "GO HERE"');
+    expect(tutorialCss).toContain('animation: tutorial-door-flash');
+    expect(world).not.toContain('function isTutorialDoorBlocked');
+    expect(world).toContain('If the player\n      // explores out of order');
+  });
+
+  test('teaches tools by inspection and by required activation', () => {
+    expect(controller).toContain("id: 'inventory_tools'");
+    expect(controller).toContain("payload.tab === 'tools'");
+    expect(controller).toContain('complete: state => !!state.completed?.tools_fire');
+    expect(controller).toContain('Tools are activatable gear, not passive relics');
+    expect(controller).not.toMatch(/id: 'tools_fire'[\s\S]{0,900}manual: true/);
+  });
+
+  test('ends with a real, clearly explained ladder-room fight', () => {
+    expect(rooms).toContain('ladderRoom.cleared = false');
+    expect(rooms).toContain("room.tutorialLesson === 'ladder'");
+    expect(rooms).toContain("text: 'FINAL WAVE — DOORS LOCKED'");
+    expect(controller).toContain("id: 'ladder_fight'");
+    expect(controller).toContain('Ladder rooms lock only while their final wave is alive');
+    expect(scenes).toContain('Ordinary combat rooms let you retreat');
+    expect(scenes).toContain('This is the one room you cannot retreat from while enemies remain');
+  });
+
   test('does not play future room cutscenes before their lesson is current', () => {
     expect(controller).toContain("roomKey(room) !== state[step.roomKey]");
     expect(controller).toContain("room.tutorialLesson !== 'start'");
