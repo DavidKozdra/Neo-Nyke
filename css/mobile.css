@@ -1780,7 +1780,8 @@
     border-radius: 0;
   }
 
-  #c {
+  #c,
+  #c3d {
     width: max(100dvw, calc(100dvh * 1.5));
     height: max(100dvh, calc(100dvw / 1.5));
   }
