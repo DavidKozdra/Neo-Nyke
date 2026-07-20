@@ -104,9 +104,13 @@ describe('Sarge tutorial v2', () => {
   });
 
   test('precaches all new tutorial assets', () => {
-    expect(serviceWorker).toContain("'/css/tutorial.css'");
-    expect(serviceWorker).toContain("'/js/ui/tutorial-controller.js'");
-    expect(serviceWorker).toContain("'/js/tutorial/scenes.js'");
+    // The precache list is generated (scripts/generate-precache.js) and quotes
+    // entries with JSON (double quotes), so match the path quote-agnostically.
+    const cached = new Set((serviceWorker.match(/["'](\/[^"']+)["']/g) || [])
+      .map(s => s.slice(1, -1)));
+    expect(cached.has('/css/tutorial.css')).toBe(true);
+    expect(cached.has('/js/ui/tutorial-controller.js')).toBe(true);
+    expect(cached.has('/js/tutorial/scenes.js')).toBe(true);
   });
 
   test('gates the Sarge tutorial replay behind defeating Bowman\'s Bane', () => {

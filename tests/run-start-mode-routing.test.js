@@ -100,6 +100,7 @@ function createNormalStartHarness({
     resetTutorialState,
     consumeReplayTutorialRequest,
     startCompetitive,
+    startEndless: dependencies.startEndless,
     createRandomSeed: dependencies.createRandomSeed,
   };
 }
@@ -166,6 +167,29 @@ describe('run start mode and seed routing', () => {
     expect(harness.resetTutorialState).toHaveBeenCalledWith(false);
     expect(harness.tutorialStart).not.toHaveBeenCalled();
     expect(harness.Neo.selectedChallenges).toEqual(['storm']);
+  });
+
+  test('a New Game force-detaches any live browser-network game before starting', async () => {
+    const harness = createNormalStartHarness({ seed: 'SOLO-SEED' });
+
+    await harness.startGame(false);
+
+    // Single Player must tear the network view down first, so a solo run can
+    // never boot on top of a live multiplayer game (its HUD bleeding into menus).
+    expect(harness.Neo.detachBrowserMultiplayerGame).toHaveBeenCalledTimes(1);
+  });
+
+  test('the detach runs before mode routing, so even Endless clears a network game first', async () => {
+    const harness = createNormalStartHarness({ seed: 'X' });
+    harness.Neo.gameMode = 'endless';
+
+    await harness.startGame(false);
+
+    expect(harness.Neo.detachBrowserMultiplayerGame).toHaveBeenCalledTimes(1);
+    expect(harness.startEndless).toHaveBeenCalledTimes(1);
+    // Detach must precede the mode handler.
+    expect(harness.Neo.detachBrowserMultiplayerGame.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.startEndless.mock.invocationCallOrder[0]);
   });
 
   test('ordinary New Game generates a seed when the seed field is blank', async () => {
