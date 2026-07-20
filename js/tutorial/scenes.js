@@ -17,7 +17,7 @@ export const TUTORIAL_SCENES = {
   training: {
     lesson: 'training',
     lines: [
-      { speaker: 'SARGE', text: 'Training room. Doors with hostiles lock until the fight is done. No running from a scrap ATTACK ATTACK ATTACk.' },
+      { speaker: 'SARGE', text: 'Training room. Ordinary combat rooms let you retreat if a fight goes bad. EXIT rooms are different: their doors lock until the final wave is beaten.' },
       { speaker: 'SARGE', text: 'Dash slips danger and gives you a blink of invulnerability. Close attack, ranged attack, heavy move — each has its own cooldown and its own job.' },
       { speaker: 'SARGE', text: "Watch for the big yellow numbers — that's a critical hit, extra damage on the house." },
       { speaker: 'SARGE', text: 'Some weapons and moves stack nasty status — bleed, fire, poison — that keeps hurting after you stop. Layer it on.' },
@@ -68,9 +68,9 @@ export const TUTORIAL_SCENES = {
   ladder: {
     lesson: 'ladder',
     lines: [
-      { speaker: 'SARGE', text: 'Exit room. The minimap tags it EXIT. End of boot camp.' },
-      { speaker: 'SARGE', text: 'Out in the real dungeon, an exit might pack a final wave or a boss. This one I cleared for you.' },
-      { speaker: 'SARGE', text: 'Take the ladder. Floor two is the real thing — and everything you bought, grabbed, and forged comes with you.' },
+      { speaker: 'SARGE', text: 'Exit room. The minimap tags it EXIT. This is the one room you cannot retreat from while enemies remain.' },
+      { speaker: 'SARGE', text: 'The doors are locking because this is a ladder-room final wave. Beat the wave and the ladder appears. Ordinary combat rooms still let you leave.' },
+      { speaker: 'SARGE', text: 'Clear the room, then take the ladder. Floor two is the real thing — and everything you bought, grabbed, and forged comes with you.' },
     ],
   },
   summary: {
