@@ -49,6 +49,43 @@ describe('drain balance', () => {
     expect(Neo.player.thornDrainRate).toBeGreaterThan(0);
   });
 
+  // The lingering drain used to be capped at enemyMax * 0.04, so a boss fight
+  // trickled ~16 HP/s indefinitely (every proc also refreshed the window). The
+  // rate now comes from stacks alone, which is what keeps drain from running away
+  // against exactly the tanky enemies that give it the most time to tick.
+  test('lingering drain rate scales with stacks, not with the target', () => {
+    const makeNeo = stacks => ({
+      player: { character: 'thorn_knight', hp: 5, maxHp: 120, x: 100, y: 100 },
+      getItemStats: () => ({ drainChance: 1 }),
+      getItemCount: key => (key === 'tooth_of_thorn' ? stacks : 0),
+      nextRandom: () => 0,
+      scalePlayerHealing: value => value,
+      applyPlayerHealing: value => value,
+      spawnHealPopup: () => {},
+      spawnParticle: () => {},
+      rand: () => 0,
+    });
+    const run = (neo, enemy) => {
+      const roll = new Function(
+        'Neo',
+        `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
+      )(neo);
+      roll(enemy);
+      return neo.player.thornDrainRate;
+    };
+
+    // A 10x tankier target must not change the rate at all.
+    const weak = run(makeNeo(2), { type: 'hunter', max: 60 });
+    const boss = run(makeNeo(2), { type: 'boss', max: 600 });
+    expect(boss).toBe(weak);
+
+    // Stacking Tooth is what increases it, linearly.
+    expect(run(makeNeo(4), { type: 'hunter', max: 60 })).toBeCloseTo(weak * 2);
+
+    // And the boss-fight runaway is gone: the old formula reached 600 * 0.04 = 24 HP/s.
+    expect(boss).toBeLessThan(5);
+  });
+
   test('drain bonuses do nothing without Tooth of Thorn base chance', () => {
     const Neo = {
       player: { character: 'mooggy', hp: 5, maxHp: 10, x: 100, y: 100 },
