@@ -89,8 +89,9 @@
       displayedBleedChance: bleedChance + weaponBleedChance,
       weaponCritChance,
       displayedCritChance: critChance + weaponCritChance,
-      drainChance: stacks('tooth_of_thorn') * 0.045 + stacks('tooth_of_thorn') ** 2 * 0.025,
-      meleeDrainChance: stacks('tooth_of_thorn') * 0.08 + stacks('tooth_of_thorn') ** 2 * 0.025,
+      // Quadratic term kept in step with js/game/player.js: 1.8%, down from 2.5%.
+      drainChance: stacks('tooth_of_thorn') * 0.045 + stacks('tooth_of_thorn') ** 2 * 0.018,
+      meleeDrainChance: stacks('tooth_of_thorn') * 0.08 + stacks('tooth_of_thorn') ** 2 * 0.018,
       bleedResistance: clamp(stacks('tough_bandaid') * 0.1, 0, 0.8),
       fireResistance: 0.5,
       bleedDurationDecayMultiplier: clamp(1 + stacks('tough_bandaid') * 0.2, 1, 3),

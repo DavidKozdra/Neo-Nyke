@@ -752,12 +752,14 @@ export function getItemStats() {
       displayedBleedChance: (baseBleedChance + weaponBleedBonus) * rivalCombatCurse,
       weaponCritChance: weaponCritBonus * rivalCombatCurse,
       displayedCritChance: (critChance + weaponCritBonus * rivalCombatCurse),
-      // Tooth of Thorn ramps: 4.5% per stack plus an extra 2.5% × stacks per stack,
+      // Tooth of Thorn ramps: 4.5% per stack plus an extra 1.8% × stacks per stack,
       // so investment compounds (mirrors Enemy Magnet's homing ramp). Melee hits
       // get a higher linear term (8% per stack) since they land far less often than
       // a held beam — see meleeDrainChance, picked by hitEnemy when options.melee.
-      drainChance: toothOfThorn * 0.045 + toothOfThorn * toothOfThorn * 0.025,
-      meleeDrainChance: toothOfThorn * 0.08 + toothOfThorn * toothOfThorn * 0.025,
+      // The quadratic term was 2.5%, which made Thorn's starting 2 stacks proc on
+      // a quarter of all melee hits and hit a guaranteed proc by 5 stacks.
+      drainChance: toothOfThorn * 0.045 + toothOfThorn * toothOfThorn * 0.018,
+      meleeDrainChance: toothOfThorn * 0.08 + toothOfThorn * toothOfThorn * 0.018,
       bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
       // Always-on base fire-damage reduction: the player takes ~50% less fire
       // DoT. Applied in the player fire tick (tickPlayerStatus 'fire').
