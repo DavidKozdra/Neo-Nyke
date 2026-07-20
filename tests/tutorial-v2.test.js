@@ -108,6 +108,8 @@ describe('Sarge tutorial v2', () => {
   test('ends with a real, clearly explained ladder-room fight', () => {
     expect(rooms).toContain('ladderRoom.cleared = false');
     expect(rooms).toContain("room.tutorialLesson === 'ladder'");
+    expect(rooms).toContain('tutorialExit ? 3 : Neo.getWaveCount(4)');
+    expect(rooms).toContain('suppressBossUpgrade: tutorialExit');
     expect(rooms).toContain("text: 'FINAL WAVE — DOORS LOCKED'");
     expect(controller).toContain("id: 'ladder_fight'");
     expect(controller).toContain('Ladder rooms lock only while their final wave is alive');

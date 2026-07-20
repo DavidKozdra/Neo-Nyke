@@ -268,6 +268,10 @@ export function bindInput() {
         try {
           localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
         } catch {}
+        // Session-only marker distinguishes the dedicated Tutorial route from a
+        // replay checkbox intentionally saved in Settings. Backing out should
+        // cancel this route, not leave a surprise tutorial armed indefinitely.
+        Neo.tutorialLaunchPending = true;
         Neo.gameMode = 'normal';
         Neo.practiceVariant = 'standard';
         Neo.charSelectPhase = null;
@@ -287,6 +291,10 @@ export function bindInput() {
         Neo.navigateTutorialStep(1);
       },
       onOpenCharacterSelect() {
+        if (Neo.tutorialLaunchPending) {
+          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
+          Neo.tutorialLaunchPending = false;
+        }
         Neo.gameMode = 'normal';
         Neo.practiceVariant = 'standard';
         Neo.charSelectPhase = null;
@@ -301,10 +309,18 @@ export function bindInput() {
           Neo.updateCharacterSelectionUI();
           return;
         }
+        if (Neo.tutorialLaunchPending) {
+          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
+          Neo.tutorialLaunchPending = false;
+        }
         Neo.charSelectPhase = null;
         Neo.setGameState('menu');
       },
       onOpenAltModeCharSelect(mode) {
+        if (Neo.tutorialLaunchPending) {
+          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
+          Neo.tutorialLaunchPending = false;
+        }
         const challengePractice = mode === 'challenge_practice';
         Neo.gameMode = challengePractice ? 'practice' : mode;
         Neo.practiceVariant = challengePractice ? 'challenges' : 'standard';
@@ -317,6 +333,10 @@ export function bindInput() {
         }
       },
       onStartSandbox() {
+        if (Neo.tutorialLaunchPending) {
+          try { localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY); } catch {}
+          Neo.tutorialLaunchPending = false;
+        }
         Neo.gameMode = 'sandbox';
         Neo.selectedDifficulty = 'easy';
         Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;

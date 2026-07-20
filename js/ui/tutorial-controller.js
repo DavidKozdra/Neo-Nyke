@@ -997,8 +997,6 @@ export function createTutorialController() {
     if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');
     if (type === 'challenge-started' && payload.challengeType === 'bomb') setCompleted('challenge_start');
     if (type === 'challenge-completed' && payload.challengeType === 'bomb') setCompleted('challenge_bombs');
-    if (type === 'enemy-killed' && currentRoomKey === state.ladderRoomKey
-      && Neo.currentRoom?.cleared) setCompleted('ladder_fight');
     if (type === 'room-enter') {
       if (currentRoomKey === state.trainingRoomKey) setCompleted('dwell_do');
       advanceCompletedSteps();
@@ -1350,6 +1348,12 @@ export function createTutorialController() {
       return;
     }
     if (Neo.gameState === 'play') {
+      // Room clear happens after the final enemy's kill signal, so record the
+      // ladder milestone from live room state on the following tick. This also
+      // recovers a save resumed after the wave but before using the ladder.
+      if (roomKey(Neo.currentRoom) === state.ladderRoomKey && Neo.currentRoom?.cleared) {
+        setCompleted('ladder_fight');
+      }
       const step = getStep();
       if (isInStepRoom(step, state) && (state.step === 'melee' || state.step === 'laser' || state.step === 'smash' || state.step === 'fight')) {
         Neo.ensureTutorialDummyEnemy?.();
