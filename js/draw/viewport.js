@@ -222,14 +222,22 @@ export function carveEnemyBeamLights() {
         : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
           ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
           : [enemy.beamAngle];
+      const struggle = Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy
+        ? Neo.beamStruggle : null;
       angles.forEach(angle => {
-        const beamPath = Neo.buildRicochetBeamPath(
-          enemy.x,
-          enemy.y,
-          angle,
-          isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : isGod ? beam.enemyGodRange : enemy.type === 'rival' ? (enemy.rivalBeamRange || beam.enemyDefaultRange) : beam.enemyDefaultRange,
-          isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
-        );
+        const beamPath = struggle
+          ? [{
+            x1: enemy.x, y1: enemy.y, x2: struggle.x, y2: struggle.y,
+            angle: Math.atan2(struggle.y - enemy.y, struggle.x - enemy.x),
+            length: Neo.dist(enemy.x, enemy.y, struggle.x, struggle.y), hitWall: false,
+          }]
+          : Neo.buildRicochetBeamPath(
+            enemy.x,
+            enemy.y,
+            angle,
+            isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : isGod ? beam.enemyGodRange : enemy.type === 'rival' ? (enemy.rivalBeamRange || beam.enemyDefaultRange) : beam.enemyDefaultRange,
+            isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
+          );
         Neo.carveBeamLight(beamPath, isGod ? beam.enemyGodWidth : beam.enemyDefaultWidth, isGod ? beam.enemyGodStrength : beam.enemyDefaultStrength);
       });
     });

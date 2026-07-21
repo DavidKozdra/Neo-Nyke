@@ -3783,6 +3783,7 @@ export function resumeGame() {
     Neo.skySwords = [];
     Neo.titanHammer = null;
     Neo.activeBeamPaths = null;
+    Neo.beamStruggle = null;
     Neo.healingZoneCharging = false;
     Neo.healingZoneChargeTime = 0;
     Neo.deathBallCharging = false;

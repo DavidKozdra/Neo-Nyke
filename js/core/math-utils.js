@@ -667,6 +667,88 @@ export function beamPathHitsDestructible(path, prop, padding = 0) {
   return null;
 }
 
+// Return the closest contact between two polyline beam paths. Beam struggles
+// only make sense when the rays are travelling generally toward one another;
+// crossing or parallel co-directional lasers continue through normally.
+// `tolerance` accounts for the authored beam widths without coupling this math
+// helper to any particular move's visual style.
+export function findOpposingBeamPathContact(pathA, pathB, tolerance = 14, maxDirectionDot = -0.15) {
+  if (!Array.isArray(pathA) || !Array.isArray(pathB)) return null;
+  const limitSq = Math.max(0, Number(tolerance || 0)) ** 2;
+  let best = null;
+  for (const first of pathA) {
+    const ax = Number(first.x2) - Number(first.x1);
+    const ay = Number(first.y2) - Number(first.y1);
+    const aLength = Math.hypot(ax, ay);
+    if (aLength <= 1e-6) continue;
+    for (const second of pathB) {
+      const bx = Number(second.x2) - Number(second.x1);
+      const by = Number(second.y2) - Number(second.y1);
+      const bLength = Math.hypot(bx, by);
+      if (bLength <= 1e-6) continue;
+      const directionDot = (ax * bx + ay * by) / (aLength * bLength);
+      if (directionDot > maxDirectionDot) continue;
+
+      // Closest points on two finite 2D segments (the 3D segment algorithm
+      // reduced to x/y). It also handles collinear overlap, where a normal line
+      // intersection test has no unique point.
+      const rx = Number(first.x1) - Number(second.x1);
+      const ry = Number(first.y1) - Number(second.y1);
+      const a = ax * ax + ay * ay;
+      const e = bx * bx + by * by;
+      const b = ax * bx + ay * by;
+      const c = ax * rx + ay * ry;
+      const f = bx * rx + by * ry;
+      const denominator = a * e - b * b;
+      let s;
+      let t;
+      if (denominator > 1e-8) {
+        s = clamp((b * f - c * e) / denominator, 0, 1);
+        t = (b * s + f) / e;
+      } else {
+        // Parallel/collinear rays have no unique intersection. Place contact at
+        // the middle of their overlap so a head-on clash begins between the
+        // casters instead of snapping to one beam's start point.
+        const projectedStart = ((Number(second.x1) - Number(first.x1)) * ax
+          + (Number(second.y1) - Number(first.y1)) * ay) / a;
+        const projectedEnd = ((Number(second.x2) - Number(first.x1)) * ax
+          + (Number(second.y2) - Number(first.y1)) * ay) / a;
+        const overlapLow = Math.max(0, Math.min(projectedStart, projectedEnd));
+        const overlapHigh = Math.min(1, Math.max(projectedStart, projectedEnd));
+        s = overlapLow <= overlapHigh ? (overlapLow + overlapHigh) / 2 : 0;
+        const targetX = Number(first.x1) + ax * s;
+        const targetY = Number(first.y1) + ay * s;
+        t = ((targetX - Number(second.x1)) * bx + (targetY - Number(second.y1)) * by) / e;
+      }
+      if (t < 0) {
+        t = 0;
+        s = clamp(-c / a, 0, 1);
+      } else if (t > 1) {
+        t = 1;
+        s = clamp((b - c) / a, 0, 1);
+      }
+      const firstX = Number(first.x1) + ax * s;
+      const firstY = Number(first.y1) + ay * s;
+      const secondX = Number(second.x1) + bx * t;
+      const secondY = Number(second.y1) + by * t;
+      const dx = firstX - secondX;
+      const dy = firstY - secondY;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq > limitSq || best && distanceSq >= best.distanceSq) continue;
+      best = {
+        x: (firstX + secondX) / 2,
+        y: (firstY + secondY) / 2,
+        distance: Math.sqrt(distanceSq),
+        distanceSq,
+        directionDot,
+        segmentA: first,
+        segmentB: second,
+      };
+    }
+  }
+  return best;
+}
+
 export function getBeamPathLength(path) {
   if (!Array.isArray(path)) return 0;
   if (Number.isFinite(path.totalLength)) return path.totalLength;
@@ -918,6 +1000,7 @@ Neo.findBeamRicochetHit = findBeamRicochetHit;
 Neo.buildRicochetBeamPath = buildRicochetBeamPath;
 Neo.beamPathHitsCircle = beamPathHitsCircle;
 Neo.beamPathHitsDestructible = beamPathHitsDestructible;
+Neo.findOpposingBeamPathContact = findOpposingBeamPathContact;
 Neo.getBeamPathLength = getBeamPathLength;
 Neo.getBeamPathBounds = getBeamPathBounds;
 Neo.getBeamPathEnd = getBeamPathEnd;

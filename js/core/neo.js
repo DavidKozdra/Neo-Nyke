@@ -105,6 +105,7 @@ window.Neo = {
   laserSweepSpeed: 0,
   loveBeamCasting: false,
   turtleWaveHpTimer: 0,
+  beamStruggle: null,
 
   // --- difficulty ---
   selectedDifficulty: 'medium',

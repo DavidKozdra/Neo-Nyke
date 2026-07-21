@@ -67,8 +67,74 @@
     if (!isDying && Neo.godTimer > 0) Neo.drawGodModeBar();
     const bossBarHidden = window.NeoSettings?.getHudElements?.()?.bossbar?.visible === false;
     if (!isDying && !bossBarHidden) Neo.drawBossHealthBars();
+    if (!isDying) drawBeamStruggleHud();
     Neo.drawFloorTransition();
     Neo.perfEnd('draw.overlays', sectionPerfStart);
+  }
+
+  function drawBeamStruggleHud() {
+    const struggle = Neo.beamStruggle;
+    if (!struggle?.active) return;
+    const g = Neo.ctx;
+    const w = Math.min(520, Neo.canvas.width * 0.62);
+    const h = 24;
+    const x = (Neo.canvas.width - w) / 2;
+    const y = Math.max(54, Neo.canvas.height * 0.105);
+    const progress = Neo.clamp(Number(struggle.progress || 0.5), 0, 1);
+    const remaining = Math.max(0, Number(struggle.duration || 0) - Number(struggle.elapsed || 0));
+    const enemyName = struggle.enemy?.type === 'rival'
+      ? (struggle.enemy.rivalData?.name || 'RIVAL')
+      : String(struggle.enemy?.type || 'ENEMY').replaceAll('_', ' ').toUpperCase();
+    const laserHint = Neo.getControlHint?.('laser', 'rmb') || 'RMB';
+    const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
+    const pulse = reduceFlash ? 1 : 0.9 + Math.sin(Date.now() / 80) * 0.1;
+
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = 'bold 16px system-ui';
+    g.shadowColor = 'rgba(0,0,0,0.9)';
+    g.shadowBlur = 8;
+    g.fillStyle = '#ffffff';
+    g.fillText(`BEAM STRUGGLE  •  ${remaining.toFixed(1)}s`, Neo.canvas.width / 2, y - 27);
+
+    g.fillStyle = 'rgba(5, 8, 18, 0.92)';
+    g.strokeStyle = 'rgba(225,245,255,0.9)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.roundRect(x - 4, y - 4, w + 8, h + 8, 8);
+    g.fill();
+    g.stroke();
+
+    const split = x + w * progress;
+    const leftGrad = g.createLinearGradient(x, 0, split, 0);
+    leftGrad.addColorStop(0, '#ff355d');
+    leftGrad.addColorStop(1, '#ff8aa0');
+    g.fillStyle = leftGrad;
+    g.fillRect(x, y, Math.max(0, split - x), h);
+    const rightGrad = g.createLinearGradient(split, 0, x + w, 0);
+    rightGrad.addColorStop(0, '#9cf6ff');
+    rightGrad.addColorStop(1, '#2b9cff');
+    g.fillStyle = rightGrad;
+    g.fillRect(split, y, Math.max(0, x + w - split), h);
+    g.fillStyle = '#ffffff';
+    g.shadowColor = '#ffffff';
+    g.shadowBlur = 12;
+    g.fillRect(split - 3, y - 5, 6, h + 10);
+
+    g.shadowBlur = 5;
+    g.font = 'bold 12px system-ui';
+    g.textAlign = 'left';
+    g.fillText(enemyName, x + 8, y + h / 2);
+    g.textAlign = 'right';
+    g.fillText('YOU', x + w - 8, y + h / 2);
+    g.globalAlpha = pulse;
+    g.textAlign = 'center';
+    g.font = 'bold 18px system-ui';
+    g.fillStyle = '#dffbff';
+    g.fillText(`MASH [${String(laserHint).toUpperCase()}]`, Neo.canvas.width / 2, y + 52);
+    g.restore();
   }
 
   // Cached low-health edge gradient, rebuilt only when the canvas size changes.
