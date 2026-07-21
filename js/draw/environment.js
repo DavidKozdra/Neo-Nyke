@@ -92,6 +92,9 @@
     const laserHint = Neo.getControlHint?.('laser', 'rmb') || 'RMB';
     const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
     const pulse = reduceFlash ? 1 : 0.9 + Math.sin(Date.now() / 80) * 0.1;
+    // Give the mash prompt a subtle size beat so it reads as an urgent,
+    // repeatedly-tappable action without becoming a distracting flash.
+    const mashScale = reduceFlash ? 1 : 1 + Math.sin(Date.now() / 115) * 0.08;
 
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -154,7 +157,9 @@
     g.textAlign = 'center';
     g.font = 'bold 18px system-ui';
     g.fillStyle = '#dffbff';
-    g.fillText(`MASH [${String(laserHint).toUpperCase()}]`, Neo.canvas.width / 2, y + 52);
+    g.translate(Neo.canvas.width / 2, y + 52);
+    g.scale(mashScale, mashScale);
+    g.fillText(`MASH [${String(laserHint).toUpperCase()}]`, 0, 0);
     g.restore();
   }
 

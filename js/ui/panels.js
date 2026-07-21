@@ -1100,18 +1100,26 @@ export function setAnvilPanelOpen(open, options = {}) {
     if (!Neo.ui.anvilPanel) return;
   const animateClose = options.animateClose !== false;
     if (open) {
+      const equipped = Neo.player?.equippedWeapon;
       if (!Neo.isFirstRunTutorialEngaged?.()) Neo.showFirstTip?.('forge');
       // Engaged (pause-tolerant) so the forge step still ticks if the forge ever
       // opens while the game is paused.
       if (Neo.isFirstRunTutorialEngaged()) {
         Neo.tutorialState.openedForge = true;
+        // The Forge opens with the equipped weapon already selected. Treat
+        // that deterministic choice as the lesson's item decision so the
+        // player can go straight to payment and the actual upgrade.
+        Neo.tutorialController?.signal?.('forge-item-select', {
+          itemType: 'weapon',
+          itemKey: equipped,
+          automatic: true,
+        });
         Neo.updateObjective?.();
       }
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');
       Neo.anvilStagedUpgrades = {};
-      const equipped = Neo.player?.equippedWeapon;
       Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
       renderAnvilPanel();
       Neo.tutorialController?.signal?.('panel-open', { panel: 'forge' });

@@ -89,6 +89,13 @@ describe('Sarge tutorial v2', () => {
     expect(controller).toContain('const open = getOpenGamePanelInfo()');
   });
 
+  test('route highlights only a live doorway and Forge chooses its equipped item directly', () => {
+    expect(controller).toContain('Only highlight a doorway that is actually present in the live room');
+    expect(controller).toContain("!current.doors?.[direction]");
+    expect(panels).toContain("automatic: true");
+    expect(controller).not.toContain("id: 'forge_item_select'");
+  });
+
   test('makes target doors unmistakable without silently gating exploration', () => {
     expect(tutorialCss).toContain('.tutorial-target-ring--route::before');
     expect(tutorialCss).toContain('content: "GO HERE"');

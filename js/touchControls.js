@@ -17,12 +17,13 @@
     smash: false,
     ascend: false,
     dash: false,
+    beamMash: false,
     active: false, // true once any touch fires
   };
 
   const NT = window.NeoTouch;
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
-  const TOUCH_ACTION_LABELS = { slash: 'SLASH', laser: 'LASER', smash: 'SMASH', ascend: 'CLIMB', dash: 'DASH' };
+  const TOUCH_ACTION_LABELS = { slash: 'SLASH', laser: 'LASER', smash: 'SMASH', ascend: 'CLIMB', dash: 'DASH', beamMash: 'MASH' };
   const TOUCH_ACTIONS = Object.keys(TOUCH_ACTION_LABELS);
 
   // ── DOM ────────────────────────────────────────────────────────────────────
@@ -49,12 +50,14 @@
   const btnY    = mkBtn('Y',    'btn-y',    'SMASH');
   const btnX    = mkBtn('X',    'btn-x',    'CLIMB');
   const btnDash = mkBtn('DASH', 'btn-dash', '');
+  const btnMash = mkBtn('MASH', 'btn-mash', 'BEAM');
 
   btnCluster.appendChild(btnY);
   btnCluster.appendChild(btnX);
   btnCluster.appendChild(btnB);
   btnCluster.appendChild(btnA);
   btnCluster.appendChild(btnDash);
+  btnCluster.appendChild(btnMash);
   overlay.appendChild(btnCluster);
 
   // ── Joystick logic ─────────────────────────────────────────────────────────
@@ -159,6 +162,7 @@
   bindBtn(btnY,    'touchY',    'smash');
   bindBtn(btnX,    'touchX',    'ascend');
   bindBtn(btnDash, 'touchDash', 'dash');
+  bindBtn(btnMash, 'beamMash', 'beamMash');
 
   function normalizeTouchAction(value, fallback) {
     const action = String(value || fallback || '').toLowerCase();
@@ -396,7 +400,7 @@
     releaseAscendKey();
     joyKnob.style.transform = '';
     joyBase.classList.remove('joy-active');
-    [btnA, btnB, btnY, btnX, btnDash].forEach(btn => btn.classList.remove('pressed'));
+    [btnA, btnB, btnY, btnX, btnDash, btnMash].forEach(btn => btn.classList.remove('pressed'));
     closeHamMenu();
   }
 
@@ -409,6 +413,7 @@
   function syncOverlayMode() {
     const allowed = isGameplayTouchAllowed();
     overlay.classList.toggle('touch-overlay--gameplay', allowed);
+    overlay.classList.toggle('beam-struggle-active', allowed && !!window.Neo?.beamStruggle?.active);
     if (!allowed) {
       clearTouchState();
       NT.active = false;
