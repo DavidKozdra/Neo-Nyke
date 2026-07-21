@@ -87,6 +87,14 @@
       return this.client.sendGameCommand(command, args);
     }
 
+    sendChat(text) {
+      return this.client.sendChat(text);
+    }
+
+    requestRematch(ready = true) {
+      return this.client.requestRematch(ready);
+    }
+
     subscribe(handler) {
       if (typeof handler !== 'function') throw new TypeError('Browser multiplayer listener must be a function');
       this.listeners.add(handler);
@@ -102,6 +110,8 @@
         lobbyState: this.client.lobbyState,
         gameState: this.client.getStateSnapshot(),
         gameplayEvents: this.client.gameplayEvents.slice(),
+        chatMessages: this.client.chatMessages.slice(),
+        runEnd: this.client.runEnd,
         errors: this.client.errors.slice(),
       };
     }

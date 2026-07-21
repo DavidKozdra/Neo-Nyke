@@ -156,7 +156,7 @@ GET  /api/multiplayer/rooms/:code
 GET  /api/multiplayer/rooms/:code/socket
 ```
 
-Lobby hosts can copy a same-origin invite URL in the form `?join=:code`. Opening a valid invite URL brings up the multiplayer flow and joins that authoritative room automatically; malformed and ambiguous room codes are ignored client-side.
+Lobby hosts can copy a same-origin invite URL in the form `?join=:code`. Opening a valid invite URL brings up the multiplayer flow and joins that authoritative room automatically. Join from Clipboard accepts either that URL or a plain room code; malformed and ambiguous room codes are ignored client-side.
 
 D1 may store match history and leaderboard metadata. Queues may process post-match analytics. R2 may store replays/diagnostics. None of D1, Queues, or R2 may carry live movement or combat.
 
@@ -178,6 +178,10 @@ The implementation target is immediate local input response and low perceived la
 ## Co-op lifecycle and safety
 
 Initial co-op supports 2–4 players. Room location is per player: one player crossing a door never teleports the party. `player.roomId` selects that client's camera/presentation while `floorState.encounters[roomId]` retains the shared authoritative enemies, drops, clear state, and other room outcomes. Every occupied room simulates concurrently; a later visitor receives its current shared state. Discovered room IDs are currently shared on the party minimap. Suggested rules remain configurable: personal gold, shared XP, no friendly fire, no player collision, revive enabled, and an explicit co-op rule for final floor advancement.
+
+When a player is downed, their camera follows a living teammate by default. The spectator strip can select any connected player, including another downed player or the local player's fallen body/location, and clicking the dungeon cycles targets. Down, revive, and respawn notices are party-wide even when teammates occupy different rooms. A party wipe or completed expedition opens synchronized run results; Play Again is a rematch-ready vote and recreates the authoritative simulation in the existing room after every connected player agrees.
+
+Pressing T opens authority-routed party chat. Messages are sanitized, limited to 180 characters, rate-limited by the authority, and attributed from server-owned player identity rather than client-supplied names. Opening chat releases gameplay input and pointer lock until the form closes.
 
 The normal multiplayer screen uses the campaign HUD rather than a separate always-on debug HUD. Escape opens a local multiplayer menu (the authority keeps running) with Resume, Info, Settings, and Leave Server. Network diagnostics will return as an opt-in debug overlay rather than replacing gameplay presentation.
 

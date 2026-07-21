@@ -422,6 +422,52 @@ describe('protocol-driven local multiplayer session', () => {
     expect(reconnected.state.players[originalPlayerId].id).toBe(originalPlayerId);
   });
 
+  test('broadcasts bounded authority chat to every connected player', async () => {
+    const { clock, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+
+    expect(clientA.sendChat('  Need\nhelp!  ')).toBe(true);
+    clock.runAll();
+
+    expect(clientA.chatMessages).toEqual([expect.objectContaining({
+      playerId: clientA.playerId,
+      displayName: 'Client A',
+      text: 'Need help!',
+    })]);
+    expect(clientB.chatMessages).toEqual(clientA.chatMessages);
+  });
+
+  test('restarts the same room only after every connected player requests a rematch', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const playerIds = [clientA.playerId, clientB.playerId];
+    authority.simulation.state.status = 'ended';
+    authority.pendingRunEnd = { result: 'defeat', reason: 'party-wiped', floorNumber: 3 };
+    authority._broadcastRunEnded();
+    clock.runAll();
+
+    expect(clientA.status).toBe('ended');
+    expect(clientA.runEnd).toEqual(expect.objectContaining({ result: 'defeat', reason: 'party-wiped' }));
+    clientA.requestRematch(true);
+    clock.runAll();
+    expect(authority.simulation.state.status).toBe('ended');
+    expect(clientA.lobbyState.members.find(member => member.playerId === clientA.playerId).rematchReady).toBe(true);
+
+    clientB.requestRematch(true);
+    clock.runAll();
+    expect(authority.simulation.state.status).toBe('running');
+    expect(clientA.status).toBe('running');
+    expect(clientB.status).toBe('running');
+    expect(Object.keys(authority.simulation.state.players)).toEqual(playerIds);
+    expect(clientA.runEnd).toBeNull();
+  });
+
   test('rejects an incompatible build before joining', async () => {
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });

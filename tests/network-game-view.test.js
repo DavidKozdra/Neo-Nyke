@@ -13,7 +13,7 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v26');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v27');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v26');
   });
 
@@ -103,9 +103,10 @@ describe('network multiplayer game view', () => {
     view.stop();
   });
 
-  test('leaves Escape entirely to the campaign pause and panel handler', () => {
+  test('lets the campaign key handler route Escape into one network pause toggle', () => {
     const preventDefault = jest.fn();
     const pauseGame = jest.fn();
+    const panelSource = fs.readFileSync(path.join(__dirname, '..', 'js/ui/panels.js'), 'utf8');
     const view = new NetworkGameView({ session: {}, neo: { gameState: 'play', pauseGame } });
     view.active = true;
 
@@ -114,6 +115,11 @@ describe('network multiplayer game view', () => {
     expect(preventDefault).not.toHaveBeenCalled();
     expect(pauseGame).not.toHaveBeenCalled();
     expect(view.paused).toBe(false);
+    expect(panelSource).toContain('Neo.multiplayerGameView.togglePause?.()');
+
+    view.togglePause();
+    expect(view.paused).toBe(true);
+    expect(pauseGame).toHaveBeenCalledTimes(1);
   });
 
   // The shop/anvil/special-room panels are toggled by the campaign's global
@@ -644,6 +650,44 @@ describe('network multiplayer game view', () => {
     expect(pushItemNotification).not.toHaveBeenCalled();
   });
 
+  test('shows downed-player notices even when the teammate is in another room', () => {
+    const pushStatusToast = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1', lobbyState: { members: [{ playerId: 'p2', displayName: 'Client B' }] } }) },
+      neo: { pushStatusToast },
+    });
+    view.currentSample = { state: { players: {
+      p1: { id: 'p1', roomId: 'room-a' },
+      p2: { id: 'p2', roomId: 'room-b', displayName: 'Client B' },
+    } } };
+
+    view._consumeGameplayEvents([{
+      eventId: 'down-p2', eventType: 'PLAYER_DOWNED',
+      data: { playerId: 'p2', roomId: 'room-b' },
+    }]);
+
+    expect(pushStatusToast).toHaveBeenCalledWith(expect.objectContaining({
+      label: 'DOWNED', text: 'Client B is down',
+    }));
+  });
+
+  test('downed clients default to a living teammate and can cycle back to their own body', () => {
+    const state = { players: {
+      p1: { id: 'p1', slotIndex: 0, downed: true, roomId: 'room-a' },
+      p2: { id: 'p2', slotIndex: 1, downed: false, roomId: 'room-b' },
+    } };
+    const view = new NetworkGameView({ session: { snapshot: () => ({ playerId: 'p1' }) }, neo: {} });
+    view.currentSample = { state };
+
+    view._syncSpectatorState(state, 'p1');
+    expect(view.spectatorPlayerId).toBe('p2');
+    expect(view._viewpointPlayerId(state, 'p1')).toBe('p2');
+
+    view._cycleSpectatorTarget();
+    expect(view.spectatorPlayerId).toBe('p1');
+    expect(view._viewpointPlayerId(state, 'p1')).toBe('p1');
+  });
+
   test('keeps normal room pillars and chamber geometry in network presentation', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'js/rendering/NetworkGameView.js'), 'utf8');
     expect(source).not.toContain('_hydrateRoomDecor');
@@ -740,7 +784,7 @@ describe('network multiplayer game view', () => {
     expect(environment).toContain('Neo.multiplayerGameView.syncPresentation();');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('requestAnimationFrame?.(this.boundRenderFrame)');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncNeoPresentationFloor(floorState, enemies, pickups, state)');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state, frameDelta)');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta, visibleRoomId)');
     expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.threeRenderer?.render?.()');
     expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.drawWorldViewport(Neo.camera');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('this.neo.decorateRoomData(room)');

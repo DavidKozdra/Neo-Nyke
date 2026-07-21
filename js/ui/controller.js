@@ -105,6 +105,7 @@ export function createUIController(view) {
       view.multiplayerPanel?.toggleAttribute('data-multiplayer-development-enabled', enabled);
       if (view.multiplayerCreateRoom) view.multiplayerCreateRoom.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerJoinRoom) view.multiplayerJoinRoom.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerJoinClipboard) view.multiplayerJoinClipboard.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerMode) view.multiplayerMode.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerDevelopmentNote) {
@@ -605,6 +606,7 @@ export function createUIController(view) {
         view.multiplayerReady.disabled = !canReady || localMember?.ready === true;
         view.multiplayerReady.textContent = localMember?.ready ? 'READY ✓' : 'READY';
       }
+      renderMultiplayerEndScreen(snapshot);
       if (snapshot.status === 'running' && snapshot.gameState && !browserMultiplayerBackgrounded) {
         startBrowserMultiplayerGameView();
       } else if (browserMultiplayerGameView?.active && ['disconnected', 'rejected', 'ended'].includes(snapshot.status)) {
@@ -617,6 +619,53 @@ export function createUIController(view) {
         browserMultiplayerBackgrounded = false;
       }
       renderMultiplayerResumeCard(snapshot);
+    }
+
+    function renderMultiplayerEndScreen(snapshot = {}) {
+      const runEnd = snapshot.runEnd;
+      const visible = snapshot.status === 'ended' && !!runEnd;
+      view.multiplayerEndScreen?.classList.toggle('hidden', !visible);
+      if (!visible) return;
+
+      const victory = runEnd.result === 'victory';
+      if (view.multiplayerEndTitle) view.multiplayerEndTitle.textContent = victory ? 'EXPEDITION COMPLETE' : 'PARTY DEFEATED';
+      const summary = runEnd.summary || {};
+      const elapsed = Math.max(0, Math.round(Number(summary.elapsedSeconds || 0)));
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = String(elapsed % 60).padStart(2, '0');
+      if (view.multiplayerEndSummary) {
+        view.multiplayerEndSummary.textContent = `Floor ${Math.max(1, Number(summary.floorNumber || 1))} • ${minutes}:${seconds} • ${summary.mode === 'rival' ? 'Rival Expedition' : 'Co-op Expedition'}`;
+      }
+
+      const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
+      const namesById = new Map(members.map(member => [member.playerId, member.displayName || member.playerId]));
+      if (view.multiplayerEndPlayers) {
+        const deaths = summary.runStats?.deathsByPlayer || {};
+        const kills = summary.mode === 'rival'
+          ? (summary.runStats?.playerKills || {})
+          : (summary.runStats?.killsByPlayer || {});
+        view.multiplayerEndPlayers.replaceChildren(...(summary.players || []).map(player => {
+          const card = document.createElement('div');
+          card.className = 'multiplayer-end-screen__player';
+          const name = namesById.get(player.playerId) || player.playerId || 'Player';
+          const hero = MULTIPLAYER_CHARACTER_NAMES[player.characterKey] || 'HERO';
+          card.textContent = `${name} — ${hero} — ${Number(kills[player.playerId] || 0)} KOs / ${Number(deaths[player.playerId] || 0)} downs`;
+          return card;
+        }));
+      }
+
+      const localMember = members.find(member => member.playerId === snapshot.playerId);
+      const readyCount = members.filter(member => member.rematchReady).length;
+      const waitingForRematch = localMember?.rematchReady === true;
+      if (view.multiplayerRematch) {
+        view.multiplayerRematch.disabled = waitingForRematch;
+        view.multiplayerRematch.textContent = waitingForRematch ? 'WAITING FOR PARTY…' : 'PLAY AGAIN';
+      }
+      if (view.multiplayerRematchStatus) {
+        view.multiplayerRematchStatus.textContent = waitingForRematch
+          ? `${readyCount}/${members.length} players ready for the rematch.`
+          : 'Every connected player must choose Play Again.';
+      }
     }
 
     // Is there a live network match we've backed away from that can be rejoined?
@@ -869,6 +918,25 @@ export function createUIController(view) {
         return;
       }
       void runBrowserMultiplayerAction(session => session.joinRoom(roomCode));
+    }
+
+    async function joinBrowserMultiplayerFromClipboard() {
+      const parseClipboard = globalThis.NeoNyke?.multiplayer?.readMultiplayerRoomCodeFromClipboard;
+      if (typeof parseClipboard !== 'function' || typeof navigator.clipboard?.readText !== 'function') {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Clipboard reading is unavailable. Paste the invite into the room code box.';
+        return;
+      }
+      try {
+        const roomCode = parseClipboard(await navigator.clipboard.readText());
+        if (!roomCode) {
+          if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'The clipboard does not contain a valid room code or Neo Nyke invite.';
+          return;
+        }
+        if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = roomCode;
+        view.multiplayerJoinRoom?.click();
+      } catch {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Clipboard access was denied. Paste the invite into the room code box.';
+      }
     }
 
     const CHARACTER_PAGE_SIZE = 8;
@@ -3430,6 +3498,9 @@ export function createUIController(view) {
           const code = view.multiplayerRoomCode?.value || '';
           void runBrowserMultiplayerAction(session => session.joinRoom(code));
         });
+        view.multiplayerJoinClipboard?.addEventListener('click', () => {
+          void joinBrowserMultiplayerFromClipboard();
+        });
         view.multiplayerRoomCode?.addEventListener('input', () => {
           view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 8);
         });
@@ -3439,6 +3510,21 @@ export function createUIController(view) {
           view.multiplayerJoinRoom?.click();
         });
         view.multiplayerReady?.addEventListener('click', () => browserMultiplayerSession?.setReady(true));
+        view.multiplayerRematch?.addEventListener('click', () => {
+          if (!browserMultiplayerSession) return;
+          view.multiplayerRematch.disabled = true;
+          view.multiplayerRematch.textContent = 'REQUESTING…';
+          try {
+            browserMultiplayerSession.requestRematch(true);
+          } catch {
+            view.multiplayerRematch.disabled = false;
+            view.multiplayerRematch.textContent = 'PLAY AGAIN';
+          }
+        });
+        view.multiplayerEndMenu?.addEventListener('click', () => {
+          disposeBrowserMultiplayerSession();
+          setMultiplayerPanelOpen(false);
+        });
         view.multiplayerCharacter?.addEventListener('change', () => {
           browserMultiplayerSession?.setCharacter(view.multiplayerCharacter.value);
         });

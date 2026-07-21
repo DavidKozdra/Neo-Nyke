@@ -4,6 +4,7 @@ const {
   normalizeMultiplayerInviteRoomCode,
   buildMultiplayerInviteUrl,
   readMultiplayerInviteRoomCode,
+  readMultiplayerRoomCodeFromClipboard,
 } = require('../js/multiplayer/MultiplayerInviteLink');
 
 const read = relativePath => fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
@@ -26,6 +27,13 @@ describe('multiplayer invite links', () => {
     expect(readMultiplayerInviteRoomCode('https://game.example/?join=ABC')).toBe('');
     expect(readMultiplayerInviteRoomCode('not a URL')).toBe('');
     expect(normalizeMultiplayerInviteRoomCode('  nyke42 ')).toBe('NYKE42');
+  });
+
+  test('extracts either a copied room code or an invite URL from clipboard text', () => {
+    expect(readMultiplayerRoomCodeFromClipboard(' ABC234 ')).toBe('ABC234');
+    expect(readMultiplayerRoomCodeFromClipboard('https://game.example/?join=NYKE42')).toBe('NYKE42');
+    expect(readMultiplayerRoomCodeFromClipboard('Join me: https://game.example/?join=ABC234!')).toBe('ABC234');
+    expect(readMultiplayerRoomCodeFromClipboard('ordinary clipboard text')).toBe('');
   });
 
   test('lobbies expose invite controls and startup routes valid invites into joinRoom', () => {

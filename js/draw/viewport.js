@@ -58,7 +58,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
       const presentationSlots = Neo.presentationPlayerSlots;
       if (Array.isArray(presentationSlots)) {
         presentationSlots.forEach(drawSlot => {
-          if (drawSlot.getDead?.()) return;
+          if (drawSlot.getDead?.()) {
+            if (drawSlot.getEntity?.()?.networkDowned) Neo.drawPlayerSlot(drawSlot);
+            return;
+          }
           // The local hero uses the same full-fidelity renderer as a local
           // campaign run; only remote allies get the tinted slot treatment.
           if (drawSlot.isLocal && drawSlot.getEntity?.() === Neo.player) Neo.drawPlayer();

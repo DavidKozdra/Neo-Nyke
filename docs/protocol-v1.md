@@ -66,6 +66,8 @@ The protocol's co-op match is entered from the separate `MULTIPLAYER` flow. Lega
 | `PLAYER_ACTION` | reliable for discrete actions or unreliable for repeatable input/simulation | Attack/ability intent, input sequence, aim direction, equipped slot/item reference. Authority checks ownership, cooldown, status, range, and match state. |
 | `INTERACT_REQUEST` | reliable/gameplay | Target entity ID and input sequence. Authority checks existence, distance, ownership/state, and one-winner races. |
 | `UPGRADE_SELECTION` | reliable/gameplay | Authority-issued selection event ID plus option ID. Authority checks eligibility and whether already resolved. |
+| `CHAT_SEND` | reliable/chat | Sender-owned party text, trimmed and bounded to 180 characters. Authority sanitizes and rate-limits before broadcast. |
+| `REMATCH_REQUEST` | reliable/control | Boolean post-run rematch readiness. A new run starts only after every connected member is ready. |
 | `LEAVE_MATCH` | reliable/control | Graceful leave reason code. Authority owns cleanup. |
 | `PING` | unreliable/control | Opaque bounded nonce and client send timestamp used only for diagnostics. |
 
@@ -120,6 +122,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `GAMEPLAY_EVENT` | reliable/gameplay | Event ID plus typed outcome such as hit, pickup, purchase, death, revive, or choice resolved. Clients deduplicate event IDs. |
 | `FLOOR_TRANSITION` | reliable/gameplay | New floor number/seed, transition tick, spawn points, generation/content versions. |
 | `RUN_ENDED` | reliable/gameplay | Result, authority reason, synchronized summary, leaderboard eligibility. |
+| `CHAT_MESSAGE` | reliable/chat | Authority-attributed player ID/name, sanitized text, message ID, and authority tick. |
 | `PLAYER_DISCONNECTED` | reliable/control | Player ID, reason, reconnect deadline if reserved. |
 | `ERROR` | reliable/control | Stable safe code, message, whether connection closes. Never includes secrets/internal stack. |
 | `PONG` | unreliable/control | Echoed nonce plus authority receive/send tick/time for diagnostics. |

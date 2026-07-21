@@ -59,6 +59,15 @@ export function bindInput() {
     });
     window.addEventListener('keydown', event => {
       const key = event.key.toLowerCase();
+      const multiplayerChatForm = document.getElementById('multiplayerChatForm');
+      const multiplayerChatOpen = !!multiplayerChatForm && !multiplayerChatForm.classList.contains('hidden');
+      if (multiplayerChatOpen) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          Neo.multiplayerGameView?.closeChat?.();
+        }
+        return;
+      }
       if (event.key === 'F3' || (event.ctrlKey && event.shiftKey && key === 'p')) {
         event.preventDefault();
         Neo.setPerfEnabled(!Neo.perfState.enabled);
@@ -99,6 +108,11 @@ export function bindInput() {
         return;
       }
       if (event.key === 'Escape') {
+        if (Neo.multiplayerGameView?.active) {
+          event.preventDefault();
+          Neo.multiplayerGameView.togglePause?.();
+          return;
+        }
         if (Neo.gameState === 'play') { Neo.pauseGame(); return; }
         if (Neo.gameState === 'pause') { Neo.resumeGame(); return; }
       }

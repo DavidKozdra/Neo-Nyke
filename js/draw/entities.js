@@ -1767,9 +1767,27 @@
       : Math.atan2(pn.vy || 0, pn.vx || 1);
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
+    const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
+    if (pn.networkDowned) {
+      drawSpriteFrame(spriteKey, pn.x, pn.y + slotSize * 0.14, slotSize, {
+        alpha: 0.64,
+        flipX: facing < 0,
+        rotation: (facing < 0 ? -1 : 1) * Math.PI / 2,
+        scaleY: 0.72,
+        shadowColor: hexToRgba(tintColor, 0.5),
+        shadowBlur: 12,
+        tint: 'rgba(70, 8, 18, 0.42)',
+      });
+      Neo.ctx.save();
+      Neo.ctx.fillStyle = '#ff8295';
+      Neo.ctx.font = 'bold 11px monospace';
+      Neo.ctx.textAlign = 'center';
+      Neo.ctx.fillText(`${label} — DOWN`, pn.x, pn.y - pn.r - 7);
+      Neo.ctx.restore();
+      return;
+    }
     drawActorStatusRings(pn);
     drawActorOverhealBarrier(pn);
-    const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
     const slotGodTime = getActorGodTime(pn);
     drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
       alpha: pn.inv > 0 ? 0.55 : 1,
