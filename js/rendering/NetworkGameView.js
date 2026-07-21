@@ -113,7 +113,7 @@
     'laserSweepSpeed', 'loveBeamCasting', 'activeBeamPaths', 'justiceBlades',
     'titanHammer', 'ghostBalls', 'skySwords', 'gameElapsedTime', 'lavaAnimTime',
     'showFloorTransition', 'floorTransitionTime', 'presentationPlayerSlots',
-    'activePlayerEffects',
+    'activePlayerEffects', 'presentationViewpointPlayer', 'beamStruggle',
   ]);
 
   function deriveAbilityPresentation(data = {}) {
@@ -263,6 +263,8 @@
       this.keys = new Set();
       this.aimDirection = 0;
       this.laserHeld = false;
+      this.touchLaserHeld = false;
+      this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false };
       this.localBeamAngle = null;
       this.localBeamChannelStart = -1;
       this.previousSample = null;
@@ -285,6 +287,7 @@
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors = new Map();
       this.presentationEnemyActors = new Map();
+      this.enemyLostSightStartedAtTick = new Map();
       this.presentationProjectiles = new Map();
       this.presentationPickups = new Map();
       this.presentationHazards = new Map();
@@ -332,6 +335,7 @@
       this.boundBlur = () => {
         this.keys.clear();
         this.laserHeld = false;
+        this.touchLaserHeld = false;
       };
       this.boundPauseResume = event => {
         event?.preventDefault?.();
@@ -803,6 +807,10 @@
 
     _useSlot(slot) {
       if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
+      if (slot === 'laser' && this.neo.beamStruggle?.active) {
+        this.session.sendAction('BEAM_MASH', this.aimDirection);
+        return;
+      }
       const player = this.localPredictedPlayer;
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
@@ -1189,8 +1197,32 @@
         : movement;
     }
 
+    _syncTouchActions() {
+      const touch = root.NeoTouch;
+      const current = {
+        slash: !!touch?.active && !!touch.slash,
+        laser: !!touch?.active && !!touch.laser,
+        smash: !!touch?.active && !!touch.smash,
+        ascend: !!touch?.active && !!touch.ascend,
+        dash: !!touch?.active && !!touch.dash,
+      };
+      if (touch?.active && Math.hypot(Number(touch.lastAimX || 0), Number(touch.lastAimY || 0)) > 0.2) {
+        this.aimDirection = Math.atan2(Number(touch.lastAimY || 0), Number(touch.lastAimX || 0));
+      }
+      if (!this._isInputBlocked() && !this.localPredictedPlayer?.downed) {
+        if (current.slash && !this.previousTouchActions.slash) this._attack();
+        if (current.laser && !this.previousTouchActions.laser) this._useSlot('laser');
+        if (current.smash && !this.previousTouchActions.smash) this._useSlot('smash');
+        if (current.dash && !this.previousTouchActions.dash) this._useSlot('dash');
+        if (current.ascend && !this.previousTouchActions.ascend) this._interact();
+      }
+      this.touchLaserHeld = current.laser;
+      this.previousTouchActions = current;
+    }
+
     _sendInput() {
       if (!this.active || this.session.snapshot().status !== 'running') return;
+      this._syncTouchActions();
       const movement = this._isInputBlocked() || this.localPredictedPlayer?.downed
         ? { moveX: 0, moveY: 0 }
         : this._readMovement();
@@ -1198,7 +1230,7 @@
       // direction to authority instead of the stale top-down pointer angle.
       const firstPersonYaw = this.neo.getFirstPersonYaw?.();
       if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
-      const input = { ...movement, aimDirection: this.aimDirection, buttons: this.laserHeld ? BUTTON_LASER_HELD : 0 };
+      const input = { ...movement, aimDirection: this.aimDirection, buttons: this.laserHeld || this.touchLaserHeld ? BUTTON_LASER_HELD : 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
           this.localPredictedPlayer,
@@ -1368,6 +1400,7 @@
           xp: Math.max(0, Number(player.xp || 0)),
           xpToNext: Math.max(1, Number(player.xpToNext || 20)),
           weaponCooldown: Math.max(0, Number(player.attackCooldownUntilTick || 0) - serverTick) / 20,
+          stun: Math.max(0, Number(player.stunnedUntilTick || 0) - serverTick) / 20,
           inv: serverTick < Number(player.invulnerableUntilTick || 0) ? 1 : 0,
           swing: attacking ? Math.max(0.001, activeSeconds - elapsed) : 0,
           swingA: Number(player.aimDirection || 0),
@@ -1418,7 +1451,10 @@
         !visibleRoomId || slot.getEntity?.()?.roomId === visibleRoomId
       ));
       const localSlot = projectedPlayerSlots.find(slot => slot.id === localPlayerId);
+      const viewpointId = this._viewpointPlayerId(state, localPlayerId);
+      const viewpointSlot = projectedPlayerSlots.find(slot => slot.id === viewpointId) || localSlot;
       this.neo.presentationPlayerSlots = this.presentationPlayerSlots;
+      this.neo.presentationViewpointPlayer = viewpointSlot?.getEntity?.() || null;
       if (localSlot) {
         this.neo.player = localSlot.getEntity();
         this._syncCampaignHudState(this.neo.player, state);
@@ -1659,6 +1695,21 @@
       this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       this._syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta, visibleRoomId);
+      const authorityStruggle = state?.beamStruggles?.[localPlayerId];
+      const struggleEnemy = authorityStruggle
+        ? this.presentationEnemyActors.get(String(authorityStruggle.enemyId))
+          || this.presentationEnemyActors.get(authorityStruggle.enemyId)
+        : null;
+      this.neo.beamStruggle = authorityStruggle && struggleEnemy ? {
+        active: true,
+        enemy: struggleEnemy,
+        progress: Number(authorityStruggle.progress || 0.5),
+        mashCount: Number(authorityStruggle.mashCount || 0),
+        elapsed: Math.max(0, Number(state.tick || 0) - Number(authorityStruggle.startTick || 0)) / 20,
+        duration: Math.max(0, Number(authorityStruggle.endTick || 0) - Number(authorityStruggle.startTick || 0)) / 20,
+        x: Number(authorityStruggle.x || 0),
+        y: Number(authorityStruggle.y || 0),
+      } : null;
       this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
       const floorTransitionAge = this.floorTransitionStartedAt > 0
         ? Math.max(0, now - this.floorTransitionStartedAt) / 1000
@@ -1730,6 +1781,13 @@
         this.presentationEnemyActors,
         liveEnemies,
         enemy => {
+          const currentTick = Number(state?.tick || 0);
+          const lostSightActive = currentTick < Number(enemy.confusedBlindUntilTick || 0);
+          if (lostSightActive && !this.enemyLostSightStartedAtTick.has(enemy.id)) {
+            this.enemyLostSightStartedAtTick.set(enemy.id, currentTick);
+          } else if (!lostSightActive) {
+            this.enemyLostSightStartedAtTick.delete(enemy.id);
+          }
           const adapted = {
             ...enemy,
             r: Number(enemy.radius || 20),
@@ -1739,6 +1797,10 @@
             spawnT: Math.max(0, 0.72 - (Number(state?.tick || 0) - Number(enemy.spawnTick || 0)) / 20),
             stun: Math.max(0, Number(enemy.stunnedUntilTick || 0) - Number(state?.tick || 0)) / 20,
             confusedBlindUntil: Number(enemy.confusedBlindUntilTick || 0) / 20,
+            playerLostSight: lostSightActive,
+            playerLostSightAge: lostSightActive
+              ? Math.max(0, currentTick - Number(this.enemyLostSightStartedAtTick.get(enemy.id) || currentTick)) / 20
+              : 0,
             // Status state is already canonical authority state. Pass it through
             // unchanged so campaign 2D/3D renderers see the same stacks,
             // durations and proc power as local play; never reconstruct a

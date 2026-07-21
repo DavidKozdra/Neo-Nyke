@@ -2627,6 +2627,13 @@
         });
       });
 
+      // Three.js keeps the conduits on this floor texture but constructs the
+      // control chassis and terminal bank as raised geometry.
+      if (Neo._threeChallengeFloorOnly) {
+        Neo.ctx.restore();
+        return;
+      }
+
       // Bolted control chassis.
       Neo.ctx.fillStyle = 'rgba(2,7,12,0.72)';
       Neo.ctx.beginPath();
@@ -2778,6 +2785,13 @@
     Neo.ctx.arc(0, 0, obelisk.guardRange || 96, 0, Math.PI * 2);
     Neo.ctx.stroke();
     Neo.ctx.setLineDash([]);
+
+    // The 3D pass keeps this guard-range ring on the floor and replaces the
+    // remaining top-down body with a physical crystal mesh.
+    if (Neo._threeChallengeFloorOnly) {
+      Neo.ctx.restore();
+      return;
+    }
 
     // Base shadow
     Neo.ctx.fillStyle = 'rgba(0,0,0,0.32)';

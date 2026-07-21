@@ -32,7 +32,7 @@
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v26';
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v27';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
@@ -148,6 +148,8 @@
         const input = inputs[player.id] || {};
         let moveX = Number(input.moveX) || 0;
         let moveY = Number(input.moveY) || 0;
+        const stunned = state.tick < Number(player.stunnedUntilTick || 0);
+        if (stunned) { moveX = 0; moveY = 0; }
         const magnitude = Math.hypot(moveX, moveY);
         if (magnitude > 1) { moveX /= magnitude; moveY /= magnitude; }
         const speed = getCampaignPlayerMovementSpeed(player, state.tick);
@@ -155,7 +157,7 @@
         const minimum = wall + radius;
         const maximumX = width - minimum;
         const maximumY = height - minimum;
-        const dashing = isCampaignPlayerDashing?.(player, state.tick);
+        const dashing = !stunned && isCampaignPlayerDashing?.(player, state.tick);
         if (dashing) {
           // A dashing hero glides at its locked dash velocity and ignores input
           // steering, exactly like the campaign's dashTime branch. Movement
@@ -207,7 +209,7 @@
       vx: 0, vy: 0, radius: 18, moveSpeed: 228,
       maxHp: 100, hp: 100, coins: 0, level: 1, xp: 0, xpToNext: 20,
       damageMultiplier: 1, kills: 0, playerKills: 0, deaths: 0,
-      downed: false, action: 'idle', actionTick: -1, attackCooldownUntilTick: 0,
+      downed: false, action: 'idle', actionTick: -1, attackCooldownUntilTick: 0, stunnedUntilTick: 0,
       aimDirection: 0, characterKey: options.characterKey || 'thorn_knight', slotIndex,
       roomId: String(options.roomId || ''),
     };

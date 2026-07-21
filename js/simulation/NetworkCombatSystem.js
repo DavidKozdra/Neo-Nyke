@@ -130,6 +130,12 @@
   // campaign); a channel that never sees it simply runs its full duration.
   const BUTTON_LASER_HELD = 1;
   const TURTLE_WAVE_HP_PER_SECOND = 2;
+  const HEAVY_HIT_HEALTH_RATIO = 0.5;
+  const HEAVY_KNOCKBACK_THRESHOLD = 6600;
+  const HEAVY_HIT_STUN_SECONDS = 0.62;
+  const HEAVY_KNOCKBACK_STUN_SECONDS = 0.46;
+  const BEAM_STRUGGLE_DURATION_TICKS = 60;
+  const BEAM_STRUGGLE_MASH_FORCE = 0.085;
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
     Object.entries(CHARACTER_DEFAULT_WEAPONS).map(([characterKey, weaponKey]) => [characterKey, Object.freeze({
       characterKey,
@@ -1722,6 +1728,7 @@
   function endBeamChannel(state, player) {
     const channel = player?.beamChannel;
     if (!channel) return;
+    if (state.beamStruggles?.[player.id]) clearNetworkBeamStruggle(state, state.beamStruggles[player.id]);
     // The campaign starts the laser cooldown when the beam ENDS (held skills
     // recharge on release), so an early release must pull the cooldown forward
     // from the full-duration estimate written at cast time.
@@ -1731,6 +1738,98 @@
       state.tick + Math.max(1, Number(channel.cooldownTicks || 1)),
     );
     player.beamChannel = null;
+  }
+
+  function clearNetworkBeamStruggle(state, struggle) {
+    if (!struggle) return;
+    const enemy = state.enemies?.[struggle.enemyId];
+    if (enemy?.networkBeamStrugglePlayerId === struggle.playerId) delete enemy.networkBeamStrugglePlayerId;
+    if (state.beamStruggles) delete state.beamStruggles[struggle.playerId];
+  }
+
+  function resolveNetworkBeamStruggle(state, struggle, playerWon, emitEvent) {
+    const player = state.players?.[struggle.playerId];
+    const enemy = state.enemies?.[struggle.enemyId];
+    clearNetworkBeamStruggle(state, struggle);
+    if (player) endBeamChannel(state, player);
+    if (enemy) enemy.beamTime = 0;
+    if (playerWon && enemy && !enemy.dead) {
+      enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 25);
+      damageEnemy(state, enemy, 30, player?.id, emitEvent, { attackKind: 'beam_struggle', knockback: 360 });
+    } else if (player && !player.downed) {
+      player.stunnedUntilTick = Math.max(Number(player.stunnedUntilTick || 0), state.tick + 14);
+      damagePlayer(state, player, Math.max(18, Number(enemy?.contactDamage || enemy?.dmg || 14) * 1.35), enemy?.id, emitEvent, 'beam_struggle', {
+        angle: Number(enemy?.beamAngle || 0), knockback: 330,
+      });
+    }
+    emitEvent('BEAM_STRUGGLE_RESOLVED', {
+      playerId: struggle.playerId, enemyId: struggle.enemyId, playerWon,
+      x: struggle.x, y: struggle.y,
+    });
+  }
+
+  function registerNetworkBeamMash(state, player, emitEvent) {
+    const struggle = state.beamStruggles?.[player.id];
+    if (!struggle) return false;
+    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE));
+    struggle.mashCount = Number(struggle.mashCount || 0) + 1;
+    if (struggle.progress >= 1) resolveNetworkBeamStruggle(state, struggle, true, emitEvent);
+    return true;
+  }
+
+  function tryStartNetworkBeamStruggle(state, player, channel, emitEvent) {
+    state.beamStruggles = state.beamStruggles || {};
+    if (state.beamStruggles[player.id]) return state.beamStruggles[player.id];
+    const playerRange = Number(BEAM_CHANNEL_PROFILES[channel.moveKey]?.range || 430);
+    let nearest = null;
+    Object.values(state.enemies || {}).forEach(enemy => {
+      if (!enemy || enemy.dead || enemy.roomId !== player.roomId || Number(enemy.beamTime || 0) <= 0) return;
+      const enemyAngle = Number(enemy.beamAngle || 0);
+      const facingDot = Math.cos(channel.angle) * Math.cos(enemyAngle) + Math.sin(channel.angle) * Math.sin(enemyAngle);
+      if (facingDot > -0.15) return;
+      const dx = Number(enemy.x) - Number(player.x);
+      const dy = Number(enemy.y) - Number(player.y);
+      const distance = Math.hypot(dx, dy);
+      const enemyRange = Number(enemy.beamRange || (enemy.type === 'god' ? 620 : 520));
+      if (distance > Math.min(playerRange, enemyRange)) return;
+      const playerLateral = Math.abs(dx * Math.sin(channel.angle) - dy * Math.cos(channel.angle));
+      const enemyLateral = Math.abs((-dx) * Math.sin(enemyAngle) - (-dy) * Math.cos(enemyAngle));
+      if (playerLateral > 24 || enemyLateral > 24) return;
+      if (!nearest || distance < nearest.distance) nearest = { enemy, distance };
+    });
+    if (!nearest) return null;
+    const struggle = {
+      playerId: player.id,
+      enemyId: nearest.enemy.id,
+      startTick: state.tick,
+      endTick: state.tick + BEAM_STRUGGLE_DURATION_TICKS,
+      progress: 0.5,
+      mashCount: 0,
+      x: (Number(player.x) + Number(nearest.enemy.x)) / 2,
+      y: (Number(player.y) + Number(nearest.enemy.y)) / 2,
+    };
+    state.beamStruggles[player.id] = struggle;
+    nearest.enemy.networkBeamStrugglePlayerId = player.id;
+    emitEvent('BEAM_STRUGGLE_STARTED', { ...struggle });
+    return struggle;
+  }
+
+  function updateNetworkBeamStruggle(state, player, channel, emitEvent) {
+    const struggle = state.beamStruggles?.[player.id];
+    if (!struggle) return false;
+    const enemy = state.enemies?.[struggle.enemyId];
+    if (!enemy || enemy.dead || !channel || player.downed) {
+      clearNetworkBeamStruggle(state, struggle);
+      return false;
+    }
+    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) - 0.006));
+    struggle.x = (Number(player.x) + Number(enemy.x)) / 2;
+    struggle.y = (Number(player.y) + Number(enemy.y)) / 2;
+    enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
+    if (struggle.progress <= 0 || state.tick >= Number(struggle.endTick || 0)) {
+      resolveNetworkBeamStruggle(state, struggle, false, emitEvent);
+    }
+    return true;
   }
 
   function updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent) {
@@ -1761,6 +1860,9 @@
         sweepDirection: channel.sweepDirection,
         laserWeightMultiplier: itemStats.laserWeightMultiplier,
       });
+      const struggle = state.beamStruggles?.[player.id]
+        || tryStartNetworkBeamStruggle(state, player, channel, emitEvent);
+      if (struggle && updateNetworkBeamStruggle(state, player, channel, emitEvent)) continue;
       const weight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
       const recoil = BEAM_RECOIL_ACCEL * weight + (channel.moveKey === 'wizard_lazer' ? WIZARD_LAZER_EXTRA_RECOIL : 0);
       if (recoil > 0) {
@@ -2279,6 +2381,12 @@
         return false;
       });
       const actions = Array.isArray(inputs[player.id]?.actions) ? inputs[player.id].actions : [];
+      if (state.tick < Number(player.stunnedUntilTick || 0)) {
+        player.action = 'stunned';
+        return;
+      }
+      actions.filter(action => action?.action === 'BEAM_MASH')
+        .forEach(() => registerNetworkBeamMash(state, player, emitEvent));
       if (actions.some(action => action?.action === 'ATTACK' || action?.action === 'ABILITY')) {
         if (player.statusUntilTick) delete player.statusUntilTick.cowards_way;
       }
@@ -2333,6 +2441,28 @@
     const impulse = dealt > 0 && Number(options.knockback || 0) > 0
       ? applyCampaignImpulse(player, Number(options.angle || 0), Number(options.knockback || 0), Number(itemStats.anchorKnockbackResist || 0))
       : null;
+    if (dealt > 0) {
+      const stunResistance = Math.max(0, Number(itemStats.stunResistance || 0));
+      const thresholdMultiplier = 1 + stunResistance * 0.35;
+      const durationMultiplier = Math.max(0.28, 1 - stunResistance * 0.28)
+        * Math.max(0, Number(itemStats.negativeStatusMultiplier ?? 1));
+      const lostHalfHealth = dealt >= Math.max(1, Number(player.maxHp || 100))
+        * HEAVY_HIT_HEALTH_RATIO * thresholdMultiplier;
+      const knockback = Number(impulse?.magnitude || 0);
+      const knockbackThreshold = HEAVY_KNOCKBACK_THRESHOLD * thresholdMultiplier;
+      const heavyKnockback = knockback >= knockbackThreshold;
+      if (lostHalfHealth || heavyKnockback) {
+        let seconds = lostHalfHealth ? HEAVY_HIT_STUN_SECONDS : 0;
+        if (heavyKnockback) {
+          const excess = Math.max(0, Math.min(1, (knockback - knockbackThreshold) / knockbackThreshold));
+          seconds = Math.max(seconds, HEAVY_KNOCKBACK_STUN_SECONDS + excess * 0.18);
+        }
+        player.stunnedUntilTick = Math.max(
+          Number(player.stunnedUntilTick || 0),
+          state.tick + Math.ceil(seconds * durationMultiplier * 20),
+        );
+      }
+    }
     const newlyDowned = player.hp <= 0;
     if (newlyDowned) {
       player.downed = true;
@@ -2930,6 +3060,7 @@
       const state = behaviorRuntime.state;
       const player = state.players?.[playerRef.id];
       if (!player) return;
+      if (enemy.networkBeamStrugglePlayerId === player.id && state.beamStruggles?.[player.id]) return;
       damagePlayer(state, player, damage, enemy.id, behaviorRuntime.emitEvent, source || enemy.type, { angle, knockback });
     },
     applyPlayerStatus(enemy, playerRef, key, stacks, duration) {

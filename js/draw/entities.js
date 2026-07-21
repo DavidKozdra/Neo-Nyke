@@ -2063,6 +2063,8 @@
   Neo.getFacingDirection = getFacingDirection;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;
+  Neo.getActorSpriteScale = getActorSpriteScale;
+  Neo.getActorGodTime = getActorGodTime;
   Neo.drawWarpPreview = drawWarpPreview;
   Neo.drawSpriteFrame = drawSpriteFrame;
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;

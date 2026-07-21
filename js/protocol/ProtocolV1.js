@@ -87,7 +87,7 @@
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
       fields: {
-        action: field('string', { required: true, enum: ['ATTACK', 'ABILITY', 'DASH', 'INTERACT'] }),
+        action: field('string', { required: true, enum: ['ATTACK', 'ABILITY', 'DASH', 'INTERACT', 'BEAM_MASH'] }),
         inputSequence: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
         aimDirection: field('number', { required: true, min: -Math.PI * 4, max: Math.PI * 4 }),
         equippedItemId: field('string', { maxLength: 96 }),

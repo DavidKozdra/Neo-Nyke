@@ -13,8 +13,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v29');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v26');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v30');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v27');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -101,6 +101,28 @@ describe('network multiplayer game view', () => {
       globalThis.NeoTouch = { active: true, moveX: 1, moveY: 1 };
       const movement = touchView()._readMovement();
       expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);
+    });
+
+    test('routes touch combat buttons into network actions and holds the beam bit', () => {
+      const calls = [];
+      const session = {
+        snapshot: () => ({ status: 'running' }),
+        sendAction: action => calls.push(action),
+        sendAbility: ability => calls.push(`ability:${ability}`),
+        sendDash: ability => calls.push(`dash:${ability}`),
+      };
+      const view = new NetworkGameView({ session, neo: {} });
+      view.active = true;
+      view.localPredictedPlayer = {
+        id: 'p1', equippedMoves: { laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+      };
+      globalThis.NeoTouch = { active: true, slash: true, laser: true, smash: true, dash: true, lastAimX: 0, lastAimY: 1 };
+      view._syncTouchActions();
+      expect(calls).toEqual(['ATTACK', 'ability:blood_beam', 'ability:crimson_smash', 'dash:dash']);
+      expect(view.touchLaserHeld).toBe(true);
+      expect(view.aimDirection).toBeCloseTo(Math.PI / 2);
+      view._syncTouchActions();
+      expect(calls).toHaveLength(4); // held buttons do not resend edge-triggered actions
     });
   });
 

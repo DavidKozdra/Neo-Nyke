@@ -190,6 +190,42 @@ describe('authoritative network combat system', () => {
     expect(events.find(event => event.data.abilityId === 'blood_beam').data.effectRadius).toBe(430);
   });
 
+  test('starts and resolves an authoritative beam struggle when opposing lasers meet', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'thorn_knight');
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    enemy.x = player.x + 150;
+    enemy.y = player.y;
+    enemy.moveSpeed = 0;
+    enemy.beamTime = 1;
+    enemy.beamAngle = Math.PI;
+
+    simulation.updateGame({ p1: {
+      buttons: 1,
+      aimDirection: 0,
+      actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }],
+    } }, 0.05);
+
+    expect(state.beamStruggles.p1).toEqual(expect.objectContaining({
+      playerId: 'p1', enemyId: enemy.id,
+    }));
+    expect(events.some(event => event.eventType === 'BEAM_STRUGGLE_STARTED')).toBe(true);
+
+    for (let index = 0; index < 7; index += 1) {
+      simulation.updateGame({ p1: {
+        buttons: 1,
+        aimDirection: 0,
+        actions: [{ action: 'BEAM_MASH', aimDirection: 0 }],
+      } }, 0.05);
+    }
+
+    expect(state.beamStruggles.p1).toBeUndefined();
+    expect(enemy.stunnedUntilTick).toBeGreaterThan(state.tick);
+    expect(events.some(event => event.eventType === 'BEAM_STRUGGLE_RESOLVED' && event.data.playerWon)).toBe(true);
+  });
+
   test('uses the campaign Power Disk recipe: eight radial disks that shed perpendicular shards', () => {
     const { state, simulation } = combatHarness('metao');
     applyNetworkHeroProfile(state.players.p1, 'metao');

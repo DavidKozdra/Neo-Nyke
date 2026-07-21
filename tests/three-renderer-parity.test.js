@@ -88,7 +88,7 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('sprite.material.rotation = -Number(blade.angle || 0);');
     expect(renderer).toContain('turtleWave,');
     expect(renderer).toContain('playerBeam.width * 1.7 * wavePulse');
-    expect(renderer).toContain('function drawChargeHud()');
+    expect(renderer).toContain('function drawChargeHud(p = Neo.player, viewCamera = camera, viewport = null)');
     expect(renderer).toContain('Neo.drawHealingZoneChargeBar?.();');
     expect(renderer).toContain('Neo.drawDeathBallChargeBar?.();');
     expect(renderer).toContain('Neo.drawLoveBombChargeBar?.();');
@@ -100,7 +100,7 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('Neo.drawRoomDecor();');
     expect(renderer).toContain('function syncWorldFxOverlay()');
     expect(renderer).toContain('Neo.drawGhostBalls?.();');
-    expect(renderer).toContain('Neo.drawSkySwords?.();');
+    expect(renderer).toContain('function syncSkySwords()');
     expect(renderer).toContain('Neo.drawChallengeObelisk?.();');
     expect(renderer).toContain('function syncEnemyWindup(group, enemy)');
     expect(renderer).toContain('function syncMooggyAura(group, enemy)');
@@ -112,7 +112,7 @@ describe('3D renderer gameplay parity', () => {
     const update = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
     const math = fs.readFileSync(path.join(__dirname, '../js/core/math-utils.js'), 'utf8');
     expect(renderer).toContain('function projectCanvasMouseToWorld(canvasX, canvasY)');
-    expect(renderer).toContain('mouseAimRay.setFromCamera(mouseAimNdc, camera);');
+    expect(renderer).toContain('mouseAimRay.setFromCamera(mouseAimNdc, aimCamera);');
     expect(renderer).toContain('Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;');
     expect(math).toContain('const perspectiveAim = Neo.projectCanvasMouseToWorld?.(clampedCanvasX, canvasY);');
     expect(update).toContain('Neo.updatePointerAimWorld();');
