@@ -226,6 +226,33 @@ describe('authoritative network combat system', () => {
     expect(events.some(event => event.eventType === 'BEAM_STRUGGLE_RESOLVED' && event.data.playerWon)).toBe(true);
   });
 
+  test('lets rival players contest opposing beam channels from both clients', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    state.matchRules = { mode: 'rival' };
+    state.players.p2 = {
+      ...state.players.p1, id: 'p2', x: state.players.p1.x + 160,
+      hp: 100, maxHp: 100, beamChannel: null,
+    };
+    applyNetworkHeroProfile(state.players.p1, 'thorn_knight');
+    applyNetworkHeroProfile(state.players.p2, 'thorn_knight');
+
+    simulation.updateGame({
+      p1: { buttons: 1, aimDirection: 0, actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] },
+      p2: { buttons: 1, aimDirection: Math.PI, actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: Math.PI }] },
+    }, 0.05);
+
+    expect(state.beamStruggles.p1).toBe(state.beamStruggles.p2);
+    for (let index = 0; index < 7; index += 1) {
+      simulation.updateGame({
+        p1: { buttons: 1, aimDirection: 0, actions: [{ action: 'BEAM_MASH', aimDirection: 0 }] },
+        p2: { buttons: 1, aimDirection: Math.PI, actions: [] },
+      }, 0.05);
+    }
+    expect(state.beamStruggles.p1).toBeUndefined();
+    expect(state.players.p2.stunnedUntilTick).toBeGreaterThan(state.tick);
+    expect(events.some(event => event.eventType === 'BEAM_STRUGGLE_RESOLVED' && event.data.opponentPlayerId === 'p2')).toBe(true);
+  });
+
   test('uses the campaign Power Disk recipe: eight radial disks that shed perpendicular shards', () => {
     const { state, simulation } = combatHarness('metao');
     applyNetworkHeroProfile(state.players.p1, 'metao');

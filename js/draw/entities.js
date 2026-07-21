@@ -1823,6 +1823,19 @@
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
     Neo.ctx.restore();
+    if (pn.pvpBeamActive && Array.isArray(pn.pvpBeamPath)) {
+      Neo.drawTaperedBeamPaths?.([pn.pvpBeamPath], {
+        color: pn.pvpBeamMode === 'turtle_wave' ? '#74f5ff' : tintColor,
+        glow: pn.pvpBeamMode === 'turtle_wave' ? '#b8ffff' : tintColor,
+        maxWidth: pn.pvpBeamMode === 'turtle_wave' ? 18 : 8,
+        coreColor: '#ffffff',
+      });
+    }
+    if (Number(pn.auxLaserFxTime || 0) > 0 && Array.isArray(pn.auxLaserPath)) {
+      Neo.drawTaperedBeamPaths?.([pn.auxLaserPath], {
+        color: tintColor, glow: tintColor, maxWidth: 8, coreColor: '#ffffff',
+      });
+    }
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;
     Neo.ctx.font = 'bold 11px monospace';

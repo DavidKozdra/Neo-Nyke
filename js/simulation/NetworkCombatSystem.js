@@ -1744,16 +1744,31 @@
     if (!struggle) return;
     const enemy = state.enemies?.[struggle.enemyId];
     if (enemy?.networkBeamStrugglePlayerId === struggle.playerId) delete enemy.networkBeamStrugglePlayerId;
-    if (state.beamStruggles) delete state.beamStruggles[struggle.playerId];
+    if (state.beamStruggles) {
+      delete state.beamStruggles[struggle.playerId];
+      if (struggle.opponentPlayerId) delete state.beamStruggles[struggle.opponentPlayerId];
+    }
   }
 
   function resolveNetworkBeamStruggle(state, struggle, playerWon, emitEvent) {
     const player = state.players?.[struggle.playerId];
+    const opponent = state.players?.[struggle.opponentPlayerId];
     const enemy = state.enemies?.[struggle.enemyId];
     clearNetworkBeamStruggle(state, struggle);
     if (player) endBeamChannel(state, player);
+    if (opponent) endBeamChannel(state, opponent);
     if (enemy) enemy.beamTime = 0;
-    if (playerWon && enemy && !enemy.dead) {
+    if (opponent) {
+      const winner = playerWon ? player : opponent;
+      const loser = playerWon ? opponent : player;
+      if (loser && !loser.downed) {
+        loser.stunnedUntilTick = Math.max(Number(loser.stunnedUntilTick || 0), state.tick + 14);
+        damagePlayer(state, loser, 22, winner?.id, emitEvent, 'beam_struggle', {
+          angle: Math.atan2(Number(loser.y) - Number(winner?.y || 0), Number(loser.x) - Number(winner?.x || 0)),
+          knockback: 330,
+        });
+      }
+    } else if (playerWon && enemy && !enemy.dead) {
       enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 25);
       damageEnemy(state, enemy, 30, player?.id, emitEvent, { attackKind: 'beam_struggle', knockback: 360 });
     } else if (player && !player.downed) {
@@ -1763,7 +1778,8 @@
       });
     }
     emitEvent('BEAM_STRUGGLE_RESOLVED', {
-      playerId: struggle.playerId, enemyId: struggle.enemyId, playerWon,
+      playerId: struggle.playerId, enemyId: struggle.enemyId,
+      opponentPlayerId: struggle.opponentPlayerId, playerWon,
       x: struggle.x, y: struggle.y,
     });
   }
@@ -1771,9 +1787,11 @@
   function registerNetworkBeamMash(state, player, emitEvent) {
     const struggle = state.beamStruggles?.[player.id];
     if (!struggle) return false;
-    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE));
+    const direction = player.id === struggle.playerId ? 1 : -1;
+    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE * direction));
     struggle.mashCount = Number(struggle.mashCount || 0) + 1;
     if (struggle.progress >= 1) resolveNetworkBeamStruggle(state, struggle, true, emitEvent);
+    else if (struggle.progress <= 0) resolveNetworkBeamStruggle(state, struggle, false, emitEvent);
     return true;
   }
 
@@ -1781,6 +1799,37 @@
     state.beamStruggles = state.beamStruggles || {};
     if (state.beamStruggles[player.id]) return state.beamStruggles[player.id];
     const playerRange = Number(BEAM_CHANNEL_PROFILES[channel.moveKey]?.range || 430);
+    let opposingPlayer = null;
+    if (state.matchRules?.mode === 'rival') {
+      Object.values(state.players || {}).forEach(candidate => {
+        if (!candidate || candidate.id === player.id || candidate.downed || candidate.roomId !== player.roomId || !candidate.beamChannel) return;
+        if (state.beamStruggles[candidate.id]) return;
+        const opponentAngle = Number(candidate.beamChannel.angle || candidate.aimDirection || 0);
+        const dx = Number(candidate.x) - Number(player.x);
+        const dy = Number(candidate.y) - Number(player.y);
+        const distance = Math.hypot(dx, dy);
+        const opponentRange = Number(BEAM_CHANNEL_PROFILES[candidate.beamChannel.moveKey]?.range || 430);
+        const facingDot = Math.cos(channel.angle) * Math.cos(opponentAngle) + Math.sin(channel.angle) * Math.sin(opponentAngle);
+        const lateralA = Math.abs(dx * Math.sin(channel.angle) - dy * Math.cos(channel.angle));
+        const lateralB = Math.abs((-dx) * Math.sin(opponentAngle) - (-dy) * Math.cos(opponentAngle));
+        if (facingDot <= -0.15 && distance <= Math.min(playerRange, opponentRange) && lateralA <= 24 && lateralB <= 24
+          && (!opposingPlayer || distance < opposingPlayer.distance)) opposingPlayer = { player: candidate, distance };
+      });
+    }
+    if (opposingPlayer) {
+      const opponent = opposingPlayer.player;
+      const struggle = {
+        playerId: player.id, opponentPlayerId: opponent.id,
+        startTick: state.tick, endTick: state.tick + BEAM_STRUGGLE_DURATION_TICKS,
+        progress: 0.5, mashCount: 0,
+        x: (Number(player.x) + Number(opponent.x)) / 2,
+        y: (Number(player.y) + Number(opponent.y)) / 2,
+      };
+      state.beamStruggles[player.id] = struggle;
+      state.beamStruggles[opponent.id] = struggle;
+      emitEvent('BEAM_STRUGGLE_STARTED', { ...struggle });
+      return struggle;
+    }
     let nearest = null;
     Object.values(state.enemies || {}).forEach(enemy => {
       if (!enemy || enemy.dead || enemy.roomId !== player.roomId || Number(enemy.beamTime || 0) <= 0) return;
@@ -1818,14 +1867,17 @@
     const struggle = state.beamStruggles?.[player.id];
     if (!struggle) return false;
     const enemy = state.enemies?.[struggle.enemyId];
-    if (!enemy || enemy.dead || !channel || player.downed) {
+    const opponent = state.players?.[struggle.opponentPlayerId];
+    if ((!enemy && !opponent) || enemy?.dead || opponent?.downed || !channel || player.downed) {
       clearNetworkBeamStruggle(state, struggle);
       return false;
     }
-    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) - 0.006));
-    struggle.x = (Number(player.x) + Number(enemy.x)) / 2;
-    struggle.y = (Number(player.y) + Number(enemy.y)) / 2;
-    enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
+    if (player.id !== struggle.playerId) return true;
+    struggle.progress = Math.max(0, Math.min(1, Number(struggle.progress || 0.5) - (opponent ? 0 : 0.006)));
+    const target = opponent || enemy;
+    struggle.x = (Number(player.x) + Number(target.x)) / 2;
+    struggle.y = (Number(player.y) + Number(target.y)) / 2;
+    if (enemy) enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
     if (struggle.progress <= 0 || state.tick >= Number(struggle.endTick || 0)) {
       resolveNetworkBeamStruggle(state, struggle, false, emitEvent);
     }

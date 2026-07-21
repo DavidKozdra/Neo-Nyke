@@ -1007,6 +1007,10 @@ function makeActorGroup(spriteKey, radius) {
   arm.renderOrder = 3;
   arm.visible = false;
   group.add(arm);
+  const weapon3d = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xd9e3ef }));
+  weapon3d.name = 'weapon-3d';
+  weapon3d.visible = false;
+  group.add(weapon3d);
   const status = new THREE.Group();
   status.name = 'status-effects';
   const aura = new THREE.Mesh(
@@ -1261,10 +1265,12 @@ function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
 
 function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const arm = group.getObjectByName('arm');
+  const weapon3d = group.getObjectByName('weapon-3d');
   if (!arm) return;
   const texture = getSpriteTexture(`${spriteKey}:arm`, flip);
   if (!texture || options.hidden) {
     arm.visible = false;
+    if (weapon3d) weapon3d.visible = false;
     return;
   }
   const renderScale = Number(texture.userData?.renderScale || 1);
@@ -1295,6 +1301,20 @@ function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   arm.scale.set(size * aspect, size, 1);
   arm.position.set(Math.cos(aim) * reach + offsetX, size * 0.45 + offsetY, Math.sin(aim) * reach);
   arm.material.needsUpdate = true;
+  if (weapon3d) {
+    const weaponKey = player.equippedWeapon || (player === Neo.player ? Neo.getEquippedWeapon?.() : '');
+    const hammer = /hammer/.test(weaponKey);
+    const staff = /staff|wand/.test(weaponKey);
+    const bow = /bow/.test(weaponKey);
+    const gun = /p90|degale|gun/.test(weaponKey);
+    const length = hammer ? 22 : staff || bow ? 27 : gun ? 20 : 16;
+    weapon3d.visible = !!weaponKey;
+    weapon3d.material.color.set(hammer ? 0x7da3ff : staff ? 0xff7bd8 : bow ? 0xb7efff : gun ? 0xff6fba : 0xe8edf5);
+    weapon3d.scale.set(length, hammer ? 6 : gun ? 4 : 2.5, hammer ? 6 : 2.5);
+    weapon3d.position.set(Math.cos(aim) * (reach + length * 0.35), size * 0.48 + offsetY, Math.sin(aim) * (reach + length * 0.35));
+    weapon3d.rotation.y = -aim;
+    weapon3d.rotation.z = angleOffset * (flip ? -1 : 1);
+  }
 }
 
 function syncActorStatus(group, actor, radius, isPlayer = false) {
@@ -2107,30 +2127,60 @@ function scaleNameplatesToScreen(viewCamera = camera, viewportHeight = null) {
   });
 }
 
+function makeProjectileObject(projectile) {
+  const visual = Neo.getProjectileVisual?.(projectile) || {};
+  const shape = visual.shape || 'orb';
+  const color = new THREE.Color(visual.color || projectile.color || '#ffffff').getHex();
+  if (shape === 'heart') {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+    sprite.userData.billboardProjectile = true;
+    return sprite;
+  }
+  let geometry;
+  if (shape === 'disk') geometry = new THREE.CylinderGeometry(1, 1, 0.28, 18);
+  else if (shape === 'rock') geometry = new THREE.DodecahedronGeometry(1, 0);
+  else if (['blade', 'dart', 'tracer', 'slug', 'arrow'].includes(shape)) geometry = new THREE.ConeGeometry(0.34, 2.4, 8);
+  else geometry = new THREE.SphereGeometry(1, shape === 'fireball' || shape === 'energy_orb' ? 16 : 10, 8);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.94 }));
+  mesh.userData.projectileShape = shape;
+  return mesh;
+}
+
 function syncProjectiles() {
   syncPool(
     pools.projectiles,
     Neo.projectiles,
-    () => new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })),
-    (projectile, sprite) => {
+    projectile => makeProjectileObject(projectile),
+    (projectile, object) => {
       const visual = Neo.getProjectileVisual?.(projectile) || {};
-      // Every projectile with authored 2D shape data bakes that silhouette.
       const shaped = getShapedProjectileTexture(projectile);
-      const texture = shaped || getGlowTexture(visual.color || projectile.color || '#ffffff');
-      if (sprite.material.map !== texture) {
-        sprite.material.map = texture;
-        // Baked art carries its own shading; additive would wash it out.
-        sprite.material.blending = shaped ? THREE.NormalBlending : THREE.AdditiveBlending;
-        sprite.material.needsUpdate = true;
+      const radius = Math.max(3, Number(projectile.r || 6));
+      const angle = Math.atan2(projectile.vy || 0, projectile.vx || 1);
+      if (object.userData.billboardProjectile) {
+        const texture = shaped || getGlowTexture(visual.color || projectile.color || '#ffffff');
+        if (object.material.map !== texture) {
+          object.material.map = texture;
+          object.material.needsUpdate = true;
+        }
+        const size = shaped ? (texture.userData.halfSize / texture.userData.bakedRadius) * radius * 2 : radius * 4;
+        object.scale.set(size, size, 1);
+        object.material.rotation = -angle;
+      } else {
+        object.material.color.set(visual.color || projectile.color || '#ffffff');
+        const elongated = ['blade', 'dart', 'tracer', 'slug', 'arrow'].includes(object.userData.projectileShape);
+        object.scale.setScalar(radius);
+        if (elongated) {
+          object.rotation.z = -Math.PI / 2;
+          object.rotation.y = -angle;
+        } else if (object.userData.projectileShape === 'disk') {
+          object.rotation.z = Math.PI / 2;
+          object.rotation.x += 0.18;
+        } else {
+          object.rotation.y += 0.12;
+          object.rotation.z += 0.08;
+        }
       }
-      const size = shaped
-        // Scale the baked texture so its baked radius maps to the live radius,
-        // preserving the padding baked into the canvas.
-        ? (texture.userData.halfSize / texture.userData.bakedRadius) * (projectile.r || 6) * 2
-        : Math.max(10, (projectile.r || 6) * 4);
-      sprite.scale.set(size, size, 1);
-      sprite.position.set(projectile.x, BEAM_Y, projectile.y);
-      sprite.material.rotation = shaped ? -Math.atan2(projectile.vy || 0, projectile.vx || 1) : 0;
+      object.position.set(projectile.x, BEAM_Y, projectile.y);
     },
   );
 }
@@ -3429,6 +3479,19 @@ function syncBeams() {
       addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, color, playerBeam.width, playerBeam.turtleWave ? 0.78 : 0.88);
     }));
   });
+  if (Neo.player2?.pvpBeamActive && Array.isArray(Neo.player2.pvpBeamPath)) {
+    const color = Neo.player2.pvpBeamMode === 'turtle_wave' ? 0x74f5ff : 0x4ca8ff;
+    Neo.player2.pvpBeamPath.forEach(seg => addBeamSegment(
+      seg.x1, seg.y1, seg.x2, seg.y2, color,
+      Neo.player2.pvpBeamMode === 'turtle_wave' ? 18 : 8,
+    ));
+  }
+  (Neo.getActivePlayerSlots?.() || []).forEach(slot => {
+    const actor = slot?.getEntity?.();
+    if (!actor || Number(actor.auxLaserFxTime || 0) <= 0 || !Array.isArray(actor.auxLaserPath)) return;
+    const color = new THREE.Color(slot.color || '#a8d8ff').getHex();
+    actor.auxLaserPath.forEach(seg => addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, color, 8));
+  });
   // Enemy and rival beams use the same range, fan and ricochet path used by
   // combat and the top-down renderer — visual walls can never disagree with
   // what can damage the player.
@@ -3757,7 +3820,7 @@ let fpPitch = -0.08;
 // completely untouched otherwise.
 function isFirstPersonActive() {
   return ready && Neo.render3D && cameraMode === 'fp'
-    && !Neo.isSplitScreen?.() && !window.NeoTouch?.active
+    && !window.NeoTouch?.active
     && (!Neo.presentationViewpointPlayer || Neo.presentationViewpointPlayer === Neo.player);
 }
 
@@ -4022,9 +4085,9 @@ function renderSceneViews() {
     return;
   }
 
-  // Local co-op/PvP retains a true viewport per participant in 3D. First
-  // person is deliberately normalized to third person above: one pointer lock
-  // cannot correctly drive several local cameras at once.
+  // Local co-op/PvP retains a true viewport per participant in 3D. Pointer
+  // lock drives P1's first-person camera while the remaining local players
+  // keep their independent third-person cameras/gamepad aim.
   const slots = (Neo.getActivePlayerSlots?.() || []).filter(slot => slot?.getEntity?.());
   const count = slots.length;
   if (!count) {
@@ -4038,8 +4101,10 @@ function renderSceneViews() {
   const viewW = fullW / 2;
   const viewH = count >= 3 ? fullH / 2 : fullH;
   renderer.setScissorTest(true);
+  const playerWasVisible = playerSprite?.visible;
   slots.forEach((slot, index) => {
-    let viewCamera = splitCameras[index];
+    const firstPersonView = cameraMode === 'fp' && !window.NeoTouch?.active;
+    let viewCamera = firstPersonView ? camera : splitCameras[index];
     if (!viewCamera) {
       viewCamera = new THREE.PerspectiveCamera(50, viewW / viewH, 10, 3000);
       splitCameras[index] = viewCamera;
@@ -4050,8 +4115,17 @@ function renderSceneViews() {
     const lookX = focusX * 0.72 + (Neo.ROOM_W / 2) * 0.28;
     const lookZ = focusZ * 0.72 + (Neo.ROOM_H / 2) * 0.28;
     viewCamera.aspect = viewW / viewH;
-    viewCamera.position.set(lookX, CAMERA_HEIGHT, lookZ + CAMERA_BACK);
-    viewCamera.lookAt(lookX, 12, lookZ);
+    if (firstPersonView && index > 0) {
+      const gamepad = window.NeoGamepad?.[index];
+      const yaw = gamepad?.hasAim && Math.hypot(gamepad.aimX || 0, gamepad.aimY || 0) > 0.25
+        ? Math.atan2(gamepad.aimY, gamepad.aimX)
+        : Number(actor.lastAimAngle ?? actor.aimDirection ?? actor.swingA ?? 0);
+      viewCamera.position.set(focusX, FP_EYE_HEIGHT, focusZ);
+      viewCamera.lookAt(focusX + Math.cos(yaw) * 100, FP_EYE_HEIGHT, focusZ + Math.sin(yaw) * 100);
+    } else if (!firstPersonView) {
+      viewCamera.position.set(lookX, CAMERA_HEIGHT, lookZ + CAMERA_BACK);
+      viewCamera.lookAt(lookX, 12, lookZ);
+    }
     viewCamera.updateProjectionMatrix();
     const col = index % 2;
     const rowFromTop = count >= 3 ? Math.floor(index / 2) : 0;
@@ -4059,9 +4133,15 @@ function renderSceneViews() {
     const y = fullH - (rowFromTop + 1) * viewH;
     renderer.setViewport(x, y, viewW, viewH);
     renderer.setScissor(x, y, viewW, viewH);
+    if (playerSprite) playerSprite.visible = firstPersonView && index === 0 ? false : !!playerWasVisible || isFirstPersonActive();
+    const actorGroup = index > 0 ? pools.players.get(actor) : null;
+    const actorWasVisible = actorGroup?.visible;
+    if (actorGroup && firstPersonView) actorGroup.visible = false;
     scaleNameplatesToScreen(viewCamera, viewH);
     renderer.render(scene, viewCamera);
+    if (actorGroup) actorGroup.visible = actorWasVisible;
   });
+  if (playerSprite) playerSprite.visible = playerWasVisible;
   renderer.setScissorTest(false);
 }
 
@@ -4091,12 +4171,31 @@ function drawChargeHud(p = Neo.player, viewCamera = camera, viewport = null) {
     // There is no player position to project from the camera's own eye. Keep
     // the shared 2D meter layout intact, anchored just below the crosshair.
     Neo.ctx.save();
-    Neo.ctx.translate(Neo.canvas.width / 2 - p.x, Neo.canvas.height * 0.72 - p.y);
+    const bounds = viewport || { x: 0, y: 0, width: Neo.canvas.width, height: Neo.canvas.height };
+    Neo.ctx.translate(bounds.x + bounds.width / 2 - p.x, bounds.y + bounds.height * 0.72 - p.y);
     draw();
     Neo.ctx.restore();
     return;
   }
   drawProjectedPrompt(p.x, p.y, Math.max(26, (p.r || 14) * SPRITE_SIZE_MULT), draw, viewCamera, viewport);
+}
+
+function drawActorChargeHud(actor, viewCamera = camera, viewport = null) {
+  const charge = actor?.localChargeState;
+  if (!charge || Number(charge.max || 0) <= 0) return;
+  const point = projectToCanvas(actor.x, actor.y, Math.max(34, (actor.r || 14) * SPRITE_SIZE_MULT), viewCamera, viewport);
+  if (point.behind) return;
+  const ratio = Math.max(0, Math.min(1, Number(charge.time || 0) / Number(charge.max)));
+  const width = 92;
+  Neo.ctx.save();
+  Neo.ctx.fillStyle = 'rgba(5,12,22,0.86)';
+  Neo.ctx.fillRect(point.x - width / 2 - 2, point.y - 2, width + 4, 10);
+  Neo.ctx.fillStyle = charge.slot === 'smash' ? '#ff6b72' : '#64d9ff';
+  Neo.ctx.fillRect(point.x - width / 2, point.y, width * ratio, 6);
+  Neo.ctx.strokeStyle = '#ffffff';
+  Neo.ctx.lineWidth = 1;
+  Neo.ctx.strokeRect(point.x - width / 2, point.y, width, 6);
+  Neo.ctx.restore();
 }
 
 function drawPromptsForActor(actor, viewCamera = camera, viewport = null, drawMeters = true) {
@@ -4116,6 +4215,7 @@ function drawPromptsForActor(actor, viewCamera = camera, viewport = null, drawMe
       - Neo.dist(Neo.player.x, Neo.player.y, b.x, b.y))[0];
   if (portal) drawProjectedPrompt(portal.x, portal.y, 38, Neo.drawJesterPortalPrompt, viewCamera, viewport);
   if (drawMeters) drawChargeHud(actor, viewCamera, viewport);
+  if (actor !== realPlayer) drawActorChargeHud(actor, viewCamera, viewport);
   Neo.player = realPlayer;
 }
 
@@ -4134,7 +4234,7 @@ function drawPrompts() {
       Neo.ctx.beginPath();
       Neo.ctx.rect(viewport.x, viewport.y, viewport.width, viewport.height);
       Neo.ctx.clip();
-      drawPromptsForActor(slot.getEntity(), splitCameras[index] || camera, viewport, index === 0);
+      drawPromptsForActor(slot.getEntity(), index === 0 && isFirstPersonActive() ? camera : (splitCameras[index] || camera), viewport, index === 0);
       const actor = slot.getEntity();
       if (slot.getDead?.() || actor?.networkDowned) {
         Neo.ctx.fillStyle = 'rgba(40, 0, 8, 0.34)';
@@ -4156,8 +4256,32 @@ function drawPrompts() {
     drawPromptsForActor(Neo.player);
   }
   if (isFirstPersonActive()) {
-    drawViewmodel();
-    drawCrosshair();
+    if (Neo.isSplitScreen?.()) {
+      const slots = (Neo.getActivePlayerSlots?.() || []).filter(slot => slot?.getEntity?.());
+      const count = slots.length;
+      const viewW = Neo.canvas.width / 2;
+      const viewH = count >= 3 ? Neo.canvas.height / 2 : Neo.canvas.height;
+      const realPlayer = Neo.player;
+      slots.forEach((slot, index) => {
+        const col = index % 2;
+        const row = count >= 3 ? Math.floor(index / 2) : 0;
+        const x = col * viewW;
+        const y = row * viewH;
+        Neo.player = slot.getEntity();
+        Neo.ctx.save();
+        Neo.ctx.beginPath();
+        Neo.ctx.rect(x, y, viewW, viewH);
+        Neo.ctx.clip();
+        Neo.ctx.translate(x + viewW / 2 - Neo.canvas.width / 2, y + viewH / 2 - Neo.canvas.height / 2);
+        drawViewmodel();
+        drawCrosshair();
+        Neo.ctx.restore();
+      });
+      Neo.player = realPlayer;
+    } else {
+      drawViewmodel();
+      drawCrosshair();
+    }
   }
 }
 

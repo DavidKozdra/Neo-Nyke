@@ -1700,10 +1700,18 @@
         ? this.presentationEnemyActors.get(String(authorityStruggle.enemyId))
           || this.presentationEnemyActors.get(authorityStruggle.enemyId)
         : null;
-      this.neo.beamStruggle = authorityStruggle && struggleEnemy ? {
+      const opponentId = authorityStruggle?.opponentPlayerId === localPlayerId
+        ? authorityStruggle.playerId : authorityStruggle?.opponentPlayerId;
+      const struggleOpponent = opponentId ? this.presentationPlayerActors.get(opponentId) : null;
+      const struggleTarget = struggleEnemy || struggleOpponent;
+      const localIsPrimary = authorityStruggle?.playerId === localPlayerId;
+      this.neo.beamStruggle = authorityStruggle && struggleTarget ? {
         active: true,
-        enemy: struggleEnemy,
-        progress: Number(authorityStruggle.progress || 0.5),
+        enemy: struggleTarget,
+        opponentPlayer: struggleOpponent,
+        progress: localIsPrimary
+          ? Number(authorityStruggle.progress || 0.5)
+          : 1 - Number(authorityStruggle.progress || 0.5),
         mashCount: Number(authorityStruggle.mashCount || 0),
         elapsed: Math.max(0, Number(state.tick || 0) - Number(authorityStruggle.startTick || 0)) / 20,
         duration: Math.max(0, Number(authorityStruggle.endTick || 0) - Number(authorityStruggle.startTick || 0)) / 20,

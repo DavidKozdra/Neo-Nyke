@@ -4,6 +4,7 @@ const path = require('node:path');
 describe('beam struggles', () => {
   const mathSource = fs.readFileSync(path.join(__dirname, '../js/core/math-utils.js'), 'utf8');
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+  const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
   const updateSource = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
   const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
   const entitiesSource = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
@@ -44,7 +45,9 @@ describe('beam struggles', () => {
 
   test('owns mash input, damage suppression, and both outcomes', () => {
     expect(combatSource).toContain('function tryStartBeamStruggle(playerPaths)');
-    expect(combatSource).toContain('function registerBeamStruggleMash()');
+    expect(combatSource).toContain('function registerBeamStruggleMash(playerNumber = 1)');
+    expect(combatSource).toContain("opponentPlayer: options.opponentPlayer || null");
+    expect(worldSource).toContain('Neo.registerBeamStruggleMash?.(2)');
     expect(combatSource).toContain('struggle.progress - struggle.enemyPressure * dt');
     expect(combatSource).toContain('if (isBeamStruggleParticipant(enemy)) return false;');
     expect(combatSource).toContain('resolveBeamStruggle(true)');
