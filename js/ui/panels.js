@@ -289,6 +289,15 @@ export function bindInput() {
         Neo.setGameState('charselect');
         Neo.updateCharacterSelectionUI();
       },
+      onOpenStorySelect() {
+        Neo.tutorialLaunchPending = false;
+        Neo.gameMode = 'story';
+        Neo.practiceVariant = 'standard';
+        Neo.selectedChallenges = [];
+        Neo.charSelectPhase = null;
+        Neo.setGameState('charselect');
+        Neo.updateCharacterSelectionUI();
+      },
       onOpenSprEditor() {
         Neo.openSpriteEditor?.();
       },

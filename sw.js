@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v95';
+const CACHE_VERSION = 'neonyke-v96';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -204,6 +204,8 @@ const PRECACHE = [
   "/js/simulation/SharedStatusSystem.js",
   "/js/simulation/SharedWorldContent.js",
   "/js/simulation/SharedWorldMutationSystem.js",
+  "/js/story/campaigns.js",
+  "/js/story/cutscene-manager.js",
   "/js/touchControls.js",
   "/js/tutorial/scenes.js",
   "/js/ui/controller.js",

@@ -932,7 +932,7 @@ export const ui = {
     modsLegacyPane: document.getElementById('modsLegacyPane'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
-    tutorialMenuBtn: document.getElementById('tutorialMenuBtn'),
+    storyModeBtn: document.getElementById('storyModeBtn'),
     sprEditorBtn: document.getElementById('sprEditorBtn'),
     mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
     competitivePanel: document.getElementById('competitivePanel'),
@@ -999,7 +999,6 @@ export const ui = {
     rhInfoSearch: document.getElementById('rhInfoSearch'),
     rhInfoSort: document.getElementById('rhInfoSort'),
     rhInfoResultStatus: document.getElementById('rhInfoResultStatus'),
-    infoTutorialBtn: document.getElementById('infoTutorialBtn'),
     rhBankCoins: document.getElementById('rhBankCoins'),
     rhLoopCount: document.getElementById('rhLoopCount'),
     rhBestFloor: document.getElementById('rhBestFloor'),
@@ -1157,7 +1156,7 @@ export const ui = {
 const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
 export const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
   if (gameStateManager) {
-    ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
+    ['menu', 'charselect', 'play', 'cutscene', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
   }
   // uiController is created in perf.js boot() after controller.js loads
   // Neo.uiController is set there.

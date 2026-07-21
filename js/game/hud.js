@@ -163,6 +163,14 @@
       Neo.uiController.setObjective(text);
       Neo.uiController.setObjectiveList(Neo.getRoomLabel(Neo.currentRoom.type), getObjectiveEntries(text));
     };
+    if (Neo.gameMode === 'story') {
+      if (Neo.currentRoom?.storyEscapeOpen && !Neo.currentRoom.cleared) {
+        setObjective("Fight Bowman's Bane or escape through the open passage.");
+      } else {
+        setObjective(Neo.storyState?.objective || globalThis.NeoNyke?.story?.getFloorPlan?.(Neo.player?.character, Neo.floor)?.objective || 'Continue the story.');
+      }
+      return;
+    }
     if (Neo.gameMode === 'treasure_hunt') {
       const startRoom = Neo.rooms.find(room => room.type === 'start');
       if (Neo.treasureHuntPhase === 'seek') {
@@ -1166,6 +1174,9 @@
       hideLadderOnMinimap: !!Neo.hideLadderOnMinimap,
       tutorialState: Neo.tutorialState && typeof Neo.tutorialState === 'object'
         ? JSON.parse(JSON.stringify(Neo.tutorialState))
+        : null,
+      storyState: Neo.storyState && typeof Neo.storyState === 'object'
+        ? JSON.parse(JSON.stringify(Neo.storyState))
         : null,
       camera: Neo.camera,
     };

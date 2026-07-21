@@ -1858,7 +1858,7 @@ export function createUIController(view) {
           view.pause.setAttribute('aria-hidden', 'true');
         }
       }
-      const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
+      const inPlay = show === 'play' || show === 'cutscene' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
       setVisible(view.hudLower, show === 'play' || show === 'pause', '');
@@ -2707,15 +2707,15 @@ export function createUIController(view) {
     if (manager && typeof manager.registerScreen === 'function') {
       manager.registerScreen('coinDisplay', {
         create: () => makeContainer(view.coinDisplay, 'flex'),
-        validStates: ['play', 'pause', 'dialogue'],
+        validStates: ['play', 'cutscene', 'pause', 'dialogue'],
       });
       manager.registerScreen('centerDisplay', {
         create: () => makeContainer(view.centerDisplay, ''),
-        validStates: ['play', 'pause', 'dialogue'],
+        validStates: ['play', 'cutscene', 'pause', 'dialogue'],
       });
       manager.registerScreen('playerStats', {
         create: () => makeContainer(view.playerStats, ''),
-        validStates: ['play', 'pause', 'dialogue'],
+        validStates: ['play', 'cutscene', 'pause', 'dialogue'],
       });
       manager.registerScreen('actionBar', {
         create: () => makeContainer(view.actionBar, ''),
@@ -2739,7 +2739,7 @@ export function createUIController(view) {
         create: () => makeContainer(view.entityDialogueLayer, 'block'),
         show: renderEntityDialogue,
         update: renderEntityDialogue,
-        validStates: ['play', 'pause', 'dialogue'],
+        validStates: ['play', 'cutscene', 'pause', 'dialogue'],
       });
       manager.registerScreen('start', { create: () => makeContainer(view.start, ''), validStates: ['menu'] });
       manager.registerScreen('charSelect', { create: () => makeContainer(view.charSelect, ''), validStates: ['charselect'] });
@@ -3468,17 +3468,6 @@ export function createUIController(view) {
           infoSortModes[activeInfoTab] = view.rhInfoSort.value === 'name' ? 'name' : 'rarity';
           populateInfoPanel(activeInfoTab);
         });
-        view.infoTutorialBtn?.addEventListener('click', () => {
-          localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
-          view.infoTutorialBtn.textContent = '✓ Set for next run';
-          view.infoTutorialBtn.disabled = true;
-          setTimeout(() => {
-            if (view.infoTutorialBtn) {
-              view.infoTutorialBtn.textContent = '▶ Tutorial';
-              view.infoTutorialBtn.disabled = false;
-            }
-          }, 2200);
-        });
         view.runHistoryPrev?.addEventListener('click', () => {
           runHistoryPage = Math.max(0, runHistoryPage - 1);
           renderRunHistoryPage();
@@ -3529,7 +3518,7 @@ export function createUIController(view) {
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
-        view.tutorialMenuBtn?.addEventListener('click', handlers.onPlayTutorial);
+        view.storyModeBtn?.addEventListener('click', handlers.onOpenStorySelect);
         view.sprEditorBtn?.addEventListener('click', handlers.onOpenSprEditor);
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
@@ -3836,6 +3825,11 @@ export function createUIController(view) {
         renderDialogue();
         return !!advanced;
       },
+      closeDialogue() {
+        const closed = dialogueRuntime?.close?.();
+        renderDialogue();
+        return !!closed;
+      },
       isDialogueOpen() {
         return !!dialogueRuntime?.isOpen?.();
       },
@@ -3860,12 +3854,7 @@ export function createUIController(view) {
         // An in-progress run means the player has already been through (or
         // explicitly skipped) onboarding — don't dangle the tutorial offer in
         // front of someone who has an active save to resume.
-        const canOfferTutorial = activeState === 'menu' && !Neo.activeRun;
-        if (activeState === 'menu' && canOfferTutorial && !tutorialMenuOfferVisible) {
-          tutorialMenuOfferVisible = true;
-          Neo.markTutorialButtonOfferedNow?.();
-        }
-        view.tutorialMenuBtn?.classList.toggle('hidden', !canOfferTutorial);
+        view.storyModeBtn?.classList.remove('hidden');
         view.sprEditorBtn?.classList.remove('hidden');
       },
       showFirstTip(tip) {
@@ -4473,6 +4462,9 @@ export function createUIController(view) {
           ]);
         }
         if (view.winDifficulty) view.winDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
+        view.winActions?.forEach(button => {
+          if (button.dataset.winAction === 'loop') button.classList.toggle('hidden', entry.mode === 'story');
+        });
 
         const earned = Number(entry.loopCrystalsEarned || 0);
         const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0);

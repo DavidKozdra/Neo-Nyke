@@ -57,13 +57,34 @@
     Neo.hideLadderOnMinimap = !!layout.hideExitOnMinimap;
     if (Neo.isTutorialRun?.()) configureTutorialFloor(startRoom, farRoom);
     if (Neo.isTutorialRun?.()) assignSecretRoom(roomMap);
+    if (Neo.gameMode === 'story' && !Neo.isTutorialRun?.()) {
+      const storyPlan = globalThis.NeoNyke?.story?.getFloorPlan?.(Neo.player?.character || Neo.chosenCharacter, Neo.floor);
+      Neo.storyState.objective = storyPlan?.objective || '';
+      startRoom.storyPlanId = storyPlan?.id || '';
+      startRoom.storyScene = storyPlan?.scene || '';
+      if (['secret_beasts', 'sarge_skip_warning'].includes(storyPlan?.scene)) {
+        let storySecret = Neo.rooms.find(room => room.secret);
+        if (!storySecret) {
+          storySecret = Neo.rooms.find(room => room !== startRoom && room !== farRoom && ['combat', 'treasure'].includes(room.type));
+          if (storySecret) {
+            storySecret.secret = true;
+            storySecret.type = 'secret';
+          }
+        }
+        if (storySecret) {
+          storySecret.storySecretRoom = true;
+          storySecret.secretKind = 'story_skip';
+          storySecret.cleared = true;
+        }
+      }
+    }
     Neo.rooms.forEach(decorateRoomData);
     if (Neo.isTutorialRun?.()) finalizeTutorialFloor(startRoom, farRoom);
     configureStartRoomDifficultyEncounter(startRoom);
 
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
-    if (!Neo.isTutorialRun?.()) spawnRivals();
+    if (!Neo.isTutorialRun?.() && Neo.gameMode !== 'story') spawnRivals();
     const curses = applyRivalCurses();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);

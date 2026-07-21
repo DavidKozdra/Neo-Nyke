@@ -4773,6 +4773,16 @@
       return;
     }
     if (!options.forceDeath && Neo.handleBountyTargetLethal?.(enemy)) return;
+    if (!options.forceDeath && Neo.gameMode === 'story' && enemy.storyAlliance) {
+      enemy.hp = 1;
+      enemy.dead = true;
+      const storyIndex = Neo.enemies.indexOf(enemy);
+      if (storyIndex >= 0) Neo.enemies.splice(storyIndex, 1);
+      if (enemy.rivalData) enemy.rivalData.dead = true;
+      Neo.spawnParticle?.({ x: enemy.x, y: enemy.y - 32, life: 1.1, text: 'TRUCE', c: '#8dc7ff' });
+      Neo.onStoryEnemyDefeated?.(enemy);
+      return;
+    }
     if (enemy.dead) return;
     enemy.dead = true;
 
@@ -5024,8 +5034,10 @@
         });
       }
       Neo.currentRoom.cleared = true;
-      // After defeating god: offer the choice — cash in (win) or loop; Endless Descent adds a third option
-      if (Neo.hasLegacy('endless_descent')) {
+      // Story campaigns end here; procedural campaigns retain crown/loop/descent choices.
+      if (Neo.gameMode === 'story') {
+        Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'crown' });
+      } else if (Neo.hasLegacy('endless_descent')) {
         Neo.pickups.push({ x: Neo.ROOM_W / 2 - 200, y: Neo.ROOM_H / 2, type: 'crown' });
         Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'descend' });
         Neo.pickups.push({ x: Neo.ROOM_W / 2 + 200, y: Neo.ROOM_H / 2, type: 'returnGate' });
@@ -5086,6 +5098,11 @@
       Neo.refreshMenuState();
       Neo.updateObjective();
       Neo.scheduleRunSave();
+    }
+
+    if (Neo.gameMode === 'story' && enemy.storyEncounter) {
+      Neo.onStoryEnemyDefeated?.(enemy);
+      if (enemy.type === 'rival') return;
     }
 
     if (enemy.type === 'rival' && Neo.gameMode === 'rival_rumble') {

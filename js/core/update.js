@@ -173,6 +173,7 @@ export function loop(timestamp) {
     const uiPerfStart = Neo.perfStart();
     Neo.uiController.tick(dt);
     Neo.tutorialController?.tick?.(dt);
+    Neo.storyManager?.tick?.(dt);
     Neo.perfEnd('Neo.ui', uiPerfStart);
     // Track the camera at render rate (see trackCameras) so the view eases
     // smoothly between the simulation's 20Hz position updates. Skipped while

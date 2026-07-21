@@ -1028,6 +1028,42 @@ body.render3d #c {
   box-sizing: border-box;
 }
 
+.settings-action-btn {
+  min-width: 150px;
+  padding: 10px 16px;
+  border: 1px solid rgba(110, 218, 255, .52);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(27, 88, 116, .9), rgba(10, 37, 58, .96));
+  color: #dff7ff;
+  font: 800 12px/1 system-ui, sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.settings-action-btn:hover,
+.settings-action-btn:focus-visible {
+  border-color: #8ee7ff;
+  box-shadow: 0 0 14px rgba(71, 199, 255, .28);
+}
+
+.story-skip-hold {
+  position: fixed;
+  right: 16px;
+  top: 12px;
+  z-index: 48;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(102,202,255,.42) var(--skip-progress, 0%), rgba(5,11,20,.84) var(--skip-progress, 0%));
+  color: #dff7ff;
+  font: 800 10px/1 system-ui, sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.story-skip-hold.hidden { display: none; }
+
 .tutorial-speaker {
   margin-bottom: 6px;
   color: #9ce9ff;

@@ -325,6 +325,7 @@
       </div>
     </div>
   </div>
+  <button id="storySkipHold" class="story-skip-hold hidden" type="button" aria-label="Hold to skip cutscene">HOLD TO SKIP</button>
   <div id="tutorialOverlay" class="tutorial-overlay hidden" aria-hidden="true">
     <svg class="tutorial-spotlight" aria-hidden="true">
       <defs>
@@ -831,7 +832,7 @@
       </div>
 
       <div class="main-nav">
-        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden"><span class="nav-btn__icon" aria-hidden="true">▶</span><span data-i18n="menu.tutorial">TUTORIAL</span></button>
+        <button id="storyModeBtn" class="nav-btn nav-btn--tutorial"><span class="nav-btn__icon" aria-hidden="true">◆</span><span>STORY MODE</span></button>
         <button id="continueBtn" class="nav-btn hidden" data-i18n="menu.continue">CONTINUE</button>
         <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive" data-i18n="menu.competitive">COMPETITIVE</button>
         <button id="newRunBtn" class="nav-btn">SINGLE PLAYER</button>
@@ -875,6 +876,7 @@
         <div class="rh-mode-tabs" role="tablist" aria-label="Run mode filter">
           <button class="rh-mode-tab active" data-mode="all" type="button">All</button>
           <button class="rh-mode-tab" data-mode="normal" type="button">Normal</button>
+          <button class="rh-mode-tab" data-mode="story" type="button">Story</button>
           <button class="rh-mode-tab" data-mode="endless" type="button">Endless</button>
           <button class="rh-mode-tab" data-mode="practice" type="button">Practice</button>
           <button class="rh-mode-tab" data-mode="boss_rush" type="button">Boss Rush</button>
@@ -916,7 +918,6 @@
           <button id="rhInfoCharactersTab" class="rh-info-tab" data-info-tab="characters" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Characters</button>
           <button id="rhInfoMetaTab" class="rh-info-tab" data-info-tab="meta" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Progression</button>
         </div>
-        <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
       </aside>
       <div class="rh-info-main">
         <div class="rh-info-head">
@@ -2440,10 +2441,10 @@
       <h3 class="settings-group__title">Tutorial</h3>
       <div class="access-row">
         <div class="access-text">
-          <span class="access-label">Replay tutorial on next run</span>
-          <span class="access-desc">Shows the tutorial intro again at the start of your next run.</span>
+          <span class="access-label">Play tutorial</span>
+          <span class="access-desc">Start Sarge's standalone guided tutorial.</span>
         </div>
-        <label class="toggle"><input type="checkbox" id="accReplayTutorial"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+        <button class="settings-action-btn" id="settingsPlayTutorial" type="button">PLAY TUTORIAL</button>
       </div>
       </section>
     </div>

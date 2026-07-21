@@ -120,7 +120,7 @@
     else if (floorNumber % 3 === 0) exitRoom.type = 'boss';
     else exitRoom.type = 'ladder';
 
-    const hideExitOnMinimap = gameMode !== 'treasure_hunt'
+    const hideExitOnMinimap = gameMode !== 'treasure_hunt' && gameMode !== 'story'
       && exitRoom.type === 'ladder'
       && random.next() < 0.1;
 
@@ -133,6 +133,7 @@
         const loopIndex = Math.max(0, Math.trunc(Number(options.runLoopIndex) || 0));
         const depth = Math.max(0, floorNumber - 1 + loopIndex * 3);
         service.type = SPECIAL_ROOM_ORDER[depth % SPECIAL_ROOM_ORDER.length];
+        if (gameMode === 'story' && service.type === 'portal') service.type = 'reliquary';
       }
     }
     const shop = candidates.find(room => room.type === 'combat');

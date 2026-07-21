@@ -8,7 +8,7 @@
   const GAMEPLAY_TRACK_PATH = 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav';
 
   const MENU_STATES = new Set(['menu', 'charselect', 'start']);
-  const GAME_STATES = new Set(['play', 'dialogue', 'boss_rush', 'endless']);
+  const GAME_STATES = new Set(['play', 'cutscene', 'dialogue', 'boss_rush', 'endless']);
 
   let titleIntro = null;
   let titleLoop = null;

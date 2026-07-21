@@ -46,6 +46,7 @@ export function resumeGame() {
       lastSeenAt: 0,
       tutorialButtonLastOfferedAt: 0,
       seenTips: {},
+      storyScenesSeen: [],
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
   }
@@ -393,7 +394,7 @@ export function resumeGame() {
 
   function isTutorialRun() {
     return !!Neo.tutorialState?.active
-      && Neo.gameMode === 'normal'
+      && (Neo.gameMode === 'normal' || Neo.gameMode === 'story')
       && Number(Neo.floor || 1) === 1;
   }
 
@@ -461,7 +462,7 @@ export function resumeGame() {
   // advancing steps, detecting movement). These must only run while the world is
   // simulating, i.e. gameState === 'play'.
   function isFirstRunTutorialActive() {
-    return !!Neo.tutorialState?.active && Neo.gameMode === 'normal' && Neo.gameState === 'play';
+    return !!Neo.tutorialState?.active && (Neo.gameMode === 'normal' || Neo.gameMode === 'story') && Neo.gameState === 'play';
   }
 
   // Display/eligibility gate for the tutorial. True whenever the tutorial is
@@ -470,7 +471,7 @@ export function resumeGame() {
   // panel-open flag setters that fire after pauseGame() — otherwise opening the
   // inventory would freeze the tutorial and hide its UI mid-step.
   function isFirstRunTutorialEngaged() {
-    if (!Neo.tutorialState?.active || Neo.gameMode !== 'normal') return false;
+    if (!Neo.tutorialState?.active || !['normal', 'story'].includes(Neo.gameMode)) return false;
     if (Neo.gameState === 'play') return true;
     // Tolerate the pause that the inventory panel applies to the world.
     return Neo.gameState === 'pause' && !!Neo.inventoryPauseActive;
@@ -1087,6 +1088,7 @@ export function resumeGame() {
           selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
+          storyScenesSeen: Array.isArray(savedMeta.storyScenesSeen) ? [...new Set(savedMeta.storyScenesSeen.map(String))] : [],
           characterKitChoices: migrateCharacterKitChoices(savedMeta.characterKitChoices),
           customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
         };
@@ -1332,11 +1334,12 @@ export function resumeGame() {
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'rival_rumble' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
+    if (mode === 'story' || mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'rival_rumble' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
     return 'normal';
   }
 
   function getRunModeLabel(mode) {
+    if (mode === 'story') return 'Story';
     if (mode === 'coop') return 'Co-op';
     if (mode === 'pvp') return 'PVP';
     if (mode === 'endless') return 'Endless';
@@ -1495,6 +1498,10 @@ export function resumeGame() {
   }
 
   function getFloorSeed() {
+    if (Neo.gameMode === 'story') {
+      return globalThis.NeoNyke?.story?.storySeed?.(Neo.player?.character || Neo.chosenCharacter, Neo.floor)
+        || `NEONYKE-STORY-V1|${Neo.player?.character || Neo.chosenCharacter}|floor:${Neo.floor}`;
+    }
     return `${Neo.baseSeedStr}|difficulty:${Neo.selectedDifficulty}|loop:${Neo.runLoopIndex}|floor:${Neo.floor}`;
   }
 
@@ -1779,13 +1786,16 @@ export function resumeGame() {
 
   function getDashCooldownDuration(moveKey = Neo.getEquippedMove('dash'), attackSpeed = Neo.getAttackSpeedValue()) {
     const anvilBase = getMoveCooldownBase(moveKey);
-    if (anvilBase !== null) return anvilBase / attackSpeed;
-    if (moveKey === 'warp') return 2.8 / attackSpeed;
-    if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
-    if (moveKey === 'zip_lightning') return 2.0 / attackSpeed;
-    if (moveKey === 'cowards_way') return 6 / attackSpeed;
-    if (moveKey === 'mooggy_zoomies') return 20 / attackSpeed;
-    return 3.2 / attackSpeed;
+    let duration;
+    if (anvilBase !== null) duration = anvilBase / attackSpeed;
+    else if (moveKey === 'warp') duration = 2.8 / attackSpeed;
+    else if (moveKey === 'nimrod_stomp') duration = 4.2 / attackSpeed;
+    else if (moveKey === 'zip_lightning') duration = 2.0 / attackSpeed;
+    else if (moveKey === 'cowards_way') duration = 6 / attackSpeed;
+    else if (moveKey === 'mooggy_zoomies') duration = 20 / attackSpeed;
+    else duration = 3.2 / attackSpeed;
+    const hasBaneInsignia = !!Neo.player?.storyBaneInsignia || !!Neo.storyState?.rewards?.baneInsignia;
+    return duration * (hasBaneInsignia ? 0.85 : 1);
   }
 
   function getSmashCooldownDuration(attackSpeed = Neo.getAttackSpeedValue()) {
@@ -1808,7 +1818,9 @@ export function resumeGame() {
       characterKey,
       Number(playerState?.level || 1),
     );
-    return Math.max(characterStacks, playerOverrideStacks || 0) + milestoneBonus;
+    const hasBaneInsignia = !!playerState?.storyBaneInsignia || !!Neo.storyState?.rewards?.baneInsignia;
+    const storyBonus = moveDef.slot === 'dash' && hasBaneInsignia ? 1 : 0;
+    return Math.max(characterStacks, playerOverrideStacks || 0) + milestoneBonus + storyBonus;
   }
 
   function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {
@@ -2600,12 +2612,17 @@ export function resumeGame() {
       if (Neo.gameMode === 'competitive') {
         if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
+      } else if (Neo.gameMode === 'story') {
+        if (titleEl) titleEl.textContent = 'CHOOSE YOUR STORY';
+        if (subtitleEl) subtitleEl.textContent = 'A deterministic single-player campaign. Floor 1 is Sarge\'s tutorial.';
+        if (goBtn) goBtn.textContent = 'BEGIN STORY';
       } else {
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }
 
     const isCompetitive = Neo.gameMode === 'competitive';
+    const isStory = Neo.gameMode === 'story';
     const difficultySelect = document.getElementById('difficultySelect');
     const seedLabel = document.getElementById('seedLabel');
     const seedInput = document.getElementById('seed');
@@ -2613,10 +2630,10 @@ export function resumeGame() {
     const challengeToggleEl = document.getElementById('challengeToggle');
     if (difficultySelect) difficultySelect.style.pointerEvents = isCompetitive ? 'none' : '';
     if (difficultySelect) difficultySelect.style.opacity = isCompetitive ? '0.35' : '';
-    if (seedRow) seedRow.style.display = isCompetitive ? 'none' : '';
-    if (!seedRow && seedLabel) seedLabel.style.display = isCompetitive ? 'none' : '';
-    if (!seedRow && seedInput) seedInput.style.display = isCompetitive ? 'none' : '';
-    if (challengeToggleEl) challengeToggleEl.style.display = isCompetitive ? 'none' : '';
+    if (seedRow) seedRow.style.display = isCompetitive || isStory ? 'none' : '';
+    if (!seedRow && seedLabel) seedLabel.style.display = isCompetitive || isStory ? 'none' : '';
+    if (!seedRow && seedInput) seedInput.style.display = isCompetitive || isStory ? 'none' : '';
+    if (challengeToggleEl) challengeToggleEl.style.display = isCompetitive || isStory ? 'none' : '';
 
     if (isCompetitive) {
       Neo.selectedDifficulty = 'hard';
@@ -2660,12 +2677,20 @@ export function resumeGame() {
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     if (Number(Neo.metaProgress.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
     getCustomCharacterKeys().forEach(key => unlocked.add(key));
+    const storyCharacters = new Set(globalThis.NeoNyke?.story?.STORY_CHARACTERS || []);
+    const storyUnlocked = isStory
+      ? new Set([...unlocked].filter(key => storyCharacters.has(key)))
+      : unlocked;
+    if (isStory && !storyUnlocked.has(Neo.chosenCharacter)) {
+      Neo.chosenCharacter = ['thorn_knight', 'princess', 'metao'].find(key => storyUnlocked.has(key)) || [...storyUnlocked][0];
+      activeChar = Neo.chosenCharacter;
+    }
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
-      if (unlocked.has(preferredCharacter)) {
+      if (storyUnlocked.has(preferredCharacter)) {
         Neo.chosenCharacter = preferredCharacter;
       }
-      if (unlocked.has(Neo.chosenCharacter)) {
+      if (storyUnlocked.has(Neo.chosenCharacter)) {
         Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
       }
     }
@@ -2689,12 +2714,12 @@ export function resumeGame() {
       }
     }
     const ownedLegacy = new Set(Neo.metaProgress.unlockedLegacy || []);
-    const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess' && !isCustomCharacterKey(k))) : unlocked;
+    const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess' && !isCustomCharacterKey(k))) : storyUnlocked;
     if (isCompetitive && competitiveUnlocked.size > 0 && !competitiveUnlocked.has(Neo.chosenCharacter)) {
       Neo.chosenCharacter = [...competitiveUnlocked][0];
       Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
     }
-    Neo.uiController.updateCharacterSelection(isCompetitive ? competitiveUnlocked : unlocked, activeChar);
+    Neo.uiController.updateCharacterSelection(isCompetitive ? competitiveUnlocked : storyUnlocked, activeChar);
     Neo.uiController.updateDifficultySelection(unlockedDifficulties, isCompetitive ? 'hard' : Neo.selectedDifficulty, Neo.metaProgress.loopCrystals || 0);
     Neo.uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, isCompetitive ? [] : Neo.selectedChallenges, Neo.metaProgress.loopCrystals || 0, Neo.metaProgress.coins || 0);
     Neo.uiController.updateLegacySelection(ownedLegacy, Neo.metaProgress.loopCrystals || 0);
@@ -2823,24 +2848,28 @@ export function resumeGame() {
     // Tutorial mode is opt-in from the dedicated Tutorial action/settings.
     // A normal New Game must stay a normal run even when the tutorial has never
     // been completed or its content version changed.
+    const storyRun = Neo.gameMode === 'story';
     const shouldRunTutorial = Neo.gameMode === 'normal'
       && forceTutorialReplay;
+    const shouldRunGuidedFloor = storyRun || shouldRunTutorial;
     // Stamp "last played" so the green tutorial button only re-offers after a long absence.
     if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');
 
     if (resume && Neo.activeRun) {
       restoreRun(Neo.activeRun);
-      if (!Neo.activeRun.tutorialState) resetTutorialState(shouldRunTutorial);
+      if (!Neo.activeRun.tutorialState) resetTutorialState(storyRun ? Number(Neo.activeRun.floor || 1) === 1 : shouldRunTutorial);
     } else {
       // The tutorial runs on a fixed seed so its layout, forced relic, and
       // ladder room are identical for every new player; any typed seed is
       // ignored only while the tutorial is active.
-      Neo.baseSeedStr = shouldRunTutorial
-        ? TUTORIAL_SEED
-        : (Neo.ui.seed.value.trim() || createRandomSeed());
+      Neo.baseSeedStr = storyRun
+        ? (globalThis.NeoNyke?.story?.storySeed?.(Neo.chosenCharacter, 1) || `NEONYKE-STORY-V1|${Neo.chosenCharacter}`)
+        : shouldRunGuidedFloor
+          ? TUTORIAL_SEED
+          : (Neo.ui.seed.value.trim() || createRandomSeed());
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
-      Neo.selectedChallenges = shouldRunTutorial
+      Neo.selectedChallenges = shouldRunGuidedFloor
         ? []
         : normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
@@ -2854,7 +2883,10 @@ export function resumeGame() {
       Neo.resetRunUnlocks?.();
       invalidateRunStatCaches();
       Neo.player = createDefaultPlayer();
-      resetTutorialState(shouldRunTutorial);
+      Neo.storyState = storyRun
+        ? globalThis.NeoNyke?.story?.createStoryState?.(Neo.player.character)
+        : null;
+      resetTutorialState(shouldRunGuidedFloor);
       grantTutorialResources();
       if (!isMultiplayerMode()) resetMultiplayerState();
       if (Neo.gameMode === 'sandbox') {
@@ -2877,7 +2909,7 @@ export function resumeGame() {
       Neo.lastDamageSourceKey = '';
       resetScene();
       Neo.generateFloor();
-      if (shouldRunTutorial) Neo.tutorialController?.start?.();
+      if (shouldRunGuidedFloor) Neo.tutorialController?.start?.();
       Neo.persistMetaSoon();
       Neo.scheduleRunSave();
     }
@@ -4031,6 +4063,9 @@ export function resumeGame() {
     Neo.currentRoom = Neo.rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || Neo.rooms[0] || null;
     invalidateRunStatCaches();
     Neo.player = Neo.migratePlayerData(snapshot.player);
+    Neo.storyState = Neo.gameMode === 'story'
+      ? globalThis.NeoNyke?.story?.normalizeStoryState?.(snapshot.storyState, Neo.player.character)
+      : null;
     grantTutorialResources();
     if (isMultiplayerMode()) {
       Neo.player2 = snapshot.player2 ? Neo.migratePlayerData(snapshot.player2) : null;
@@ -4143,6 +4178,9 @@ export function resumeGame() {
     Neo.updateObjective();
     Neo.updateHud();
     Neo.updateEndlessWaveHud();
+    if (Neo.gameMode === 'story') {
+      setTimeout(() => Neo.storyManager?.triggerRoom?.(Neo.currentRoom), 0);
+    }
     Neo.persistMetaSoon();
   }
 

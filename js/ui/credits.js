@@ -201,10 +201,17 @@
 
   function renderGallery() {
     if (!sceneList) return;
-    const scenes = Array.isArray(Neo.CUTSCENE_GALLERY) ? Neo.CUTSCENE_GALLERY : [];
+    const baseScenes = Array.isArray(Neo.CUTSCENE_GALLERY) ? Neo.CUTSCENE_GALLERY : [];
+    const storyScenes = Array.isArray(globalThis.NeoNyke?.story?.STORY_GALLERY)
+      ? globalThis.NeoNyke.story.STORY_GALLERY
+      : [];
+    const seenStoryScenes = new Set(Neo.metaProgress?.storyScenesSeen || []);
+    const scenes = [...baseScenes, ...storyScenes.filter(scene => seenStoryScenes.has(scene.id))];
     if (!scenes.length) return false; // game-core not ready yet; retry on next open
     const selectedCharacter = Neo.player?.character || Neo.chosenCharacter || Neo.metaProgress?.selectedCharacter || 'thorn_knight';
-    const matchesSelectedCharacter = scene => !scene.character || scene.character === selectedCharacter;
+    const matchesSelectedCharacter = scene => scene.storyMode || (!scene.character && !scene.characters)
+      || scene.character === selectedCharacter
+      || scene.characters?.includes(selectedCharacter);
     const bossTaunts = scenes.find(scene => scene.id === 'boss_openings');
     const storyEntries = scenes.filter(scene => scene.id !== 'boss_openings' && matchesSelectedCharacter(scene));
     const tauntEntries = (bossTaunts?.lines || []).map((line, index) => ({
