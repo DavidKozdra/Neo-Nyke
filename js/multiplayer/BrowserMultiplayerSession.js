@@ -111,6 +111,7 @@
         gameState: this.client.getStateSnapshot(),
         gameplayEvents: this.client.gameplayEvents.slice(),
         chatMessages: this.client.chatMessages.slice(),
+        connectionNotices: this.client.connectionNotices.slice(),
         runEnd: this.client.runEnd,
         errors: this.client.errors.slice(),
       };
@@ -140,13 +141,15 @@
       }, delay) ?? null;
     }
 
-    dispose() {
+    dispose(reason = 'left') {
       this.disposed = true;
       if (this.reconnectTimer !== null) root.clearTimeout?.(this.reconnectTimer);
       this.reconnectTimer = null;
       this.unsubscribeMessage?.();
       this.unsubscribeDisconnect?.();
-      this.client.dispose();
+      const leaveResult = this.client.leave?.(reason);
+      if (leaveResult && typeof leaveResult.finally === 'function') leaveResult.finally(() => this.client.dispose());
+      else this.client.dispose();
       this.listeners.clear();
     }
   }

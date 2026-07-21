@@ -36,7 +36,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v28';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v29';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v26';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v26';
@@ -51,6 +51,12 @@
   const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
     'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',
   ]);
+
+  function isIntentionalDisconnectReason(reason) {
+    const normalized = String(reason || '').trim().toLowerCase();
+    return ['left', 'leave', 'disposed', 'quit', 'menu', 'changed-session']
+      .some(value => normalized === value || normalized.startsWith(`${value}-`));
+  }
 
   function createReconnectToken() {
     const uuid = globalThis.crypto?.randomUUID?.();
@@ -526,7 +532,15 @@
         return;
       }
       const playerId = this.simulation.state.allocateEntityId('player');
-      const slotIndex = this.playerIdByPeer.size;
+      const occupiedSlots = new Set(Array.from(this.playerIdByPeer.values())
+        .map(connectedPlayerId => Number(this.simulation.state.players[connectedPlayerId]?.slotIndex))
+        .filter(Number.isInteger));
+      const slotIndex = Array.from({ length: this.maxPlayers }, (_unused, index) => index)
+        .find(index => !occupiedSlots.has(index));
+      if (slotIndex == null) {
+        this._send(peerId, 'JOIN_REJECTED', { code: 'ROOM_FULL', message: 'The local multiplayer room is full.' });
+        return;
+      }
       this.playerIdByPeer.set(peerId, playerId);
       record.playerId = playerId;
       record.ready = false;
@@ -779,12 +793,13 @@
       const members = Array.from(this.playerIdByPeer.entries()).map(([peerId, playerId]) => ({
         peerId,
         playerId,
+        slotIndex: Math.max(0, Math.trunc(Number(this.simulation.state.players[playerId]?.slotIndex) || 0)),
         displayName: this.simulation.state.players[playerId]?.displayName || peerId,
         characterKey: this.simulation.state.players[playerId]?.characterKey || 'thorn_knight',
         kitChoices: { ...(this.simulation.state.players[playerId]?.kitChoices || {}) },
         ready: !!this.peerRecords.get(peerId)?.ready,
         rematchReady: !!this.peerRecords.get(peerId)?.rematchReady,
-      }));
+      })).sort((first, second) => first.slotIndex - second.slotIndex);
       this._broadcast('LOBBY_STATE', {
         status: this.simulation.state.status === 'starting' ? 'starting' : this.simulation.state.status,
         members,
@@ -822,6 +837,9 @@
       delete this.lastProcessedInput[playerId];
       delete this.lastProcessedAction[playerId];
       const player = this.simulation.state.players[playerId];
+      const displayName = String(player?.displayName || record?.displayName || peerId).slice(0, 64);
+      const slotIndex = Math.max(0, Math.trunc(Number(player?.slotIndex) || 0));
+      const intentional = isIntentionalDisconnectReason(reason);
       const canReconnect = this.simulation.state.status === 'running' && player && record?.reconnectToken;
       if (canReconnect) {
         const deadlineTick = this.simulation.state.tick + RECONNECT_RESERVATION_TICKS;
@@ -831,13 +849,16 @@
         player.reconnectDeadlineAt = deadlineAt;
         player.vx = 0;
         player.vy = 0;
-        this.reconnectReservations.set(record.reconnectToken, { playerId, deadlineTick, deadlineAt });
+        this.reconnectReservations.set(record.reconnectToken, { playerId, deadlineTick, deadlineAt, displayName, slotIndex });
       } else {
         delete this.simulation.state.players[playerId];
       }
       if (this.transport.sessionId) {
         this._broadcast('PLAYER_DISCONNECTED', {
           playerId,
+          displayName,
+          slotIndex,
+          intentional,
           reason: String(reason || 'disconnected').slice(0, 96),
           ...(canReconnect ? { reconnectDeadline: this.simulation.state.elapsedSeconds + RECONNECT_RESERVATION_TICKS / SIMULATION_TICK_RATE } : {}),
         });
@@ -892,7 +913,13 @@
         if (reservation.deadlineTick > this.simulation.state.tick && reservation.deadlineAt > Date.now()) return;
         this.reconnectReservations.delete(token);
         delete this.simulation.state.players[reservation.playerId];
-        this._broadcast('PLAYER_DISCONNECTED', { playerId: reservation.playerId, reason: 'reconnect-timeout' });
+        this._broadcast('PLAYER_DISCONNECTED', {
+          playerId: reservation.playerId,
+          displayName: String(reservation.displayName || reservation.playerId).slice(0, 64),
+          slotIndex: Math.max(0, Math.trunc(Number(reservation.slotIndex) || 0)),
+          intentional: false,
+          reason: 'reconnect-timeout',
+        });
       });
     }
 
@@ -1002,6 +1029,7 @@
       this.receivedTypes = [];
       this.gameplayEvents = [];
       this.chatMessages = [];
+      this.connectionNotices = [];
       this.runEnd = null;
       this.errors = [];
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
@@ -1174,12 +1202,38 @@
         case 'GAMEPLAY_EVENT':
           this.gameplayEvents.push(cloneSerializable(message.payload));
           if (this.gameplayEvents.length > 128) this.gameplayEvents.splice(0, this.gameplayEvents.length - 128);
+          if (message.payload.eventType === 'PLAYER_RECONNECTED') {
+            const playerId = message.payload.data?.playerId;
+            const player = this.state?.players?.[playerId];
+            this._recordConnectionNotice({
+              noticeId: `reconnected-${message.sequence}`,
+              playerId,
+              displayName: player?.displayName || playerId || 'Player',
+              slotIndex: player?.slotIndex,
+              kind: 'reconnected',
+              message: `${player?.displayName || 'Player'} reconnected.`,
+            });
+          }
           break;
         case 'CHAT_MESSAGE':
           this.chatMessages.push(cloneSerializable(message.payload));
           if (this.chatMessages.length > 64) this.chatMessages.splice(0, this.chatMessages.length - 64);
           break;
         case 'PLAYER_DISCONNECTED':
+          {
+            const previousMember = this.lobbyState?.members?.find(member => member.playerId === message.payload.playerId);
+            const displayName = message.payload.displayName || previousMember?.displayName || 'Player';
+            const intentional = message.payload.intentional === true;
+            this._recordConnectionNotice({
+              noticeId: `disconnected-${message.sequence}`,
+              playerId: message.payload.playerId,
+              displayName,
+              slotIndex: message.payload.slotIndex ?? previousMember?.slotIndex,
+              kind: intentional ? 'left' : 'disconnected',
+              reason: message.payload.reason,
+              message: intentional ? `${displayName} left the lobby.` : `${displayName} lost connection.`,
+            });
+          }
           if (this.state) delete this.state.players[message.payload.playerId];
           break;
         case 'FLOOR_TRANSITION':
@@ -1198,6 +1252,18 @@
           break;
         default: break;
       }
+    }
+
+    _recordConnectionNotice(notice) {
+      this.connectionNotices.push(cloneSerializable(notice));
+      if (this.connectionNotices.length > 8) this.connectionNotices.splice(0, this.connectionNotices.length - 8);
+    }
+
+    leave(reason = 'left') {
+      if (this.authorityPeerId && this.playerId) {
+        try { this._send('LEAVE_MATCH', { reason: String(reason || 'left').slice(0, 64) }); } catch { /* socket already unavailable */ }
+      }
+      return this.transport.leaveSession?.(reason);
     }
 
     _applySnapshot(snapshot) {

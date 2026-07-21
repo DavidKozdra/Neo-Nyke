@@ -85,6 +85,16 @@ describe('gameplay protocol v1 runtime validation', () => {
       .toContain('payload.text is too long');
   });
 
+  test('validates enriched player departure notices', () => {
+    expect(validateEnvelope(createEnvelope('PLAYER_DISCONNECTED', 8, 20, {
+      playerId: 'player-2',
+      displayName: 'Player 2',
+      slotIndex: 1,
+      intentional: true,
+      reason: 'left',
+    }), { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
+  });
+
   test('requires snapshots to state whether nullable boss state changed', () => {
     const snapshot = createEnvelope('WORLD_SNAPSHOT', 9, 40, {
       snapshotSequence: 3,

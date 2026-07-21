@@ -294,6 +294,9 @@
       delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
       fields: {
         playerId: field('string', { required: true, minLength: 1, maxLength: 96 }),
+        displayName: field('string', { maxLength: 64 }),
+        slotIndex: field('integer', { min: 0, max: 3 }),
+        intentional: field('boolean'),
         reason: field('string', { required: true, minLength: 1, maxLength: 96 }),
         reconnectDeadline: field('number', { min: 0 }),
       },

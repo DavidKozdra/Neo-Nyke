@@ -18,4 +18,25 @@ describe('multiplayer social and death UI', () => {
     expect(view).toContain('_cycleSpectatorTarget()');
     expect(controller).toContain('browserMultiplayerSession.requestRematch(true)');
   });
+
+  test('places the large multiplayer banner outside a collapsible lobby-code card', () => {
+    const html = read('index.html');
+    const controller = read('js/ui/controller.js');
+
+    expect(html).toMatch(/<header class="multiplayer-banner">[\s\S]*id="multiplayerPanelTitle"[\s\S]*<div class="multiplayer-panel__surface">/);
+    expect(html).toMatch(/<details id="multiplayerJoinPanel"[\s\S]*<summary class="multiplayer-join-summary">[\s\S]*id="multiplayerRoomCode"/);
+    expect(controller).toContain("view.multiplayerJoinPanel?.addEventListener('toggle'");
+  });
+
+  test('uses a vertical party rail and exposes live lobby connection activity', () => {
+    const html = read('index.html');
+    const styles = read('css/style.css');
+    const controller = read('js/ui/controller.js');
+
+    expect(html).toMatch(/class="coop-lobby__workspace"[\s\S]*class="coop-lobby__party-panel"[\s\S]*id="coopLobbySlots"[\s\S]*id="coopLobbyActivity"[\s\S]*class="charselect-main coop-lobby__main"/);
+    expect(styles).toMatch(/\.coop-lobby__workspace\s*\{[\s\S]*grid-template-columns:\s*310px minmax\(0, 1fr\)/);
+    expect(styles).toMatch(/\.coop-lobby__slots\s*\{[\s\S]*flex-direction:\s*column/);
+    expect(controller).toContain('renderCoopActivity(connectionNotices)');
+    expect(controller).toContain('membersBySlot');
+  });
 });

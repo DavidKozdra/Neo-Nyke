@@ -180,9 +180,15 @@ export function createUIController(view) {
       if (view.coopLobbyRoomCode) {
         view.coopLobbyRoomCode.textContent = snapshot.roomCode || '';
       }
+      const connectionNotices = Array.isArray(snapshot.connectionNotices) ? snapshot.connectionNotices : [];
       renderCoopSlots(members, snapshot.playerId);
+      renderCoopActivity(connectionNotices);
       renderCoopPicker(localMember, snapshot.status);
       renderCoopHeroDetail(localMember, snapshot.status);
+
+      if (view.coopLobbyPartyCount) {
+        view.coopLobbyPartyCount.textContent = `${members.length} / ${Number(snapshot.lobbyState?.maxPlayers) || MULTIPLAYER_MAX_SLOTS}`;
+      }
 
       const readyCount = members.filter(member => member.ready).length;
       const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
@@ -195,7 +201,7 @@ export function createUIController(view) {
       }
       if (view.coopLobbyReady) {
         const isReady = localMember?.ready === true;
-        view.coopLobbyReady.textContent = isReady ? 'WAITING…' : 'ENTER DUNGEON';
+        view.coopLobbyReady.textContent = isReady ? 'READY ✓' : 'READY UP';
         view.coopLobbyReady.classList.toggle('coop-lobby__ready--armed', isReady);
         view.coopLobbyReady.disabled = snapshot.status !== 'waiting' || !localMember;
       }
@@ -203,9 +209,13 @@ export function createUIController(view) {
 
     function renderCoopSlots(members, localPlayerId) {
       if (!view.coopLobbySlots) return;
+      const membersBySlot = new Map(members.map((member, fallbackIndex) => [
+        Number.isInteger(Number(member.slotIndex)) ? Number(member.slotIndex) : fallbackIndex,
+        member,
+      ]));
       const slots = [];
       for (let index = 0; index < MULTIPLAYER_MAX_SLOTS; index += 1) {
-        const member = members[index] || null;
+        const member = membersBySlot.get(index) || null;
         const slot = document.createElement('div');
         slot.className = 'coop-slot';
         slot.setAttribute('role', 'listitem');
@@ -239,7 +249,7 @@ export function createUIController(view) {
           hero.textContent = MULTIPLAYER_CHARACTER_NAMES[member.characterKey] || 'HERO';
           const status = document.createElement('span');
           status.className = 'coop-slot__status';
-          status.textContent = member.ready ? 'READY ✓' : 'CHOOSING…';
+          status.textContent = member.ready ? 'READY ✓' : 'SELECTING HERO';
           meta.append(name, hero, status);
           slot.appendChild(meta);
         } else {
@@ -251,6 +261,29 @@ export function createUIController(view) {
         slots.push(slot);
       }
       view.coopLobbySlots.replaceChildren(...slots);
+    }
+
+    function renderCoopActivity(notices = []) {
+      if (!view.coopLobbyActivity) return;
+      const label = document.createElement('span');
+      label.className = 'coop-lobby__activity-label';
+      label.textContent = 'LOBBY ACTIVITY';
+      const recent = notices.slice(-3);
+      if (!recent.length) {
+        const empty = document.createElement('div');
+        empty.className = 'coop-lobby__activity-empty';
+        empty.textContent = 'No recent activity';
+        view.coopLobbyActivity.replaceChildren(label, empty);
+        return;
+      }
+      const rows = recent.map(notice => {
+        const row = document.createElement('div');
+        row.className = 'coop-lobby__activity-item';
+        row.dataset.kind = notice.kind || 'disconnected';
+        row.textContent = String(notice.message || 'Party connection changed.');
+        return row;
+      });
+      view.coopLobbyActivity.replaceChildren(label, ...rows);
     }
 
     // ── Shared hero dossier ─────────────────────────────────────────────
@@ -851,13 +884,13 @@ export function createUIController(view) {
       }
     }
 
-    function disposeBrowserMultiplayerSession() {
+    function disposeBrowserMultiplayerSession(reason = 'left') {
       stopBrowserMultiplayerGameView();
       browserMultiplayerBackgrounded = false;
       browserMultiplayerUnsubscribe?.();
       browserMultiplayerUnsubscribe = null;
       const disposedSession = browserMultiplayerSession;
-      browserMultiplayerSession?.dispose?.();
+      browserMultiplayerSession?.dispose?.(reason);
       browserMultiplayerSession = null;
       if (Neo.gameSession === disposedSession) Neo.gameSession = null;
       setMultiplayerCopyFeedback('idle');
@@ -912,6 +945,7 @@ export function createUIController(view) {
       if (!roomCode) return;
 
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = roomCode;
+      if (view.multiplayerJoinPanel) view.multiplayerJoinPanel.open = true;
       setMultiplayerPanelOpen(true);
       if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'This invite cannot be joined because multiplayer is disabled in this build.';
@@ -3500,6 +3534,9 @@ export function createUIController(view) {
         });
         view.multiplayerJoinClipboard?.addEventListener('click', () => {
           void joinBrowserMultiplayerFromClipboard();
+        });
+        view.multiplayerJoinPanel?.addEventListener('toggle', () => {
+          if (view.multiplayerJoinPanel.open) view.multiplayerRoomCode?.focus?.({ preventScroll: true });
         });
         view.multiplayerRoomCode?.addEventListener('input', () => {
           view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 8);
