@@ -1553,6 +1553,80 @@ body.render3d #c {
   display: none;
 }
 
+/* In 3D the actor badges are world-space and can be hidden by perspective or
+   combat effects. Keep the same information in the fixed player card, without
+   adding duplicate noise to the already-clear 2D view. */
+.player-status-row {
+  display: none;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.render3d .player-status-row:not([hidden]) {
+  display: flex;
+}
+
+.player-status-heading {
+  flex: 0 0 auto;
+  padding-top: 4px;
+  color: var(--hud-muted);
+  font-size: calc(8px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.player-status-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.player-status-effect {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 20px;
+  padding: 1px 5px 1px 2px;
+  border: 1px solid color-mix(in srgb, var(--player-status-color) 68%, transparent);
+  border-left-width: 2px;
+  border-radius: 5px;
+  background: var(--player-status-bg, rgba(12,18,28,.9));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--player-status-color) 22%, transparent);
+  color: var(--player-status-color, #ffe66d);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.player-status-effect__icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  image-rendering: pixelated;
+}
+
+.player-status-effect__name {
+  color: #f2f6fb;
+  font-size: calc(8px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+
+.player-status-effect__stacks,
+.player-status-effect__time {
+  font-size: calc(8px * var(--font-scale, 1));
+  font-weight: 900;
+}
+
+.player-status-effect__time {
+  min-width: 22px;
+  color: var(--player-status-color, #ffe66d);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .player-shield-bar {
   position: relative;
   width: 118px;

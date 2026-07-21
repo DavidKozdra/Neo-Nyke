@@ -333,6 +333,120 @@
     return `linear-gradient(90deg, ${fallbackColor || '#b83346'}, #ff5f73)`;
   }
 
+  function getPlayerStatusHudEntries(entity) {
+    if (!entity) return [];
+    const entries = [];
+    (Neo.STATUS_KEYS || []).forEach(key => {
+      const stacks = Number(Neo.getStatusStacks?.(entity, key) || 0);
+      if (stacks <= 0) return;
+      const state = Neo.getStatusState?.(entity, key);
+      const definition = Neo.STATUS_ICON_DEFS?.[key] || {};
+      entries.push({
+        key,
+        label: definition.label || Neo.titleCase?.(key) || key,
+        stacks,
+        duration: Math.max(0, Number(state?.duration || 0)),
+        definition,
+      });
+    });
+    if (Number(entity.stun || 0) > 0) {
+      const definition = Neo.STATUS_ICON_DEFS?.stun || {};
+      entries.push({
+        key: 'stun',
+        label: definition.label || 'Stun',
+        stacks: 1,
+        duration: Math.max(0, Number(entity.stun || 0)),
+        definition,
+      });
+    }
+    return entries;
+  }
+
+  function drawPlayerStatusHudIcon(canvas, definition) {
+    const iconCtx = canvas?.getContext?.('2d');
+    if (!iconCtx) return;
+    iconCtx.clearRect(0, 0, canvas.width, canvas.height);
+    const cell = Math.max(1, Math.floor(Math.min(canvas.width, canvas.height) / 10));
+    const iconWidth = cell * 8;
+    const offsetX = Math.floor((canvas.width - iconWidth) / 2);
+    const offsetY = Math.floor((canvas.height - iconWidth) / 2);
+    const paint = (pixels, color) => {
+      iconCtx.fillStyle = color;
+      (pixels || []).forEach(([x, y]) => iconCtx.fillRect(offsetX + x * cell, offsetY + y * cell, cell, cell));
+    };
+    paint(definition.pixels, definition.color || '#ffe66d');
+    paint(definition.accentPixels, definition.accent || '#fff');
+  }
+
+  // In 3D, world-space badges can disappear behind actors and perspective.
+  // Mirror the local status state into the fixed player card so effect name,
+  // stacks, and remaining time stay readable even while the camera is moving.
+  function renderPlayerStatusHud(row, list, entity) {
+    if (!row || !list) return;
+    if (!document.body.classList.contains('render3d')) {
+      if (!row.hidden) row.hidden = true;
+      return;
+    }
+    const entries = getPlayerStatusHudEntries(entity);
+    const shouldHide = entries.length === 0;
+    if (row.hidden !== shouldHide) row.hidden = shouldHide;
+    if (!list._statusPills) list._statusPills = new Map();
+    const pills = list._statusPills;
+    const activeKeys = new Set(entries.map(entry => entry.key));
+    pills.forEach((pill, key) => {
+      if (!activeKeys.has(key)) {
+        pill.remove();
+        pills.delete(key);
+      }
+    });
+    entries.forEach(entry => {
+      let pill = pills.get(entry.key);
+      if (!pill) {
+        pill = document.createElement('span');
+        pill.className = 'player-status-effect';
+        pill.dataset.playerStatus = entry.key;
+        pill.innerHTML = `
+          <canvas class="player-status-effect__icon" width="18" height="18" aria-hidden="true"></canvas>
+          <span class="player-status-effect__name"></span>
+          <b class="player-status-effect__stacks"></b>
+          <time class="player-status-effect__time"></time>`;
+        pill._refs = {
+          icon: pill.querySelector('.player-status-effect__icon'),
+          name: pill.querySelector('.player-status-effect__name'),
+          stacks: pill.querySelector('.player-status-effect__stacks'),
+          time: pill.querySelector('.player-status-effect__time'),
+        };
+        pill._last = {};
+        list.appendChild(pill);
+        pills.set(entry.key, pill);
+      }
+      const refs = pill._refs;
+      const last = pill._last;
+      const stackCount = Math.max(1, Math.round(entry.stacks));
+      const stackText = stackCount > 1 ? `\u00d7${stackCount}` : '';
+      const timeText = entry.duration > 0
+        ? `${entry.duration < 10 ? entry.duration.toFixed(1) : Math.ceil(entry.duration)}s`
+        : '';
+      if (last.label !== entry.label) { last.label = entry.label; refs.name.textContent = entry.label; }
+      if (last.stacks !== stackText) { last.stacks = stackText; refs.stacks.textContent = stackText; }
+      if (last.time !== timeText) { last.time = timeText; refs.time.textContent = timeText; }
+      const color = entry.definition.color || '#ffe66d';
+      const bg = entry.definition.bg || 'rgba(12,18,28,.9)';
+      if (last.color !== color) {
+        last.color = color;
+        pill.style.setProperty('--player-status-color', color);
+        pill.style.setProperty('--player-status-bg', bg);
+        drawPlayerStatusHudIcon(refs.icon, entry.definition);
+      }
+      const description = `${entry.label}${stackCount > 1 ? `, ${stackCount} stacks` : ''}${timeText ? `, ${timeText} remaining` : ''}`;
+      if (last.description !== description) {
+        last.description = description;
+        pill.title = description;
+        pill.setAttribute('aria-label', description);
+      }
+    });
+  }
+
   function renderPlayerStatsPanel() {
     if (!Neo.ui.playerStats) return;
     const slots = Neo.getActivePlayerSlots();
@@ -383,6 +497,10 @@
             <div class="bar player-shield-bar"><i class="player-stat-fill player-stat-fill--shield" data-player-field="shieldFill"></i></div>
             <span data-player-field="shieldText"></span>
           </div>
+          <div class="player-status-row" data-player-field="statusRow" hidden>
+            <span class="player-status-heading">Affected</span>
+            <div class="player-status-list" data-player-field="statusList"></div>
+          </div>
           <div class="player-stat-row">
             <span>XP</span>
             <span class="player-level-badge" data-player-field="level"></span>
@@ -403,6 +521,8 @@
           hpText: card.querySelector('[data-player-field="hpText"]'),
           shieldRow: card.querySelector('[data-player-field="shieldRow"]'),
           shieldText: card.querySelector('[data-player-field="shieldText"]'),
+          statusRow: card.querySelector('[data-player-field="statusRow"]'),
+          statusList: card.querySelector('[data-player-field="statusList"]'),
           level: card.querySelector('[data-player-field="level"]'),
           xpText: card.querySelector('[data-player-field="xpText"]'),
           metaRow: card.querySelector('[data-player-field="metaRow"]'),
@@ -479,6 +599,7 @@
         if (refs.shieldFill && last.shieldWidth !== shieldWidth) { last.shieldWidth = shieldWidth; refs.shieldFill.style.width = shieldWidth; }
         if (refs.shieldText && last.shieldText !== shieldText) { last.shieldText = shieldText; refs.shieldText.textContent = shieldText; }
       }
+      renderPlayerStatusHud(refs.statusRow, refs.statusList, entity);
       if (refs.xpFill) {
         const xpWidth = `${xpPercent.toFixed(1)}%`;
         if (last.xpWidth !== xpWidth) { last.xpWidth = xpWidth; refs.xpFill.style.width = xpWidth; }
