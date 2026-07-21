@@ -3067,6 +3067,19 @@
           Neo.tutorialController?.signal?.('treasure-item-collected', { key: pickup.key });
         }
         Neo.collectItem(pickup.key);
+        if (Neo.gameMode === 'story' && pickup.storyRewardGroup === 'floor8DragonOrbs' && Neo.storyState) {
+          const claimed = Neo.storyState.floor8DragonOrbsClaimed ||= {};
+          claimed[pickup.storyRewardIndex] = true;
+          const count = Object.keys(claimed).length;
+          Neo.storyState.objective = count >= 5 ? 'Reach GOD and become the strongest there is' : `Claim all five Dragon Orbs (${count}/5)`;
+          if (count >= 5) Neo.storyState.rewards.floor8DragonOrbs = true;
+          Neo.updateObjective?.();
+        }
+        if (Neo.gameMode === 'story' && pickup.storyRewardGroup === 'floor3DragonOrb' && Neo.storyState) {
+          Neo.storyState.rewards.floor3DragonOrb = true;
+          Neo.storyState.objective = 'Continue the quest for the Dragon Orbs';
+          Neo.updateObjective?.();
+        }
         Neo.playSfx?.('item_collect');
         if (Neo.floorSkipPending > 0) {
           if (spawnJesterPortalPickup()) {

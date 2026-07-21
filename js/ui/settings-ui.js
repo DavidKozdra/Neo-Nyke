@@ -1877,12 +1877,12 @@
 
   });
 
-  const replayTutorialEl = document.getElementById('accReplayTutorial');
-  if (replayTutorialEl) {
-    replayTutorialEl.checked = localStorage.getItem(REPLAY_TUTORIAL_KEY) === '1';
-    replayTutorialEl.addEventListener('change', () => {
-      if (replayTutorialEl.checked) localStorage.setItem(REPLAY_TUTORIAL_KEY, '1');
-      else localStorage.removeItem(REPLAY_TUTORIAL_KEY);
+  const playTutorialEl = document.getElementById('settingsPlayTutorial');
+  if (playTutorialEl) {
+    playTutorialEl.addEventListener('click', () => {
+      localStorage.setItem(REPLAY_TUTORIAL_KEY, '1');
+      document.getElementById('settingsClose')?.click();
+      setTimeout(() => document.getElementById('newRunBtn')?.click(), 0);
     });
   }
 

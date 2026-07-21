@@ -53,6 +53,7 @@ let playerLight = null;
 const pools = {
   players: new Map(),
   enemies: new Map(),
+  storyActors: new Map(),
   projectiles: new Map(),
   pickups: new Map(),
   chests: new Map(),
@@ -1699,7 +1700,7 @@ function syncPlayer() {
   const anim = dying ? Neo.playerDeathAnim : null;
   // First person normally hides the body, but the death fall must remain
   // visible in every camera mode just like the 2D corpse animation.
-  playerSprite.visible = !isFirstPersonActive() || !!anim || networkDowned;
+  playerSprite.visible = !!Neo.storyCamera?.active || !isFirstPersonActive() || !!anim || networkDowned;
   const x = anim ? anim.x : p.x;
   const z = anim ? anim.y : p.y;
   playerSprite.position.set(x, 0, z);
@@ -1767,6 +1768,7 @@ function syncPlayer() {
   if (!networkDowned) {
     syncActorStatus(playerSprite, p, p.r || 14, true);
     syncActorFeedback(playerSprite, p, p.r || 14);
+    syncStoryEmote(playerSprite, p, p.r || 14);
   }
   syncPlayerDashTrail(p, frameKey, flip);
   if (playerShadow) {
@@ -2002,6 +2004,46 @@ function syncEnemies() {
   if (typeof syncSpawnPortals === 'function') syncSpawnPortals();
   // Nameplate sprites die with their enemy group (child objects); prune the map.
   nameplatePool.forEach((plate, enemy) => { if (!pools.enemies.has(enemy)) nameplatePool.delete(enemy); });
+}
+
+function syncStoryActors() {
+  syncPool(
+    pools.storyActors,
+    Array.isArray(Neo.storyActors) ? Neo.storyActors.filter(actor => !actor.combatConverted) : [],
+    actor => makeActorGroup(actor.spriteKey || actor.character || 'thorn_knight', actor.r || 16),
+    (actor, group) => {
+      const jumpHeight = Math.max(0, Number(actor.jumpZ || 0));
+      group.position.set(actor.x, jumpHeight, actor.y);
+      group.visible = true;
+      const key = actor.spriteKey || actor.character || 'thorn_knight';
+      const bob = walkBob(actor, actor.x);
+      const animation = { maxSpeed: 220, stepRate: 7.5, seedKey: key };
+      const frameKey = Neo.getActorSpriteFrameKey?.(key, actor, animation) || key;
+      updateActorSprite(group, frameKey, actor.r || 16, Number(actor.vx || 0) < 0, bob);
+      syncStoryEmote(group, actor, actor.r || 16);
+    },
+  );
+}
+
+function syncStoryEmote(group, actor, radius) {
+  const storyMark = actor?.storyEmote || actor?.emote;
+  const storyMarkTime = Number(actor?.storyEmoteTime || actor?.emoteTime || 0);
+  const mark = group?.getObjectByName?.('lost-sight');
+  if (!mark) return;
+  if (!storyMark || storyMarkTime <= 0) {
+    if (!actor?.playerLostSight) mark.visible = false;
+    return;
+  }
+  mark.visible = true;
+  const entry = getTextTexture(storyMark, storyMark === '?' ? '#67d8ff' : '#ffd24a');
+  if (mark.material.map !== entry.texture) {
+    mark.material.map = entry.texture;
+    mark.material.needsUpdate = true;
+  }
+  const reducedMotion = window.NeoSettings?.getAccess?.()?.reducedMotion;
+  const bob = reducedMotion ? 0 : Math.sin(storyMarkTime * 10) * 2;
+  mark.position.set(0, radius * SPRITE_SIZE_MULT + 58 + bob, 0);
+  mark.scale.set(entry.w, entry.h, 1);
 }
 
 function makeSpawnPortalObject() {
@@ -4001,15 +4043,16 @@ document.addEventListener('pointerdown', requestGameplayPointerLock, true);
 
 function syncCamera() {
   const p = Neo.presentationViewpointPlayer || Neo.player;
+  const storyCamera = Neo.storyCamera?.active ? Neo.storyCamera : null;
   // FPS-appropriate field of view in first person; classic follow cam otherwise.
-  const targetFov = isFirstPersonActive() ? 68 : 50;
+  const targetFov = storyCamera ? 50 / Math.max(0.75, Number(storyCamera.zoom || 1)) : isFirstPersonActive() ? 68 : 50;
   if (camera.fov !== targetFov) {
     camera.fov = targetFov;
     camera.updateProjectionMatrix();
   }
   const anim = Neo.gameState === 'dying' ? Neo.playerDeathAnim : null;
-  const rawFocusX = anim ? anim.x : (p?.x ?? Neo.ROOM_W / 2);
-  const rawFocusZ = anim ? anim.y : (p?.y ?? Neo.ROOM_H / 2);
+  const rawFocusX = storyCamera ? storyCamera.x : anim ? anim.x : (p?.x ?? Neo.ROOM_W / 2);
+  const rawFocusZ = storyCamera ? storyCamera.y : anim ? anim.y : (p?.y ?? Neo.ROOM_H / 2);
   // Render-time delta (not simulation dt): this smoothing exists precisely to
   // bridge render frames between simulation ticks. Clamped so a stall or a
   // backgrounded tab doesn't produce one huge catch-up jump.
@@ -4488,6 +4531,7 @@ function render() {
     syncPlayerMeleeIndicator();
     syncWarpPreview();
     syncEnemies();
+    syncStoryActors();
     syncProjectiles();
     syncPickups();
     syncChests();

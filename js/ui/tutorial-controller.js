@@ -1069,7 +1069,7 @@ export function createTutorialController() {
 
   function skipTutorial() {
     if (!getState()?.active) return;
-    if (!window.confirm('Skip the guided tutorial? You will stay in this run and can replay the tutorial from the main menu.')) return;
+    if (!window.confirm('Skip the guided tutorial? You will stay in this run and can replay the standalone tutorial from Settings.')) return;
     getState().active = false;
     Neo.metaProgress.tutorialCompleted = true;
     Neo.metaProgress.tutorialVersion = TUTORIAL_VERSION;
@@ -1280,7 +1280,7 @@ export function createTutorialController() {
   // through the pause menu / settings — needed for the guided HUD-editor path.
   function isEngaged() {
     const state = getState();
-    if (!state?.active || Neo.gameMode !== 'normal') return false;
+    if (!state?.active || !['normal', 'story'].includes(Neo.gameMode)) return false;
     if (Neo.isFirstRunTutorialEngaged?.()) return true;
     return Neo.gameState === 'pause' && !!getStep()?.liveDuringPause;
   }

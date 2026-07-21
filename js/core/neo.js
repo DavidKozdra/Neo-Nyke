@@ -57,6 +57,9 @@ window.Neo = {
   // --- flow ---
   gameState: 'menu',
   gameMode: 'normal',
+  storyState: null,
+  storyCamera: { active: false, x: 0, y: 0, zoom: 1, targetX: 0, targetY: 0, targetZoom: 1 },
+  storyActors: [],
   gameSession: null,
   gameSessionReady: null,
   treasureHuntPhase: 'seek',

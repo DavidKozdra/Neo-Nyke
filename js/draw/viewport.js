@@ -26,7 +26,16 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // while moving. Rounding once here keeps the whole scene on a shared grid.
     // Sub-pixel camera motion is still tracked in cam.x/y; only the draw
     // transform is quantised, so movement stays smooth rather than stepping.
-    Neo.ctx.translate(Math.round(vpX - cam.x + sX), Math.round(vpY - cam.y + sY));
+    const storyZoom = pLabel === null && Neo.storyCamera?.active
+      ? Math.max(0.75, Math.min(1.35, Number(Neo.storyCamera.zoom || 1)))
+      : 1;
+    if (storyZoom !== 1) {
+      Neo.ctx.translate(Math.round(vpX + vpW / 2 + sX), Math.round(vpY + vpH / 2 + sY));
+      Neo.ctx.scale(storyZoom, storyZoom);
+      Neo.ctx.translate(Math.round(-(cam.x + vpW / 2)), Math.round(-(cam.y + vpH / 2)));
+    } else {
+      Neo.ctx.translate(Math.round(vpX - cam.x + sX), Math.round(vpY - cam.y + sY));
+    }
     Neo.drawFloor();
     Neo.drawRoomDecor();
     Neo.drawWorldProps();
@@ -52,6 +61,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
       top: cam.y,
       bottom: cam.y + vpH,
     });
+    Neo.drawStoryActors?.();
     Neo.perfEnd('draw.entities', sectionPerfStart);
     drawRoomCeilingMask();
     if (!isDying) {
