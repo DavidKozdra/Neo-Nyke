@@ -765,6 +765,7 @@
     Neo.ghostBalls = [];
     Neo.titanHammer = null;
     Neo.activeBeamPaths = null;
+    Neo.beamStruggle = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     Neo.setGameState('play');

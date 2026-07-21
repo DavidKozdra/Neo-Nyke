@@ -989,6 +989,7 @@
 
   function endActiveLaser() {
     if (!Neo.laserActive) return;
+    cancelBeamStruggle();
     Neo.laserActive = false;
     Neo.laserMode = 'beam';
     Neo.loveBeamCasting = false;
@@ -1020,8 +1021,178 @@
     return false;
   }
 
+  const BEAM_STRUGGLE_DURATION = 3;
+  const BEAM_STRUGGLE_MASH_FORCE = 0.085;
+
+  function getBeamStruggleEnemyRange(enemy) {
+    if (enemy.type === 'god') return Number(enemy.beamRange || 620);
+    if (enemy.type === 'rival') return Number(enemy.rivalBeamRange || 430);
+    if (enemy.type === 'mooggy') return 520;
+    if (enemy.type === 'handsome_devil') return enemy.state === 'devilGiantLaser' ? 900 : Number(enemy.beamRange || 560);
+    if (enemy.type === 'bowman_bane') return 480;
+    return 430;
+  }
+
+  function getBeamStruggleEnemyPaths(enemy) {
+    const fan = enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
+      ? enemy.rivalBeamFan
+      : [0];
+    const range = getBeamStruggleEnemyRange(enemy);
+    return fan.map(offset => Neo.buildRicochetBeamPath(
+      enemy.x,
+      enemy.y,
+      Number(enemy.beamAngle || 0) + offset,
+      range,
+      Neo.getEnemyBeamBounceCount(enemy),
+    ));
+  }
+
+  function makeBeamStrugglePath(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return [{ x1, y1, x2, y2, angle: Math.atan2(dy, dx), length: Math.hypot(dx, dy), hitWall: false }];
+  }
+
+  function getBeamStruggleEnemyPressure(enemy) {
+    const difficulty = Number(Neo.getEnemyDifficultyTuning?.()?.reaction || 1);
+    const rolePressure = enemy.type === 'god' ? 0.24
+      : Neo.isBossType?.(enemy.type) ? 0.22
+        : enemy.type === 'rival' ? 0.19
+          : enemy.elite ? 0.16 : 0.12;
+    return rolePressure * Neo.clamp(Number.isFinite(difficulty) ? difficulty : 1, 0.8, 1.35);
+  }
+
+  function isBeamStruggleActive() {
+    return !!Neo.beamStruggle?.active;
+  }
+
+  function isBeamStruggleParticipant(enemy) {
+    return isBeamStruggleActive() && Neo.beamStruggle.enemy === enemy;
+  }
+
+  function startBeamStruggle(enemy, contact) {
+    if (!enemy || isBeamStruggleActive()) return false;
+    const playerAngle = Neo.angleBetween(Neo.player, enemy);
+    const enemyAngle = Neo.angleBetween(enemy, Neo.player);
+    Neo.laserAngle = playerAngle;
+    enemy.beamAngle = enemyAngle;
+    Neo.beamStruggle = {
+      active: true,
+      enemy,
+      elapsed: 0,
+      duration: BEAM_STRUGGLE_DURATION,
+      progress: 0.5,
+      mashCount: 0,
+      enemyPressure: getBeamStruggleEnemyPressure(enemy),
+      x: Number(contact?.x ?? (Neo.player.x + enemy.x) / 2),
+      y: Number(contact?.y ?? (Neo.player.y + enemy.y) / 2),
+      playerAngle,
+      enemyAngle,
+    };
+    Neo.laserTime = Math.max(Number(Neo.laserTime || 0), BEAM_STRUGGLE_DURATION + 0.25);
+    enemy.beamTime = Math.max(Number(enemy.beamTime || 0), BEAM_STRUGGLE_DURATION + 0.25);
+    Neo.spawnParticle({ x: Neo.beamStruggle.x, y: Neo.beamStruggle.y, life: 0.8, text: 'BEAM STRUGGLE!', c: '#ffffff' });
+    Neo.shake = Math.max(Number(Neo.shake || 0), 7);
+    return true;
+  }
+
+  function tryStartBeamStruggle(playerPaths) {
+    if (isBeamStruggleActive() || !Neo.laserActive || !Array.isArray(playerPaths)) return false;
+    let best = null;
+    for (const enemy of Neo.enemies || []) {
+      if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.spawnT > 0 || Number(enemy.beamTime || 0) <= 0) continue;
+      if (enemy.type === 'rival' && enemy.rivalData?.friend) continue;
+      for (const playerPath of playerPaths) {
+        for (const enemyPath of getBeamStruggleEnemyPaths(enemy)) {
+          const contact = Neo.findOpposingBeamPathContact?.(playerPath, enemyPath, 24, -0.15);
+          if (!contact) continue;
+          const playerDistance = Neo.dist(Neo.player.x, Neo.player.y, contact.x, contact.y);
+          if (!best || playerDistance < best.playerDistance) best = { enemy, contact, playerDistance };
+        }
+      }
+    }
+    return best ? startBeamStruggle(best.enemy, best.contact) : false;
+  }
+
+  function registerBeamStruggleMash() {
+    const struggle = Neo.beamStruggle;
+    if (!struggle?.active) return false;
+    struggle.progress = Neo.clamp(Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE, 0, 1);
+    struggle.mashCount = Number(struggle.mashCount || 0) + 1;
+    Neo.spawnParticle({ x: struggle.x, y: struggle.y, life: 0.16, r: 7, c: '#dff7ff' });
+    if (struggle.progress >= 1) resolveBeamStruggle(true);
+    return true;
+  }
+
+  function resolveBeamStruggle(playerWon) {
+    const struggle = Neo.beamStruggle;
+    if (!struggle?.active) return;
+    const enemy = struggle.enemy;
+    const point = { x: struggle.x, y: struggle.y };
+    Neo.beamStruggle = null;
+    if (enemy) enemy.beamTime = 0;
+    endActiveLaser();
+    Neo.spawnAoeShockwave?.(point.x, point.y, playerWon ? 92 : 78, playerWon ? '#f4fbff' : '#ff5577', 'heavy');
+    Neo.shake = Math.max(Number(Neo.shake || 0), playerWon ? 12 : 15);
+    if (playerWon && enemy && !enemy.dead && enemy.hp > 0) {
+      enemy.stun = Math.max(Number(enemy.stun || 0), 1.25);
+      const damage = Math.max(28, Math.round(Number(Neo.ATTACKS?.laser?.damage || 10) * 3));
+      hitEnemy(enemy, damage, Neo.angleBetween(Neo.player, enemy), 360, '#f4fbff', { beamFx: true });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 20, life: 0.9, text: 'STRUGGLE WON!', c: '#9cf6ff' });
+      return;
+    }
+    if (Neo.player) {
+      Neo.player.stun = Math.max(Number(Neo.player.stun || 0), 0.7);
+      const source = getEnemyBeamDamageSource(enemy || {}, null);
+      const damage = Math.max(18, Math.round(Number(enemy?.dmg || 14) * 1.35));
+      Neo.damagePlayer(damage, Number(enemy?.beamAngle || 0), 330, source.label, { sourceKey: source.key, attacker: enemy });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'OVERPOWERED!', c: '#ff8098' });
+    }
+  }
+
+  function cancelBeamStruggle() {
+    if (!isBeamStruggleActive()) return;
+    Neo.beamStruggle = null;
+  }
+
+  function updateBeamStruggle(dt) {
+    const struggle = Neo.beamStruggle;
+    if (!struggle?.active) return false;
+    const enemy = struggle.enemy;
+    if (Neo.gameState !== 'play' || !Neo.player || !Neo.laserActive || !enemy || enemy.dead || enemy.hp <= 0) {
+      cancelBeamStruggle();
+      return false;
+    }
+    struggle.elapsed += dt;
+    struggle.progress = Neo.clamp(struggle.progress - struggle.enemyPressure * dt, 0, 1);
+    Neo.laserTime = Math.max(Number(Neo.laserTime || 0), 0.18);
+    enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
+    struggle.playerAngle = Neo.angleBetween(Neo.player, enemy);
+    struggle.enemyAngle = Neo.angleBetween(enemy, Neo.player);
+    Neo.laserAngle = struggle.playerAngle;
+    enemy.beamAngle = struggle.enemyAngle;
+    const clashRatio = 0.18 + struggle.progress * 0.64;
+    const targetX = Neo.player.x + (enemy.x - Neo.player.x) * clashRatio;
+    const targetY = Neo.player.y + (enemy.y - Neo.player.y) * clashRatio;
+    const follow = 1 - Math.exp(-12 * dt);
+    struggle.x += (targetX - struggle.x) * follow;
+    struggle.y += (targetY - struggle.y) * follow;
+    Neo.activeBeamPaths = [makeBeamStrugglePath(Neo.player.x, Neo.player.y, struggle.x, struggle.y)];
+    if (Neo.nextRandom('fx') < 0.7) {
+      Neo.spawnParticle({
+        x: struggle.x + Neo.rand(10, -10, 'fx'), y: struggle.y + Neo.rand(10, -10, 'fx'),
+        vx: Neo.rand(90, -90, 'fx'), vy: Neo.rand(90, -90, 'fx'), life: 0.16, c: '#ffffff', size: 3,
+      });
+    }
+    if (struggle.progress >= 1) resolveBeamStruggle(true);
+    else if (struggle.progress <= 0) resolveBeamStruggle(false);
+    else if (struggle.elapsed >= struggle.duration) resolveBeamStruggle(struggle.progress >= 0.5);
+    return true;
+  }
+
   function updatePlayerLaser(dt) {
     if (!Neo.laserActive) return;
+    if (updateBeamStruggle(dt)) return;
     Neo.laserTime -= dt;
     Neo.laserTick -= dt;
     if (tickTurtleWaveHpDrain(dt)) {
@@ -1123,6 +1294,7 @@
       const beamPaths = beamAngles.map(a =>
         Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, range, Neo.getPlayerBeamBounceCount(Neo.laserMode)));
       Neo.activeBeamPaths = beamPaths; // exposed for the renderer (multi-beam draw)
+      if (tryStartBeamStruggle(beamPaths)) return;
       const beamPath = beamPaths[0];
       const hitThisTick = new Set();
       for (let pathIndex = 0; pathIndex < beamPaths.length; pathIndex += 1) {
@@ -4264,6 +4436,7 @@
     if (typeof onTick === 'function') onTick(enemy, dt);
     if (enemy.beamTick <= 0) {
       enemy.beamTick = tick;
+      if (isBeamStruggleParticipant(enemy)) return false;
       const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
       const hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
       if (hitSegment) {
@@ -5413,6 +5586,12 @@
   Neo.endActiveLaser = endActiveLaser;
   Neo.tickTurtleWaveHpDrain = tickTurtleWaveHpDrain;
   Neo.updatePlayerLaser = updatePlayerLaser;
+  Neo.isBeamStruggleActive = isBeamStruggleActive;
+  Neo.isBeamStruggleParticipant = isBeamStruggleParticipant;
+  Neo.tryStartBeamStruggle = tryStartBeamStruggle;
+  Neo.registerBeamStruggleMash = registerBeamStruggleMash;
+  Neo.updateBeamStruggle = updateBeamStruggle;
+  Neo.cancelBeamStruggle = cancelBeamStruggle;
   Neo.tryUsePotion = tryUsePotion;
   Neo.trySmash = trySmash;
   Neo.tryDash = tryDash;

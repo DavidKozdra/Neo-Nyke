@@ -594,9 +594,15 @@ export function loop(timestamp) {
       // auto-repeating every frame — otherwise holding the button drains the
       // whole charge pool in a few frames. Beam moves keep their held behavior.
       const laserPressEdge = laserHeld && !Neo._laserWasHeld;
-      const fireLaser = laserHeld && !loveBombChargeActive && (laserPressEdge || !Neo.isInstantLaserMove?.());
-      if (!laserHeld && Neo.laserActive && !Neo.isInstantLaserMove?.()) Neo.endActiveLaser?.();
-      if (!overlayOpen && !playerStunned && fireLaser) Neo.tryLaser();
+      if (Neo.isBeamStruggleActive?.()) {
+        // Releasing the laser control must not end the channel during a clash;
+        // every fresh press is one mash, shared by mouse, touch and gamepad.
+        if (laserPressEdge && !overlayOpen) Neo.registerBeamStruggleMash?.();
+      } else {
+        const fireLaser = laserHeld && !loveBombChargeActive && (laserPressEdge || !Neo.isInstantLaserMove?.());
+        if (!laserHeld && Neo.laserActive && !Neo.isInstantLaserMove?.()) Neo.endActiveLaser?.();
+        if (!overlayOpen && !playerStunned && fireLaser) Neo.tryLaser();
+      }
       Neo._laserWasHeld = laserHeld;
     }
 

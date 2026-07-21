@@ -2994,6 +2994,8 @@ function getEnemyBeamVisual(enemy) {
     : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
       ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
       : [enemy.beamAngle];
+  const struggle = Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy
+    ? Neo.beamStruggle : null;
   return {
     color: isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff'
       : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa')
@@ -3003,13 +3005,19 @@ function getEnemyBeamVisual(enemy) {
       : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8)
         : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22
           : enemy.type === 'handsome_devil' ? 9 : 8,
-    paths: angles.map(angle => Neo.buildRicochetBeamPath(
-      enemy.x,
-      enemy.y,
-      angle,
-      isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
-      isPartition ? 0 : (Neo.getEnemyBeamBounceCount?.(enemy) ?? 0),
-    )),
+    paths: struggle
+      ? [[{
+        x1: enemy.x, y1: enemy.y, x2: struggle.x, y2: struggle.y,
+        angle: Math.atan2(struggle.y - enemy.y, struggle.x - enemy.x),
+        length: Neo.dist(enemy.x, enemy.y, struggle.x, struggle.y), hitWall: false,
+      }]]
+      : angles.map(angle => Neo.buildRicochetBeamPath(
+        enemy.x,
+        enemy.y,
+        angle,
+        isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
+        isPartition ? 0 : (Neo.getEnemyBeamBounceCount?.(enemy) ?? 0),
+      )),
   };
 }
 
