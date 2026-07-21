@@ -44,6 +44,9 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDashTrail(player, spriteKey, flip)');
     expect(renderer).not.toContain('SHAPED_PROJECTILE_KINDS');
     expect(renderer).toContain("`${kind}|${visual.shape || ''}|${visual.color || ''}|${visual.core || ''}|${projectile.enemy ? 1 : 0}`");
+    expect(renderer).toContain('function makeProjectileObject(projectile)');
+    expect(renderer).toContain('new THREE.DodecahedronGeometry(1, 0)');
+    expect(renderer).toContain('new THREE.CylinderGeometry(1, 1, 0.28, 18)');
   });
 
   test('renders live combat beam paths instead of a fixed visual-only beam', () => {

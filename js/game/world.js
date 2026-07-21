@@ -25,26 +25,87 @@
     return Number(Neo.player2?.lastAimAngle || 0);
   }
 
+  function updateAuxPlayerAbilities(dt, player, gamepad, aimAngle, color = '#a8d8ff') {
+    if (!player || !gamepad?.active) return;
+    player.auxLaserCooldown = Math.max(0, Number(player.auxLaserCooldown || 0) - dt);
+    player.auxSmashCooldown = Math.max(0, Number(player.auxSmashCooldown || 0) - dt);
+    const updateCharge = (slot, held, cooldownKey, release) => {
+      const latchKey = `aux${slot[0].toUpperCase()}${slot.slice(1)}Latch`;
+      if (held && Number(player[cooldownKey] || 0) <= 0) {
+        player[latchKey] = true;
+        player.localChargeState = {
+          slot, time: Math.min(3, Number(player.localChargeState?.slot === slot ? player.localChargeState.time : 0) + dt), max: 3,
+        };
+      } else if (!held && player[latchKey]) {
+        const ratio = Math.max(0, Math.min(1, Number(player.localChargeState?.time || 0) / 3));
+        player[latchKey] = false;
+        player.localChargeState = null;
+        release(ratio);
+      }
+    };
+    updateCharge('laser', !!gamepad.laser, 'auxLaserCooldown', ratio => {
+      const moveKey = player.equippedMoves?.laser || 'blood_beam';
+      const range = Neo.getPlayerBeamRange?.('beam', moveKey) || 430;
+      const path = Neo.buildRicochetBeamPath(player.x, player.y, aimAngle, range, Neo.getPlayerBeamBounceCount?.('beam') || 0);
+      const damage = Math.max(1, Number(Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.laser.damage) * (0.7 + ratio * 1.3));
+      for (const enemy of Neo.enemies) {
+        if (!enemy?.dead && Neo.beamPathHitsCircle?.(path, enemy.x, enemy.y, enemy.r + 7)) {
+          Neo.hitEnemy(enemy, damage, aimAngle, 80 + ratio * 100, color);
+        }
+      }
+      player.auxLaserPath = path;
+      player.auxLaserFxTime = 0.16;
+      player.auxLaserCooldown = getPvpMoveCooldown(player, 'laser', 'blood_beam');
+    });
+    updateCharge('smash', !!gamepad.smash, 'auxSmashCooldown', ratio => {
+      const moveKey = player.equippedMoves?.smash || 'crimson_smash';
+      const radius = (Neo.ATTACKS.smash.radius || 105) * (0.75 + ratio * 0.55);
+      const damage = Math.max(1, Number(Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.smash.damage) * (0.7 + ratio * 1.3));
+      Neo.spawnAoeShockwave(player.x, player.y, radius, color, 'heavy');
+      for (const enemy of Neo.enemies) {
+        if (!enemy?.dead && Neo.dist(player.x, player.y, enemy.x, enemy.y) <= radius + enemy.r) {
+          Neo.hitEnemy(enemy, damage, Neo.angleBetween(player, enemy), 260 + ratio * 120, color);
+        }
+      }
+      player.auxSmashCooldown = getPvpMoveCooldown(player, 'smash', 'crimson_smash');
+    });
+    player.auxLaserFxTime = Math.max(0, Number(player.auxLaserFxTime || 0) - dt);
+    if (player.auxLaserFxTime <= 0) player.auxLaserPath = null;
+  }
+
   function castPlayer2PvpLaser(angle) {
     if (!Neo.player2 || Neo.player2.pvpLaserCooldown > 0) return;
     const moveKey = Neo.player2.equippedMoves?.laser || 'blood_beam';
-    Neo.player2.pvpLaserCooldown = getPvpMoveCooldown(Neo.player2, 'laser', 'blood_beam');
     Neo.player2.lastAimAngle = angle;
     const mode = moveKey === 'turtle_wave' ? 'turtle_wave' : moveKey === 'god_sweep' ? 'god_sweep' : 'beam';
     const range = Neo.getPlayerBeamRange(mode, moveKey);
     const path = Neo.buildRicochetBeamPath(Neo.player2.x, Neo.player2.y, angle, range, Neo.getPlayerBeamBounceCount(mode));
-    const baseDamage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.laser.damage;
-    hitPvpPlayer1WithBeamPath(path, mode === 'turtle_wave' ? 14 : 6, baseDamage, mode === 'turtle_wave' ? 155 : 60, 'pvp_p2_beam');
-    const end = Neo.getBeamPathEnd?.(path) || { x: Neo.player2.x + Math.cos(angle) * 90, y: Neo.player2.y + Math.sin(angle) * 90 };
-    Neo.spawnParticle({ x: end.x, y: end.y, life: 0.18, r: 10, c: '#74b8ff' });
+    Neo.player2.pvpBeamActive = true;
+    Neo.player2.pvpBeamPath = path;
+    Neo.player2.pvpBeamMode = mode;
+    Neo.player2.pvpBeamMoveKey = moveKey;
   }
 
-  function castPlayer2PvpSmash() {
+  function releasePlayer2PvpLaser() {
+    const player = Neo.player2;
+    if (!player?.pvpBeamActive || Neo.beamStruggle?.opponentPlayer === player) return;
+    const path = player.pvpBeamPath || [];
+    const moveKey = player.pvpBeamMoveKey || player.equippedMoves?.laser || 'blood_beam';
+    const mode = player.pvpBeamMode || 'beam';
+    const baseDamage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.laser.damage;
+    hitPvpPlayer1WithBeamPath(path, mode === 'turtle_wave' ? 14 : 6, baseDamage, mode === 'turtle_wave' ? 155 : 60, 'pvp_p2_beam');
+    player.pvpLaserCooldown = getPvpMoveCooldown(player, 'laser', 'blood_beam');
+    player.pvpBeamActive = false;
+    player.pvpBeamPath = null;
+  }
+
+  function castPlayer2PvpSmash(chargeRatio = 0) {
     if (!Neo.player2 || Neo.player2.pvpSmashCooldown > 0) return;
     const moveKey = Neo.player2.equippedMoves?.smash || 'crimson_smash';
     Neo.player2.pvpSmashCooldown = getPvpMoveCooldown(Neo.player2, 'smash', 'crimson_smash');
-    const radius = (Neo.ATTACKS.smash.radius || 105) * 0.95;
-    const damage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.smash.damage;
+    const chargeScale = 1 + Neo.clamp(Number(chargeRatio || 0), 0, 1) * 1.1;
+    const radius = (Neo.ATTACKS.smash.radius || 105) * 0.95 * (1 + (chargeScale - 1) * 0.35);
+    const damage = (Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.smash.damage) * chargeScale;
     const smashColor = moveKey === 'crimson_smash'
       ? '#ff3048'
       : moveKey === 'chaos_burst'
@@ -82,6 +143,7 @@
     tickPvpPlayer2Cooldowns(dt);
     const p2AimAngle = getPlayer2AimAngle(p2NX, p2NY, _gp1Active ? _gp1 : null);
     Neo.player2.lastAimAngle = p2AimAngle;
+    if (Neo.gameMode === 'coop') updateAuxPlayerAbilities(dt, Neo.player2, _gp1, p2AimAngle, '#4ca8ff');
     Neo.moveCircle(Neo.player2, dt);
     Neo.player2.inv = Math.max(0, Neo.player2.inv - dt);
     if (Neo.player2.swing > 0) Neo.player2.swing = Math.max(0, Neo.player2.swing - dt);
@@ -118,17 +180,44 @@
     } else if (!Neo.keys[';'] && !(_gp1Active && _gp1.p2DashHeld)) {
       Neo.player2.dashLatch = false;
     }
-    if (Neo.gameMode === 'pvp' && (Neo.keys.o || _gp1Active && _gp1.laser) && !Neo.player2.laserLatch) {
+    const p2LaserHeld = !!(Neo.keys.o || _gp1Active && _gp1.laser);
+    if (Neo.gameMode === 'pvp' && Neo.beamStruggle?.opponentPlayer === Neo.player2) {
+      if (p2LaserHeld && !Neo.player2.laserLatch) Neo.registerBeamStruggleMash?.(2);
+      Neo.player2.laserLatch = p2LaserHeld;
+    } else if (Neo.gameMode === 'pvp' && p2LaserHeld) {
+      if (!Neo.player2.pvpBeamActive) castPlayer2PvpLaser(p2AimAngle);
+      if (Neo.player2.pvpBeamActive) {
+        Neo.player2.lastAimAngle = p2AimAngle;
+        const range = Neo.getPlayerBeamRange(Neo.player2.pvpBeamMode || 'beam', Neo.player2.pvpBeamMoveKey);
+        Neo.player2.pvpBeamPath = Neo.buildRicochetBeamPath(
+          Neo.player2.x, Neo.player2.y, p2AimAngle, range,
+          Neo.getPlayerBeamBounceCount(Neo.player2.pvpBeamMode || 'beam'),
+        );
+      }
       Neo.player2.laserLatch = true;
-      castPlayer2PvpLaser(p2AimAngle);
-    } else if (!Neo.keys.o && !(_gp1Active && _gp1.laser)) {
+      Neo.player2.localChargeState = {
+        slot: 'laser',
+        time: Math.min(5, Number(Neo.player2.localChargeState?.slot === 'laser' ? Neo.player2.localChargeState.time : 0) + dt),
+        max: 5,
+      };
+    } else {
+      releasePlayer2PvpLaser();
       Neo.player2.laserLatch = false;
+      if (Neo.player2.localChargeState?.slot === 'laser') Neo.player2.localChargeState = null;
     }
-    if (Neo.gameMode === 'pvp' && (Neo.keys.p || _gp1Active && _gp1.smash) && !Neo.player2.smashLatch) {
+    const p2SmashHeld = !!(Neo.keys.p || _gp1Active && _gp1.smash);
+    if (Neo.gameMode === 'pvp' && p2SmashHeld && Neo.player2.pvpSmashCooldown <= 0) {
       Neo.player2.smashLatch = true;
-      castPlayer2PvpSmash();
-    } else if (!Neo.keys.p && !(_gp1Active && _gp1.smash)) {
+      Neo.player2.localChargeState = {
+        slot: 'smash',
+        time: Math.min(5, Number(Neo.player2.localChargeState?.slot === 'smash' ? Neo.player2.localChargeState.time : 0) + dt),
+        max: 5,
+      };
+    } else if (!p2SmashHeld && Neo.player2.smashLatch) {
+      const ratio = Number(Neo.player2.localChargeState?.time || 0) / Math.max(1, Number(Neo.player2.localChargeState?.max || 5));
+      castPlayer2PvpSmash(ratio);
       Neo.player2.smashLatch = false;
+      Neo.player2.localChargeState = null;
     }
     // PVP: P2 melee hits P1
     if (Neo.gameMode === 'pvp' && Neo.player && Neo.player.inv <= 0 && Neo.player2.swing > 0) {
@@ -195,6 +284,9 @@
       pn.dashTime = 0.16; pn.dashX = Math.cos(angle) * 480; pn.dashY = Math.sin(angle) * 480;
       pn.vx = pn.dashX; pn.vy = pn.dashY; pn.inv = Math.max(pn.inv, 0.18);
     } else if (!(_gpN && _gpN.p2DashHeld)) { pn.dashLatch = false; }
+    const aimAngle = _gpN?.hasAim ? Math.atan2(_gpN.aimY, _gpN.aimX) : Math.atan2(pn.vy || 0, pn.vx || 1);
+    pn.lastAimAngle = aimAngle;
+    updateAuxPlayerAbilities(dt, pn, _gpN, aimAngle, n === 3 ? '#8aff8a' : '#ffd080');
     for (const enemy of Neo.enemies) {
       if (enemy.dead) continue;
       if (Math.hypot(pn.x - enemy.x, pn.y - enemy.y) < pn.r + enemy.r + 2 && pn.inv <= 0)

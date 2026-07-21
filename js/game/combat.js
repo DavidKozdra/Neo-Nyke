@@ -1070,7 +1070,7 @@
     return isBeamStruggleActive() && Neo.beamStruggle.enemy === enemy;
   }
 
-  function startBeamStruggle(enemy, contact) {
+  function startBeamStruggle(enemy, contact, options = {}) {
     if (!enemy || isBeamStruggleActive()) return false;
     const playerAngle = Neo.angleBetween(Neo.player, enemy);
     const enemyAngle = Neo.angleBetween(enemy, Neo.player);
@@ -1079,11 +1079,12 @@
     Neo.beamStruggle = {
       active: true,
       enemy,
+      opponentPlayer: options.opponentPlayer || null,
       elapsed: 0,
       duration: BEAM_STRUGGLE_DURATION,
       progress: 0.5,
       mashCount: 0,
-      enemyPressure: getBeamStruggleEnemyPressure(enemy),
+      enemyPressure: options.opponentPlayer ? 0 : getBeamStruggleEnemyPressure(enemy),
       x: Number(contact?.x ?? (Neo.player.x + enemy.x) / 2),
       y: Number(contact?.y ?? (Neo.player.y + enemy.y) / 2),
       playerAngle,
@@ -1111,16 +1112,28 @@
         }
       }
     }
-    return best ? startBeamStruggle(best.enemy, best.contact) : false;
+    const opponent = Neo.gameMode === 'pvp' ? Neo.player2 : null;
+    if (!best && opponent?.pvpBeamActive && Array.isArray(opponent.pvpBeamPath)) {
+      for (const playerPath of playerPaths) {
+        const contact = Neo.findOpposingBeamPathContact?.(playerPath, opponent.pvpBeamPath, 24, -0.15);
+        if (contact) {
+          best = { enemy: opponent, contact, playerDistance: Neo.dist(Neo.player.x, Neo.player.y, contact.x, contact.y), opponentPlayer: opponent };
+          break;
+        }
+      }
+    }
+    return best ? startBeamStruggle(best.enemy, best.contact, { opponentPlayer: best.opponentPlayer }) : false;
   }
 
-  function registerBeamStruggleMash() {
+  function registerBeamStruggleMash(playerNumber = 1) {
     const struggle = Neo.beamStruggle;
     if (!struggle?.active) return false;
-    struggle.progress = Neo.clamp(Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE, 0, 1);
+    const direction = playerNumber === 2 && struggle.opponentPlayer ? -1 : 1;
+    struggle.progress = Neo.clamp(Number(struggle.progress || 0.5) + BEAM_STRUGGLE_MASH_FORCE * direction, 0, 1);
     struggle.mashCount = Number(struggle.mashCount || 0) + 1;
     Neo.spawnParticle({ x: struggle.x, y: struggle.y, life: 0.16, r: 7, c: '#dff7ff' });
     if (struggle.progress >= 1) resolveBeamStruggle(true);
+    else if (struggle.progress <= 0) resolveBeamStruggle(false);
     return true;
   }
 
@@ -1128,12 +1141,29 @@
     const struggle = Neo.beamStruggle;
     if (!struggle?.active) return;
     const enemy = struggle.enemy;
+    const opponent = struggle.opponentPlayer;
     const point = { x: struggle.x, y: struggle.y };
     Neo.beamStruggle = null;
-    if (enemy) enemy.beamTime = 0;
+    if (enemy && !opponent) enemy.beamTime = 0;
+    if (opponent) {
+      opponent.pvpBeamActive = false;
+      opponent.pvpBeamPath = null;
+      const opponentMove = opponent.equippedMoves?.laser || 'blood_beam';
+      opponent.pvpLaserCooldown = Math.max(0.2, Number(Neo.MOVE_BASE_STATS?.[opponentMove]?.cooldown || 1.8));
+    }
     endActiveLaser();
     Neo.spawnAoeShockwave?.(point.x, point.y, playerWon ? 92 : 78, playerWon ? '#f4fbff' : '#ff5577', 'heavy');
     Neo.shake = Math.max(Number(Neo.shake || 0), playerWon ? 12 : 15);
+    if (opponent) {
+      if (playerWon) {
+        opponent.stun = Math.max(Number(opponent.stun || 0), 0.7);
+        Neo.damagePlayer2?.(22, Neo.angleBetween(Neo.player, opponent), 330, 'pvp_beam_struggle');
+      } else if (Neo.player) {
+        Neo.player.stun = Math.max(Number(Neo.player.stun || 0), 0.7);
+        Neo.damagePlayer(22, Neo.angleBetween(opponent, Neo.player), 330, 'pvp_p2_beam_struggle', { attacker: opponent });
+      }
+      return;
+    }
     if (playerWon && enemy && !enemy.dead && enemy.hp > 0) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 1.25);
       const damage = Math.max(28, Math.round(Number(Neo.ATTACKS?.laser?.damage || 10) * 3));
@@ -1159,18 +1189,21 @@
     const struggle = Neo.beamStruggle;
     if (!struggle?.active) return false;
     const enemy = struggle.enemy;
-    if (Neo.gameState !== 'play' || !Neo.player || !Neo.laserActive || !enemy || enemy.dead || enemy.hp <= 0) {
+    const opponent = struggle.opponentPlayer;
+    if (Neo.gameState !== 'play' || !Neo.player || !Neo.laserActive || !enemy
+      || (!opponent && (enemy.dead || enemy.hp <= 0)) || (opponent && !opponent.pvpBeamActive)) {
       cancelBeamStruggle();
       return false;
     }
     struggle.elapsed += dt;
     struggle.progress = Neo.clamp(struggle.progress - struggle.enemyPressure * dt, 0, 1);
     Neo.laserTime = Math.max(Number(Neo.laserTime || 0), 0.18);
-    enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
+    if (!opponent) enemy.beamTime = Math.max(Number(enemy.beamTime || 0), 0.18);
     struggle.playerAngle = Neo.angleBetween(Neo.player, enemy);
     struggle.enemyAngle = Neo.angleBetween(enemy, Neo.player);
     Neo.laserAngle = struggle.playerAngle;
     enemy.beamAngle = struggle.enemyAngle;
+    if (opponent) opponent.pvpBeamPath = makeBeamStrugglePath(opponent.x, opponent.y, struggle.x, struggle.y);
     const clashRatio = 0.18 + struggle.progress * 0.64;
     const targetX = Neo.player.x + (enemy.x - Neo.player.x) * clashRatio;
     const targetY = Neo.player.y + (enemy.y - Neo.player.y) * clashRatio;
