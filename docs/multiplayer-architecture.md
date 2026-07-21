@@ -156,6 +156,8 @@ GET  /api/multiplayer/rooms/:code
 GET  /api/multiplayer/rooms/:code/socket
 ```
 
+Lobby hosts can copy a same-origin invite URL in the form `?join=:code`. Opening a valid invite URL brings up the multiplayer flow and joins that authoritative room automatically; malformed and ambiguous room codes are ignored client-side.
+
 D1 may store match history and leaderboard metadata. Queues may process post-match analytics. R2 may store replays/diagnostics. None of D1, Queues, or R2 may carry live movement or combat.
 
 The development authority currently uses the standard Durable Object WebSocket API and an active interval because its 20 Hz simulation must remain awake. Hibernation, alarm-based lifecycle work, reconnect persistence, production deployment, and measured CPU/bandwidth tuning remain separate follow-up work.

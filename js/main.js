@@ -65,6 +65,7 @@ import './protocol/ProtocolV1.js';
 import './multiplayer/LocalMultiplayerSession.js';
 import './multiplayer/CloudflareWebSocketTransport.js';
 import './multiplayer/BrowserMultiplayerSession.js';
+import './multiplayer/MultiplayerInviteLink.js';
 import './rendering/NetworkGameView.js';
 
 import './core/game-core.js';

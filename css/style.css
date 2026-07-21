@@ -9422,18 +9422,21 @@ button.alt.danger {
   display: none;
 }
 
-.multiplayer-copy-room-code {
+.multiplayer-copy-room-code,
+.multiplayer-copy-invite-link {
   min-width: 132px;
   padding: 9px 12px;
   font-size: calc(12px * var(--font-scale, 1));
 }
 
-.multiplayer-copy-room-code[data-copy-state="copied"] {
+.multiplayer-copy-room-code[data-copy-state="copied"],
+.multiplayer-copy-invite-link[data-copy-state="copied"] {
   border-color: #62d892;
   color: #9df5bf;
 }
 
-.multiplayer-copy-room-code[data-copy-state="error"] {
+.multiplayer-copy-room-code[data-copy-state="error"],
+.multiplayer-copy-invite-link[data-copy-state="error"] {
   border-color: #e66b72;
   color: #ffadb2;
 }
