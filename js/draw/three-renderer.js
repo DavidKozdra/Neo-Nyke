@@ -4181,20 +4181,24 @@ function drawChargeHud(p = Neo.player, viewCamera = camera, viewport = null) {
 }
 
 function drawActorChargeHud(actor, viewCamera = camera, viewport = null) {
-  const charge = actor?.localChargeState;
-  if (!charge || Number(charge.max || 0) <= 0) return;
+  const charges = Object.values(actor?.auxChargeState || {}).filter(charge => Number(charge?.max || 0) > 0);
+  if (!charges.length && actor?.localChargeState) charges.push(actor.localChargeState);
+  if (!charges.length) return;
   const point = projectToCanvas(actor.x, actor.y, Math.max(34, (actor.r || 14) * SPRITE_SIZE_MULT), viewCamera, viewport);
   if (point.behind) return;
-  const ratio = Math.max(0, Math.min(1, Number(charge.time || 0) / Number(charge.max)));
   const width = 92;
   Neo.ctx.save();
-  Neo.ctx.fillStyle = 'rgba(5,12,22,0.86)';
-  Neo.ctx.fillRect(point.x - width / 2 - 2, point.y - 2, width + 4, 10);
-  Neo.ctx.fillStyle = charge.slot === 'smash' ? '#ff6b72' : '#64d9ff';
-  Neo.ctx.fillRect(point.x - width / 2, point.y, width * ratio, 6);
-  Neo.ctx.strokeStyle = '#ffffff';
-  Neo.ctx.lineWidth = 1;
-  Neo.ctx.strokeRect(point.x - width / 2, point.y, width, 6);
+  charges.forEach((charge, index) => {
+    const ratio = Math.max(0, Math.min(1, Number(charge.time || 0) / Number(charge.max)));
+    const y = point.y + index * 11;
+    Neo.ctx.fillStyle = 'rgba(5,12,22,0.86)';
+    Neo.ctx.fillRect(point.x - width / 2 - 2, y - 2, width + 4, 10);
+    Neo.ctx.fillStyle = charge.slot === 'smash' ? '#ff6b72' : '#64d9ff';
+    Neo.ctx.fillRect(point.x - width / 2, y, width * ratio, 6);
+    Neo.ctx.strokeStyle = '#ffffff';
+    Neo.ctx.lineWidth = 1;
+    Neo.ctx.strokeRect(point.x - width / 2, y, width, 6);
+  });
   Neo.ctx.restore();
 }
 

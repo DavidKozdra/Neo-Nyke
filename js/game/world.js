@@ -31,15 +31,16 @@
     player.auxSmashCooldown = Math.max(0, Number(player.auxSmashCooldown || 0) - dt);
     const updateCharge = (slot, held, cooldownKey, release) => {
       const latchKey = `aux${slot[0].toUpperCase()}${slot.slice(1)}Latch`;
+      const chargeSlots = player.auxChargeState || (player.auxChargeState = {});
       if (held && Number(player[cooldownKey] || 0) <= 0) {
         player[latchKey] = true;
-        player.localChargeState = {
-          slot, time: Math.min(3, Number(player.localChargeState?.slot === slot ? player.localChargeState.time : 0) + dt), max: 3,
-        };
+        chargeSlots[slot] = { slot, time: Math.min(3, Number(chargeSlots[slot]?.time || 0) + dt), max: 3 };
+        player.localChargeState = chargeSlots[slot];
       } else if (!held && player[latchKey]) {
-        const ratio = Math.max(0, Math.min(1, Number(player.localChargeState?.time || 0) / 3));
+        const ratio = Math.max(0, Math.min(1, Number(chargeSlots[slot]?.time || 0) / 3));
         player[latchKey] = false;
-        player.localChargeState = null;
+        delete chargeSlots[slot];
+        player.localChargeState = Object.values(chargeSlots)[0] || null;
         release(ratio);
       }
     };
@@ -200,7 +201,7 @@
         time: Math.min(5, Number(Neo.player2.localChargeState?.slot === 'laser' ? Neo.player2.localChargeState.time : 0) + dt),
         max: 5,
       };
-    } else {
+    } else if (Neo.gameMode === 'pvp') {
       releasePlayer2PvpLaser();
       Neo.player2.laserLatch = false;
       if (Neo.player2.localChargeState?.slot === 'laser') Neo.player2.localChargeState = null;
@@ -213,7 +214,7 @@
         time: Math.min(5, Number(Neo.player2.localChargeState?.slot === 'smash' ? Neo.player2.localChargeState.time : 0) + dt),
         max: 5,
       };
-    } else if (!p2SmashHeld && Neo.player2.smashLatch) {
+    } else if (Neo.gameMode === 'pvp' && !p2SmashHeld && Neo.player2.smashLatch) {
       const ratio = Number(Neo.player2.localChargeState?.time || 0) / Math.max(1, Number(Neo.player2.localChargeState?.max || 5));
       castPlayer2PvpSmash(ratio);
       Neo.player2.smashLatch = false;
