@@ -1628,6 +1628,7 @@ export function createUIController(view) {
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
       if (normalized.includes('artificer')) return 'artificer_knave';
       if (normalized.includes('antony') || normalized.includes('blemmye')) return 'antony_blemmye';
+      if (normalized === 'devil') return 'handsome_devil';
       if (normalized.includes('handsome') && normalized.includes('devil')) return 'handsome_devil';
       if (normalized.includes('golem')) return 'golem';
       if (normalized.includes('god')) return 'god';
@@ -3502,6 +3503,12 @@ export function createUIController(view) {
           });
         });
         view.go.addEventListener('click', handlers.onStartNew);
+        view.storySkipTutorial?.addEventListener('change', () => {
+          if (!Neo.metaProgress) return;
+          Neo.metaProgress.storySkipTutorial = !!view.storySkipTutorial.checked;
+          Neo.persistMetaSoon?.();
+          Neo.updateCharacterSelectionUI?.();
+        });
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
         });

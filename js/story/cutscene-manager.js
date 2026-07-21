@@ -215,7 +215,10 @@ export class StoryCutsceneManager {
         { type: 'lava', room },
         { type: 'spawn', key: 'handsome_devil', x: centerX, y: centerY - 130 },
         { type: 'focusGroup', keys: ['player', 'handsome_devil'], zoom: 1.02, duration: 0.6 },
-        { type: 'dialogue', lines: [storyLine('DEVIL', 'Ok moogy listen you must stop the heroes at all cost')] },
+        { type: 'dialogue', lines: [
+          storyLine('DEVIL', 'Ok moogy listen you must stop the heroes at all cost'),
+          storyLine('MOOGGY', 'Yes, uncle.'),
+        ] },
       ];
     }
     if (id.startsWith('mooggy_duel_')) {

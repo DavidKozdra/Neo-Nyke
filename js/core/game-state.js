@@ -47,6 +47,7 @@ export function resumeGame() {
       tutorialButtonLastOfferedAt: 0,
       seenTips: {},
       storyScenesSeen: [],
+      storySkipTutorial: false,
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
   }
@@ -334,6 +335,9 @@ export function resumeGame() {
   // is common-tier, owned by no character at start, and its effect (auto-collect
   // pickups, double coins) is immediately visible — a good first "what relics do".
   const TUTORIAL_RELIC_KEY = 'gold_vac';
+  const STORY_TUTORIAL_SKIP_ITEM_KEYS = Object.freeze([
+    'gold_vac', 'attack_servo', 'pew_pew_box', 'tough_bandaid', 'crit_charm',
+  ]);
 
   function createDefaultTutorialState() {
     return Neo.tutorialController?.normalizeState?.(null, false) || {
@@ -409,6 +413,25 @@ export function resumeGame() {
     grantTutorialTeachingMoves();
     grantTutorialTeachingTool();
     Neo.tutorialState.resourcesGranted = true;
+  }
+
+  function grantStoryTutorialSkipPackage() {
+    if (Neo.gameMode !== 'story' || !Neo.player || !Neo.storyState) return false;
+    if (!Neo.player.items || typeof Neo.player.items !== 'object') Neo.player.items = {};
+    STORY_TUTORIAL_SKIP_ITEM_KEYS.forEach(key => {
+      if (Neo.ITEM_DEFS?.[key]) Neo.player.items[key] = Math.max(1, Number(Neo.player.items[key] || 0));
+    });
+    const voucherKey = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
+    Neo.player.items[voucherKey] = Math.max(1, Number(Neo.player.items[voucherKey] || 0));
+    Neo.player.coins = Math.max(60, Number(Neo.player.coins || 0));
+    grantTutorialTeachingMoves();
+    Neo.syncEquipmentSlotsFromInventory?.();
+    Neo.storyState.choices.skippedTutorial = true;
+    Neo.storyState.completedScenes.tutorial = true;
+    Neo.storyState.rewards.tutorialSkipPackage = true;
+    Neo.tutorialState.resourcesGranted = true;
+    Neo.markInventoryPanelDirty?.();
+    return true;
   }
 
   // Prep the player's laser slot so two later lessons can be fully interactive:
@@ -1089,6 +1112,7 @@ export function resumeGame() {
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
           storyScenesSeen: Array.isArray(savedMeta.storyScenesSeen) ? [...new Set(savedMeta.storyScenesSeen.map(String))] : [],
+          storySkipTutorial: savedMeta.storySkipTutorial === true,
           characterKitChoices: migrateCharacterKitChoices(savedMeta.characterKitChoices),
           customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
         };
@@ -2591,6 +2615,8 @@ export function resumeGame() {
     const goBtn = document.getElementById('go');
     const backBtn = document.getElementById('charBackBtn');
     const backLabelEl = document.getElementById('charBackLabel');
+    const isStory = Neo.gameMode === 'story';
+    const skipStoryTutorial = isStory && !!Neo.metaProgress?.storySkipTutorial;
     const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);
     const phaseIdx = phases.indexOf(Neo.charSelectPhase);
     const isLastPhase = phaseIdx === phases.length - 1;
@@ -2612,9 +2638,11 @@ export function resumeGame() {
       if (Neo.gameMode === 'competitive') {
         if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
-      } else if (Neo.gameMode === 'story') {
+      } else if (isStory) {
         if (titleEl) titleEl.textContent = 'CHOOSE YOUR STORY';
-        if (subtitleEl) subtitleEl.textContent = 'A deterministic single-player campaign. Floor 1 is Sarge\'s tutorial.';
+        if (subtitleEl) subtitleEl.textContent = skipStoryTutorial
+          ? 'Begin on Floor 2 with the complete tutorial reward package.'
+          : 'A deterministic single-player campaign. Floor 1 is Sarge\'s tutorial.';
         if (goBtn) goBtn.textContent = 'BEGIN STORY';
       } else {
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
@@ -2622,12 +2650,15 @@ export function resumeGame() {
     }
 
     const isCompetitive = Neo.gameMode === 'competitive';
-    const isStory = Neo.gameMode === 'story';
     const difficultySelect = document.getElementById('difficultySelect');
     const seedLabel = document.getElementById('seedLabel');
     const seedInput = document.getElementById('seed');
     const seedRow = seedInput?.closest('.seedrow--panel');
     const challengeToggleEl = document.getElementById('challengeToggle');
+    const storySkipOption = document.getElementById('storySkipTutorialOption');
+    const storySkipInput = document.getElementById('storySkipTutorial');
+    storySkipOption?.classList.toggle('hidden', !isStory);
+    if (storySkipInput) storySkipInput.checked = skipStoryTutorial;
     if (difficultySelect) difficultySelect.style.pointerEvents = isCompetitive ? 'none' : '';
     if (difficultySelect) difficultySelect.style.opacity = isCompetitive ? '0.35' : '';
     if (seedRow) seedRow.style.display = isCompetitive || isStory ? 'none' : '';
@@ -2849,9 +2880,10 @@ export function resumeGame() {
     // A normal New Game must stay a normal run even when the tutorial has never
     // been completed or its content version changed.
     const storyRun = Neo.gameMode === 'story';
+    const storySkipTutorial = storyRun && !!Neo.metaProgress?.storySkipTutorial;
     const shouldRunTutorial = Neo.gameMode === 'normal'
       && forceTutorialReplay;
-    const shouldRunGuidedFloor = storyRun || shouldRunTutorial;
+    const shouldRunGuidedFloor = (storyRun && !storySkipTutorial) || shouldRunTutorial;
     // Stamp "last played" so the green tutorial button only re-offers after a long absence.
     if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');
@@ -2864,12 +2896,12 @@ export function resumeGame() {
       // ladder room are identical for every new player; any typed seed is
       // ignored only while the tutorial is active.
       Neo.baseSeedStr = storyRun
-        ? (globalThis.NeoNyke?.story?.storySeed?.(Neo.chosenCharacter, 1) || `NEONYKE-STORY-V1|${Neo.chosenCharacter}`)
+        ? (globalThis.NeoNyke?.story?.storySeed?.(Neo.chosenCharacter, storySkipTutorial ? 2 : 1) || `NEONYKE-STORY-V1|${Neo.chosenCharacter}`)
         : shouldRunGuidedFloor
           ? TUTORIAL_SEED
           : (Neo.ui.seed.value.trim() || createRandomSeed());
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
-      Neo.selectedChallenges = shouldRunGuidedFloor
+      Neo.selectedChallenges = storyRun || shouldRunTutorial
         ? []
         : normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
@@ -2877,7 +2909,7 @@ export function resumeGame() {
       Neo.runCrystalsEarned = 0;
       Neo.lastDeathEntryId = '';
       syncSeedState();
-      Neo.floor = 1;
+      Neo.floor = storySkipTutorial ? 2 : 1;
       Neo.gameElapsedTime = 0;
       window.achievementManager?.resetRunCounters();
       Neo.resetRunUnlocks?.();
@@ -2887,7 +2919,8 @@ export function resumeGame() {
         ? globalThis.NeoNyke?.story?.createStoryState?.(Neo.player.character)
         : null;
       resetTutorialState(shouldRunGuidedFloor);
-      grantTutorialResources();
+      if (storySkipTutorial) grantStoryTutorialSkipPackage();
+      else grantTutorialResources();
       if (!isMultiplayerMode()) resetMultiplayerState();
       if (Neo.gameMode === 'sandbox') {
         Neo.player.coins = Number(Neo.sandboxSettings.startingCoins || 0);
@@ -4211,6 +4244,7 @@ export function resumeGame() {
   Neo.resetTutorialState = resetTutorialState;
   Neo.isTutorialRun = isTutorialRun;
   Neo.grantTutorialResources = grantTutorialResources;
+  Neo.grantStoryTutorialSkipPackage = grantStoryTutorialSkipPackage;
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;
   Neo.isFirstRunTutorialEngaged = isFirstRunTutorialEngaged;
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;

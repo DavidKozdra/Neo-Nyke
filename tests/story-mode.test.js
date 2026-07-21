@@ -24,7 +24,7 @@ describe('Story Mode campaigns', () => {
 
     const gameState = read('js/core/game-state.js');
     expect(gameState).toContain("const storyRun = Neo.gameMode === 'story'");
-    expect(gameState).toContain('storySeed?.(Neo.chosenCharacter, 1)');
+    expect(gameState).toContain('storySeed?.(Neo.chosenCharacter, storySkipTutorial ? 2 : 1)');
     expect(gameState).toContain("seedRow.style.display = isCompetitive || isStory ? 'none' : ''");
   });
 
@@ -73,6 +73,20 @@ describe('Story Mode integration', () => {
     expect(html).not.toContain('id="infoTutorialBtn"');
   });
 
+  test('offers a saved Story-only tutorial skip with the full reward package', () => {
+    expect(html).toContain('id="storySkipTutorial"');
+    expect(html).toContain('begin the story with every tutorial reward');
+    expect(gameState).toContain('storySkipTutorial: false');
+    expect(gameState).toContain('const storySkipTutorial = storyRun && !!Neo.metaProgress?.storySkipTutorial');
+    expect(gameState).toContain('Neo.floor = storySkipTutorial ? 2 : 1');
+    expect(gameState).toContain('if (storySkipTutorial) grantStoryTutorialSkipPackage()');
+    for (const item of ['gold_vac', 'attack_servo', 'pew_pew_box', 'tough_bandaid', 'crit_charm']) {
+      expect(gameState).toContain(`'${item}'`);
+    }
+    expect(gameState).toContain('Neo.storyState.choices.skippedTutorial = true');
+    expect(gameState).toContain('Neo.storyState.rewards.tutorialSkipPackage = true');
+  });
+
   test('keeps Story single-player while preserving difficulty selection', () => {
     expect(gameState).toContain("if (mode === 'story') return 'Story'");
     expect(gameState).toContain('const storyUnlocked = isStory');
@@ -89,6 +103,14 @@ describe('Story Mode integration', () => {
     expect(campaignsIndex).toBeGreaterThan(-1);
     expect(managerIndex).toBeGreaterThan(campaignsIndex);
     expect(managerIndex).toBeLessThan(updateIndex);
+  });
+
+  test('gives the Devil his portrait and Mooggy her answer', () => {
+    const controller = read('js/ui/controller.js');
+    expect(controller).toContain("if (normalized === 'devil') return 'handsome_devil'");
+    expect(manager).toContain("storyLine('MOOGGY', 'Yes, uncle.')");
+    const galleryScene = Story.STORY_GALLERY.find(scene => scene.id === 'devil_recruits_mooggy');
+    expect(galleryScene.lines).toContainEqual({ speaker: 'MOOGGY', text: 'Yes, uncle.' });
   });
 
   test('supports authored camera, movement, jumping, emotes, choices, and hold-to-skip', () => {

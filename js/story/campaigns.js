@@ -58,6 +58,7 @@
     ] },
     { id: 'devil_recruits_mooggy', title: "The Devil's Assignment", subtitle: 'A meeting in the lava pit', storyMode: true, characters: ['mooggy'], lines: [
       { speaker: 'DEVIL', text: 'Ok moogy listen you must stop the heroes at all cost' },
+      { speaker: 'MOOGGY', text: 'Yes, uncle.' },
     ] },
     { id: 'thorn_churu_alliance', title: 'Churu Truce', subtitle: 'Thorn and Mooggy join forces', storyMode: true, characters: ['mooggy'], lines: [
       { speaker: 'THORN', text: 'You have fought everyone else. Before we fight, take this churu.' }, { speaker: 'MOOGGY', text: '...mrow.' },
