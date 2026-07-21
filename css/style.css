@@ -9356,6 +9356,16 @@ button.alt.danger {
   min-width: 132px;
 }
 
+.multiplayer-panel .multiplayer-join-actions {
+  display: grid;
+  align-self: center;
+  gap: 8px;
+}
+
+.multiplayer-panel .multiplayer-join-actions .altmode-card__btn {
+  width: 100%;
+}
+
 /* Both cards' control now sits in an identical labelled wrapper, so one rule
    sizes and positions both: same width, same gap below the description. */
 .multiplayer-panel .multiplayer-mode-picker {
@@ -10050,6 +10060,230 @@ button.alt.danger {
 }
 body.network-multiplayer-active #c {
   cursor: crosshair;
+}
+
+.multiplayer-chat {
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(150px, calc(116px + env(safe-area-inset-bottom)));
+  z-index: 46;
+  display: grid;
+  width: min(430px, calc(100vw - 28px));
+  gap: 6px;
+  pointer-events: none;
+  color: #eaf5ff;
+  font-family: var(--ui-font, monospace);
+  text-shadow: 0 1px 3px #000;
+}
+
+.multiplayer-chat.hidden,
+.multiplayer-spectator.hidden,
+.multiplayer-end-screen.hidden,
+.multiplayer-chat__composer.hidden {
+  display: none;
+}
+
+.multiplayer-chat__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9de9ff;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.multiplayer-chat__head kbd {
+  padding: 2px 5px;
+  border: 1px solid rgba(157, 233, 255, .45);
+  border-radius: 3px;
+  background: rgba(5, 11, 22, .72);
+  font: inherit;
+}
+
+.multiplayer-chat__log {
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  min-height: 24px;
+  max-height: 150px;
+  overflow: hidden;
+}
+
+.multiplayer-chat__message {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-left: 2px solid var(--chat-color, #9de9ff);
+  background: rgba(3, 8, 18, .72);
+  overflow-wrap: anywhere;
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
+.multiplayer-chat__name {
+  color: var(--chat-color, #9de9ff);
+  font-weight: 900;
+}
+
+.multiplayer-chat__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 38px;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(157, 233, 255, .45);
+  border-radius: 6px;
+  background: rgba(3, 8, 18, .94);
+  pointer-events: auto;
+}
+
+.multiplayer-chat__composer input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  background: #07101c;
+  color: #eef8ff;
+  font: inherit;
+}
+
+.multiplayer-chat__composer .nav-btn {
+  min-width: 72px;
+  padding: 7px 10px;
+}
+
+.multiplayer-chat__close {
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  background: transparent;
+  color: #dcecff;
+  cursor: pointer;
+  font-size: 22px;
+}
+
+.multiplayer-spectator {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 47;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: min(620px, calc(100vw - 28px));
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 112, 130, .52);
+  border-radius: 7px;
+  background: rgba(22, 4, 10, .86);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, .42);
+  transform: translateX(-50%);
+  color: #f4e9ec;
+  text-align: center;
+}
+
+.multiplayer-spectator__state {
+  color: #ff8094;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 950;
+  letter-spacing: .18em;
+}
+
+.multiplayer-spectator__target {
+  font-weight: 800;
+}
+
+.multiplayer-spectator__players {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.multiplayer-spectator__player {
+  padding: 6px 9px;
+  border: 1px solid var(--spectator-color, #9de9ff);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .04);
+  color: #edf7ff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.multiplayer-spectator__player.is-active {
+  background: color-mix(in srgb, var(--spectator-color, #9de9ff) 24%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--spectator-color, #9de9ff) 34%, transparent);
+}
+
+.multiplayer-spectator__player.is-downed {
+  opacity: .62;
+}
+
+.multiplayer-spectator__hint {
+  color: #c6aeb4;
+  font-size: calc(10px * var(--font-scale, 1));
+}
+
+.multiplayer-end-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 35%, rgba(72, 14, 28, .44), rgba(2, 4, 9, .96) 66%);
+}
+
+.multiplayer-end-screen__card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(650px, calc(100vw - 40px));
+  padding: clamp(24px, 5vw, 46px);
+  border: 1px solid rgba(255, 112, 130, .5);
+  border-radius: 10px;
+  background: rgba(9, 10, 18, .94);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .65);
+  color: #edf4ff;
+  text-align: center;
+}
+
+.multiplayer-end-screen__kicker {
+  color: #ff8094;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.multiplayer-end-screen h2 {
+  margin: 0;
+  color: #fff1f3;
+  font-size: clamp(32px, 7vw, 60px);
+  letter-spacing: .08em;
+}
+
+.multiplayer-end-screen__summary,
+.multiplayer-end-screen__status {
+  margin: 0;
+  color: #b8c9dc;
+}
+
+.multiplayer-end-screen__players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.multiplayer-end-screen__player {
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .035);
+}
+
+.multiplayer-end-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
 }
 
 .competitive-screen-body {

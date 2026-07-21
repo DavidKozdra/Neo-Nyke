@@ -1006,7 +1006,10 @@
             <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ROOM CODE" aria-label="Multiplayer room code">
           </label>
         </div>
-        <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN</button>
+        <div class="multiplayer-join-actions">
+          <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN</button>
+          <button id="multiplayerJoinClipboard" class="nav-btn nav-btn--minor altmode-card__btn" type="button" disabled>PASTE INVITE</button>
+        </div>
       </div>
       <div id="multiplayerRoomState" class="multiplayer-room-state" aria-live="polite">
         <div id="multiplayerRoomCodeShare" class="multiplayer-room-code-share hidden">
@@ -1501,6 +1504,39 @@
     </div>
   </div>
 </div>
+
+<!-- Network match overlays. Chat and spectator controls stay client-local;
+     messages and rematch votes travel through the authoritative room. -->
+<section id="multiplayerSpectator" class="multiplayer-spectator hidden" aria-live="polite" aria-label="Spectator controls">
+  <div class="multiplayer-spectator__state">YOU ARE DOWN</div>
+  <div id="multiplayerSpectatorTarget" class="multiplayer-spectator__target"></div>
+  <div id="multiplayerSpectatorPlayers" class="multiplayer-spectator__players" role="group" aria-label="Players to spectate"></div>
+  <div class="multiplayer-spectator__hint">Click the dungeon to cycle players</div>
+</section>
+
+<section id="multiplayerChat" class="multiplayer-chat hidden" aria-label="Multiplayer chat">
+  <div class="multiplayer-chat__head"><span>PARTY CHAT</span><kbd>T</kbd></div>
+  <div id="multiplayerChatLog" class="multiplayer-chat__log" role="log" aria-live="polite" aria-relevant="additions"></div>
+  <form id="multiplayerChatForm" class="multiplayer-chat__composer hidden">
+    <input id="multiplayerChatInput" type="text" maxlength="180" autocomplete="off" spellcheck="true" aria-label="Chat message" placeholder="Message your party…">
+    <button class="nav-btn nav-btn--minor" type="submit">SEND</button>
+    <button id="multiplayerChatClose" class="multiplayer-chat__close" type="button" aria-label="Close chat">×</button>
+  </form>
+</section>
+
+<section id="multiplayerEndScreen" class="multiplayer-end-screen hidden" role="dialog" aria-modal="true" aria-labelledby="multiplayerEndTitle">
+  <div class="multiplayer-end-screen__card">
+    <div class="multiplayer-end-screen__kicker">MULTIPLAYER RUN OVER</div>
+    <h2 id="multiplayerEndTitle">PARTY DEFEATED</h2>
+    <p id="multiplayerEndSummary" class="multiplayer-end-screen__summary"></p>
+    <div id="multiplayerEndPlayers" class="multiplayer-end-screen__players"></div>
+    <p id="multiplayerRematchStatus" class="multiplayer-end-screen__status" aria-live="polite"></p>
+    <div class="multiplayer-end-screen__actions">
+      <button id="multiplayerRematch" class="nav-btn" type="button">PLAY AGAIN</button>
+      <button id="multiplayerEndMenu" class="nav-btn nav-btn--minor" type="button">MAIN MENU</button>
+    </div>
+  </div>
+</section>
 
 <!-- Character select screen -->
 <div id="mpLobby" class="overlay hidden">

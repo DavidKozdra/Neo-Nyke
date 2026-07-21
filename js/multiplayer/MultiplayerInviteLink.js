@@ -36,11 +36,22 @@
     }
   }
 
+  function readMultiplayerRoomCodeFromClipboard(value) {
+    const text = String(value || '').trim();
+    const plainRoomCode = normalizeMultiplayerInviteRoomCode(text);
+    if (plainRoomCode) return plainRoomCode;
+    const inviteRoomCode = readMultiplayerInviteRoomCode(text);
+    if (inviteRoomCode) return inviteRoomCode;
+    const linkedUrl = text.match(/https?:\/\/\S+/i)?.[0]?.replace(/[),.;!?]+$/, '');
+    return linkedUrl ? readMultiplayerInviteRoomCode(linkedUrl) : '';
+  }
+
   return {
     MULTIPLAYER_INVITE_PARAM,
     MULTIPLAYER_ROOM_CODE_PATTERN,
     normalizeMultiplayerInviteRoomCode,
     buildMultiplayerInviteUrl,
     readMultiplayerInviteRoomCode,
+    readMultiplayerRoomCodeFromClipboard,
   };
 });

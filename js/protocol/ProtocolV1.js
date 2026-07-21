@@ -16,12 +16,13 @@
 
   const CLIENT_MESSAGE_TYPES = Object.freeze([
     'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
-    'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND', 'LEAVE_MATCH', 'PING',
+    'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND',
+    'CHAT_SEND', 'REMATCH_REQUEST', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
     'SERVER_HELLO', 'JOIN_ACCEPTED', 'JOIN_REJECTED', 'LOBBY_STATE', 'MATCH_STARTING',
     'INITIAL_STATE', 'WORLD_SNAPSHOT', 'ENTITY_SPAWNED', 'ENTITY_REMOVED',
-    'GAMEPLAY_EVENT', 'FLOOR_TRANSITION', 'RUN_ENDED', 'PLAYER_DISCONNECTED', 'ERROR', 'PONG',
+    'GAMEPLAY_EVENT', 'CHAT_MESSAGE', 'FLOOR_TRANSITION', 'RUN_ENDED', 'PLAYER_DISCONNECTED', 'ERROR', 'PONG',
   ]);
 
   const field = (type, options = {}) => ({ type, ...options });
@@ -124,6 +125,20 @@
       fields: {
         command: field('string', { required: true, enum: ['FORGE_COMMIT', 'EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT', 'SPECIAL_ROOM_CHOICE', 'WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY'] }),
         arguments: field('object', { required: true }),
+      },
+    },
+    CHAT_SEND: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'chat', replaceable: false },
+      fields: {
+        text: field('string', { required: true, minLength: 1, maxLength: 180 }),
+      },
+    },
+    REMATCH_REQUEST: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        ready: field('boolean', { required: true }),
       },
     },
     LEAVE_MATCH: {
@@ -238,6 +253,17 @@
         eventId: field('string', { required: true, minLength: 1, maxLength: 96 }),
         eventType: field('string', { required: true, minLength: 1, maxLength: 64 }),
         data: field('object', { required: true }),
+      },
+    },
+    CHAT_MESSAGE: {
+      direction: AUTHORITY_TO_CLIENT,
+      delivery: { reliability: 'reliable', channel: 'chat', replaceable: false },
+      fields: {
+        messageId: field('string', { required: true, minLength: 1, maxLength: 96 }),
+        playerId: field('string', { required: true, minLength: 1, maxLength: 96 }),
+        displayName: field('string', { required: true, minLength: 1, maxLength: 64 }),
+        text: field('string', { required: true, minLength: 1, maxLength: 180 }),
+        sentAtTick: field('integer', { required: true, min: 0 }),
       },
     },
     FLOOR_TRANSITION: {

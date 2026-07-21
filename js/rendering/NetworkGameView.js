@@ -273,6 +273,10 @@
       this.lastPresentationFrameAt = 0;
       this.lastWorldTransform = null;
       this.paused = false;
+      this.spectatorPlayerId = null;
+      this.localWasDowned = false;
+      this.spectatorRenderSignature = '';
+      this.chatRenderSignature = '';
       this.upgradeDwell = { selectionEventId: '', optionId: '', seconds: 0, sent: false };
       this.requestedInteractions = new Set();
       this.campaignPresentationState = null;
@@ -284,6 +288,20 @@
       this.boundPointerMove = event => this._onPointerMove(event);
       this.boundPointerDown = event => this._onPointerDown(event);
       this.boundPointerUp = event => this._onPointerUp(event);
+      this.boundChatSubmit = event => {
+        event.preventDefault();
+        this._submitChat();
+      };
+      this.boundChatClose = event => {
+        event.preventDefault();
+        this._closeChat();
+      };
+      this.boundSpectatorSelect = event => {
+        const button = event.target?.closest?.('[data-spectator-player-id]');
+        if (!button) return;
+        this.spectatorPlayerId = button.dataset.spectatorPlayerId || null;
+        this._renderSpectatorControls(this.currentSample?.state, this.session.snapshot().playerId, true);
+      };
       this.boundContextMenu = event => {
         if (this.active && event.target === this.canvas) event.preventDefault();
       };
@@ -339,6 +357,10 @@
       this.document?.addEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume, true);
       this.document?.getElementById('pauseSettings')?.addEventListener('click', this.boundPauseSettings, true);
+      this.document?.getElementById('multiplayerChat')?.classList.remove('hidden');
+      this.document?.getElementById('multiplayerChatForm')?.addEventListener('submit', this.boundChatSubmit);
+      this.document?.getElementById('multiplayerChatClose')?.addEventListener('click', this.boundChatClose);
+      this.document?.getElementById('multiplayerSpectatorPlayers')?.addEventListener('click', this.boundSpectatorSelect);
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
       this._onSnapshot(this.session.snapshot());
@@ -364,6 +386,12 @@
       this.document?.removeEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume, true);
       this.document?.getElementById('pauseSettings')?.removeEventListener('click', this.boundPauseSettings, true);
+      this.document?.getElementById('multiplayerChatForm')?.removeEventListener('submit', this.boundChatSubmit);
+      this.document?.getElementById('multiplayerChatClose')?.removeEventListener('click', this.boundChatClose);
+      this.document?.getElementById('multiplayerSpectatorPlayers')?.removeEventListener('click', this.boundSpectatorSelect);
+      this._closeChat();
+      this.document?.getElementById('multiplayerChat')?.classList.add('hidden');
+      this.document?.getElementById('multiplayerSpectator')?.classList.add('hidden');
       this.keys.clear();
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors.clear();
@@ -440,6 +468,10 @@
       this.lastRoomCode = '';
       this.lastPresentationFrameAt = 0;
       this.camera = { x: 0, y: 0, roomId: null };
+      this.spectatorPlayerId = null;
+      this.localWasDowned = false;
+      this.spectatorRenderSignature = '';
+      this.chatRenderSignature = '';
       this.upgradeDwell = { selectionEventId: '', optionId: '', seconds: 0, sent: false };
       this.requestedInteractions.clear();
     }
@@ -461,11 +493,151 @@
       });
     }
 
+    _isChatOpen() {
+      const form = this.document?.getElementById('multiplayerChatForm');
+      return !!form && !form.classList.contains('hidden');
+    }
+
+    _openChat() {
+      if (!this.active) return;
+      const form = this.document?.getElementById('multiplayerChatForm');
+      const input = this.document?.getElementById('multiplayerChatInput');
+      if (!form || !input) return;
+      this.keys.clear();
+      this.laserHeld = false;
+      form.classList.remove('hidden');
+      // Releasing pointer lock normally opens the multiplayer pause menu. Chat
+      // is its own intentional focus transition, so disarm that edge first.
+      if (this.document?.pointerLockElement === this.canvas) {
+        this.pointerWasLocked = false;
+        this.document.exitPointerLock?.();
+      }
+      input.focus({ preventScroll: true });
+    }
+
+    _closeChat() {
+      const form = this.document?.getElementById('multiplayerChatForm');
+      const input = this.document?.getElementById('multiplayerChatInput');
+      form?.classList.add('hidden');
+      input?.blur?.();
+    }
+
+    closeChat() {
+      this._closeChat();
+    }
+
+    _submitChat() {
+      const input = this.document?.getElementById('multiplayerChatInput');
+      const text = String(input?.value || '').replace(/\s+/g, ' ').trim();
+      if (!text) {
+        this._closeChat();
+        return;
+      }
+      try {
+        this.session.sendChat?.(text);
+        input.value = '';
+        this._closeChat();
+      } catch {
+        // Disconnect/rejection state is already surfaced by the session UI.
+      }
+    }
+
+    _renderChat(messages = []) {
+      const log = this.document?.getElementById('multiplayerChatLog');
+      if (!log) return;
+      const visible = messages.slice(-8);
+      const signature = visible.map(message => message.messageId).join('|');
+      if (signature === this.chatRenderSignature) return;
+      this.chatRenderSignature = signature;
+      const players = this.currentSample?.state?.players || {};
+      log.replaceChildren(...visible.map(message => {
+        const row = this.document.createElement('div');
+        row.className = 'multiplayer-chat__message';
+        row.style.setProperty('--chat-color', derivePlayerColor(players[message.playerId] || { id: message.playerId }));
+        const name = this.document.createElement('span');
+        name.className = 'multiplayer-chat__name';
+        name.textContent = `${message.displayName || 'Player'}: `;
+        const text = this.document.createElement('span');
+        text.textContent = String(message.text || '');
+        row.append(name, text);
+        return row;
+      }));
+      log.scrollTop = log.scrollHeight;
+    }
+
+    _spectatorCandidates(state = this.currentSample?.state) {
+      return Object.values(state?.players || {})
+        .filter(player => player && !player.disconnected)
+        .sort((first, second) => Number(first.slotIndex || 0) - Number(second.slotIndex || 0));
+    }
+
+    _renderSpectatorControls(state, localPlayerId, force = false) {
+      const panel = this.document?.getElementById('multiplayerSpectator');
+      if (!panel) return;
+      const localPlayer = state?.players?.[localPlayerId];
+      if (!localPlayer?.downed) {
+        panel.classList.add('hidden');
+        this.spectatorRenderSignature = '';
+        return;
+      }
+      const candidates = this._spectatorCandidates(state);
+      const target = candidates.find(player => player.id === this.spectatorPlayerId) || localPlayer;
+      const signature = JSON.stringify(candidates.map(player => [player.id, player.displayName, !!player.downed, player.roomId, player.id === target.id]));
+      panel.classList.remove('hidden');
+      if (!force && signature === this.spectatorRenderSignature) return;
+      this.spectatorRenderSignature = signature;
+      const targetName = target.id === localPlayerId ? 'your downed hero' : (target.displayName || target.id);
+      const targetLabel = this.document?.getElementById('multiplayerSpectatorTarget');
+      if (targetLabel) targetLabel.textContent = `Viewing ${targetName}${target.downed ? ' (downed)' : ''}`;
+      const controls = this.document?.getElementById('multiplayerSpectatorPlayers');
+      controls?.replaceChildren(...candidates.map(player => {
+        const button = this.document.createElement('button');
+        button.type = 'button';
+        button.className = `multiplayer-spectator__player${player.id === target.id ? ' is-active' : ''}${player.downed ? ' is-downed' : ''}`;
+        button.dataset.spectatorPlayerId = player.id;
+        button.style.setProperty('--spectator-color', derivePlayerColor(player));
+        button.textContent = `${player.displayName || player.id}${player.id === localPlayerId ? ' (YOU)' : ''}${player.downed ? ' — DOWN' : ''}`;
+        return button;
+      }));
+    }
+
+    _syncSpectatorState(state, localPlayerId) {
+      const localPlayer = state?.players?.[localPlayerId];
+      const isDowned = !!localPlayer?.downed;
+      if (isDowned) {
+        const candidates = this._spectatorCandidates(state);
+        const targetExists = candidates.some(player => player.id === this.spectatorPlayerId);
+        if (!this.localWasDowned || !targetExists) {
+          this.spectatorPlayerId = candidates.find(player => player.id !== localPlayerId && !player.downed)?.id
+            || localPlayerId;
+        }
+      } else {
+        this.spectatorPlayerId = null;
+      }
+      this.localWasDowned = isDowned;
+      this._renderSpectatorControls(state, localPlayerId);
+    }
+
+    _cycleSpectatorTarget() {
+      const candidates = this._spectatorCandidates();
+      if (!candidates.length) return;
+      const currentIndex = candidates.findIndex(player => player.id === this.spectatorPlayerId);
+      this.spectatorPlayerId = candidates[(currentIndex + 1 + candidates.length) % candidates.length].id;
+      this._renderSpectatorControls(this.currentSample?.state, this.session.snapshot().playerId, true);
+    }
+
+    _viewpointPlayerId(state, localPlayerId) {
+      if (!state?.players?.[localPlayerId]?.downed) return localPlayerId;
+      return state.players?.[this.spectatorPlayerId] ? this.spectatorPlayerId : localPlayerId;
+    }
+
     _onSnapshot(snapshot = {}) {
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
+      this._renderChat(snapshot.chatMessages || []);
       const state = snapshot.gameState;
       this._consumeGameplayEvents(snapshot.gameplayEvents || []);
       if (!state || !state.players) return;
+      this._syncSpectatorState(state, snapshot.playerId);
       const receivedAt = root.performance?.now?.() || Date.now();
       const receivedFloorNumber = Math.max(1, Number(state.floorNumber || state.floorState?.layout?.floorNumber || 1));
       if (this.lastFloorNumber > 0 && receivedFloorNumber !== this.lastFloorNumber) {
@@ -516,10 +688,24 @@
     }
 
     _onKey(event, pressed) {
+      if (this.active && pressed && !event.repeat && event.code === 'KeyT'
+        && !event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        this._openChat();
+        return;
+      }
+      if (this._isChatOpen()) {
+        if (pressed && event.code === 'Escape') {
+          event.preventDefault();
+          event.stopImmediatePropagation?.();
+          this._closeChat();
+        }
+        return;
+      }
       // Escape is owned by the campaign panel handler. Registering a second
-      // network toggle here made the same keydown pause and immediately resume
-      // because both listeners run on window. Multiplayer uses the campaign
-      // game state and pause overlay, so no adapter is required for this key.
+      // network toggle here would process the same window keydown twice; that
+      // handler calls togglePause() on this view exactly once.
       if (event.code === 'Escape') return;
       if (this.active && pressed && !event.repeat && event.code === 'KeyE') {
         event.preventDefault();
@@ -550,6 +736,12 @@
     }
 
     _onPointerDown(event) {
+      const localPlayer = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      if (this.active && localPlayer?.downed && event.button === 0 && event.target === this.canvas) {
+        event.preventDefault();
+        this._cycleSpectatorTarget();
+        return;
+      }
       if (!this.active || this._isInputBlocked() || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
       event.preventDefault();
       this._onPointerMove(event);
@@ -708,6 +900,17 @@
           if (intent.kind === 'achievement') root.achievementEvents?.emit?.(intent.name, intent.data);
           else if (intent.kind === 'tutorial') this.neo.tutorialController?.signal?.(intent.name, intent.data);
         });
+        if (event.eventType === 'PLAYER_DOWNED') {
+          const player = this.currentSample?.state?.players?.[event.data?.playerId];
+          const member = this.session.snapshot()?.lobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
+          const name = event.data?.playerId === localPlayerId ? 'You are down' : `${player?.displayName || member?.displayName || 'A teammate'} is down`;
+          this.neo.pushStatusToast?.({ text: name, label: 'DOWNED', accent: '#ff7082', holdMs: 3200 });
+        } else if (event.eventType === 'PLAYER_REVIVED' || event.eventType === 'PLAYER_RESPAWNED') {
+          const player = this.currentSample?.state?.players?.[event.data?.playerId];
+          const member = this.session.snapshot()?.lobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
+          const name = event.data?.playerId === localPlayerId ? 'You are back in the fight' : `${player?.displayName || member?.displayName || 'A teammate'} is back`;
+          this.neo.pushStatusToast?.({ text: name, label: 'REVIVED', accent: '#72e69c', holdMs: 2400 });
+        }
         if (!this._isGameplayEventVisible(event)) return;
         if (event.eventType === 'PLAYER_ATTACKED') {
           const weaponKey = event.data?.weaponKey || event.data?.attackKind;
@@ -777,14 +980,15 @@
     _isGameplayEventVisible(event) {
       const state = this.currentSample?.state;
       if (!state) return true;
-      const localPlayer = state.players?.[this.session.snapshot().playerId];
-      if (!localPlayer) return true;
+      const localPlayerId = this.session.snapshot().playerId;
+      const viewpointPlayer = state.players?.[this._viewpointPlayerId(state, localPlayerId)];
+      if (!viewpointPlayer) return true;
       const data = event.data || {};
       const eventEntity = state.enemies?.[data.enemyId]
         || state.players?.[data.playerId]
         || state.pickups?.[data.pickupId];
       const eventRoomId = data.roomId || eventEntity?.roomId;
-      return !eventRoomId || eventRoomId === localPlayer.roomId;
+      return !eventRoomId || eventRoomId === viewpointPlayer.roomId;
     }
 
     _spawnGameplayEventEffect(event) {
@@ -996,8 +1200,13 @@
       else this.neo.resumeGame?.();
     }
 
+    togglePause(visible = !this.paused) {
+      this._togglePause(visible);
+    }
+
     _isInputBlocked() {
       return this.paused
+        || this._isChatOpen()
         || (!!this.neo.gameState && this.neo.gameState !== 'play')
         || !!this.neo.isOverlayBlockingInput?.()
         || !!this.neo.uiController?.isDialogueOpen?.();
@@ -1085,14 +1294,14 @@
       };
     }
 
-    _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta = 0) {
+    _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta = 0, visibleRoomId = null) {
       const serverTick = Number(state?.tick || 0);
       const now = root.performance?.now?.() || Date.now();
       const livePlayerIds = new Set(Object.keys(players || {}));
       this.presentationPlayerActors.forEach((actor, playerId) => {
         if (!livePlayerIds.has(playerId)) this.presentationPlayerActors.delete(playerId);
       });
-      this.presentationPlayerSlots = Object.values(players || {}).map(player => {
+      const projectedPlayerSlots = Object.values(players || {}).map(player => {
         const authoritativeActionEvent = this.combatEffects.some(effect => (
           effect.data?.playerId === player.id
           && ['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED'].includes(effect.eventType)
@@ -1150,6 +1359,7 @@
           princessFlightTime: Math.max(0, Number(player.statusUntilTick?.flying_unhitable || 0) - serverTick) / 20,
           overhealBarrier: Number(player.barrier || 0),
           overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHp || 100) * 0.4),
+          networkDowned: !!player.downed,
         });
         this.presentationPlayerActors.set(player.id, actor);
         return {
@@ -1164,7 +1374,10 @@
           getDead: () => !!player.downed,
         };
       });
-      const localSlot = this.presentationPlayerSlots.find(slot => slot.id === localPlayerId);
+      this.presentationPlayerSlots = projectedPlayerSlots.filter(slot => (
+        !visibleRoomId || slot.getEntity?.()?.roomId === visibleRoomId
+      ));
+      const localSlot = projectedPlayerSlots.find(slot => slot.id === localPlayerId);
       this.neo.presentationPlayerSlots = this.presentationPlayerSlots;
       if (localSlot) {
         this.neo.player = localSlot.getEntity();
@@ -1373,9 +1586,10 @@
       const visibleBounds = this._visibleCanvasBounds();
       const players = this._renderedPlayers(now);
       const localPlayerId = this.session.snapshot().playerId;
-      const localRoomId = players[localPlayerId]?.roomId || authorityFloorState.currentRoomId;
-      const floorState = { ...authorityFloorState, currentRoomId: localRoomId };
-      const visiblePlayers = Object.fromEntries(Object.entries(players).filter(([, player]) => player.roomId === localRoomId));
+      const viewpointPlayerId = this._viewpointPlayerId(state, localPlayerId);
+      const viewpointPlayer = players[viewpointPlayerId] || players[localPlayerId];
+      const visibleRoomId = viewpointPlayer?.roomId || authorityFloorState.currentRoomId;
+      const floorState = { ...authorityFloorState, currentRoomId: visibleRoomId };
       const enemies = this._renderedEntities('enemies', now);
       const projectiles = this._renderedEntities('projectiles', now);
       const pickups = state?.pickups || {};
@@ -1384,7 +1598,7 @@
         ? clamp((now - this.lastPresentationFrameAt) / 1000, 0, 0.05)
         : 1 / 60;
       this.lastPresentationFrameAt = now;
-      this._updateCamera(localPlayer, frameDelta);
+      this._updateCamera(viewpointPlayer, frameDelta);
       // Neo.draw reads Neo.camera in every local presentation mode. Keep that
       // canonical camera object synchronized with the network state adapter;
       // otherwise the adapter aimed/tracked with one camera while the normal
@@ -1394,7 +1608,7 @@
       this.neo.camera.y = this.camera.y;
       const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
       this.lastWorldTransform = transform;
-      this.lastRenderedPlayerCount = Object.keys(visiblePlayers).length;
+      this.lastRenderedPlayerCount = Object.values(players).filter(player => player.roomId === visibleRoomId).length;
       this.lastRenderedEnemyCount = Object.keys(enemies).length;
       this.lastRenderedProjectileCount = Object.keys(projectiles).length;
       this.lastRenderedPickupCount = Object.keys(pickups).length;
@@ -1404,7 +1618,7 @@
       this._updateLocalBeamAngle(localPlayer, frameDelta);
       this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
-      this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state, frameDelta);
+      this._syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta, visibleRoomId);
       this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
       const floorTransitionAge = this.floorTransitionStartedAt > 0
         ? Math.max(0, now - this.floorTransitionStartedAt) / 1000

@@ -55,7 +55,9 @@ async function main() {
   await Promise.all([hostContext, guestContext].map(context => context.addInitScript(apiBase => {
     globalThis.NEO_MULTIPLAYER_API_BASE = apiBase;
   }, `${baseUrl}/api/multiplayer`)));
-  await hostContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: baseUrl });
+  await Promise.all([hostContext, guestContext].map(context => (
+    context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: baseUrl })
+  )));
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
   const errors = [];
@@ -74,11 +76,17 @@ async function main() {
 
     const roomCode = await host.evaluate(() => globalThis.Neo.gameSession.snapshot().roomCode);
     await host.locator('#coopLobbyCopyRoomCode').click();
-    await host.waitForFunction(() => document.querySelector('#coopLobbyCopyRoomCode')?.textContent?.includes('COPIED'));
+    await host.waitForFunction(() => document.querySelector('#coopLobbyCopyRoomCode')?.dataset.copyState === 'copied');
     const copiedRoomCode = await host.evaluate(() => navigator.clipboard.readText());
     if (copiedRoomCode !== roomCode) throw new Error(`Clipboard contained ${copiedRoomCode} instead of ${roomCode}`);
-    await guest.locator('#multiplayerRoomCode').fill(roomCode);
-    await guest.locator('#multiplayerJoinRoom').click();
+    await host.locator('#coopLobbyCopyInviteLink').click();
+    await host.waitForFunction(() => document.querySelector('#coopLobbyCopyInviteLink')?.dataset.copyState === 'copied');
+    const copiedInviteUrl = await host.evaluate(() => navigator.clipboard.readText());
+    if (new URL(copiedInviteUrl).searchParams.get('join') !== roomCode) {
+      throw new Error(`Invite URL did not contain room ${roomCode}: ${copiedInviteUrl}`);
+    }
+    await guest.evaluate(inviteUrl => navigator.clipboard.writeText(inviteUrl), copiedInviteUrl);
+    await guest.locator('#multiplayerJoinClipboard').click();
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
@@ -110,6 +118,33 @@ async function main() {
     const initialEnemyCount = await host.evaluate(() => Object.values(
       globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
     ).filter(enemy => !enemy.dead).length);
+
+    // T opens the real multiplayer composer. Sending through the form must route
+    // the authority-attributed message to the other browser and its live DOM.
+    const chatText = `Meet at the stairs ${roomCode}`;
+    await host.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 't', code: 'KeyT', bubbles: true, cancelable: true,
+    })));
+    await host.locator('#multiplayerChatForm').waitFor({ state: 'visible' });
+    await host.locator('#multiplayerChatInput').fill(chatText);
+    await host.locator('#multiplayerChatForm button[type="submit"]').click();
+    await guest.waitForFunction(expectedText => {
+      const snapshot = globalThis.Neo?.gameSession?.snapshot?.();
+      const received = snapshot?.chatMessages?.some(message => message.text === expectedText);
+      const rendered = Array.from(document.querySelectorAll('#multiplayerChatLog .multiplayer-chat__message'))
+        .some(row => row.textContent.includes(expectedText));
+      return received && rendered;
+    }, chatText, { timeout: 10_000 });
+    const chatProof = await guest.evaluate(expectedText => {
+      const message = globalThis.Neo.gameSession.snapshot().chatMessages.find(candidate => candidate.text === expectedText);
+      return {
+        received: !!message,
+        playerId: message?.playerId || '',
+        displayName: message?.displayName || '',
+        rendered: Array.from(document.querySelectorAll('#multiplayerChatLog .multiplayer-chat__message'))
+          .some(row => row.textContent.includes(expectedText)),
+      };
+    }, chatText);
 
     // FPS is a local presentation preference. Prove that changing it through
     // the normal in-game Settings UI leaves the network session alone and that
@@ -309,12 +344,14 @@ async function main() {
       baseUrl,
       roomCode,
       copiedRoomCode,
+      copiedInviteUrl,
       hostStatus: hostSnapshot.status,
       guestStatus: guestSnapshot.status,
       tick: hostSnapshot.gameState?.tick,
       memberCount: hostSnapshot.lobbyState?.members?.length,
       gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
       pauseProof,
+      chatProof,
       itemNotificationProof,
       twoDimensionalProof,
       fpsProof,
@@ -347,8 +384,33 @@ async function main() {
       ]);
       report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
+    let resultsProof = { shown: false, rematched: false };
     await host.keyboard.press('Escape');
-    await host.locator('#pauseLeaveServer').waitFor({ state: 'visible' });
+    await host.waitForFunction(() => (
+      !document.querySelector('#pauseLeaveServer')?.classList.contains('hidden')
+      || globalThis.Neo?.gameSession?.snapshot?.().status === 'ended'
+    ), undefined, { timeout: 10_000 });
+    if (await host.evaluate(() => globalThis.Neo?.gameSession?.snapshot?.().status === 'ended')) {
+      await Promise.all([host, guest].map(page => page.locator('#multiplayerEndScreen').waitFor({ state: 'visible' })));
+      resultsProof = await host.evaluate(() => ({
+        shown: !document.querySelector('#multiplayerEndScreen')?.classList.contains('hidden'),
+        title: document.querySelector('#multiplayerEndTitle')?.textContent || '',
+        playAgainVisible: !document.querySelector('#multiplayerRematch')?.classList.contains('hidden'),
+        rematched: false,
+      }));
+      await Promise.all([
+        host.locator('#multiplayerRematch').click(),
+        guest.locator('#multiplayerRematch').click(),
+      ]);
+      await Promise.all([
+        waitForSessionStatus(host, 'running', 'host rematch'),
+        waitForSessionStatus(guest, 'running', 'guest rematch'),
+      ]);
+      await host.waitForFunction(() => globalThis.Neo?.multiplayerGameView?.active === true);
+      resultsProof.rematched = true;
+      await host.keyboard.press('Escape');
+      await host.locator('#pauseLeaveServer').waitFor({ state: 'visible' });
+    }
     await host.locator('#pauseLeaveServer').click();
     await host.waitForFunction(() => (
       !globalThis.Neo?.multiplayerGameView
@@ -366,6 +428,7 @@ async function main() {
       pauseClosed: document.querySelector('#pause')?.classList.contains('hidden') === true,
       settingsClosed: document.querySelector('#settingsModal')?.classList.contains('hidden') === true,
     }));
+    report.resultsProof = resultsProof;
     console.log(JSON.stringify(report, null, 2));
     if (!converged || !moved || report.gameViewActive !== true
       || hostRenderedPlayerCount < 2 || guestRenderedPlayerCount < 2
@@ -382,10 +445,12 @@ async function main() {
       || report.beamProof.activeEffects < 1 || report.beamProof.beams < 1
       || report.bladeJusticeProof.projectedBlades !== 3 || report.bladeJusticeProof.renderedBlades !== 3
       || !report.pauseProof.settingsOpened || !report.pauseProof.resumed || !report.pauseProof.campaignPlayStateRestored
+      || !report.chatProof.received || !report.chatProof.rendered || report.chatProof.playerId !== hostSnapshot.playerId
       || !report.itemNotificationProof.visible || !report.itemNotificationProof.title.includes('Neo-Knife')
       || !report.leaveProof.gameViewReleased || !report.leaveProof.menuVisible
       || !report.leaveProof.networkClassRemoved || !report.leaveProof.webglSuspended
       || !report.leaveProof.pauseClosed || !report.leaveProof.settingsClosed
+      || (report.resultsProof.shown && (!report.resultsProof.playAgainVisible || !report.resultsProof.rematched))
       || report.fpsProof.threeRendererCalls < 1 || !report.fpsProof.gameViewActive
       || report.fpsProof.sessionStatus !== 'running' || errors.length) process.exitCode = 1;
   } finally {

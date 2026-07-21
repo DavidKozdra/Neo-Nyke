@@ -68,6 +68,23 @@ describe('gameplay protocol v1 runtime validation', () => {
     }, { direction: CLIENT_TO_AUTHORITY }).errors).toContain('payload.kitChoices must be object');
   });
 
+  test('validates bounded chat and rematch messages in both directions', () => {
+    expect(validateEnvelope(createEnvelope('CHAT_SEND', 5, 20, { text: 'Need a revive!' }), {
+      direction: CLIENT_TO_AUTHORITY,
+    })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope(createEnvelope('REMATCH_REQUEST', 6, 20, { ready: true }), {
+      direction: CLIENT_TO_AUTHORITY,
+    })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope(createEnvelope('CHAT_MESSAGE', 7, 20, {
+      messageId: 'chat-1', playerId: 'p1', displayName: 'Player 1', text: 'Need a revive!', sentAtTick: 20,
+    }), { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
+
+    const oversizedChat = createEnvelope('CHAT_SEND', 8, 20, { text: 'x' });
+    oversizedChat.payload.text = 'x'.repeat(181);
+    expect(validateEnvelope(oversizedChat, { direction: CLIENT_TO_AUTHORITY }).errors)
+      .toContain('payload.text is too long');
+  });
+
   test('rejects wrong direction, unknown fields, invalid movement, and oversized messages', () => {
     const input = createEnvelope('PLAYER_INPUT', 1, 1, {
       inputSequence: 1,

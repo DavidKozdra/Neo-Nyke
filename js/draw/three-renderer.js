@@ -1322,7 +1322,8 @@ function walkBob(actor, seedX = 0) {
 function syncPlayer() {
   const p = Neo.player;
   const dying = Neo.gameState === 'dying';
-  if (!p || (dying && !Neo.playerDeathAnim)) {
+  const outsidePresentedRoom = p?.roomId && Neo.currentRoom?.id && p.roomId !== Neo.currentRoom.id;
+  if (!p || outsidePresentedRoom || (dying && !Neo.playerDeathAnim)) {
     if (playerSprite) playerSprite.visible = false;
     return;
   }
@@ -1332,10 +1333,11 @@ function syncPlayer() {
     playerShadow = playerSprite.getObjectByName('shadow');
     scene.add(playerSprite);
   }
+  const networkDowned = !!p.networkDowned;
   const anim = dying ? Neo.playerDeathAnim : null;
   // First person normally hides the body, but the death fall must remain
   // visible in every camera mode just like the 2D corpse animation.
-  playerSprite.visible = !isFirstPersonActive() || !!anim;
+  playerSprite.visible = !isFirstPersonActive() || !!anim || networkDowned;
   const x = anim ? anim.x : p.x;
   const z = anim ? anim.y : p.y;
   playerSprite.position.set(x, 0, z);
@@ -1361,7 +1363,7 @@ function syncPlayer() {
       seedKey: 'player',
     }) || baseKey)
     : baseKey;
-  let bob = !anim ? walkBob(p) : { hop: 0, squashX: 1, squashY: 1 };
+  let bob = !anim && !networkDowned ? walkBob(p) : { hop: 0, squashX: 1, squashY: 0.72 };
   if (!anim && Number(p.dashTime || 0) > 0) {
     bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
   }
@@ -1374,24 +1376,28 @@ function syncPlayer() {
     bob = { hop: 0, squashX: 1 + 0.05 * fallEase, squashY: 1 - 0.46 * fallEase };
     tint = 0x5e2630;
     syncPlayerDeathPool(anim, Math.max(34, (anim.r || p.r || 14) * 2.5), fallEase);
+  } else if (networkDowned) {
+    tint = 0x641b2a;
   } else if (playerDeathPool) {
     playerDeathPool.visible = false;
   }
   updateActorSprite(playerSprite, frameKey, p.r || 14, flip, { ...bob, alpha, tint });
   const body = playerSprite.getObjectByName('body');
   if (body) {
-    body.material.rotation = anim ? (anim.facing < 0 ? -1 : 1) * (Math.PI / 2) * fallEase : 0;
-    body.center.set(0.5, anim ? 0.5 : 0);
-    if (anim) body.position.y = Math.max(4, (p.r || 14) * SPRITE_SIZE_MULT * 0.28);
+    body.material.rotation = anim
+      ? (anim.facing < 0 ? -1 : 1) * (Math.PI / 2) * fallEase
+      : networkDowned ? (flip ? -1 : 1) * Math.PI / 2 : 0;
+    body.center.set(0.5, anim || networkDowned ? 0.5 : 0);
+    if (anim || networkDowned) body.position.y = Math.max(4, (p.r || 14) * SPRITE_SIZE_MULT * 0.28);
   }
   const recoil = armRecoilRemaining / armRecoilDuration;
   syncPlayerArm(playerSprite, baseKey, p, aim, flip, {
-    hidden: !!anim || isFirstPersonActive(),
+    hidden: !!anim || networkDowned || isFirstPersonActive(),
     recoil,
     attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
     alpha,
   });
-  syncActorStatus(playerSprite, p, p.r || 14, true);
+  if (!networkDowned) syncActorStatus(playerSprite, p, p.r || 14, true);
   syncPlayerDashTrail(p, frameKey, flip);
   if (playerShadow) {
     const dashScale = Number(p.dashTime || 0) > 0 ? 1.18 : 1;
@@ -1409,7 +1415,7 @@ function syncOtherPlayers() {
   const slots = Neo.presentationPlayerSlots || [];
   const remoteSlots = slots.filter(slot => {
     const actor = slot?.getEntity?.();
-    return actor && actor !== Neo.player && !slot.getDead?.();
+    return actor && actor !== Neo.player && (!slot.getDead?.() || actor.networkDowned);
   });
   syncPool(
     pools.players,
@@ -1430,20 +1436,30 @@ function syncOtherPlayers() {
         attackProgress: Math.max(0, 1 - Number(actor.swing || 0) / swingTotal),
         seedKey: `player:${actor.id || actor.displayName || 'remote'}`,
       }) || baseKey;
-      let bob = walkBob(actor, Number(actor.x || 0));
+      let bob = actor.networkDowned
+        ? { hop: 0, squashX: 1, squashY: 0.72 }
+        : walkBob(actor, Number(actor.x || 0));
       if (Number(actor.dashTime || 0) > 0) {
         bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
       }
-      const tint = actor.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+      const tint = actor.networkDowned
+        ? 0x641b2a
+        : actor.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
       group.visible = true;
       group.position.set(actor.x, 0, actor.y);
       updateActorSprite(group, frameKey, actor.r || 14, flip, { ...bob, tint });
+      const body = group.getObjectByName('body');
+      if (body) {
+        body.material.rotation = actor.networkDowned ? (flip ? -1 : 1) * Math.PI / 2 : 0;
+        body.center.set(0.5, actor.networkDowned ? 0.5 : 0);
+      }
       syncPlayerArm(group, baseKey, actor, aim, flip, {
+        hidden: !!actor.networkDowned,
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
       });
-      syncActorStatus(group, actor, actor.r || 14, true);
+      if (!actor.networkDowned) syncActorStatus(group, actor, actor.r || 14, true);
       const shadow = group.getObjectByName('shadow');
       if (shadow) {
         const dashScale = Number(actor.dashTime || 0) > 0 ? 1.18 : 1;
