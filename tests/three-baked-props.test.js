@@ -81,7 +81,7 @@ describe('3D props bake their 2D art by default', () => {
   });
 
   test('hazards with authored 2D art bake instead of falling to the purple disc', () => {
-    ['holy_turret', 'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine']
+    ['fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine']
       .forEach(kind => expect(setEntries('BAKED_2D_HAZARD_KINDS')).toContain(kind));
     // These had flat-disc styles that the bake now replaces; leaving a style
     // behind would silently win over the bake.

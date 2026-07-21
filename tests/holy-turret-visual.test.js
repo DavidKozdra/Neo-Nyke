@@ -5,10 +5,19 @@ describe('holy turret gun visuals', () => {
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
   const propsSource = fs.readFileSync(path.join(__dirname, '../js/draw/props.js'), 'utf8');
+  const threeSource = fs.readFileSync(path.join(__dirname, '../js/draw/three-renderer.js'), 'utf8');
 
   test('spawns turrets with facing and recoil state', () => {
     expect(combatSource).toContain('aimAngle: angle');
     expect(combatSource).toContain('recoil: 0');
+  });
+
+  test('3D builds a textured physical turret with world-space cannon aim', () => {
+    expect(threeSource).toContain('function makeHolyTurretObject()');
+    expect(threeSource).toContain("decal.name = 'platformTexture'");
+    expect(threeSource).toContain("cannon.name = 'cannon'");
+    expect(threeSource).toContain('cannon.rotation.y = -Number(hazard.aimAngle || 0)');
+    expect(threeSource).toContain('threeBaseOnly: true');
   });
 
   test('tracks targets and fires from the cannon muzzle', () => {

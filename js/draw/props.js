@@ -688,9 +688,12 @@
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
 
-        // Rotating cannon assembly.
-        Neo.ctx.save();
-        Neo.ctx.rotate(aimAngle);
+        // The 3D renderer bakes just this authored platform texture, then builds
+        // the rotating cannon as real geometry above it.
+        if (!hazard.threeBaseOnly) {
+          // Rotating cannon assembly.
+          Neo.ctx.save();
+          Neo.ctx.rotate(aimAngle);
         Neo.ctx.fillStyle = '#101724';
         Neo.ctx.strokeStyle = '#f6d67c';
         Neo.ctx.lineWidth = 2;
@@ -739,7 +742,8 @@
           Neo.ctx.fill();
           Neo.ctx.shadowBlur = 0;
         }
-        Neo.ctx.restore();
+          Neo.ctx.restore();
+        }
       } else if (hazard.kind === 'chaos_burst') {
         const t = Date.now() * 0.005 + hazard.x * 0.01;
         const flicker = 0.75 + Math.sin(t * 9) * 0.15 + Math.sin(t * 23.7) * 0.1;
