@@ -2944,6 +2944,11 @@ export function equipMove(slot, moveKey) {
       if (!result?.ok) return;
       Neo.cooldowns[slot] = Neo.createCooldownEntry(slot, Neo.player, Neo.cooldowns[slot]);
     }
+    // If this is one of the character's authored kit choices, make the equip
+    // their saved default too. Purchased/general moves stay scoped to this run,
+    // while choosing either the base or alternate kit option is remembered for
+    // the next character-select screen and fresh run.
+    Neo.setKitChoice?.(Neo.player.character, slot, moveKey);
     markInventoryPanelDirty();
     renderInventoryPanel();
     Neo.updateHud();

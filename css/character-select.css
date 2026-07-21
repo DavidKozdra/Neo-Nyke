@@ -630,6 +630,72 @@
   gap: 7px;
 }
 
+#charSelect .story-skip-tutorial {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  box-sizing: border-box;
+  padding: 10px 11px;
+  border: 1px solid rgba(101, 217, 232, .34);
+  border-radius: var(--ui-control-radius);
+  background: rgba(8, 21, 31, .78);
+  color: var(--menu-text);
+  cursor: pointer;
+}
+
+#charSelect .story-skip-tutorial.hidden { display: none; }
+
+#charSelect .story-skip-tutorial input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#charSelect .story-skip-tutorial__check {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .28);
+  color: transparent;
+  font: 900 18px/1 system-ui, sans-serif;
+}
+
+#charSelect .story-skip-tutorial input:checked + .story-skip-tutorial__check {
+  border-color: var(--menu-accent);
+  background: rgba(101, 217, 232, .2);
+  color: var(--menu-accent-strong);
+  box-shadow: 0 0 12px rgba(101, 217, 232, .22);
+}
+
+#charSelect .story-skip-tutorial:focus-within {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+#charSelect .story-skip-tutorial__copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+#charSelect .story-skip-tutorial__copy strong {
+  color: var(--menu-accent-strong);
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+#charSelect .story-skip-tutorial__copy small {
+  color: var(--menu-muted);
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.25;
+}
+
 #charSelect .charselect-crystal-wallet {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);

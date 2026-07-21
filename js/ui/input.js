@@ -925,6 +925,8 @@ export const ui = {
     go: document.getElementById('go'),
     challengePanel: document.getElementById('challengePanel'),
     challengeToggle: document.getElementById('challengeToggle'),
+    storySkipTutorial: document.getElementById('storySkipTutorial'),
+    storySkipTutorialOption: document.getElementById('storySkipTutorialOption'),
     challengeClose: document.getElementById('challengeClose'),
     challengeHint: document.getElementById('challengeHint'),
     modsTabs: [...document.querySelectorAll('#challengePanel .mods-tab')],
