@@ -43,6 +43,7 @@ let floorCacheKey = null;
 let worldFxMesh = null;
 let worldFxCanvas = null;
 let worldFxTexture = null;
+let challengeStructure = null;
 
 // Lighting
 let ambientLight = null;
@@ -62,14 +63,17 @@ const pools = {
   bodies: new Map(),
   spawnPortals: new Map(),
   justiceBlades: new Map(),
+  skySwords: new Map(),
 };
 let playerSprite = null;
 let playerShadow = null;
 let playerDeathPool = null;
 const dashAfterimages = [];
-let lastDashAfterimageAt = -Infinity;
+const lastDashAfterimageAt = new WeakMap();
 let playerMeleeIndicator = null;
 let playerWeaponPreview = null;
+let warpPreview = null;
+const remoteMeleeIndicators = new Map();
 const beamMeshes = []; // reused per-frame list of beam boxes
 const nameplatePool = new Map(); // enemy -> { sprite, texture, signature }
 
@@ -869,9 +873,8 @@ function syncRoomEnvironmentSprites() {
 function syncWorldFxOverlay() {
   const room = Neo.currentRoom;
   const hasGhostBalls = Array.isArray(Neo.ghostBalls) && Neo.ghostBalls.length > 0;
-  const hasSkySwords = Array.isArray(Neo.skySwords) && Neo.skySwords.length > 0;
   const hasChallengeVisual = room?.type === 'challenge' && !room.cleared && !!room.challengeStarted;
-  if (!hasGhostBalls && !hasSkySwords && !hasChallengeVisual) {
+  if (!hasGhostBalls && !hasChallengeVisual) {
     if (worldFxMesh) worldFxMesh.visible = false;
     return;
   }
@@ -899,12 +902,14 @@ function syncWorldFxOverlay() {
   g.clearRect(0, 0, W, H);
   g.imageSmoothingEnabled = false;
   const realCtx = Neo.ctx;
+  const priorChallengeFloorOnly = Neo._threeChallengeFloorOnly;
   try {
     Neo.ctx = g;
     Neo.drawGhostBalls?.();
-    Neo.drawSkySwords?.();
+    Neo._threeChallengeFloorOnly = true;
     Neo.drawChallengeObelisk?.();
   } catch { /* a special effect must never take down the 3D frame */ }
+  Neo._threeChallengeFloorOnly = priorChallengeFloorOnly;
   Neo.ctx = realCtx;
   worldFxTexture.needsUpdate = true;
   worldFxMesh.visible = true;
@@ -1067,7 +1072,94 @@ function makeActorGroup(spriteKey, radius) {
   mooggyAura.name = 'mooggy-aura';
   mooggyAura.visible = false;
   group.add(mooggyAura);
+  const stance = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 1, 36),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+  );
+  stance.rotation.x = -Math.PI / 2;
+  stance.position.y = 1.05;
+  stance.name = 'rival-stance';
+  stance.visible = false;
+  group.add(stance);
+  const slashGeometry = new THREE.BufferGeometry();
+  slashGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(33 * 3), 3));
+  const slash = new THREE.Line(slashGeometry, new THREE.LineBasicMaterial({
+    color: 0xff8e6c, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  slash.name = 'enemy-slash';
+  slash.visible = false;
+  group.add(slash);
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
+  marker.name = 'enemy-marker';
+  marker.renderOrder = 12;
+  marker.visible = false;
+  group.add(marker);
   return group;
+}
+
+function syncEnemyReadability(group, enemy) {
+  const stance = group.getObjectByName('rival-stance');
+  const brain = enemy.type === 'rival' ? enemy.rivalData?.brain : null;
+  if (stance) {
+    stance.visible = !!brain;
+    if (brain) {
+      const telegraphing = !!enemy.rivalTelegraphReadyKey;
+      const color = brain.stance === 'retreating' ? '#8ed1ff'
+        : brain.stance === 'warning' ? '#ffd76a'
+          : brain.stance === 'hostile' ? (enemy.rivalData?.color || '#ff6e8b') : '#b7d7ca';
+      stance.material.color.set(color);
+      stance.material.opacity = telegraphing ? 0.72 : brain.stance === 'hostile' ? 0.24 : 0.32;
+      stance.scale.setScalar((enemy.r || 14) + (telegraphing ? 9 : 6));
+    }
+  }
+
+  const slash = group.getObjectByName('enemy-slash');
+  const slashActive = Number(enemy.swingTime || 0) > 0 && Number.isFinite(Number(enemy.swingA))
+    && (enemy.type === 'rival' || enemy.state === 'blade');
+  if (slash) {
+    slash.visible = slashActive;
+    if (slashActive) {
+      const rival = enemy.type === 'rival';
+      const move = enemy.rivalSwingMove || '';
+      const extending = move === 'extending_staff';
+      const total = rival ? 0.22 : 0.26;
+      const range = rival ? (extending ? 130 : Number(enemy.rivalData?.weapons?.find(weapon => weapon.key === move)?.range || 55))
+        : Number(enemy.r || 14) + Number(Neo.player?.r || 14) + 56;
+      const arc = extending ? 1.45 : rival ? Number(Neo.ATTACKS?.melee?.arc || 0.9) : 1.15;
+      const progress = Math.max(0, Math.min(1, 1 - Number(enemy.swingTime) / total));
+      const direction = rival && Math.cos(Number(enemy.swingA)) < 0 ? 1 : -1;
+      const current = Number(enemy.swingA) + arc * direction + (-2 * arc * direction) * progress;
+      const trailStart = current + arc * 0.55 * direction;
+      const points = [];
+      for (let index = 0; index < 33; index += 1) {
+        const theta = trailStart + (current - trailStart) * (index / 32);
+        points.push({ x: Math.cos(theta) * range, y: 7, z: Math.sin(theta) * range });
+      }
+      writeMeleeLine(slash, points);
+      slash.material.color.set(extending ? '#ff3333' : rival ? (enemy.rivalData?.color || '#d86d87') : '#ff8e6c');
+      slash.material.opacity = Math.max(0, Math.min(1, Number(enemy.swingTime) / total)) * 0.9;
+    }
+  }
+
+  const marker = group.getObjectByName('enemy-marker');
+  if (marker) {
+    const bountyReady = !!(enemy.bountyCaptureReady || enemy.bountyTheftReady);
+    const text = enemy.type === 'boss_spawner' ? `${Math.max(0, Math.ceil(Number(enemy.bossSpawnTimer || 0)))}`
+      : bountyReady ? 'PRESS E'
+        : enemy.bountyTarget ? '◎'
+          : enemy.elite ? '♛' : '';
+    marker.visible = !!text;
+    if (text) {
+      const color = enemy.type === 'boss_spawner' ? '#ffb07b' : bountyReady ? '#83f0b0' : enemy.bountyTarget ? '#ff9d66' : '#f6cf6a';
+      const entry = getTextTexture(text, color);
+      if (marker.material.map !== entry.texture) {
+        marker.material.map = entry.texture;
+        marker.material.needsUpdate = true;
+      }
+      marker.position.set(0, (enemy.r || 14) * SPRITE_SIZE_MULT + 40, 0);
+      marker.scale.set(entry.w, entry.h, 1);
+    }
+  }
 }
 
 function syncActorFeedback(group, actor, radius, { enemy = false } = {}) {
@@ -1267,7 +1359,8 @@ function syncActorStatus(group, actor, radius, isPlayer = false) {
 function syncPlayerDashTrail(player, spriteKey, flip) {
   const now = performance.now() / 1000;
   const active = !isFirstPersonActive() && Number(player.dashTime || 0) > 0;
-  if (active && now - lastDashAfterimageAt >= 0.038) {
+  const lastBorn = Number(lastDashAfterimageAt.get(player) || -Infinity);
+  if (active && now - lastBorn >= 0.038) {
     const texture = getSpriteTexture(spriteKey, flip);
     if (texture) {
       const sprite = makeBillboard(texture, { depthWrite: false, color: 0xbceeff });
@@ -1279,8 +1372,8 @@ function syncPlayerDashTrail(player, spriteKey, flip) {
       sprite.scale.set(height * aspect, height, 1);
       sprite.position.set(player.x, 0.8, player.y);
       scene.add(sprite);
-      dashAfterimages.push({ sprite, born: now });
-      lastDashAfterimageAt = now;
+      dashAfterimages.push({ sprite, born: now, actor: player });
+      lastDashAfterimageAt.set(player, now);
     }
   }
   for (let index = dashAfterimages.length - 1; index >= 0; index -= 1) {
@@ -1294,6 +1387,43 @@ function syncPlayerDashTrail(player, spriteKey, flip) {
     }
     trail.sprite.material.opacity = 0.46 * (1 - age / 0.26);
   }
+}
+
+function syncRemoteMeleeIndicator(actor) {
+  let indicator = remoteMeleeIndicators.get(actor);
+  const active = !actor.networkDowned && Number(actor.swing || 0) > 0;
+  if (!indicator && active) {
+    indicator = makeMeleeIndicator();
+    remoteMeleeIndicators.set(actor, indicator);
+  }
+  if (!indicator) return;
+  indicator.visible = active;
+  if (!active) return;
+  const total = Math.max(0.01, Number(Neo.ATTACKS?.melee?.active || 0.32));
+  const progress = Math.max(0, Math.min(1, 1 - Number(actor.swing || 0) / total));
+  const angle = Number(actor.swingA || actor.aimDirection || 0);
+  const arc = Number(Neo.ATTACKS?.melee?.arc || 0.9);
+  const range = 55;
+  const direction = Number(actor.swingFacing || 1) < 0 ? 1 : -1;
+  const current = angle + arc * direction + (-2 * arc * direction) * progress;
+  const trailStart = current + arc * 0.55 * direction;
+  const points = [];
+  for (let index = 0; index < 33; index += 1) {
+    const theta = trailStart + (current - trailStart) * (index / 32);
+    points.push({ x: actor.x + Math.cos(theta) * range, y: 7, z: actor.y + Math.sin(theta) * range });
+  }
+  const glow = indicator.getObjectByName('glow');
+  const edge = indicator.getObjectByName('edge');
+  const tip = indicator.getObjectByName('tip');
+  writeMeleeLine(glow, points);
+  writeMeleeLine(edge, points);
+  const fade = Math.max(0, Math.min(1, Number(actor.swing || 0) / total));
+  glow.material.opacity = fade * 0.42;
+  edge.material.opacity = fade;
+  const end = points[points.length - 1];
+  tip.position.set(end.x, end.y, end.z);
+  tip.scale.set(11, 11, 1);
+  tip.material.opacity = fade;
 }
 
 function makeMeleeIndicator() {
@@ -1376,6 +1506,69 @@ function syncPlayerWeaponPreview() {
   writeMeleeLine(arc, points);
   tip.position.set(p.x + Math.cos(angle) * range, 4, p.y + Math.sin(angle) * range);
   tip.scale.set(10, 10, 1);
+}
+
+function syncWarpPreview() {
+  const active = Neo.getEquippedMove?.('dash') === 'warp' && typeof Neo.getWarpLandingPoint === 'function' && !!Neo.player;
+  if (!warpPreview && active) {
+    const group = new THREE.Group();
+    const route = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0xc8a6ff, transparent: true, opacity: 0.34, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    route.name = 'route';
+    group.add(route);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.72, 1, 36),
+      new THREE.MeshBasicMaterial({ color: 0xc8a6ff, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.name = 'landing-ring';
+    group.add(ring);
+    const adjusted = ring.clone();
+    adjusted.material = ring.material.clone();
+    adjusted.material.opacity = 0.24;
+    adjusted.name = 'adjusted-target';
+    group.add(adjusted);
+    const ghost = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0.44, depthWrite: false, color: 0xc8a6ff }));
+    ghost.center.set(0.5, 0);
+    ghost.name = 'landing-ghost';
+    group.add(ghost);
+    warpPreview = group;
+    scene.add(group);
+  }
+  if (!warpPreview) return;
+  warpPreview.visible = active;
+  if (!active) return;
+  const landing = Neo.getWarpLandingPoint();
+  if (!landing) { warpPreview.visible = false; return; }
+  const dx = Number(landing.x) - Number(Neo.player.x);
+  const dz = Number(landing.y) - Number(Neo.player.y);
+  const length = Math.hypot(dx, dz);
+  const angle = Math.atan2(dz, dx);
+  const pulse = Math.sin(performance.now() * 0.006) * 2.5;
+  const route = warpPreview.getObjectByName('route');
+  route.position.set(Neo.player.x + dx / 2, 3.2, Neo.player.y + dz / 2);
+  route.scale.set(length, 1.5, 1.5);
+  route.rotation.y = -angle;
+  const ring = warpPreview.getObjectByName('landing-ring');
+  ring.position.set(landing.x, 2.4, landing.y);
+  ring.scale.setScalar(Math.max(8, Number(Neo.player.r || 14) + 11 + pulse));
+  const adjusted = warpPreview.getObjectByName('adjusted-target');
+  adjusted.visible = !!landing.adjustedFromCursor;
+  adjusted.position.set(Number(landing.targetX || landing.x), 2.2, Number(landing.targetY || landing.y));
+  adjusted.scale.setScalar(12);
+  const ghost = warpPreview.getObjectByName('landing-ghost');
+  const ghostFlip = Math.cos(Number(Neo.laserAngle || angle)) < 0;
+  const texture = getSpriteTexture(playerSpriteKey(), ghostFlip);
+  if (ghost.material.map !== texture) {
+    ghost.material.map = texture;
+    ghost.material.needsUpdate = true;
+  }
+  const ghostSize = Math.max(34, Number(Neo.player.r || 14) * 2.5);
+  ghost.position.set(landing.x, 2.6, landing.y);
+  ghost.scale.set(ghostSize, ghostSize, 1);
+  ghost.material.opacity = 0.42 + Math.sin(performance.now() * 0.006) * 0.06;
 }
 
 function syncPlayerMeleeIndicator() {
@@ -1513,8 +1706,12 @@ function syncPlayer() {
   if (!anim && Number(p.dashTime || 0) > 0) {
     bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
   }
-  let alpha = 1;
-  let tint = p.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+  const godTime = Number(Neo.getActorGodTime?.(p) || Neo.godTimer || 0);
+  const capeActive = Number(p?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
+    && (Neo.isPlayerHidden?.(p) ?? true);
+  let alpha = capeActive ? 0.34 : 1;
+  let tint = godTime > 0 ? 0xfff5dc
+    : p.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
   let fallEase = 0;
   if (anim) {
     const t = Neo.clamp?.(anim.timer / anim.duration, 0, 1) ?? Math.max(0, Math.min(1, anim.timer / anim.duration));
@@ -1527,7 +1724,8 @@ function syncPlayer() {
   } else if (playerDeathPool) {
     playerDeathPool.visible = false;
   }
-  updateActorSprite(playerSprite, frameKey, p.r || 14, flip, { ...bob, alpha, tint });
+  const actorScale = Number(Neo.getActorSpriteScale?.(p) || 1);
+  updateActorSprite(playerSprite, frameKey, (p.r || 14) * actorScale, flip, { ...bob, alpha, tint });
   const body = playerSprite.getObjectByName('body');
   if (body) {
     body.material.rotation = anim
@@ -1569,6 +1767,7 @@ function syncOtherPlayers() {
     const actor = slot?.getEntity?.();
     return actor && actor !== Neo.player && (!slot.getDead?.() || actor.networkDowned);
   });
+  const slotByActor = new Map(remoteSlots.map(slot => [slot.getEntity(), slot]));
   syncPool(
     pools.players,
     remoteSlots.map(slot => slot.getEntity()),
@@ -1599,7 +1798,15 @@ function syncOtherPlayers() {
         : actor.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
       group.visible = true;
       group.position.set(actor.x, 0, actor.y);
-      updateActorSprite(group, frameKey, actor.r || 14, flip, { ...bob, tint });
+      const actorScale = Number(Neo.getActorSpriteScale?.(actor) || 1);
+      const actorGodTime = Number(Neo.getActorGodTime?.(actor) || 0);
+      const capeActive = Number(actor?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
+        && (Neo.isPlayerHidden?.(actor) ?? true);
+      updateActorSprite(group, frameKey, (actor.r || 14) * actorScale, flip, {
+        ...bob,
+        alpha: capeActive ? 0.34 : 1,
+        tint: actorGodTime > 0 ? 0xfff5dc : tint,
+      });
       const body = group.getObjectByName('body');
       if (body) {
         body.material.rotation = actor.networkDowned ? (flip ? -1 : 1) * Math.PI / 2 : 0;
@@ -1615,6 +1822,29 @@ function syncOtherPlayers() {
         syncActorStatus(group, actor, actor.r || 14, true);
         syncActorFeedback(group, actor, actor.r || 14);
       }
+      syncPlayerDashTrail(actor, frameKey, flip);
+      syncRemoteMeleeIndicator(actor);
+      let label = group.getObjectByName('player-label');
+      const slot = slotByActor.get(actor);
+      const labelText = actor.networkDowned ? `${slot?.label || 'PLAYER'} — DOWN` : String(slot?.label || '');
+      if (!label && labelText) {
+        label = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
+        label.name = 'player-label';
+        label.renderOrder = 12;
+        group.add(label);
+      }
+      if (label) {
+        label.visible = !!labelText;
+        if (labelText) {
+          const entry = getTextTexture(labelText, actor.networkDowned ? '#ff8090' : (slot?.color || '#dff7ff'));
+          if (label.material.map !== entry.texture) {
+            label.material.map = entry.texture;
+            label.material.needsUpdate = true;
+          }
+          label.position.set(0, (actor.r || 14) * SPRITE_SIZE_MULT + 34, 0);
+          label.scale.set(entry.w * 0.72, entry.h * 0.72, 1);
+        }
+      }
       const shadow = group.getObjectByName('shadow');
       if (shadow) {
         const dashScale = Number(actor.dashTime || 0) > 0 ? 1.18 : 1;
@@ -1623,6 +1853,13 @@ function syncOtherPlayers() {
       }
     },
   );
+  const liveActors = new Set(remoteSlots.map(slot => slot.getEntity()));
+  remoteMeleeIndicators.forEach((indicator, actor) => {
+    if (liveActors.has(actor)) return;
+    scene.remove(indicator);
+    disposeObject(indicator);
+    remoteMeleeIndicators.delete(actor);
+  });
 }
 
 // The enemy nameplate — name + level + HP text + health bar (+ barrier bar) —
@@ -1660,19 +1897,54 @@ function syncEnemies() {
     Neo.enemies,
     enemy => makeActorGroup(enemySpriteKey(enemy), enemy.r || 12),
     (enemy, group) => {
-      group.position.set(enemy.x, 0, enemy.y);
+      const jumpHeight = Math.max(0, Number(enemy.jumpZ || 0));
+      const finisherShake = Math.max(0, Number(enemy.queenFinisherShake || 0));
+      const shakePhase = performance.now() * 0.045 + Number(enemy.x || 0) * 0.03;
+      group.position.set(
+        enemy.x + Math.sin(shakePhase) * finisherShake,
+        jumpHeight,
+        enemy.y + Math.cos(shakePhase * 1.17) * finisherShake,
+      );
       // During the shared 0.72s spawn window, 2D draws only the portal and
       // its emerging silhouette. Keep the normal actor/nameplate hidden until
       // that presentation has completed.
       group.visible = Number(enemy.spawnT || 0) <= 0;
       if (!group.visible) return;
-      const flip = (Neo.player ? Neo.player.x < enemy.x : false);
+      const baseKey = enemySpriteKey(enemy);
+      const facingAngle = Number.isFinite(Number(enemy.beamAngle)) && Number(enemy.beamTime || 0) > 0
+        ? Number(enemy.beamAngle)
+        : Number.isFinite(Number(enemy.dashAngle)) && Number(enemy.dashTime || 0) > 0
+          ? Number(enemy.dashAngle)
+          : Number.isFinite(Number(enemy.swingA)) && Number(enemy.swingTime || 0) > 0
+            ? Number(enemy.swingA)
+            : null;
+      const flip = facingAngle == null
+        ? (Math.abs(Number(enemy.vx || 0)) > 6 ? Number(enemy.vx) < 0 : Number(enemy.facing || 1) < 0)
+        : Math.cos(facingAngle) < 0;
       const bob = walkBob(enemy, enemy.x);
       const stunned = Number(enemy.stun || 0) > 0;
       const tint = stunned ? 0xaad4ff : enemy.elite ? 0xffe2a8 : 0xffffff;
-      updateActorSprite(group, enemySpriteKey(enemy), enemy.r || 12, flip, { ...bob, tint });
+      const attackRemaining = Math.max(Number(enemy.swingTime || 0), Number(enemy.windup || 0), Number(enemy.attackAnimT || 0));
+      const attackProgress = attackRemaining > 0 ? Math.max(0.001, 1 - Math.min(1, attackRemaining / 0.5)) : 0;
+      const animation = {
+        maxSpeed: Math.max(110, Number(enemy.speed || 100) * 1.6),
+        stepRate: enemy.type === 'golem' || enemy.type === 'bulk_golem' ? 5.5 : 7.5,
+        dashPulse: Number(enemy.dashTime || 0) > 0 ? 1 : 0,
+        actionPulse: attackRemaining > 0 ? Math.sin(attackProgress * Math.PI) : 0,
+        castPulse: Number(enemy.beamTime || 0) > 0 || Number(enemy.aoeTime || 0) > 0 ? 0.5 : 0,
+        attackProgress,
+        seedKey: baseKey,
+      };
+      const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, enemy, animation) || baseKey;
+      const transforming = Number(enemy.transformAnimT || 0) > 0;
+      const transformPulse = transforming ? 1.1 + Math.sin(performance.now() / 60) * 0.13 * Number(enemy.transformAnimT || 0) * 2 : 1;
+      const transformTint = transforming && Math.floor(performance.now() / 80) % 2 === 0 ? 0xffffb4 : tint;
+      updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, { ...bob, tint: transformTint });
+      const groundShadow = group.getObjectByName('shadow');
+      if (groundShadow) groundShadow.position.y = 0.6 - jumpHeight;
       syncEnemyWindup(group, enemy);
       syncMooggyAura(group, enemy);
+      syncEnemyReadability(group, enemy);
 
       // Nameplate + health bar, pixel-matched to the 2D renderer.
       const plate = ensureNameplate(enemy, group);
@@ -1819,11 +2091,11 @@ function syncSpawnPortals() {
 // on-screen pixel size yields the world scale. Called after syncCamera() so the
 // camera's world position is current this frame.
 const _plateWorldPos = new THREE.Vector3();
-function scaleNameplatesToScreen() {
+function scaleNameplatesToScreen(viewCamera = camera, viewportHeight = null) {
   if (!nameplatePool.size) return;
-  const vpH = glCanvas?.height || renderer?.domElement?.height || 720;
-  const halfFovTan = Math.tan((camera.fov * Math.PI / 180) / 2);
-  const camPos = camera.position;
+  const vpH = viewportHeight || glCanvas?.height || renderer?.domElement?.height || 720;
+  const halfFovTan = Math.tan((viewCamera.fov * Math.PI / 180) / 2);
+  const camPos = viewCamera.position;
   nameplatePool.forEach((plate) => {
     const sprite = plate.sprite;
     if (!sprite.visible || !plate.cw) return;
@@ -2603,7 +2875,8 @@ function syncHazards() {
         sprite.name = 'bakedHazard';
         return sprite;
       }
-      const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
+      const authoredStyle = HAZARD_STYLES[hazard.kind];
+      const style = authoredStyle || { color: hazard.color || 0xffb347, opacity: 0.8 };
       let material;
       if (hazard.kind === 'lava') {
         const texture = getEnvTileTexture('floor_lava');
@@ -2622,6 +2895,7 @@ function syncHazards() {
       }
       const geometry = hazard.shape === 'rect' ? unitPlane : unitCircle;
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.dynamicHazardColor = !authoredStyle;
       mesh.rotation.x = -Math.PI / 2;
       mesh.renderOrder = 2;
       return mesh;
@@ -2665,6 +2939,9 @@ function syncHazards() {
       const h = hazard.shape === 'rect' ? hazard.h : (hazard.r || 24) * 2;
       mesh.scale.set(w, h, 1);
       mesh.position.set(hazard.x, 2, hazard.y);
+      if (mesh.userData.dynamicHazardColor && hazard.color != null) {
+        mesh.material.color.set(hazard.color);
+      }
       if (hazard.kind === 'lava') {
         mesh.material.opacity = 0.75 + Math.sin(performance.now() / 300 + (hazard.phase || 0)) * 0.15;
       }
@@ -3305,6 +3582,136 @@ function syncJusticeBlades() {
   );
 }
 
+function makeSkySwordObject() {
+  const group = new THREE.Group();
+  const bladeMaterial = new THREE.MeshStandardMaterial({
+    color: 0xfff1c2, emissive: 0xffc84d, emissiveIntensity: 1.1,
+    roughness: 0.25, metalness: 0.65,
+  });
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(8, 66, 4), bladeMaterial);
+  blade.position.y = 34;
+  blade.name = 'blade';
+  group.add(blade);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(28, 5, 7), bladeMaterial.clone());
+  guard.position.y = 10;
+  guard.name = 'guard';
+  group.add(guard);
+  const impact = new THREE.Mesh(
+    new THREE.RingGeometry(0.82, 1, 36),
+    new THREE.MeshBasicMaterial({ color: 0xffe6a3, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+  );
+  impact.rotation.x = -Math.PI / 2;
+  impact.position.y = 2;
+  impact.name = 'impact';
+  group.add(impact);
+  return group;
+}
+
+function syncSkySwords() {
+  syncPool(
+    pools.skySwords,
+    Array.isArray(Neo.skySwords) ? Neo.skySwords.filter(sword => Number(sword.delay || 0) <= 0) : [],
+    () => makeSkySwordObject(),
+    (sword, group) => {
+      group.position.set(Number(sword.x || 0), 0, Number(sword.y || 0));
+      const blade = group.getObjectByName('blade');
+      const guard = group.getObjectByName('guard');
+      const impact = group.getObjectByName('impact');
+      const falling = sword.phase === 'falling';
+      const hovering = sword.phase === 'hover';
+      blade.visible = falling || hovering;
+      guard.visible = blade.visible;
+      if (blade.visible) {
+        const ratio = falling ? Math.max(0, Math.min(1, Number(sword.fall || 0) / 0.34)) : 0;
+        group.position.y = ratio * 220;
+        group.rotation.y = hovering ? -Number(sword.angle || 0) : 0;
+        const scale = falling ? 1 : 0.72;
+        blade.scale.setScalar(scale);
+        guard.scale.setScalar(scale);
+      }
+      impact.visible = !blade.visible;
+      if (impact.visible) {
+        const alpha = Math.max(0, Math.min(1, Number(sword.fadeT || 0) / 0.3));
+        impact.material.opacity = alpha * 0.7;
+        impact.scale.setScalar(30 * (1 - alpha) + 8);
+      }
+    },
+  );
+}
+
+function rebuildChallengeStructure(kind) {
+  if (challengeStructure) {
+    scene.remove(challengeStructure);
+    disposeObject(challengeStructure);
+  }
+  const group = new THREE.Group();
+  group.userData.kind = kind;
+  if (kind === 'circuit') {
+    const chassis = new THREE.Mesh(
+      new THREE.BoxGeometry(310, 62, 30),
+      new THREE.MeshStandardMaterial({ color: 0x17232e, roughness: 0.48, metalness: 0.65, emissive: 0x071018, emissiveIntensity: 0.4 }),
+    );
+    chassis.position.y = 32;
+    chassis.name = 'chassis';
+    group.add(chassis);
+    const colors = [0xff667d, 0x68a7ff, 0xffd45d, 0x70e09a];
+    colors.forEach((color, index) => {
+      const terminal = new THREE.Mesh(
+        new THREE.SphereGeometry(7, 12, 8),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45, roughness: 0.25 }),
+      );
+      terminal.position.set((index - 1.5) * 62, 49, -16);
+      terminal.name = `terminal-${index}`;
+      group.add(terminal);
+    });
+  } else {
+    const crystal = new THREE.Mesh(
+      new THREE.ConeGeometry(16, 70, 5),
+      new THREE.MeshStandardMaterial({ color: 0xbfe6ff, emissive: 0x5ab8ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.25 }),
+    );
+    crystal.position.y = 35;
+    crystal.name = 'crystal';
+    group.add(crystal);
+  }
+  challengeStructure = group;
+  scene.add(group);
+}
+
+function syncChallengeStructure() {
+  const room = Neo.currentRoom;
+  const active = room?.type === 'challenge' && !room.cleared && !!room.challengeStarted;
+  if (!active) {
+    if (challengeStructure) challengeStructure.visible = false;
+    return;
+  }
+  const circuit = ['circuit', 'stillness'].includes(room.challengeType || 'mirror');
+  const kind = circuit ? 'circuit' : 'obelisk';
+  if (!challengeStructure || challengeStructure.userData.kind !== kind) rebuildChallengeStructure(kind);
+  challengeStructure.visible = true;
+  if (circuit) {
+    challengeStructure.position.set(Neo.ROOM_W / 2, 0, 112);
+    const sequence = Array.isArray(room.challengeData?.sequence) ? room.challengeData.sequence : [];
+    const progress = Math.max(0, Number(room.challengeData?.progress || 0));
+    for (let index = 0; index < 4; index += 1) {
+      const terminal = challengeStructure.getObjectByName(`terminal-${index}`);
+      if (!terminal) continue;
+      const powered = sequence[progress] === index;
+      terminal.material.emissiveIntensity = powered ? 2.2 : 0.35;
+      terminal.scale.setScalar(powered ? 1.25 + Math.sin(performance.now() / 100) * 0.08 : 1);
+    }
+  } else {
+    const obelisk = room.challengeData?.obelisk;
+    if (!obelisk) { challengeStructure.visible = false; return; }
+    challengeStructure.position.set(Number(obelisk.x || Neo.ROOM_W / 2), 0, Number(obelisk.y || Neo.ROOM_H / 2));
+    const crystal = challengeStructure.getObjectByName('crystal');
+    const radiusScale = Math.max(0.5, Number(obelisk.r || 22) / 22);
+    crystal.scale.set(radiusScale, radiusScale, radiusScale);
+    crystal.material.color.set(Number(obelisk.hitFlash || 0) > 0 ? 0xffd0d6 : 0xbfe6ff);
+    crystal.material.emissiveIntensity = 0.75 + Math.sin(performance.now() / 500) * 0.25;
+    challengeStructure.rotation.y += 0.006;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Camera + screen projection
 // ---------------------------------------------------------------------------
@@ -3350,7 +3757,8 @@ let fpPitch = -0.08;
 // completely untouched otherwise.
 function isFirstPersonActive() {
   return ready && Neo.render3D && cameraMode === 'fp'
-    && !Neo.isSplitScreen?.() && !window.NeoTouch?.active;
+    && !Neo.isSplitScreen?.() && !window.NeoTouch?.active
+    && (!Neo.presentationViewpointPlayer || Neo.presentationViewpointPlayer === Neo.player);
 }
 
 // The old 2D aim conversion treats canvas pixels as world pixels. That is
@@ -3359,11 +3767,15 @@ function isFirstPersonActive() {
 // the shared simulation receives the same intended world target the player is
 // actually pointing at.
 function projectCanvasMouseToWorld(canvasX, canvasY) {
-  if (!ready || !Neo.render3D || cameraMode !== 'third' || Neo.isSplitScreen?.() || !camera || !Neo.canvas) return null;
-  const width = Math.max(1, Number(Neo.canvas.width || 1));
-  const height = Math.max(1, Number(Neo.canvas.height || 1));
+  if (!ready || !Neo.render3D || cameraMode !== 'third' || !camera || !Neo.canvas) return null;
+  const split = !!Neo.isSplitScreen?.();
+  const slotCount = split ? Math.max(1, (Neo.getActivePlayerSlots?.() || []).length) : 1;
+  const width = Math.max(1, Number(Neo.canvas.width || 1) / (split ? 2 : 1));
+  const height = Math.max(1, Number(Neo.canvas.height || 1) / (split && slotCount >= 3 ? 2 : 1));
+  const aimCamera = split ? splitCameras[0] : camera;
+  if (!aimCamera) return null;
   mouseAimNdc.set((Number(canvasX || 0) / width) * 2 - 1, 1 - (Number(canvasY || 0) / height) * 2);
-  mouseAimRay.setFromCamera(mouseAimNdc, camera);
+  mouseAimRay.setFromCamera(mouseAimNdc, aimCamera);
   const directionY = mouseAimRay.ray.direction.y;
   if (Math.abs(directionY) < 1e-5) return null;
   const distance = -mouseAimRay.ray.origin.y / directionY;
@@ -3496,7 +3908,7 @@ function requestGameplayPointerLock(event) {
 document.addEventListener('pointerdown', requestGameplayPointerLock, true);
 
 function syncCamera() {
-  const p = Neo.player;
+  const p = Neo.presentationViewpointPlayer || Neo.player;
   // FPS-appropriate field of view in first person; classic follow cam otherwise.
   const targetFov = isFirstPersonActive() ? 68 : 50;
   if (camera.fov !== targetFov) {
@@ -3589,12 +4001,13 @@ function syncCamera() {
 
 // Project a world (game) position to #c canvas pixel coordinates.
 const projectVector = new THREE.Vector3();
-function projectToCanvas(x, y, height = 0) {
+function projectToCanvas(x, y, height = 0, viewCamera = camera, viewport = null) {
   projectVector.set(x, height, y);
-  projectVector.project(camera);
+  projectVector.project(viewCamera);
+  const bounds = viewport || { x: 0, y: 0, width: Neo.canvas.width, height: Neo.canvas.height };
   return {
-    x: (projectVector.x * 0.5 + 0.5) * Neo.canvas.width,
-    y: (-projectVector.y * 0.5 + 0.5) * Neo.canvas.height,
+    x: bounds.x + (projectVector.x * 0.5 + 0.5) * bounds.width,
+    y: bounds.y + (-projectVector.y * 0.5 + 0.5) * bounds.height,
     behind: projectVector.z > 1,
   };
 }
@@ -3604,6 +4017,7 @@ function renderSceneViews() {
     renderer.setScissorTest(false);
     const rect = Neo.canvas.getBoundingClientRect();
     renderer.setViewport(0, 0, Math.max(2, rect.width), Math.max(2, rect.height));
+    scaleNameplatesToScreen(camera, Math.max(2, rect.height));
     renderer.render(scene, camera);
     return;
   }
@@ -3645,6 +4059,7 @@ function renderSceneViews() {
     const y = fullH - (rowFromTop + 1) * viewH;
     renderer.setViewport(x, y, viewW, viewH);
     renderer.setScissor(x, y, viewW, viewH);
+    scaleNameplatesToScreen(viewCamera, viewH);
     renderer.render(scene, viewCamera);
   });
   renderer.setScissorTest(false);
@@ -3653,9 +4068,9 @@ function renderSceneViews() {
 // Re-uses the existing 2D prompt drawing (distance gating included) by
 // translating the 2D context so the world-coordinate draw lands at the
 // projected screen position of that world point.
-function drawProjectedPrompt(worldX, worldY, height, drawFn) {
+function drawProjectedPrompt(worldX, worldY, height, drawFn, viewCamera = camera, viewport = null) {
   if (typeof drawFn !== 'function') return;
-  const point = projectToCanvas(worldX, worldY, height);
+  const point = projectToCanvas(worldX, worldY, height, viewCamera, viewport);
   if (point.behind) return;
   Neo.ctx.save();
   Neo.ctx.translate(point.x - worldX, point.y - worldY);
@@ -3663,8 +4078,7 @@ function drawProjectedPrompt(worldX, worldY, height, drawFn) {
   Neo.ctx.restore();
 }
 
-function drawChargeHud() {
-  const p = Neo.player;
+function drawChargeHud(p = Neo.player, viewCamera = camera, viewport = null) {
   if (!p || Neo.gameState !== 'play') return;
   const draw = () => {
     Neo.drawHealingZoneChargeBar?.();
@@ -3682,14 +4096,16 @@ function drawChargeHud() {
     Neo.ctx.restore();
     return;
   }
-  drawProjectedPrompt(p.x, p.y, Math.max(26, (p.r || 14) * SPRITE_SIZE_MULT), draw);
+  drawProjectedPrompt(p.x, p.y, Math.max(26, (p.r || 14) * SPRITE_SIZE_MULT), draw, viewCamera, viewport);
 }
 
-function drawPrompts() {
-  if (Neo.gameState !== 'play') return;
+function drawPromptsForActor(actor, viewCamera = camera, viewport = null, drawMeters = true) {
+  if (!actor) return;
+  const realPlayer = Neo.player;
+  Neo.player = actor;
   const ladder = (Neo.pickups || []).find(pickup => pickup?.type === 'ladder');
   if (ladder && Neo.currentRoom?.cleared) {
-    drawProjectedPrompt(ladder.x, ladder.y, 30, Neo.drawLadderPrompt);
+    drawProjectedPrompt(ladder.x, ladder.y, 30, Neo.drawLadderPrompt, viewCamera, viewport);
   }
   const portal = (Neo.pickups || [])
     .filter(pickup => (
@@ -3698,8 +4114,47 @@ function drawPrompts() {
     ))
     .sort((a, b) => Neo.dist(Neo.player.x, Neo.player.y, a.x, a.y)
       - Neo.dist(Neo.player.x, Neo.player.y, b.x, b.y))[0];
-  if (portal) drawProjectedPrompt(portal.x, portal.y, 38, Neo.drawJesterPortalPrompt);
-  drawChargeHud();
+  if (portal) drawProjectedPrompt(portal.x, portal.y, 38, Neo.drawJesterPortalPrompt, viewCamera, viewport);
+  if (drawMeters) drawChargeHud(actor, viewCamera, viewport);
+  Neo.player = realPlayer;
+}
+
+function drawPrompts() {
+  if (Neo.gameState !== 'play') return;
+  if (Neo.isSplitScreen?.()) {
+    const slots = (Neo.getActivePlayerSlots?.() || []).filter(slot => slot?.getEntity?.());
+    const count = slots.length;
+    const viewW = Neo.canvas.width / 2;
+    const viewH = count >= 3 ? Neo.canvas.height / 2 : Neo.canvas.height;
+    slots.forEach((slot, index) => {
+      const col = index % 2;
+      const row = count >= 3 ? Math.floor(index / 2) : 0;
+      const viewport = { x: col * viewW, y: row * viewH, width: viewW, height: viewH };
+      Neo.ctx.save();
+      Neo.ctx.beginPath();
+      Neo.ctx.rect(viewport.x, viewport.y, viewport.width, viewport.height);
+      Neo.ctx.clip();
+      drawPromptsForActor(slot.getEntity(), splitCameras[index] || camera, viewport, index === 0);
+      const actor = slot.getEntity();
+      if (slot.getDead?.() || actor?.networkDowned) {
+        Neo.ctx.fillStyle = 'rgba(40, 0, 8, 0.34)';
+        Neo.ctx.fillRect(viewport.x, viewport.y, viewport.width, viewport.height);
+      }
+      Neo.ctx.font = 'bold 13px system-ui';
+      Neo.ctx.textAlign = 'left';
+      Neo.ctx.textBaseline = 'top';
+      Neo.ctx.fillStyle = slot.getDead?.() || actor?.networkDowned ? '#ff8090' : (slot.color || '#dff7ff');
+      Neo.ctx.fillText(`${slot.label || `P${index + 1}`}${slot.getDead?.() || actor?.networkDowned ? ' — DOWN' : ''}`, viewport.x + 10, viewport.y + 9);
+      Neo.ctx.restore();
+    });
+    Neo.ctx.save();
+    Neo.ctx.fillStyle = '#000';
+    Neo.ctx.fillRect(viewW - 1, 0, 2, Neo.canvas.height);
+    if (count >= 3) Neo.ctx.fillRect(0, viewH - 1, Neo.canvas.width, 2);
+    Neo.ctx.restore();
+  } else {
+    drawPromptsForActor(Neo.player);
+  }
   if (isFirstPersonActive()) {
     drawViewmodel();
     drawCrosshair();
@@ -3874,6 +4329,7 @@ function render() {
     syncPlayer();
     syncOtherPlayers();
     syncPlayerMeleeIndicator();
+    syncWarpPreview();
     syncEnemies();
     syncProjectiles();
     syncPickups();
@@ -3885,10 +4341,10 @@ function render() {
     syncDeadBodies();
     syncBeams();
     syncJusticeBlades();
+    syncSkySwords();
+    syncChallengeStructure();
     syncTitanHammer();
     syncCamera();
-    scaleNameplatesToScreen();
-
     renderSceneViews();
     syncPointerLock();
     drawPrompts();

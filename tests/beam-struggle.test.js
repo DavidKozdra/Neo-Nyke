@@ -8,6 +8,8 @@ describe('beam struggles', () => {
   const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
   const entitiesSource = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
   const threeSource = fs.readFileSync(path.join(__dirname, '../js/draw/three-renderer.js'), 'utf8');
+  const networkSource = fs.readFileSync(path.join(__dirname, '../js/simulation/NetworkCombatSystem.js'), 'utf8');
+  const networkViewSource = fs.readFileSync(path.join(__dirname, '../js/rendering/NetworkGameView.js'), 'utf8');
 
   function loadContactFunction() {
     const match = mathSource.match(/export function findOpposingBeamPathContact[\s\S]*?\n}\n\nexport function getBeamPathLength/);
@@ -56,5 +58,13 @@ describe('beam struggles', () => {
     expect(environmentSource).toContain('MASH [${String(laserHint).toUpperCase()}]');
     expect(entitiesSource).toContain('Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy');
     expect(threeSource).toContain('Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy');
+  });
+
+  test('owns multiplayer beam struggles on the authority and projects them to the shared HUD', () => {
+    expect(networkSource).toContain('function tryStartNetworkBeamStruggle');
+    expect(networkSource).toContain('function registerNetworkBeamMash');
+    expect(networkSource).toContain("emitEvent('BEAM_STRUGGLE_RESOLVED'");
+    expect(networkViewSource).toContain("this.session.sendAction('BEAM_MASH'");
+    expect(networkViewSource).toContain('this.neo.beamStruggle = authorityStruggle');
   });
 });
