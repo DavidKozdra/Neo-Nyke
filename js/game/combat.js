@@ -3900,8 +3900,8 @@
     const knockbackResistFactor = 1 / (1 + getEnemyCcLevel(enemy));
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1) * knockbackResistFactor;
     if (isCrit) dealt = Math.round(dealt * critMultiplier);
-    // Rivals are meant to be tougher than a normal enemy: a flat 20% damage
-    // reduction on top of their stats. Friends are already exempted above.
+    // Rivals retain a slight 5% damage reduction. A larger hidden reduction
+    // made ordinary hits read like an unexplained block on top of their HP.
     if (enemy?.type === 'rival') dealt = Math.max(1, Math.round(dealt * (1 - Neo.RIVAL_DAMAGE_REDUCTION)));
     // The final boss shrugs off a flat 5% of every incoming hit on top of its stats.
     if (enemy?.type === 'god') dealt = Math.max(1, Math.round(dealt * 0.95));
