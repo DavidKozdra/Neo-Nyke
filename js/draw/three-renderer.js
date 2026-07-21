@@ -1891,6 +1891,10 @@ const GLOW_ONLY_PICKUP_TYPES = new Set(['crystal', 'key']);
 // consoles and bake onto billboards — standing the switch up, or laying the
 // altar down, is the same mistake as the flat ladder.
 const FLAT_BAKED_PICKUP_TYPES = new Set(['challengeSwitch']);
+// Loose loot should hover as a readable pickup in perspective. Its baked
+// canvas is centered on the simulation point, so it must be lifted by half its
+// world height or the lower half sits below the 3D floor.
+const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion']);
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
 // Sized from each type's actual draw extents in drawPickups, doubled (the bake
@@ -1969,32 +1973,6 @@ function syncPickups() {
     pools.pickups,
     Neo.pickups,
     pickup => {
-      if (pickup.type === 'potion') {
-        // A native bottle stays recognisable in perspective and cannot collapse
-        // into the tiny red/green dot produced by a failed billboard bake.
-        const bottle = new THREE.Group();
-        bottle.name = 'potion3d';
-        const glass = new THREE.MeshStandardMaterial({
-          color: 0x5dff86, emissive: 0x16c94f, emissiveIntensity: 1.1,
-          transparent: true, opacity: 0.9, roughness: 0.25, metalness: 0.05,
-        });
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(8, 10, 18, 10), glass);
-        body.position.y = 10;
-        bottle.add(body);
-        const shoulder = new THREE.Mesh(new THREE.ConeGeometry(8, 7, 10), glass);
-        shoulder.position.y = 22.5;
-        bottle.add(shoulder);
-        const neck = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 8, 8), glass);
-        neck.position.y = 29;
-        bottle.add(neck);
-        const cork = new THREE.Mesh(
-          new THREE.CylinderGeometry(4.2, 4.2, 4, 8),
-          new THREE.MeshStandardMaterial({ color: 0xc58a4c, roughness: 0.9 }),
-        );
-        cork.position.y = 35;
-        bottle.add(cork);
-        return bottle;
-      }
       if (pickup.type === 'ladder') {
         const group = new THREE.Group();
         const texture = getImageTexture('ladder_0', 0, Neo.ENVIRONMENT_IMAGES?.ladder_0?.image?.naturalWidth || 24);
@@ -2036,17 +2014,14 @@ function syncPickups() {
     },
     (pickup, obj) => {
       obj.position.set(pickup.x, 0, pickup.y);
-      if (obj.name === 'potion3d') {
-        const t = performance.now() / 420 + pickup.x * 0.01;
-        obj.position.y = 4 + Math.sin(t) * 3;
-        obj.rotation.y = t * 0.45;
-        return;
-      }
       if (obj.name === 'baked2d' || obj.name === 'baked2dFlat') {
         const worldSize = pickupBakeWorldSize(pickup);
         rasterizeWorldDrawIntoSprite(obj, pickup, worldSize);
-        // Flat plates hug the floor; upright props stand just above it.
-        obj.position.y = obj.name === 'baked2dFlat' ? 2 : 1;
+        // Flat plates hug the floor; authored room props keep their simulation
+        // origin; loose coins/items/potions float wholly above the floor.
+        const floating = FLOATING_BAKED_PICKUP_TYPES.has(pickup.type);
+        const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
+        obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : 1;
         return;
       }
       if (pickup.type === 'ladder') {
@@ -2076,7 +2051,17 @@ function syncChests() {
   syncPool(
     pools.chests,
     Neo.chests,
-    () => makeGroundedBillboard(getGlowTexture('#c98a4b'), 20),
+    () => {
+      // Chests need only their authored sprite. The generic grounded-prop base
+      // was the grey rectangle visible beneath every chest in perspective.
+      const group = new THREE.Group();
+      const sprite = makeBillboard(getGlowTexture('#c98a4b'), { depthWrite: false });
+      sprite.name = 'body';
+      sprite.center.set(0.5, 0.2);
+      sprite.position.y = 0.6;
+      group.add(sprite);
+      return group;
+    },
     (chest, group) => {
       const sprite = group.getObjectByName('body');
       if (!sprite) return;
@@ -2096,8 +2081,7 @@ function syncChests() {
         sprite.material.map = texture;
         sprite.material.needsUpdate = true;
       }
-      // drawChests() uses a 64px source frame. Matching that scale plus a
-      // contact shadow keeps treasure grounded and recognizable in 3D.
+      // drawChests() uses a 64px source frame; match it without adding geometry.
       sprite.scale.set(64, 64, 1);
       group.position.set(chest.x, 0, chest.y);
     },

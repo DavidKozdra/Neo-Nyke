@@ -42,8 +42,17 @@ describe('gameplay polish regressions', () => {
     expect(enemies).toContain('const boltCount = Math.min(9, 5 + getBossTier(enemy))');
   });
 
-  test('3D potions use a native bottle instead of a generic dot', () => {
-    expect(renderer3d).toContain("bottle.name = 'potion3d'");
-    expect(renderer3d).toContain('new THREE.CylinderGeometry(8, 10, 18, 10)');
+  test('3D potions reuse their authored 2D art and loose loot floats above the floor', () => {
+    expect(renderer3d).toContain("const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion'])");
+    expect(renderer3d).not.toContain("bottle.name = 'potion3d'");
+    expect(renderer3d).toContain('floating ? worldSize * 0.5 + bob : 1');
+  });
+
+  test('3D chests contain only the authored chest sprite', () => {
+    const start = renderer3d.indexOf('function syncChests()');
+    const end = renderer3d.indexOf('\nfunction syncDestructibles()', start);
+    const syncChests = renderer3d.slice(start, end);
+    expect(syncChests).toContain("sprite.name = 'body'");
+    expect(syncChests).not.toContain('makeGroundedBillboard');
   });
 });
