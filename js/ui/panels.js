@@ -329,9 +329,11 @@ export function bindInput() {
         if (Neo.tutorialLaunchPending) {
           Neo.tutorialLaunchPending = false;
         }
-        const challengePractice = mode === 'challenge_practice';
-        Neo.gameMode = challengePractice ? 'practice' : mode;
-        Neo.practiceVariant = challengePractice ? 'challenges' : 'standard';
+        const practiceVariant = mode === 'challenge_practice'
+          ? 'challenges'
+          : mode === 'beam_practice' ? 'beams' : 'standard';
+        Neo.gameMode = practiceVariant !== 'standard' ? 'practice' : mode;
+        Neo.practiceVariant = practiceVariant;
         if (Neo.gameMode === 'coop' || Neo.gameMode === 'pvp') {
           Neo.openMpLobby(Neo.gameMode);
         } else {

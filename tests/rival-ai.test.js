@@ -97,7 +97,7 @@ describe('rival full-kit tactical AI', () => {
     expect(roomsSource).toContain("thorn_blood_beams: { color: '#ff3b5c'");
     expect(roomsSource).toContain("fan: [-0.32, -0.11, 0.11, 0.32]");
     expect(roomsSource).toContain('Neo.buildRicochetBeamPath(');
-    expect(drawSource).toContain("enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa')");
+    expect(drawSource).toContain("Neo.getEnemyBeamVisualColor?.(enemy) || '#aa66ff'");
     expect(drawSource).toContain('enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)');
   });
 

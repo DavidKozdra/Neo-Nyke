@@ -448,8 +448,10 @@
 
   function buildEnemyNameplateRender(enemy, hpPct) {
     const bountyReady = !!(enemy.bountyTarget && (enemy.bountyCaptureReady || enemy.bountyTheftReady));
-    const label = (enemy.type === 'rival' && enemy.rivalData)
-      ? enemy.rivalData.name
+    const label = enemy.displayName
+      ? enemy.displayName
+      : (enemy.type === 'rival' && enemy.rivalData)
+        ? enemy.rivalData.name
       : enemy.bountyTarget
         ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
         : Neo.getEliteEnemyLabel(enemy);
@@ -670,10 +672,15 @@
       if (enemy.beamTime > 0 || partitionPreview) {
         const isRivalBeam = enemy.type === 'rival' && !!enemy.rivalBeamMove;
         const isDevilGiantLaser = enemy.type === 'handsome_devil' && enemy.state === 'devilGiantLaser';
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430) : enemy.type === 'mooggy' ? 520 : isDevilGiantLaser ? 900 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
+        const range = Number(enemy.beamRange) > 0 ? Number(enemy.beamRange)
+          : enemy.type === 'god' ? 620 : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430)
+            : enemy.type === 'mooggy' ? 520 : isDevilGiantLaser ? 900
+              : enemy.type === 'handsome_devil' ? 560 : enemy.type === 'bowman_bane' ? 480 : 430;
         const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
         const angles = isPartition
           ? enemy.partitionAngles
+          : Array.isArray(enemy.beamFan) && enemy.beamFan.length
+            ? enemy.beamFan.map(offset => enemy.beamAngle + offset)
           : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
             ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
             : [enemy.beamAngle];
@@ -692,8 +699,13 @@
             isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
             isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
           ));
-        const color = isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff' : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa') : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
-        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8) : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22 : enemy.type === 'handsome_devil' ? 9 : 8;
+        const color = Neo.getEnemyBeamVisualColor?.(enemy) || '#aa66ff';
+        const width = enemy.state === 'elite_laser' && enemy.eliteLaserMode
+          ? (Neo.getBeamVisualWidth?.(enemy.eliteLaserMode, enemy.eliteLaserMode) || 8)
+          : isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18
+            : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8)
+              : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22
+                : enemy.type === 'handsome_devil' ? 9 : 8;
         const options = {
           color,
           glow: enemy.type === 'rival' ? (enemy.rivalBeamGlow || color) : color,
@@ -1858,6 +1870,103 @@
     drawPlayerSlot(slot);
   }
 
+  // Large DBZ-style pressure point where the two beams meet. Both authored beam
+  // colours remain visible, then burn together through a white-hot core and
+  // rotating energy bands instead of becoming a generic white spark.
+  function drawBeamStruggleClash(ctx = Neo.ctx, x = Neo.beamStruggle?.x, y = Neo.beamStruggle?.y) {
+    const struggle = Neo.beamStruggle;
+    if (!struggle?.active || !ctx || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const { playerColor, opponentColor } = Neo.getBeamStruggleVisualColors?.(struggle)
+      || { playerColor: '#ff00aa', opponentColor: '#aa66ff' };
+    const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
+    const now = performance.now();
+    const pulse = reduceFlash ? 0 : Math.sin(now * 0.014);
+    const radius = 38 + pulse * 4;
+    const auraRadius = radius + 29;
+    const rotation = reduceFlash ? 0 : now * 0.0028;
+    const axis = Math.atan2(
+      Number(struggle.enemy?.y ?? y) - Number(Neo.player?.y ?? y),
+      Number(struggle.enemy?.x ?? x) - Number(Neo.player?.x ?? x),
+    );
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(axis);
+    ctx.globalCompositeOperation = 'lighter';
+
+    const aura = ctx.createRadialGradient(0, 0, radius * 0.2, 0, 0, auraRadius);
+    aura.addColorStop(0, 'rgba(255,255,255,0.72)');
+    aura.addColorStop(0.38, hexToRgba(playerColor, 0.3));
+    aura.addColorStop(0.68, hexToRgba(opponentColor, 0.22));
+    aura.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Uneven corona spikes sell the violent, unstable pressure of the clash.
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 14; i += 1) {
+      const a = i * Math.PI * 2 / 14 + rotation * (i % 2 ? 1 : -0.65);
+      const length = radius + 12 + (reduceFlash ? 4 : (Math.sin(now * 0.021 + i * 2.7) + 1) * 8);
+      ctx.strokeStyle = i % 2 ? hexToRgba(playerColor, 0.62) : hexToRgba(opponentColor, 0.62);
+      ctx.lineWidth = i % 3 === 0 ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * (radius - 3), Math.sin(a) * (radius - 3));
+      ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
+      ctx.stroke();
+    }
+
+    const pressureGradient = ctx.createLinearGradient(-radius, 0, radius, 0);
+    pressureGradient.addColorStop(0, playerColor);
+    pressureGradient.addColorStop(0.38, playerColor);
+    pressureGradient.addColorStop(0.5, '#ffffff');
+    pressureGradient.addColorStop(0.62, opponentColor);
+    pressureGradient.addColorStop(1, opponentColor);
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = pressureGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (typeof ctx.createConicGradient === 'function') {
+      const swirl = ctx.createConicGradient(rotation, 0, 0);
+      swirl.addColorStop(0, hexToRgba(playerColor, 0.62));
+      swirl.addColorStop(0.2, 'rgba(255,255,255,0.3)');
+      swirl.addColorStop(0.42, hexToRgba(opponentColor, 0.68));
+      swirl.addColorStop(0.68, 'rgba(255,255,255,0.24)');
+      swirl.addColorStop(1, hexToRgba(playerColor, 0.62));
+      ctx.fillStyle = swirl;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius - 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const core = ctx.createRadialGradient(-radius * 0.18, -radius * 0.2, 1, 0, 0, radius * 0.78);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(0.28, 'rgba(255,255,255,0.82)');
+    core.addColorStop(0.7, 'rgba(255,255,255,0.14)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius + 1, rotation, rotation + Math.PI * 1.18);
+    ctx.stroke();
+    ctx.strokeStyle = hexToRgba(opponentColor, 0.85);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 8, -rotation, -rotation + Math.PI * 0.92);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawPlayerLaser() {
     if (!Neo.player) return;
     const beamWidthMultiplier = Number(Neo.getItemStats?.()?.beamWidthMultiplier || 1);
@@ -1929,14 +2038,7 @@
       : fanAngles.map(a => Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, beamRange, bounces));
     const beamPath = beamPaths[0];
     if (!beamPath || !beamPath.length) return;
-    const beamColor = turtleWaveActive ? '#74f5ff'
-      : loveBeamActive ? '#ff9ed6'
-      : Neo.laserMode === 'god_sweep' ? '#ffffff'
-      : wizardBeamActive ? '#a64bff'
-      : mooggyBeamActive ? '#ff2f57'
-      : thornBeamsActive ? '#ff3b5c'
-      : holyEyeBeamsActive ? '#ffcc33'
-      : '#ff00aa';
+    const beamColor = Neo.getBeamVisualColor?.(Neo.laserMode, equippedLaser, loveBeamActive) || '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff'
       : loveBeamActive ? '#ffd1ea'
       : Neo.laserMode === 'god_sweep' ? '#e8f0ff'
@@ -2105,5 +2207,6 @@
   Neo.drawPlayerSlot = drawPlayerSlot;
   Neo.drawPlayer2 = drawPlayer2;
   Neo.drawPlayerN = drawPlayerN;
+  Neo.drawBeamStruggleClash = drawBeamStruggleClash;
   Neo.drawPlayerLaser = drawPlayerLaser;
   Neo.drawActivePlayerEffects = drawActivePlayerEffects;

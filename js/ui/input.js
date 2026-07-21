@@ -1045,6 +1045,7 @@ export const ui = {
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
     altModeChallengePracticeBtn: document.getElementById('altModeChallengePracticeBtn'),
+    altModeBeamPracticeBtn: document.getElementById('altModeBeamPracticeBtn'),
     altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
     altModeRivalRumbleBtn: document.getElementById('altModeRivalRumbleBtn'),
     altModeTreasureHuntBtn: document.getElementById('altModeTreasureHuntBtn'),

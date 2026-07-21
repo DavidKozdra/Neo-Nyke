@@ -219,6 +219,73 @@
     return Neo.getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
   }
 
+  // Canonical beam colours. Beam-struggle presentation consumes these helpers
+  // too, so the clash and meter always match the beams that are actually being
+  // fired instead of falling back to a hard-coded red/blue matchup.
+  function getBeamVisualColor(mode = 'beam', moveKey = 'blood_beam', loveBeamCasting = false) {
+    if (mode === 'turtle_wave' || moveKey === 'turtle_wave') return '#74f5ff';
+    if (loveBeamCasting || moveKey === 'love_beam') return '#ff9ed6';
+    if (mode === 'god_sweep' || moveKey === 'god_sweep') return '#ffffff';
+    if (moveKey === 'wizard_lazer') return '#a64bff';
+    if (moveKey === 'mooggy_blood_beam') return '#ff2f57';
+    if (mode === 'thorn_blood_beams' || moveKey === 'thorn_blood_beams') return '#ff3b5c';
+    if (mode === 'holy_eye_beams' || moveKey === 'holy_eye_beams') return '#ffcc33';
+    return '#ff00aa';
+  }
+
+  function getBeamVisualWidth(mode = 'beam', moveKey = 'blood_beam') {
+    if (mode === 'god_sweep' || moveKey === 'god_sweep') return 16;
+    if (mode === 'turtle_wave' || moveKey === 'turtle_wave') return 18;
+    if (moveKey === 'love_beam') return 10;
+    if (moveKey === 'wizard_lazer') return 22;
+    if (moveKey === 'mooggy_blood_beam') return 11;
+    if (mode === 'thorn_blood_beams' || moveKey === 'thorn_blood_beams') return 6;
+    if (mode === 'holy_eye_beams' || moveKey === 'holy_eye_beams') return 7;
+    return 8;
+  }
+
+  function getEnemyBeamVisualColor(enemy) {
+    if (!enemy) return '#aa66ff';
+    if (enemy.state === 'elite_laser' && enemy.eliteLaserMode) {
+      return getBeamVisualColor(enemy.eliteLaserMode, enemy.eliteLaserMode);
+    }
+    if (enemy.type === 'god' && enemy.state === 'godPartition') return '#fff1a8';
+    if (enemy.type === 'god') return '#ffffff';
+    if (enemy.type === 'rival') return enemy.rivalBeamColor || '#ff00aa';
+    if (enemy.type === 'mooggy' || enemy.type === 'handsome_devil') return '#ff3348';
+    if (enemy.type === 'bowman_bane') return '#8dd4ff';
+    return '#aa66ff';
+  }
+
+  function getBeamStruggleVisualColors(struggle = Neo.beamStruggle) {
+    const activeEffects = Array.isArray(Neo.activePlayerEffects) ? Neo.activePlayerEffects : [];
+    const playerEffect = activeEffects.find(effect => effect?.player === Neo.player);
+    const playerColor = playerEffect
+      ? getBeamVisualColor(playerEffect.laserMode, playerEffect.equippedLaser, playerEffect.loveBeamCasting)
+      : getBeamVisualColor(Neo.laserMode, getEquippedMove('laser'), Neo.loveBeamCasting);
+
+    const opponent = struggle?.opponentPlayer;
+    if (!opponent) {
+      return { playerColor, opponentColor: getEnemyBeamVisualColor(struggle?.enemy) };
+    }
+    const opponentEffect = activeEffects.find(effect => effect?.player === opponent);
+    if (opponentEffect) {
+      return {
+        playerColor,
+        opponentColor: getBeamVisualColor(
+          opponentEffect.laserMode,
+          opponentEffect.equippedLaser,
+          opponentEffect.loveBeamCasting,
+        ),
+      };
+    }
+    const opponentColor = opponent.pvpBeamMode === 'turtle_wave'
+      ? getBeamVisualColor('turtle_wave', opponent.pvpBeamMoveKey)
+      : Neo.getSlotByEntity?.(opponent)?.color
+        || getBeamVisualColor(opponent.pvpBeamMode, opponent.pvpBeamMoveKey || opponent.equippedMoves?.laser);
+    return { playerColor, opponentColor };
+  }
+
   // --- Live damage readout (for tooltips / inventory / shop) ----------------
   // Reproduces the player-side scaling that scaleDamageAgainstEnemy() applies,
   // but with NO enemy (no defense, flat reduction, bleed bonus, or boss kronos).
@@ -1025,6 +1092,7 @@
   const BEAM_STRUGGLE_MASH_FORCE = 0.085;
 
   function getBeamStruggleEnemyRange(enemy) {
+    if (Number(enemy?.beamRange) > 0) return Number(enemy.beamRange);
     if (enemy.type === 'god') return Number(enemy.beamRange || 620);
     if (enemy.type === 'rival') return Number(enemy.rivalBeamRange || 430);
     if (enemy.type === 'mooggy') return 520;
@@ -1034,9 +1102,11 @@
   }
 
   function getBeamStruggleEnemyPaths(enemy) {
-    const fan = enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
-      ? enemy.rivalBeamFan
-      : [0];
+    const fan = Array.isArray(enemy.beamFan) && enemy.beamFan.length
+      ? enemy.beamFan
+      : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
+        ? enemy.rivalBeamFan
+        : [0];
     const range = getBeamStruggleEnemyRange(enemy);
     return fan.map(offset => Neo.buildRicochetBeamPath(
       enemy.x,
@@ -4460,6 +4530,7 @@
       onHit = null,
       onEnd = null,
       damageSource = null,
+      fan = [0],
     } = config;
     enemy.beamTime -= dt;
     enemy.beamTick -= dt;
@@ -4470,8 +4541,18 @@
     if (enemy.beamTick <= 0) {
       enemy.beamTick = tick;
       if (isBeamStruggleParticipant(enemy)) return false;
-      const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
-      const hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
+      const offsets = Array.isArray(fan) && fan.length ? fan : [0];
+      const hitSegment = offsets.reduce((hit, offset) => {
+        if (hit) return hit;
+        const beamPath = Neo.buildRicochetBeamPath(
+          enemy.x,
+          enemy.y,
+          enemy.beamAngle + Number(offset || 0),
+          range,
+          Neo.getEnemyBeamBounceCount(enemy),
+        );
+        return Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
+      }, null);
       if (hitSegment) {
         const source = getEnemyBeamDamageSource(enemy, damageSource);
         Neo.damagePlayer(damage, hitSegment.angle, knockback, source.label, { sourceKey: source.key, attacker: enemy });
@@ -5600,6 +5681,10 @@
   Neo.getDisplayDamage = getDisplayDamage;
   Neo.formatDisplayDamage = formatDisplayDamage;
   Neo.getEquippedMove = getEquippedMove;
+  Neo.getBeamVisualColor = getBeamVisualColor;
+  Neo.getBeamVisualWidth = getBeamVisualWidth;
+  Neo.getEnemyBeamVisualColor = getEnemyBeamVisualColor;
+  Neo.getBeamStruggleVisualColors = getBeamStruggleVisualColors;
   Neo.getEquippedWeapon = getEquippedWeapon;
   Neo.getWeaponBaseCooldown = getWeaponBaseCooldown;
   Neo.isChargedWeaponKey = isChargedWeaponKey;

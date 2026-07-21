@@ -3031,14 +3031,14 @@ export function resumeGame() {
     Neo.baseSeedStr = createRandomSeed();
     Neo.selectedDifficulty = Neo.practiceVariant === 'challenges'
       ? normalizeDifficulty(Neo.selectedDifficulty)
-      : 'easy';
+      : Neo.practiceVariant === 'beams' ? 'hard' : 'easy';
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
-    Neo.floor = 5;
+    Neo.floor = Neo.practiceVariant === 'beams' ? 8 : 5;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
     Neo.resetRunUnlocks?.();
@@ -3046,7 +3046,7 @@ export function resumeGame() {
     resetMultiplayerState();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
-    Neo.player.maxHp = 1000;
+    Neo.player.maxHp = Neo.practiceVariant === 'beams' ? 1500 : 1000;
     Neo.player.hp = Neo.player.maxHp;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
@@ -3068,8 +3068,98 @@ export function resumeGame() {
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
+    if (Neo.practiceVariant === 'beams') {
+      Neo.beamPracticeWave = 0;
+      Neo.beamPracticeRespawnTimer = 0;
+      spawnBeamPracticeWave();
+      Neo.spawnParticle({
+        x: Neo.player.x,
+        y: Neo.player.y - 46,
+        life: 1.6,
+        text: 'LASER GAUNTLET',
+        c: '#74f5ff',
+      });
+    }
     syncPracticeMaxHpControls();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
+  }
+
+  const BEAM_PRACTICE_MODES = Object.freeze([
+    'blood_beam',
+    'love_beam',
+    'turtle_wave',
+    'wizard_lazer',
+    'mooggy_blood_beam',
+    'thorn_blood_beams',
+    'holy_eye_beams',
+    'god_sweep',
+  ]);
+
+  const BEAM_PRACTICE_SPAWNS = Object.freeze([
+    { x: 180, y: 155 },
+    { x: Neo.ROOM_W - 180, y: 155 },
+    { x: 180, y: Neo.ROOM_H - 155 },
+    { x: Neo.ROOM_W - 180, y: Neo.ROOM_H - 155 },
+    { x: Neo.ROOM_W / 2, y: 135 },
+    { x: Neo.ROOM_W / 2, y: Neo.ROOM_H - 135 },
+  ]);
+
+  function spawnBeamPracticeWave() {
+    if (Neo.gameMode !== 'practice' || Neo.practiceVariant !== 'beams' || !Neo.currentRoom) return false;
+    Neo.beamPracticeWave = Math.max(0, Number(Neo.beamPracticeWave || 0)) + 1;
+    Neo.beamPracticeRespawnTimer = 0;
+    const wave = Neo.beamPracticeWave;
+    const count = Math.min(BEAM_PRACTICE_SPAWNS.length, 4 + Math.floor((wave - 1) / 2));
+    const strength = 1 + Math.max(0, wave - 1) * 0.12;
+    Neo.currentRoom.cleared = false;
+
+    for (let index = 0; index < count; index += 1) {
+      const authored = BEAM_PRACTICE_SPAWNS[index];
+      const safeSpawn = Neo.findSafeEnemySpawnPoint?.(authored.x, authored.y, 18) || authored;
+      const modeIndex = ((wave - 1) * 4 + index) % BEAM_PRACTICE_MODES.length;
+      const mode = BEAM_PRACTICE_MODES[modeIndex];
+      const enemy = Neo.spawnEnemy('laser', safeSpawn.x, safeSpawn.y, false);
+      if (!enemy) continue;
+      enemy.elite = true;
+      enemy.eliteTypes = ['knight', 'knight', 'lazered'];
+      Neo.applyEliteTypes?.(enemy);
+      enemy.max = Math.max(1, Math.round(enemy.max * strength));
+      enemy.hp = enemy.max;
+      enemy.dmg = Math.max(1, Math.round(enemy.dmg * (1.18 + Math.max(0, wave - 1) * 0.05)));
+      enemy.speed *= 1.08;
+      enemy.beamPracticeUser = true;
+      enemy.beamPracticeModes = [mode];
+      enemy.eliteLaserModeIndex = 0;
+      enemy.eliteLaserCd = 0.4 + index * 0.16;
+      enemy.displayName = `${Neo.MOVE_DEFS?.[mode]?.name || Neo.titleCase?.(mode) || 'Laser'} User`;
+    }
+    Neo.updateObjective?.();
+    Neo.spawnParticle({
+      x: Neo.ROOM_W / 2,
+      y: Neo.WALL + 42,
+      life: 1.15,
+      text: `BEAM WAVE ${wave}`,
+      c: '#dffbff',
+    });
+    return true;
+  }
+
+  function updateBeamPractice(dt) {
+    if (Neo.gameMode !== 'practice' || Neo.practiceVariant !== 'beams' || Neo.gameState !== 'play') return false;
+    const activeUsers = Neo.enemies.filter(enemy => enemy?.beamPracticeUser && !enemy.dead && enemy.hp > 0);
+    if (activeUsers.length > 0) return true;
+    if (!(Neo.beamPracticeRespawnTimer > 0)) {
+      Neo.beamPracticeRespawnTimer = 2.5;
+      if (Neo.player) {
+        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.player.maxHp * 0.25);
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.85, text: 'NEXT BEAM WAVE', c: '#8dffcf' });
+      }
+      Neo.updateObjective?.();
+      return true;
+    }
+    Neo.beamPracticeRespawnTimer = Math.max(0, Neo.beamPracticeRespawnTimer - dt);
+    if (Neo.beamPracticeRespawnTimer <= 0) spawnBeamPracticeWave();
+    return true;
   }
 
   const CHALLENGE_PRACTICE_LAYOUT = [
@@ -4205,6 +4295,9 @@ export function resumeGame() {
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;
+  Neo.BEAM_PRACTICE_MODES = BEAM_PRACTICE_MODES;
+  Neo.spawnBeamPracticeWave = spawnBeamPracticeWave;
+  Neo.updateBeamPractice = updateBeamPractice;
   Neo.resetChallengePracticeRoom = resetChallengePracticeRoom;
   Neo.ensureChallengePracticeReturnPortal = ensureChallengePracticeReturnPortal;
   Neo.buildChallengePracticeFloor = buildChallengePracticeFloor;

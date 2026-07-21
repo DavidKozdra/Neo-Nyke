@@ -7,6 +7,7 @@ describe('beam struggles', () => {
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
   const updateSource = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
   const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
+  const viewportSource = fs.readFileSync(path.join(__dirname, '../js/draw/viewport.js'), 'utf8');
   const entitiesSource = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
   const threeSource = fs.readFileSync(path.join(__dirname, '../js/draw/three-renderer.js'), 'utf8');
   const networkSource = fs.readFileSync(path.join(__dirname, '../js/simulation/NetworkCombatSystem.js'), 'utf8');
@@ -56,9 +57,17 @@ describe('beam struggles', () => {
     expect(updateSource).toContain('Releasing the laser control must not end the channel');
   });
 
-  test('draws a shared HUD and terminates 2D/3D beams at the clash point', () => {
+  test('draws a beam-colored shared HUD and a mixed clash sphere in 2D and 3D', () => {
     expect(environmentSource).toContain('function drawBeamStruggleHud()');
     expect(environmentSource).toContain('MASH [${String(laserHint).toUpperCase()}]');
+    expect(environmentSource).toContain('Neo.getBeamStruggleVisualColors?.(struggle)');
+    expect(combatSource).toContain('function getBeamVisualColor(');
+    expect(combatSource).toContain('function getEnemyBeamVisualColor(enemy)');
+    expect(entitiesSource).toContain('function drawBeamStruggleClash(');
+    expect(entitiesSource).toContain("pressureGradient.addColorStop(0, playerColor)");
+    expect(entitiesSource).toContain("pressureGradient.addColorStop(1, opponentColor)");
+    expect(viewportSource).toContain('Neo.drawBeamStruggleClash?.()');
+    expect(threeSource).toContain('function syncBeamStruggleClash()');
     expect(entitiesSource).toContain('Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy');
     expect(threeSource).toContain('Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy');
   });

@@ -729,6 +729,7 @@ export function loop(timestamp) {
         }
       }
     }
+    Neo.updateBeamPractice?.(dt);
     Neo.perfEnd('update.enemies', sectionPerfStart);
     if (Neo.gameState !== 'play') return;
 
