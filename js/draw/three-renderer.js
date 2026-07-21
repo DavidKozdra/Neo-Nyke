@@ -21,6 +21,7 @@ const SPRITE_SIZE_MULT = 3.4; // world height of a billboard = r * this (2D draw
 let renderer = null;
 let scene = null;
 let camera = null;
+const splitCameras = [];
 let glCanvas = null;
 let ready = false;
 let failed = false;
@@ -68,6 +69,7 @@ let playerDeathPool = null;
 const dashAfterimages = [];
 let lastDashAfterimageAt = -Infinity;
 let playerMeleeIndicator = null;
+let playerWeaponPreview = null;
 const beamMeshes = []; // reused per-frame list of beam boxes
 const nameplatePool = new Map(); // enemy -> { sprite, texture, signature }
 
@@ -207,24 +209,18 @@ function getEnvTileTexture(tileKey, size = 48) {
 }
 
 // Bake a 2D projectile silhouette (via Neo.drawProjectileShape) into its own
-// texture so a shaped shot — Sarge's spinning hammer, the Death Ball orb —
-// keeps the 2D art in 3D instead of collapsing to a plain glow blob. We render
+// texture so every authored shot keeps its silhouette in 3D instead of
+// collapsing to a plain glow blob. We render
 // a synthetic projectile centered in the canvas; the sprite billboards it, so
-// per-frame spin/pulse is dropped but the silhouette matches 2D exactly. Keyed
-// by projectile kind (one texture shared across every shot of that kind).
-// Projectile kinds whose 2D silhouette is distinctive enough to bake rather than
-// render as a generic glow. Sarge's Hammer Throw (spinning rock-hammer) and the
-// Death Ball (energy orb) both read as blobs otherwise.
-const SHAPED_PROJECTILE_KINDS = new Set(['sarges_hammer', 'death_ball', 'rock']);
+// per-frame spin/pulse is dropped but the silhouette matches 2D exactly.
 const shapedProjectileTextureCache = new Map(); // kind + floor tint -> THREE.Texture
 function getShapedProjectileTexture(projectile) {
   const kind = projectile?.kind;
   if (!kind || typeof Neo.drawProjectileShape !== 'function' || typeof Neo.getProjectileVisual !== 'function') return null;
   const visual = Neo.getProjectileVisual(projectile) || {};
-  if (!SHAPED_PROJECTILE_KINDS.has(kind)) return null;
   // Rock shots inherit the current floor tint in 2D, so their baked texture
   // must carry that same tint instead of reusing a previous room's boulder.
-  const cacheKey = `${kind}|${visual.color || ''}`;
+  const cacheKey = `${kind}|${visual.shape || ''}|${visual.color || ''}|${visual.core || ''}|${projectile.enemy ? 1 : 0}`;
   const cached = shapedProjectileTextureCache.get(cacheKey);
   if (cached) return cached;
   // Canonical radius baked into the texture; the sprite is scaled per shot to
@@ -364,6 +360,16 @@ function makeShadowMesh(radius) {
 // if it were hovering in the 3D camera.
 function makeGroundedBillboard(texture, shadowRadius = 16) {
   const group = new THREE.Group();
+  // A shallow physical base gives sprite-authored props real depth, lighting,
+  // and parallax while retaining their exact pixel-art face.
+  const base = new THREE.Mesh(
+    unitBox,
+    new THREE.MeshLambertMaterial({ color: 0x273140 }),
+  );
+  base.scale.set(shadowRadius * 1.65, 7, shadowRadius * 1.15);
+  base.position.y = 3.5;
+  base.name = 'depth-base';
+  group.add(base);
   const sprite = makeBillboard(texture);
   sprite.name = 'body';
   // makeBillboard anchors sprites by their feet (center 0.5/0), but chests and
@@ -939,7 +945,10 @@ function syncPool(pool, list, makeFn, updateFn) {
 
 // Mirrors getEnemySpriteKey in entities.js (module-internal there).
 function enemySpriteKey(enemy) {
-  if (enemy.type === 'rival') return enemy.rivalKey;
+  if (enemy.type === 'rival') {
+    const key = Neo.getCharacterSpriteKey?.(enemy.rivalKey) || enemy.rivalKey;
+    return Neo.SPRITE_DEFS?.[key] || Neo.CHARACTER_SPRITE_SHEETS?.[key] ? key : 'thorn_knight';
+  }
   if (enemy.type === 'mirror_knight') return enemy.spriteKey || playerSpriteKey();
   if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
   if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
@@ -1004,6 +1013,39 @@ function makeActorGroup(spriteKey, radius) {
   aura.name = 'aura';
   status.add(aura);
   group.add(status);
+  const barrier = new THREE.Group();
+  barrier.name = 'overheal-barrier';
+  barrier.visible = false;
+  const barrierGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 0, -1),
+    new THREE.Vector3(1, 0, 1), new THREE.Vector3(-1, 0, 1),
+  ]);
+  const barrierOutline = new THREE.LineLoop(barrierGeometry, new THREE.LineBasicMaterial({
+    color: 0x9cefff, transparent: true, opacity: 0.9, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  barrierOutline.rotation.y = Math.PI / 4;
+  barrierOutline.position.y = 2;
+  barrierOutline.name = 'outline';
+  barrier.add(barrierOutline);
+  const barrierBack = new THREE.Sprite(new THREE.SpriteMaterial({
+    color: 0x081018, transparent: true, opacity: 0.84, depthWrite: false, depthTest: false,
+  }));
+  barrierBack.name = 'bar-bg';
+  barrier.add(barrierBack);
+  const barrierFill = new THREE.Sprite(new THREE.SpriteMaterial({
+    color: 0x9cefff, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false,
+  }));
+  barrierFill.center.set(0, 0.5);
+  barrierFill.name = 'bar-fill';
+  barrier.add(barrierFill);
+  group.add(barrier);
+
+  const lostSight = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
+  lostSight.name = 'lost-sight';
+  lostSight.visible = false;
+  lostSight.renderOrder = 12;
+  group.add(lostSight);
   // Windup circles are an important attack read in the top-down renderer.
   // Keep one under every actor and simply reveal/tint it for enemies that are
   // currently charging an attack.
@@ -1026,6 +1068,57 @@ function makeActorGroup(spriteKey, radius) {
   mooggyAura.visible = false;
   group.add(mooggyAura);
   return group;
+}
+
+function syncActorFeedback(group, actor, radius, { enemy = false } = {}) {
+  const barrier = group.getObjectByName('overheal-barrier');
+  const value = Math.max(0, Number(actor?.overhealBarrier || 0));
+  if (barrier) {
+    barrier.visible = value > 0;
+    if (barrier.visible) {
+      const max = Math.max(value, Number(actor.overhealBarrierMax || 0), 1);
+      const pct = Math.max(0, Math.min(1, value / max));
+      const color = actor.overhealBarrierColor || '#9cefff';
+      const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
+      const pulse = reduceFlash ? 0 : Math.sin(Date.now() / 180) * 2;
+      const size = radius + 12 + pulse;
+      const outline = barrier.getObjectByName('outline');
+      const back = barrier.getObjectByName('bar-bg');
+      const fill = barrier.getObjectByName('bar-fill');
+      if (outline) {
+        outline.scale.set(size, 1, size);
+        outline.material.color.set(color);
+      }
+      const barY = Math.max(38, radius * SPRITE_SIZE_MULT + 22);
+      if (back) {
+        back.position.set(0, barY, 0);
+        back.scale.set(42, 6, 1);
+      }
+      if (fill) {
+        fill.position.set(-19, barY, 0.2);
+        fill.scale.set(38 * pct, 3, 1);
+        fill.material.color.set(color);
+      }
+    }
+  }
+
+  const lostSight = group.getObjectByName('lost-sight');
+  if (lostSight) {
+    lostSight.visible = enemy && !!actor?.playerLostSight;
+    if (lostSight.visible) {
+      const entry = getTextTexture('?', '#67d8ff');
+      if (lostSight.material.map !== entry.texture) {
+        lostSight.material.map = entry.texture;
+        lostSight.material.needsUpdate = true;
+      }
+      const age = Math.max(0, Number(actor.playerLostSightAge || 0));
+      const reduceMotion = window.NeoSettings?.getAccess?.()?.reduceMotion;
+      const pop = reduceMotion ? 1 : Math.max(0.15, Math.min(1, age / 0.14));
+      const bob = reduceMotion ? 0 : Math.sin(age * 5 + Number(actor.x || 0) * 0.025) * 2;
+      lostSight.position.set(0, radius * SPRITE_SIZE_MULT + 58 + bob, 0);
+      lostSight.scale.set(entry.w * pop, entry.h * pop, 1);
+    }
+  }
 }
 
 function syncEnemyWindup(group, enemy) {
@@ -1233,7 +1326,60 @@ function writeMeleeLine(line, points) {
   attribute.needsUpdate = true;
 }
 
+function syncPlayerWeaponPreview() {
+  const p = Neo.player;
+  const active = !!p && Neo.getEquippedWeapon?.() === 'extending_staff'
+    && !isFirstPersonActive() && Neo.gameState === 'play';
+  if (!playerWeaponPreview && active) {
+    const group = new THREE.Group();
+    const makeLine = opacity => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(34 * 3), 3));
+      return new THREE.Line(geometry, new THREE.LineBasicMaterial({
+        color: 0xff6666, transparent: true, opacity, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }));
+    };
+    const ray = makeLine(0.32);
+    ray.name = 'ray';
+    group.add(ray);
+    const arc = makeLine(0.18);
+    arc.name = 'arc';
+    group.add(arc);
+    const tip = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTexture('#ff3333'), transparent: true, opacity: 0.55,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    tip.name = 'tip';
+    group.add(tip);
+    playerWeaponPreview = group;
+    scene.add(group);
+  }
+  if (!playerWeaponPreview) return;
+  playerWeaponPreview.visible = active;
+  if (!active) return;
+  const angle = Number(p.swing > 0 ? p.swingA : Neo.angleToMouse?.() || 0);
+  const range = 130;
+  const arcSize = 1.45;
+  const ray = playerWeaponPreview.getObjectByName('ray');
+  const arc = playerWeaponPreview.getObjectByName('arc');
+  const tip = playerWeaponPreview.getObjectByName('tip');
+  writeMeleeLine(ray, [
+    { x: p.x + Math.cos(angle) * 18, y: 3.2, z: p.y + Math.sin(angle) * 18 },
+    { x: p.x + Math.cos(angle) * range, y: 3.2, z: p.y + Math.sin(angle) * range },
+  ]);
+  const points = [];
+  for (let index = 0; index < 33; index += 1) {
+    const theta = angle - arcSize + (arcSize * 2 * index) / 32;
+    points.push({ x: p.x + Math.cos(theta) * range, y: 3, z: p.y + Math.sin(theta) * range });
+  }
+  writeMeleeLine(arc, points);
+  tip.position.set(p.x + Math.cos(angle) * range, 4, p.y + Math.sin(angle) * range);
+  tip.scale.set(10, 10, 1);
+}
+
 function syncPlayerMeleeIndicator() {
+  syncPlayerWeaponPreview();
   const p = Neo.player;
   if (!p || Number(p.swing || 0) <= 0) {
     if (playerMeleeIndicator) playerMeleeIndicator.visible = false;
@@ -1397,7 +1543,10 @@ function syncPlayer() {
     attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
     alpha,
   });
-  if (!networkDowned) syncActorStatus(playerSprite, p, p.r || 14, true);
+  if (!networkDowned) {
+    syncActorStatus(playerSprite, p, p.r || 14, true);
+    syncActorFeedback(playerSprite, p, p.r || 14);
+  }
   syncPlayerDashTrail(p, frameKey, flip);
   if (playerShadow) {
     const dashScale = Number(p.dashTime || 0) > 0 ? 1.18 : 1;
@@ -1412,7 +1561,10 @@ function syncPlayer() {
 // local player so first- and third-person modes do not need a multiplayer-only
 // drawing path.
 function syncOtherPlayers() {
-  const slots = Neo.presentationPlayerSlots || [];
+  const projectedSlots = Neo.presentationPlayerSlots;
+  const slots = Array.isArray(projectedSlots) && projectedSlots.length
+    ? projectedSlots
+    : (Neo.getActivePlayerSlots?.() || []);
   const remoteSlots = slots.filter(slot => {
     const actor = slot?.getEntity?.();
     return actor && actor !== Neo.player && (!slot.getDead?.() || actor.networkDowned);
@@ -1459,7 +1611,10 @@ function syncOtherPlayers() {
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
       });
-      if (!actor.networkDowned) syncActorStatus(group, actor, actor.r || 14, true);
+      if (!actor.networkDowned) {
+        syncActorStatus(group, actor, actor.r || 14, true);
+        syncActorFeedback(group, actor, actor.r || 14);
+      }
       const shadow = group.getObjectByName('shadow');
       if (shadow) {
         const dashScale = Number(actor.dashTime || 0) > 0 ? 1.18 : 1;
@@ -1543,6 +1698,7 @@ function syncEnemies() {
         plate.sprite.visible = false;
       }
       syncActorStatus(group, enemy, enemy.r || 12);
+      syncActorFeedback(group, enemy, enemy.r || 12, { enemy: true });
     },
   );
   // Guard keeps an older cached module from taking down the entire 3D frame
@@ -1686,8 +1842,7 @@ function syncProjectiles() {
     () => new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })),
     (projectile, sprite) => {
       const visual = Neo.getProjectileVisual?.(projectile) || {};
-      // Shaped shots (Sarge's hammer, the Death Ball) bake their 2D silhouette;
-      // everything else keeps the fast generic glow.
+      // Every projectile with authored 2D shape data bakes that silhouette.
       const shaped = getShapedProjectileTexture(projectile);
       const texture = shaped || getGlowTexture(visual.color || projectile.color || '#ffffff');
       if (sprite.material.map !== texture) {
@@ -1703,6 +1858,7 @@ function syncProjectiles() {
         : Math.max(10, (projectile.r || 6) * 4);
       sprite.scale.set(size, size, 1);
       sprite.position.set(projectile.x, BEAM_Y, projectile.y);
+      sprite.material.rotation = shaped ? -Math.atan2(projectile.vy || 0, projectile.vx || 1) : 0;
     },
   );
 }
@@ -1953,36 +2109,63 @@ function syncDestructibles() {
     pools.destructibles,
     Neo.destructibles,
     prop => {
+      const group = new THREE.Group();
+      let intact;
       if (prop.kind === 'pot') {
         const texture = getEnvTileTexture('pot_clay');
-        return texture ? makeBillboard(texture) : null;
-      }
-      if (prop.kind === 'barrel') {
+        intact = texture ? makeBillboard(texture) : null;
+      } else if (prop.kind === 'barrel') {
         const image = Neo.ENVIRONMENT_IMAGES?.barrel_0?.image;
         const texture = image
           ? getImageTexture('barrel_0', 0, image.naturalWidth)
           : getEnvTileTexture('barrel_oak');
-        return texture ? makeBillboard(texture) : null;
-      }
-      // Wooden cover walls are authored as timber barricades in 2D. Give their
-      // 3D boxes the matching oak texture rather than the generic stone block.
-      const wooden = prop.kind === 'cover_wall' && !prop.reinforced;
-      const texture = getEnvTileTexture(wooden ? 'barrel_oak' : 'wall_block');
-      const material = texture
-        ? makeWallMaterial(texture, new THREE.Color(wooden ? 0x9b6334 : 0xd9d9d9), Number(prop.w || 50), BLOCK_HEIGHT)
-        : new THREE.MeshLambertMaterial({ color: wooden ? 0x6b3d20 : 0x555f6d });
-      const mesh = new THREE.Mesh(unitBox, material);
-      mesh.scale.set(Math.max(24, Number(prop.w || 50)), BLOCK_HEIGHT, Math.max(24, Number(prop.h || 50)));
-      return mesh;
-    },
-    (prop, obj) => {
-      const hiddenSecret = prop.kind === 'secret_wall' && prop.disguised;
-      obj.visible = !prop.hidden && !prop.broken && !hiddenSecret;
-      if (obj.isSprite || obj.getObjectByName?.('body')) {
-        obj.scale.set(52, 52, 1);
-        obj.position.set(prop.x, 0, prop.y);
+        intact = texture ? makeBillboard(texture) : null;
       } else {
-        obj.position.set(prop.x, BLOCK_HEIGHT / 2, prop.y);
+        // Wooden cover walls are authored as timber barricades in 2D. Give
+        // their 3D boxes the matching oak texture rather than generic stone.
+        const wooden = prop.kind === 'cover_wall' && !prop.reinforced;
+        const texture = getEnvTileTexture(wooden ? 'barrel_oak' : 'wall_block');
+        const material = texture
+          ? makeWallMaterial(texture, new THREE.Color(wooden ? 0x9b6334 : 0xd9d9d9), Number(prop.w || 50), BLOCK_HEIGHT)
+          : new THREE.MeshLambertMaterial({ color: wooden ? 0x6b3d20 : 0x555f6d });
+        intact = new THREE.Mesh(unitBox, material);
+        intact.scale.set(Math.max(24, Number(prop.w || 50)), BLOCK_HEIGHT, Math.max(24, Number(prop.h || 50)));
+        intact.position.y = BLOCK_HEIGHT / 2;
+      }
+      if (!intact) return null;
+      intact.name = 'intact';
+      if (intact.isSprite) intact.scale.set(52, 52, 1);
+      group.add(intact);
+
+      // The authored 2D pass contains hit cracks and broken debris. Keep a
+      // dedicated top/debris plate so damage state remains readable on the 3D
+      // object instead of the prop simply disappearing when broken.
+      const statePlate = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+      statePlate.rotation.x = -Math.PI / 2;
+      statePlate.name = 'state-art';
+      statePlate.renderOrder = 4;
+      group.add(statePlate);
+      return group;
+    },
+    (prop, group) => {
+      const hiddenSecret = prop.kind === 'secret_wall' && prop.disguised;
+      const hidden = !!prop.hidden || hiddenSecret;
+      group.visible = !hidden;
+      if (hidden) return;
+      const shakeRatio = Math.max(0, Math.min(1, Number(prop.hitShake || 0) / 0.13));
+      const hitAngle = Number(prop.lastHitAngle || 0);
+      const shake = !prop.broken ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
+      group.position.set(prop.x + Math.cos(hitAngle) * shake, 0, prop.y + Math.sin(hitAngle) * shake);
+      const intact = group.getObjectByName('intact');
+      const statePlate = group.getObjectByName('state-art');
+      if (intact) intact.visible = !prop.broken;
+      if (!statePlate) return;
+      const showStateArt = !!prop.broken || ['wall', 'cover_wall', 'secret_wall'].includes(prop.kind);
+      statePlate.visible = showStateArt;
+      if (showStateArt) {
+        const worldSize = Math.max(72, Number(prop.w || 52) * 1.5, Number(prop.h || 52) * 1.5);
+        rasterizeDestructible2D(ensureBakeSurface(statePlate, worldSize), prop, worldSize);
+        statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT + 0.8;
       }
     },
   );
@@ -2097,6 +2280,25 @@ function rasterizeHazard2D(surface, hazard, worldSize, clip) {
     Neo.drawWorldProps();
   });
   Neo.hazards = realHazards;
+  return result;
+}
+
+function rasterizeDestructible2D(surface, prop, worldSize) {
+  if (typeof Neo.drawWorldProps !== 'function') return null;
+  const realHazards = Neo.hazards;
+  const realDestructibles = Neo.destructibles;
+  const realOffers = Neo.shopOffers;
+  const result = rasterizeWorldDraw(surface, worldSize, {
+    top: -worldSize / 2, height: worldSize, offsetY: 0,
+  }, () => {
+    Neo.hazards = [];
+    Neo.shopOffers = [];
+    Neo.destructibles = [{ ...prop, x: 0, y: 0 }];
+    Neo.drawWorldProps();
+  });
+  Neo.hazards = realHazards;
+  Neo.destructibles = realDestructibles;
+  Neo.shopOffers = realOffers;
   return result;
 }
 
@@ -3053,7 +3255,7 @@ function projectCanvasMouseToWorld(canvasX, canvasY) {
 }
 
 function setCameraMode(mode) {
-  cameraMode = mode === 'fp' ? 'fp' : 'third';
+  cameraMode = mode === 'fp' && !Neo.isSplitScreen?.() ? 'fp' : 'third';
   try { localStorage.setItem(CAMERA_MODE_STORE_KEY, cameraMode); } catch { /* private mode */ }
   if (cameraMode !== 'fp' && document.pointerLockElement) document.exitPointerLock?.();
 }
@@ -3277,6 +3479,57 @@ function projectToCanvas(x, y, height = 0) {
   };
 }
 
+function renderSceneViews() {
+  if (!Neo.isSplitScreen?.()) {
+    renderer.setScissorTest(false);
+    const rect = Neo.canvas.getBoundingClientRect();
+    renderer.setViewport(0, 0, Math.max(2, rect.width), Math.max(2, rect.height));
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // Local co-op/PvP retains a true viewport per participant in 3D. First
+  // person is deliberately normalized to third person above: one pointer lock
+  // cannot correctly drive several local cameras at once.
+  const slots = (Neo.getActivePlayerSlots?.() || []).filter(slot => slot?.getEntity?.());
+  const count = slots.length;
+  if (!count) {
+    renderer.setScissorTest(false);
+    renderer.render(scene, camera);
+    return;
+  }
+  const rect = Neo.canvas.getBoundingClientRect();
+  const fullW = Math.max(2, rect.width);
+  const fullH = Math.max(2, rect.height);
+  const viewW = fullW / 2;
+  const viewH = count >= 3 ? fullH / 2 : fullH;
+  renderer.setScissorTest(true);
+  slots.forEach((slot, index) => {
+    let viewCamera = splitCameras[index];
+    if (!viewCamera) {
+      viewCamera = new THREE.PerspectiveCamera(50, viewW / viewH, 10, 3000);
+      splitCameras[index] = viewCamera;
+    }
+    const actor = slot.getEntity();
+    const focusX = Number(actor.x || Neo.ROOM_W / 2);
+    const focusZ = Number(actor.y || Neo.ROOM_H / 2);
+    const lookX = focusX * 0.72 + (Neo.ROOM_W / 2) * 0.28;
+    const lookZ = focusZ * 0.72 + (Neo.ROOM_H / 2) * 0.28;
+    viewCamera.aspect = viewW / viewH;
+    viewCamera.position.set(lookX, CAMERA_HEIGHT, lookZ + CAMERA_BACK);
+    viewCamera.lookAt(lookX, 12, lookZ);
+    viewCamera.updateProjectionMatrix();
+    const col = index % 2;
+    const rowFromTop = count >= 3 ? Math.floor(index / 2) : 0;
+    const x = col * viewW;
+    const y = fullH - (rowFromTop + 1) * viewH;
+    renderer.setViewport(x, y, viewW, viewH);
+    renderer.setScissor(x, y, viewW, viewH);
+    renderer.render(scene, viewCamera);
+  });
+  renderer.setScissorTest(false);
+}
+
 // Re-uses the existing 2D prompt drawing (distance gating included) by
 // translating the 2D context so the world-coordinate draw lands at the
 // projected screen position of that world point.
@@ -3318,6 +3571,14 @@ function drawPrompts() {
   if (ladder && Neo.currentRoom?.cleared) {
     drawProjectedPrompt(ladder.x, ladder.y, 30, Neo.drawLadderPrompt);
   }
+  const portal = (Neo.pickups || [])
+    .filter(pickup => (
+      (pickup?.type === 'challengePracticePortal' && pickup.returnToHub)
+      || ((pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active)
+    ))
+    .sort((a, b) => Neo.dist(Neo.player.x, Neo.player.y, a.x, a.y)
+      - Neo.dist(Neo.player.x, Neo.player.y, b.x, b.y))[0];
+  if (portal) drawProjectedPrompt(portal.x, portal.y, 38, Neo.drawJesterPortalPrompt);
   drawChargeHud();
   if (isFirstPersonActive()) {
     drawViewmodel();
@@ -3468,7 +3729,6 @@ function drawCrosshair() {
 // ---------------------------------------------------------------------------
 function render() {
   if (!Neo.render3D) return false;
-  if (Neo.isSplitScreen?.()) return false;         // split-screen stays on the 2D path
   if (!Neo.SPRITE_ATLAS?.canvas) return false;      // atlas not built yet
   if (!Neo.currentRoom) return false;
   if (!initRenderer()) return false;
@@ -3509,7 +3769,7 @@ function render() {
     syncCamera();
     scaleNameplatesToScreen();
 
-    renderer.render(scene, camera);
+    renderSceneViews();
     syncPointerLock();
     drawPrompts();
     return true;
@@ -3547,11 +3807,13 @@ Neo.render3D = storedPreference === '1';
 // 'neo-view-mode-changed' event fires on every change for UI mirrors.
 function getViewMode() {
   if (!Neo.render3D) return '2d';
+  if (Neo.isSplitScreen?.()) return 'third';
   return cameraMode === 'fp' ? 'fp' : 'third';
 }
 
 function setViewMode(mode) {
-  const normalized = mode === 'third' || mode === 'fp' ? mode : '2d';
+  const requested = mode === 'third' || mode === 'fp' ? mode : '2d';
+  const normalized = requested === 'fp' && Neo.isSplitScreen?.() ? 'third' : requested;
   if (normalized === '2d') {
     setRender3D(false);
   } else {

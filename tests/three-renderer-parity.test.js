@@ -22,7 +22,8 @@ describe('3D renderer gameplay parity', () => {
 
   test('renders network peers through the normal first- and third-person scene', () => {
     expect(renderer).toContain('function syncOtherPlayers()');
-    expect(renderer).toContain('Neo.presentationPlayerSlots || []');
+    expect(renderer).toContain('const projectedSlots = Neo.presentationPlayerSlots;');
+    expect(renderer).toContain('Neo.getActivePlayerSlots?.() || []');
     expect(renderer).toContain('syncPool(\n    pools.players,');
     expect(renderer).toContain('syncOtherPlayers();');
     expect(renderer).toContain('otherPlayers: pools.players.size');
@@ -41,8 +42,8 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncActorStatus(group, actor, radius, isPlayer = false)');
     expect(renderer).toContain('Neo.drawStatusIconBadge(statusKey, count, 1, 1);');
     expect(renderer).toContain('function syncPlayerDashTrail(player, spriteKey, flip)');
-    expect(renderer).toContain("new Set(['sarges_hammer', 'death_ball', 'rock'])");
-    expect(renderer).toContain('const cacheKey = `${kind}|${visual.color || \'\'}`;');
+    expect(renderer).not.toContain('SHAPED_PROJECTILE_KINDS');
+    expect(renderer).toContain("`${kind}|${visual.shape || ''}|${visual.color || ''}|${visual.core || ''}|${projectile.enemy ? 1 : 0}`");
   });
 
   test('renders live combat beam paths instead of a fixed visual-only beam', () => {
@@ -115,5 +116,35 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;');
     expect(math).toContain('const perspectiveAim = Neo.projectCanvasMouseToWorld?.(clampedCanvasX, canvasY);');
     expect(update).toContain('Neo.updatePointerAimWorld();');
+  });
+
+  test('keeps interaction and actor-state feedback visible in 3D', () => {
+    expect(renderer).toContain('Neo.drawJesterPortalPrompt');
+    expect(renderer).toContain("barrier.name = 'overheal-barrier'");
+    expect(renderer).toContain('function syncActorFeedback(group, actor, radius');
+    expect(renderer).toContain("lostSight.name = 'lost-sight'");
+    expect(renderer).toContain('!!actor?.playerLostSight');
+  });
+
+  test('retains destructible damage and broken art in 3D', () => {
+    expect(renderer).toContain('function rasterizeDestructible2D');
+    expect(renderer).toContain("statePlate.name = 'state-art'");
+    expect(renderer).toContain('Math.sin(shakeRatio * Math.PI * 3)');
+    expect(renderer).toContain('statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT + 0.8;');
+  });
+
+  test('renders local split-screen and alternate modes through the 3D path', () => {
+    const environment = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
+    expect(environment).toContain('const worldDrawn3D = Neo.render3D && !!Neo.threeRenderer?.render?.();');
+    expect(renderer).toContain('function renderSceneViews()');
+    expect(renderer).toContain('renderer.setScissorTest(true);');
+    expect(renderer).not.toContain("if (Neo.isSplitScreen?.()) return false;         // split-screen stays on the 2D path");
+    expect(renderer).toContain("return Neo.SPRITE_DEFS?.[key] || Neo.CHARACTER_SPRITE_SHEETS?.[key] ? key : 'thorn_knight';");
+  });
+
+  test('restores extending-staff range preview in third person', () => {
+    expect(renderer).toContain('function syncPlayerWeaponPreview()');
+    expect(renderer).toContain("Neo.getEquippedWeapon?.() === 'extending_staff'");
+    expect(renderer).toContain('const arcSize = 1.45;');
   });
 });
