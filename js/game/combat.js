@@ -246,6 +246,7 @@
 
   function getEnemyBeamVisualColor(enemy) {
     if (!enemy) return '#aa66ff';
+    if (enemy.beamColor) return enemy.beamColor;
     if (enemy.state === 'elite_laser' && enemy.eliteLaserMode) {
       return getBeamVisualColor(enemy.eliteLaserMode, enemy.eliteLaserMode);
     }
@@ -1222,31 +1223,79 @@
       opponent.pvpLaserCooldown = Math.max(0.2, Number(Neo.MOVE_BASE_STATS?.[opponentMove]?.cooldown || 1.8));
     }
     endActiveLaser();
-    Neo.spawnAoeShockwave?.(point.x, point.y, playerWon ? 92 : 78, playerWon ? '#f4fbff' : '#ff5577', 'heavy');
-    Neo.shake = Math.max(Number(Neo.shake || 0), playerWon ? 12 : 15);
+    const trainingSafe = Neo.gameMode === 'practice' || Neo.isTutorialRun?.();
+    const devastatingLoss = !playerWon && !trainingSafe;
+    Neo.spawnAoeShockwave?.(
+      point.x,
+      point.y,
+      playerWon ? 92 : devastatingLoss ? 132 : 78,
+      playerWon ? '#f4fbff' : '#ff365f',
+      'heavy',
+    );
+    Neo.shake = Math.max(Number(Neo.shake || 0), playerWon ? 12 : devastatingLoss ? 22 : 15);
     if (opponent) {
       if (playerWon) {
-        opponent.stun = Math.max(Number(opponent.stun || 0), 0.7);
-        Neo.damagePlayer2?.(22, Neo.angleBetween(Neo.player, opponent), 330, 'pvp_beam_struggle');
+        const opponentBeamPower = Number(Neo.MOVE_BASE_STATS?.[opponent.equippedMoves?.laser || 'blood_beam']?.damage || 10);
+        const playerBeamPower = Number(Neo.MOVE_BASE_STATS?.[Neo.player?.equippedMoves?.laser || 'blood_beam']?.damage || 10);
+        const damage = trainingSafe ? 22 : Math.max(1, Math.round(opponentBeamPower + playerBeamPower));
+        opponent.stun = Math.max(Number(opponent.stun || 0), trainingSafe ? 0.7 : 1.2);
+        Neo.damagePlayer2?.(
+          damage,
+          Neo.angleBetween(Neo.player, opponent),
+          trainingSafe ? 330 : 520,
+          'pvp_beam_struggle',
+          { ignoreInv: !trainingSafe },
+        );
       } else if (Neo.player) {
-        Neo.player.stun = Math.max(Number(Neo.player.stun || 0), 0.7);
-        Neo.damagePlayer(22, Neo.angleBetween(opponent, Neo.player), 330, 'pvp_p2_beam_struggle', { attacker: opponent });
+        const playerBeamPower = Number(Neo.MOVE_BASE_STATS?.[Neo.player.equippedMoves?.laser || 'blood_beam']?.damage || 10);
+        const opponentBeamPower = Number(Neo.MOVE_BASE_STATS?.[opponent.equippedMoves?.laser || 'blood_beam']?.damage || 10);
+        const damage = trainingSafe ? 22 : Math.max(1, Math.round(playerBeamPower + opponentBeamPower));
+        Neo.player.stun = Math.max(Number(Neo.player.stun || 0), trainingSafe ? 0.7 : 1.2);
+        Neo.damagePlayer(damage, Neo.angleBetween(opponent, Neo.player), trainingSafe ? 330 : 520, 'pvp_p2_beam_struggle', {
+          attacker: opponent,
+          ignoreInv: !trainingSafe,
+          ignoreBlock: !trainingSafe,
+          maxHitRatio: 0.6,
+          noEnemyAggression: true,
+        });
       }
       return;
     }
     if (playerWon && enemy && !enemy.dead && enemy.hp > 0) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 1.25);
+      if (enemy.tutorialBeamUser) {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 20, life: 0.9, text: 'STRUGGLE WON!', c: '#9cf6ff' });
+        Neo.tutorialController?.signal?.('beam-struggle-won');
+        return;
+      }
       const damage = Math.max(28, Math.round(Number(Neo.ATTACKS?.laser?.damage || 10) * 3));
       hitEnemy(enemy, damage, Neo.angleBetween(Neo.player, enemy), 360, '#f4fbff', { beamFx: true });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 20, life: 0.9, text: 'STRUGGLE WON!', c: '#9cf6ff' });
       return;
     }
     if (Neo.player) {
-      Neo.player.stun = Math.max(Number(Neo.player.stun || 0), 0.7);
+      Neo.player.stun = Math.max(Number(Neo.player.stun || 0), trainingSafe ? 0.7 : 1.5);
       const source = getEnemyBeamDamageSource(enemy || {}, null);
-      const damage = Math.max(18, Math.round(Number(enemy?.dmg || 14) * 1.35));
-      Neo.damagePlayer(damage, Number(enemy?.beamAngle || 0), 330, source.label, { sourceKey: source.key, attacker: enemy });
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'OVERPOWERED!', c: '#ff8098' });
+      const playerBeamPower = Number(Neo.MOVE_BASE_STATS?.[Neo.player?.equippedMoves?.laser || 'blood_beam']?.damage || 10);
+      const attackerBeamPower = Number(enemy?.dmg || 0);
+      const damage = trainingSafe
+        ? Math.max(18, Math.round(Number(enemy?.dmg || 14) * 1.35))
+        : Math.max(1, Math.round(attackerBeamPower + playerBeamPower));
+      Neo.damagePlayer(damage, Number(enemy?.beamAngle || 0), trainingSafe ? 330 : 560, source.label, {
+        sourceKey: source.key,
+        attacker: enemy,
+        ignoreInv: !trainingSafe,
+        ignoreBlock: !trainingSafe,
+        maxHitRatio: 0.6,
+        noEnemyAggression: true,
+      });
+      Neo.spawnParticle({
+        x: Neo.player.x,
+        y: Neo.player.y - 28,
+        life: devastatingLoss ? 1.35 : 0.9,
+        text: devastatingLoss ? 'BEAM BREAK!' : 'OVERPOWERED!',
+        c: '#ff8098',
+      });
     }
   }
 

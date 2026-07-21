@@ -640,7 +640,7 @@ export function resumeGame() {
 
   function ensureTutorialDummyEnemy() {
     if (!isFirstRunTutorialActive() || Neo.tutorialState.completed?.fight) return;
-    if (!['melee', 'laser', 'smash', 'fight'].includes(Neo.tutorialState.step)) return;
+    if (!['melee', 'laser', 'beam_struggle', 'smash', 'fight'].includes(Neo.tutorialState.step)) return;
     if (!Neo.currentRoom || ['boss', 'god', 'shop', 'anvil', 'challenge'].includes(Neo.currentRoom.type)) return;
     if (Neo.enemies.some(enemy => enemy?.tutorialDummy)) return;
     if (Neo.tutorialState.dummySpawned) Neo.tutorialState.dummySpawned = false;
@@ -666,6 +666,32 @@ export function resumeGame() {
     Neo.tutorialState.dummySpawned = true;
     Neo.spawnParticle({ x: dummy.x, y: dummy.y - 24, life: 1.4, text: 'TRAINING DUMMY', c: '#8dd4ff' });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.1, text: 'DUMMY SPAWNED', c: '#9ce9ff' });
+  }
+
+  // Turn the safe training dummy into a stationary beam partner for one lesson.
+  // Its beam tracks the player but deals no ordinary beam damage; it exists to
+  // create the same opposing-path collision used by real beam enemies.
+  function ensureTutorialBeamStruggleEnemy() {
+    const state = Neo.tutorialState;
+    const dummy = Neo.enemies.find(enemy => enemy?.tutorialDummy);
+    if (!isFirstRunTutorialActive() || state.step !== 'beam_struggle') {
+      if (dummy?.tutorialBeamUser) {
+        dummy.tutorialBeamUser = false;
+        dummy.beamTime = 0;
+      }
+      return;
+    }
+    if (!dummy || !Neo.player) return;
+    dummy.tutorialBeamUser = true;
+    dummy.displayName = 'Beam Trainer';
+    dummy.speed = 0;
+    dummy.dmg = 0;
+    dummy.attackCd = 99;
+    dummy.beamRange = Math.max(520, Neo.dist(dummy.x, dummy.y, Neo.player.x, Neo.player.y) + 80);
+    dummy.beamAngle = Neo.angleBetween(dummy, Neo.player);
+    dummy.beamTime = Math.max(Number(dummy.beamTime || 0), 0.24);
+    dummy.beamTick = 99;
+    dummy.beamColor = '#ff365f';
   }
 
   // Guarantee a relic for the tutorial relic step so the lesson never depends on
@@ -721,7 +747,7 @@ export function resumeGame() {
 
   function getTutorialStepOrder() {
     return Neo.tutorialController?.steps?.map(step => step.id)
-      || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'tools_fire', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_tools', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'treasure_collect', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_item_select', 'forge_pay_currency', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_fight', 'ladder_use'];
+      || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'beam_struggle', 'smash', 'tools_fire', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_tools', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'treasure_collect', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_item_select', 'forge_pay_currency', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_fight', 'ladder_use'];
   }
 
   function navigateTutorialStep(direction = 1) {
@@ -787,6 +813,7 @@ export function resumeGame() {
     if (!isFirstRunTutorialActive()) return;
     const state = Neo.tutorialState;
     ensureTutorialDummyEnemy();
+    ensureTutorialBeamStruggleEnemy();
     ensureTutorialRelicPickup();
     ensureTutorialDummyStatus(dt);
 
@@ -4160,6 +4187,7 @@ export function resumeGame() {
   Neo.getLadderControlHint = getLadderControlHint;
   Neo.getMovementControlHint = getMovementControlHint;
   Neo.ensureTutorialDummyEnemy = ensureTutorialDummyEnemy;
+  Neo.ensureTutorialBeamStruggleEnemy = ensureTutorialBeamStruggleEnemy;
   Neo.getTutorialStepOrder = getTutorialStepOrder;
   Neo.navigateTutorialStep = navigateTutorialStep;
   Neo.getTutorialStepMessage = getTutorialStepMessage;
