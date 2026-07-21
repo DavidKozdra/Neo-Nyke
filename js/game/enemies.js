@@ -4289,6 +4289,17 @@
     }
   }
 
+  const ELITE_CONTINUOUS_BEAM_PROFILES = Object.freeze({
+    blood_beam: { duration: 0.56, tick: 0.1, range: 430, knockback: 125, turnRate: 2.6, damageScale: 1 },
+    love_beam: { duration: 0.82, tick: 0.075, range: 450, knockback: 105, turnRate: 3.2, damageScale: 0.82 },
+    turtle_wave: { duration: 0.9, tick: 0.08, range: 620, knockback: 190, turnRate: 2.6, damageScale: 0.72, damageBonus: 14 },
+    wizard_lazer: { duration: 0.88, tick: 0.08, range: 500, knockback: 170, turnRate: 2.1, damageScale: 0.68 },
+    mooggy_blood_beam: { duration: 0.7, tick: 0.08, range: 520, knockback: 135, turnRate: 4.2, damageScale: 0.88 },
+    thorn_blood_beams: { duration: 0.76, tick: 0.1, range: 440, knockback: 105, turnRate: 2.5, damageScale: 0.7, fan: [-0.32, -0.11, 0.11, 0.32] },
+    holy_eye_beams: { duration: 0.74, tick: 0.09, range: 470, knockback: 120, turnRate: 3, damageScale: 0.78, fan: [-0.07, 0.07] },
+    god_sweep: { duration: 1.4, tick: 0.055, range: 560, knockback: 145, turnRate: 0, damageScale: 0.62, damageBonus: 8, sweep: true },
+  });
+
   function updateEliteEnemyTraits(enemy, dt) {
     if (!enemy?.elite || !Array.isArray(enemy.eliteTypes)) return false;
     const distanceToPlayer = Neo.player ? Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) : Infinity;
@@ -4312,29 +4323,55 @@
     }
 
     if (!enemy.eliteTypes.includes('lasered') && !enemy.eliteTypes.includes('lazered')) return false;
+    // Beam struggles terminate the enemy channel directly, bypassing
+    // tickEnemyBeam's onEnd callback. Release the sentinel cooldown here so a
+    // gauntlet user can recover and challenge the player again afterward.
+    if (enemy.state === 'elite_laser' && !(enemy.beamTime > 0) && Number(enemy.eliteLaserCd || 0) >= 90) {
+      enemy.state = 'idle';
+      enemy.beamFan = null;
+      enemy.beamRange = 0;
+      enemy.eliteLaserCd = enemy.beamPracticeUser ? 0.72 : 1.35;
+    }
     if (enemy.beamTime > 0 && enemy.state === 'elite_laser') {
+      const profile = ELITE_CONTINUOUS_BEAM_PROFILES[enemy.eliteLaserMode]
+        || ELITE_CONTINUOUS_BEAM_PROFILES.blood_beam;
       Neo.tickEnemyBeam(enemy, dt, {
-        tick: enemy.eliteLaserMode === 'god_sweep' ? 0.055 : enemy.eliteLaserMode === 'turtle_wave' ? 0.08 : 0.1,
-        range: enemy.eliteLaserMode === 'turtle_wave' ? 620 : enemy.eliteLaserMode === 'god_sweep' ? 560 : 430,
-        knockback: enemy.eliteLaserMode === 'turtle_wave' ? 190 : enemy.eliteLaserMode === 'god_sweep' ? 145 : 125,
-        damage: enemy.dmg + (enemy.eliteLaserMode === 'turtle_wave' ? 14 : enemy.eliteLaserMode === 'god_sweep' ? 8 : 0),
+        tick: profile.tick,
+        range: profile.range,
+        knockback: profile.knockback,
+        damage: enemy.beamPracticeUser
+          ? Math.max(1, Math.round(Number(enemy.dmg || 1) * profile.damageScale))
+          : Math.max(1, Math.round(Number(enemy.dmg || 1) + Number(profile.damageBonus || 0))),
         speedDamp: 0.84,
-        turnRate: enemy.eliteLaserMode === 'god_sweep' ? 0 : 2.6,
-        onTick: activeEnemy => {
-          if (activeEnemy.eliteLaserMode === 'god_sweep') activeEnemy.beamAngle += Number(activeEnemy.eliteSweepSpeed || 3.8) * 0.055;
+        turnRate: profile.turnRate,
+        fan: profile.fan || [0],
+        onTick: (activeEnemy, activeDt) => {
+          if (profile.sweep) activeEnemy.beamAngle += Number(activeEnemy.eliteSweepSpeed || 3.8) * activeDt;
         },
         onEnd: activeEnemy => {
           activeEnemy.state = 'idle';
-          activeEnemy.eliteLaserCd = 1.35;
+          activeEnemy.beamFan = null;
+          activeEnemy.beamRange = 0;
+          activeEnemy.eliteLaserCd = activeEnemy.beamPracticeUser ? 0.72 : 1.35;
         },
       });
       return true;
     }
 
     enemy.eliteLaserCd = Math.max(0, Number(enemy.eliteLaserCd || 0) - dt);
-    if (enemy.eliteLaserCd > 0 || distanceToPlayer > 520) return false;
+    if (enemy.eliteLaserCd > 0 || distanceToPlayer > 520) {
+      if (!enemy.beamPracticeUser || !Neo.player) return false;
+      const dx = Neo.player.x - enemy.x;
+      const dy = Neo.player.y - enemy.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const direction = distance < 245 ? -1 : distance > 330 ? 1 : 0;
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.4, dt);
+      return true;
+    }
 
-    const modes = ['blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns', 'god_sweep'];
+    const modes = Array.isArray(enemy.beamPracticeModes) && enemy.beamPracticeModes.length
+      ? enemy.beamPracticeModes
+      : ['blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns', 'god_sweep'];
     const mode = modes[Number(enemy.eliteLaserModeIndex || 0) % modes.length];
     enemy.eliteLaserModeIndex = Number(enemy.eliteLaserModeIndex || 0) + 1;
     const angle = Neo.angleBetween(enemy, Neo.player);
@@ -4380,11 +4417,14 @@
       return false;
     }
 
+    const profile = ELITE_CONTINUOUS_BEAM_PROFILES[mode] || ELITE_CONTINUOUS_BEAM_PROFILES.blood_beam;
     enemy.state = 'elite_laser';
-    enemy.eliteLaserMode = mode === 'god_sweep' ? 'god_sweep' : mode === 'turtle_wave' ? 'turtle_wave' : 'blood_beam';
+    enemy.eliteLaserMode = ELITE_CONTINUOUS_BEAM_PROFILES[mode] ? mode : 'blood_beam';
     enemy.beamAngle = angle;
-    enemy.beamTime = enemy.eliteLaserMode === 'god_sweep' ? 1.4 : enemy.eliteLaserMode === 'turtle_wave' ? 0.9 : 0.56;
+    enemy.beamTime = profile.duration;
     enemy.beamTick = 0;
+    enemy.beamFan = profile.fan || [0];
+    enemy.beamRange = profile.range;
     enemy.eliteSweepSpeed = (Neo.nextRandom('encounter') < 0.5 ? -1 : 1) * 4.1;
     enemy.eliteLaserCd = 99;
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.45, text: Neo.MOVE_DEFS[mode]?.name || 'LASER', c: '#8dd4ff' });

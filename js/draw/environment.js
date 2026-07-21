@@ -82,9 +82,13 @@
     const y = Math.max(54, Neo.canvas.height * 0.105);
     const progress = Neo.clamp(Number(struggle.progress || 0.5), 0, 1);
     const remaining = Math.max(0, Number(struggle.duration || 0) - Number(struggle.elapsed || 0));
-    const enemyName = struggle.enemy?.type === 'rival'
-      ? (struggle.enemy.rivalData?.name || 'RIVAL')
-      : String(struggle.enemy?.type || 'ENEMY').replaceAll('_', ' ').toUpperCase();
+    const enemyName = struggle.opponentPlayer
+      ? (Neo.getSlotByEntity?.(struggle.opponentPlayer)?.label || 'OPPONENT')
+      : struggle.enemy?.type === 'rival'
+        ? (struggle.enemy.rivalData?.name || 'RIVAL')
+        : String(struggle.enemy?.type || 'ENEMY').replaceAll('_', ' ').toUpperCase();
+    const { playerColor, opponentColor } = Neo.getBeamStruggleVisualColors?.(struggle)
+      || { playerColor: '#ff00aa', opponentColor: '#aa66ff' };
     const laserHint = Neo.getControlHint?.('laser', 'rmb') || 'RMB';
     const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
     const pulse = reduceFlash ? 1 : 0.9 + Math.sin(Date.now() / 80) * 0.1;
@@ -100,7 +104,11 @@
     g.fillText(`BEAM STRUGGLE  •  ${remaining.toFixed(1)}s`, Neo.canvas.width / 2, y - 27);
 
     g.fillStyle = 'rgba(5, 8, 18, 0.92)';
-    g.strokeStyle = 'rgba(225,245,255,0.9)';
+    const frameGradient = g.createLinearGradient(x, 0, x + w, 0);
+    frameGradient.addColorStop(0, playerColor);
+    frameGradient.addColorStop(0.5, '#ffffff');
+    frameGradient.addColorStop(1, opponentColor);
+    g.strokeStyle = frameGradient;
     g.lineWidth = 2;
     g.beginPath();
     g.roundRect(x - 4, y - 4, w + 8, h + 8, 8);
@@ -108,14 +116,16 @@
     g.stroke();
 
     const split = x + w * progress;
-    const leftGrad = g.createLinearGradient(x, 0, split, 0);
-    leftGrad.addColorStop(0, '#ff355d');
-    leftGrad.addColorStop(1, '#ff8aa0');
+    const leftGrad = g.createLinearGradient(x, 0, x + w, 0);
+    leftGrad.addColorStop(0, playerColor);
+    leftGrad.addColorStop(0.82, playerColor);
+    leftGrad.addColorStop(1, '#ffffff');
     g.fillStyle = leftGrad;
     g.fillRect(x, y, Math.max(0, split - x), h);
-    const rightGrad = g.createLinearGradient(split, 0, x + w, 0);
-    rightGrad.addColorStop(0, '#9cf6ff');
-    rightGrad.addColorStop(1, '#2b9cff');
+    const rightGrad = g.createLinearGradient(x, 0, x + w, 0);
+    rightGrad.addColorStop(0, '#ffffff');
+    rightGrad.addColorStop(0.18, opponentColor);
+    rightGrad.addColorStop(1, opponentColor);
     g.fillStyle = rightGrad;
     g.fillRect(split, y, Math.max(0, x + w - split), h);
     g.fillStyle = '#ffffff';
@@ -123,12 +133,23 @@
     g.shadowBlur = 12;
     g.fillRect(split - 3, y - 5, 6, h + 10);
 
+    // A compact version of the world clash marks the exact pressure point.
+    const clashGradient = g.createLinearGradient(split - 10, 0, split + 10, 0);
+    clashGradient.addColorStop(0, playerColor);
+    clashGradient.addColorStop(0.5, '#ffffff');
+    clashGradient.addColorStop(1, opponentColor);
+    g.fillStyle = clashGradient;
+    g.beginPath();
+    g.arc(split, y + h / 2, 9, 0, Math.PI * 2);
+    g.fill();
+
     g.shadowBlur = 5;
     g.font = 'bold 12px system-ui';
+    g.fillStyle = '#ffffff';
     g.textAlign = 'left';
-    g.fillText(enemyName, x + 8, y + h / 2);
+    g.fillText('YOU', x + 8, y + h / 2);
     g.textAlign = 'right';
-    g.fillText('YOU', x + w - 8, y + h / 2);
+    g.fillText(enemyName, x + w - 8, y + h / 2);
     g.globalAlpha = pulse;
     g.textAlign = 'center';
     g.font = 'bold 18px system-ui';

@@ -1882,7 +1882,7 @@ export function createUIController(view) {
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(
         view.practicePanel,
-        inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant !== 'challenges' && show !== 'dying',
+        inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant === 'standard' && show !== 'dying',
         'block',
       );
       const isBossRush = Neo.gameMode === 'boss_rush' || Neo.gameMode === 'rival_rumble';
@@ -3698,6 +3698,10 @@ export function createUIController(view) {
         view.altModeChallengePracticeBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('challenge_practice');
+        });
+        view.altModeBeamPracticeBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('beam_practice');
         });
         view.altModeBossRushBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);

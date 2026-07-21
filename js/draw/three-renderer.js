@@ -75,6 +75,9 @@ let playerWeaponPreview = null;
 let warpPreview = null;
 const remoteMeleeIndicators = new Map();
 const beamMeshes = []; // reused per-frame list of beam boxes
+let beamStruggleSprite = null;
+let beamStruggleCanvas = null;
+let beamStruggleTexture = null;
 const nameplatePool = new Map(); // enemy -> { sprite, texture, signature }
 
 // ---------------------------------------------------------------------------
@@ -3398,14 +3401,7 @@ function getPlayerBeamVisual(effect = null) {
   const wizardBeam = move === 'wizard_lazer';
   const mooggyBeam = move === 'mooggy_blood_beam';
   return {
-    color: turtleWave ? '#74f5ff'
-      : loveBeam ? '#ff9ed6'
-        : mode === 'god_sweep' ? '#ffffff'
-          : wizardBeam ? '#a64bff'
-            : mooggyBeam ? '#ff2f57'
-              : thornBeams ? '#ff3b5c'
-                : holyEyeBeams ? '#ffcc33'
-                  : '#ff00aa',
+    color: Neo.getBeamVisualColor?.(mode, move, loveBeam) || '#ff00aa',
     width: (mode === 'god_sweep' ? 16
       : turtleWave ? 18
         : loveBeam ? 10
@@ -3422,7 +3418,8 @@ function getPlayerBeamVisual(effect = null) {
 function getEnemyBeamVisual(enemy) {
   const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
   const isDevilGiantLaser = enemy.type === 'handsome_devil' && enemy.state === 'devilGiantLaser';
-  const range = enemy.type === 'god' ? (enemy.beamRange || 620)
+  const range = Number(enemy.beamRange) > 0 ? Number(enemy.beamRange)
+    : enemy.type === 'god' ? 620
     : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430)
       : enemy.type === 'mooggy' ? 520
         : isDevilGiantLaser ? 900
@@ -3430,20 +3427,21 @@ function getEnemyBeamVisual(enemy) {
             : enemy.type === 'bowman_bane' ? 480 : 430;
   const angles = isPartition
     ? enemy.partitionAngles || []
+    : Array.isArray(enemy.beamFan) && enemy.beamFan.length
+      ? enemy.beamFan.map(offset => enemy.beamAngle + offset)
     : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
       ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
       : [enemy.beamAngle];
   const struggle = Neo.beamStruggle?.active && Neo.beamStruggle.enemy === enemy
     ? Neo.beamStruggle : null;
   return {
-    color: isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff'
-      : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa')
-        : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? '#ff3348'
-          : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
-    width: isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18
-      : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8)
-        : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22
-          : enemy.type === 'handsome_devil' ? 9 : 8,
+    color: Neo.getEnemyBeamVisualColor?.(enemy) || '#aa66ff',
+    width: enemy.state === 'elite_laser' && enemy.eliteLaserMode
+      ? (Neo.getBeamVisualWidth?.(enemy.eliteLaserMode, enemy.eliteLaserMode) || 8)
+      : isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18
+        : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8)
+          : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22
+            : enemy.type === 'handsome_devil' ? 9 : 8,
     paths: struggle
       ? [[{
         x1: enemy.x, y1: enemy.y, x2: struggle.x, y2: struggle.y,
@@ -3503,6 +3501,37 @@ function syncBeams() {
       seg.x1, seg.y1, seg.x2, seg.y2, color, beam.width,
     )));
   });
+}
+
+function syncBeamStruggleClash() {
+  const struggle = Neo.beamStruggle;
+  if (!struggle?.active || typeof Neo.drawBeamStruggleClash !== 'function') {
+    if (beamStruggleSprite) beamStruggleSprite.visible = false;
+    return;
+  }
+  if (!beamStruggleCanvas) {
+    beamStruggleCanvas = document.createElement('canvas');
+    beamStruggleCanvas.width = 192;
+    beamStruggleCanvas.height = 192;
+    beamStruggleTexture = makeCanvasTexture(beamStruggleCanvas);
+    beamStruggleTexture.magFilter = THREE.LinearFilter;
+    beamStruggleTexture.minFilter = THREE.LinearFilter;
+    beamStruggleSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: beamStruggleTexture,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    beamStruggleSprite.renderOrder = 24;
+    scene.add(beamStruggleSprite);
+  }
+  const g = beamStruggleCanvas.getContext('2d');
+  g.clearRect(0, 0, beamStruggleCanvas.width, beamStruggleCanvas.height);
+  Neo.drawBeamStruggleClash(g, beamStruggleCanvas.width / 2, beamStruggleCanvas.height / 2);
+  beamStruggleTexture.needsUpdate = true;
+  beamStruggleSprite.visible = true;
+  beamStruggleSprite.position.set(Number(struggle.x || 0), BEAM_Y, Number(struggle.y || 0));
+  beamStruggleSprite.scale.set(128, 128, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -4468,6 +4497,7 @@ function render() {
     syncParticles();
     syncDeadBodies();
     syncBeams();
+    syncBeamStruggleClash();
     syncJusticeBlades();
     syncSkySwords();
     syncChallengeStructure();

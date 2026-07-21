@@ -22,6 +22,12 @@
     if (Neo.isFirstRunTutorialEngaged()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
     const entries = [];
+    if (Neo.gameMode === 'practice' && Neo.practiceVariant === 'beams') {
+      const remaining = Neo.enemies.filter(enemy => enemy?.beamPracticeUser && !enemy.dead && enemy.hp > 0).length;
+      entries.push({ text: lineObjective, state: remaining > 0 ? 'warn' : 'done' });
+      entries.push({ text: 'Meet an enemy beam head-on, then mash your laser control', state: 'todo' });
+      return entries;
+    }
     if (Neo.gameMode === 'treasure_hunt') {
       const startRoom = Neo.rooms.find(room => room.type === 'start');
       if (Neo.treasureHuntPhase === 'seek') {
@@ -170,6 +176,14 @@
       } else {
         setObjective(Neo.floor >= Neo.MAX_FLOOR ? 'Take the ladder and escape.' : 'Take the ladder to the next floor.');
       }
+      return;
+    }
+    if (Neo.gameMode === 'practice' && Neo.practiceVariant === 'beams') {
+      const remaining = Neo.enemies.filter(enemy => enemy?.beamPracticeUser && !enemy.dead && enemy.hp > 0).length;
+      const wave = Math.max(1, Number(Neo.beamPracticeWave || 1));
+      setObjective(remaining > 0
+        ? `Beam wave ${wave}: overpower ${remaining} laser user${remaining === 1 ? '' : 's'}.`
+        : `Beam wave ${wave} cleared. Next group incoming.`);
       return;
     }
     if (Neo.gameMode === 'endless') {

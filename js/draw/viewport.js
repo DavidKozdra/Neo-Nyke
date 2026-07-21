@@ -82,6 +82,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // in drawRoomDecor (before the player).
     Neo.drawStructuresOverPlayer?.();
     if (!isDying) Neo.drawActivePlayerEffects?.();
+    if (!isDying) Neo.drawBeamStruggleClash?.();
     Neo.drawJusticeBlades?.();
     Neo.drawTitanHammer?.();
     Neo.drawGhostBalls?.();
@@ -219,6 +220,8 @@ export function carveEnemyBeamLights() {
       const isPartition = isGod && enemy.state === 'godPartition' && Array.isArray(enemy.partitionAngles);
       const angles = isPartition
         ? enemy.partitionAngles
+        : Array.isArray(enemy.beamFan) && enemy.beamFan.length
+          ? enemy.beamFan.map(offset => enemy.beamAngle + offset)
         : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
           ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
           : [enemy.beamAngle];
@@ -235,7 +238,11 @@ export function carveEnemyBeamLights() {
             enemy.x,
             enemy.y,
             angle,
-            isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : isGod ? beam.enemyGodRange : enemy.type === 'rival' ? (enemy.rivalBeamRange || beam.enemyDefaultRange) : beam.enemyDefaultRange,
+            isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15
+              : Number(enemy.beamRange) > 0 ? Number(enemy.beamRange)
+                : isGod ? beam.enemyGodRange
+                  : enemy.type === 'rival' ? (enemy.rivalBeamRange || beam.enemyDefaultRange)
+                    : beam.enemyDefaultRange,
             isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
           );
         Neo.carveBeamLight(beamPath, isGod ? beam.enemyGodWidth : beam.enemyDefaultWidth, isGod ? beam.enemyGodStrength : beam.enemyDefaultStrength);
