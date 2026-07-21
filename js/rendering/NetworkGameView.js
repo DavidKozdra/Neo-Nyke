@@ -34,6 +34,17 @@
   const INPUT_VECTOR_EPSILON = 0.01;
   const INPUT_AIM_EPSILON = 0.02;
   const INTERPOLATION_DELAY_MS = 100;
+  const CAMPAIGN_HUD_LAYER_IDS = Object.freeze([
+    'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
+    'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
+    'interactPrompt', 'endlessHud', 'bossRushHud', 'practicePanel',
+  ]);
+  const NETWORK_HUD_DISPLAY_VALUES = Object.freeze({
+    hud: 'flex',
+    coinDisplay: 'flex',
+    centerDisplay: '',
+    actionBar: '',
+  });
   const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
   // Matches the touch deadzone the single-player loop uses in js/core/update.js.
   const TOUCH_DEADZONE = 0.08;
@@ -418,6 +429,12 @@
       this.document?.getElementById('start')?.classList.remove('hidden');
       root.document?.body?.classList.remove('network-multiplayer-active');
       this._restoreCampaignPresentationState();
+      // State managers intentionally ignore same-state transitions. If a late
+      // network frame exposed a HUD layer after the menu had already become the
+      // current state, restoring "menu" would therefore not repaint the UI.
+      // Teardown owns the final visibility invariant: no gameplay HUD survives
+      // after a multiplayer view releases the screen.
+      this._setCampaignHudVisible(false);
       // A 3D multiplayer frame must never remain behind the main menu after the
       // authority/session is gone. The next normal 3D render re-enables this
       // class and canvas without changing the player's saved view preference.
@@ -434,8 +451,7 @@
         owned: Object.prototype.hasOwnProperty.call(this.neo, key),
         value: this.neo[key],
       }]));
-      const hudIds = ['hud', 'coinDisplay', 'centerDisplay', 'actionBar'];
-      this.campaignHudState = new Map(hudIds.map(id => {
+      this.campaignHudState = new Map(CAMPAIGN_HUD_LAYER_IDS.map(id => {
         const element = this.document?.getElementById(id);
         return [id, element ? {
           className: element.className,
@@ -500,13 +516,13 @@
       // class leaves that inline style winning, so clear/set `style.display` too
       // (mirroring the per-element display values the campaign uses when it shows
       // the HUD in play).
-      const displayValues = { hud: 'flex', coinDisplay: 'flex', centerDisplay: '', actionBar: '' };
-      Object.entries(displayValues).forEach(([id, displayValue]) => {
+      const layerIds = visible ? Object.keys(NETWORK_HUD_DISPLAY_VALUES) : CAMPAIGN_HUD_LAYER_IDS;
+      layerIds.forEach(id => {
         const element = this.document?.getElementById(id);
         if (!element) return;
         element.classList.toggle('hidden', !visible);
         element.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        element.style.display = visible ? displayValue : 'none';
+        element.style.display = visible ? NETWORK_HUD_DISPLAY_VALUES[id] : 'none';
       });
     }
 

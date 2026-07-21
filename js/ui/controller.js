@@ -57,6 +57,11 @@ export function createUIController(view) {
     let browserMultiplayerUnsubscribe = null;
     let browserMultiplayerGameView = null;
     let multiplayerRequestBusy = false;
+    // The source stays near the other menu destinations for maintainability,
+    // but at runtime Multiplayer is a true sibling page like Credits. Moving it
+    // out of #start prevents main-menu sizing/visibility rules from leaking into
+    // the dedicated screen.
+    if (view.multiplayerPanel?.closest?.('#start')) document.body.append(view.multiplayerPanel);
     // True when the player has backed out of a live network match to the menu but
     // the session is still connected. The game view is torn down (no stray HUD),
     // yet the socket stays alive so the Multiplayer panel can offer "RETURN TO
@@ -2523,7 +2528,16 @@ export function createUIController(view) {
         setAltModesPanelOpen(false);
         setCompetitivePanelOpen(false);
         renderMultiplayerResumeCard();
-        view.multiplayerBack?.focus?.({ preventScroll: true });
+        view.multiplayerPanel?.classList.remove('is-open');
+        requestAnimationFrame(() => {
+          view.multiplayerPanel?.classList.add('is-open');
+          view.multiplayerBack?.focus?.({ preventScroll: true });
+        });
+      } else {
+        view.multiplayerPanel?.classList.remove('is-open');
+        if (view.multiplayerPanel?.contains(document.activeElement)) {
+          view.multiplayerBtn?.focus?.({ preventScroll: true });
+        }
       }
     }
 
@@ -3657,11 +3671,6 @@ export function createUIController(view) {
         // A stale lobby with no running match is disposed outright by detach().
         // To fully quit a match, use the lobby's LEAVE or the pause Leave Server.
         view.multiplayerBack?.addEventListener('click', () => {
-          if (browserMultiplayerSession) detachBrowserMultiplayerGame();
-          else disposeBrowserMultiplayerSession();
-          setMultiplayerPanelOpen(false);
-        });
-        view.multiplayerBackButton?.addEventListener('click', () => {
           if (browserMultiplayerSession) detachBrowserMultiplayerGame();
           else disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);

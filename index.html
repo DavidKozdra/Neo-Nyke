@@ -966,15 +966,20 @@
     </div>
   </section>
 
-  <section id="multiplayerPanel" class="panel-shell competitive-panel multiplayer-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="multiplayerPanelTitle">
-    <header class="multiplayer-banner">
+  <section id="multiplayerPanel" class="overlay multiplayer-page multiplayer-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="multiplayerPanelTitle">
+    <canvas id="multiplayerBg" class="multiplayer-page__bg" aria-hidden="true"></canvas>
+    <button id="multiplayerBack" class="back-btn multiplayer-page__back" type="button" aria-label="Back to main menu">
+      <span class="back-btn__arrow" aria-hidden="true">&#8592;</span>
+      <span>BACK TO MENU</span>
+    </button>
+    <div class="competitive-panel multiplayer-page__layout">
+      <header class="multiplayer-banner">
       <span class="multiplayer-banner__eyebrow">ONLINE EXPEDITIONS</span>
       <h2 id="multiplayerPanelTitle" class="multiplayer-banner__title">MULTIPLAYER</h2>
       <p class="multiplayer-banner__subtitle">ENTER THE DUNGEON TOGETHER</p>
-    </header>
-    <div class="multiplayer-panel__surface">
-      <button id="multiplayerBack" class="panel-close multiplayer-panel__close" type="button" aria-label="Back to main menu">X</button>
-      <div class="competitive-screen-body multiplayer-panel__body">
+      </header>
+      <div class="multiplayer-panel__surface">
+        <div class="competitive-screen-body multiplayer-panel__body">
       <p id="multiplayerDevelopmentNote" class="multiplayer-development-note">Multiplayer is under development. Network services are not initialized from this screen.</p>
       <div id="multiplayerResumeCard" class="altmode-card multiplayer-resume-card hidden">
         <div class="altmode-card__icon" aria-hidden="true">▸</div>
@@ -1044,7 +1049,7 @@
         </label>
         <button id="multiplayerReady" class="nav-btn multiplayer-ready hidden" type="button">READY</button>
       </div>
-      <button id="multiplayerBackButton" class="nav-btn nav-btn--minor multiplayer-back-button" type="button">BACK</button>
+        </div>
       </div>
     </div>
   </section>

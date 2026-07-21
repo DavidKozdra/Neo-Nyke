@@ -121,6 +121,56 @@ describe('network multiplayer game view', () => {
     view.stop();
   });
 
+  test('hides every gameplay HUD layer when a multiplayer view returns to the menu', () => {
+    const hudLayerIds = [
+      'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
+      'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
+      'interactPrompt', 'endlessHud', 'bossRushHud', 'practicePanel',
+    ];
+    const makeElement = (classNames = []) => {
+      const classes = new Set(classNames);
+      const attributes = new Map();
+      return {
+        classList: {
+          add: name => classes.add(name),
+          remove: name => classes.delete(name),
+          contains: name => classes.has(name),
+          toggle: (name, force) => (force === false ? classes.delete(name) : classes.add(name)),
+        },
+        style: { display: '' },
+        setAttribute: (name, value) => attributes.set(name, String(value)),
+        getAttribute: name => attributes.get(name) ?? null,
+        removeAttribute: name => attributes.delete(name),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      };
+    };
+    const elements = Object.fromEntries(hudLayerIds.map(id => [id, makeElement()]));
+    elements.start = makeElement(['hidden']);
+    elements.c3d = makeElement();
+    const fakeDocument = {
+      getElementById: id => elements[id] || null,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    };
+    const view = new NetworkGameView({
+      session: {},
+      neo: { gameState: 'menu', setGameState: jest.fn() },
+      document: fakeDocument,
+    });
+    view.active = true;
+
+    view.stop();
+
+    hudLayerIds.forEach(id => {
+      const layer = elements[id];
+      expect(layer.classList.contains('hidden')).toBe(true);
+      expect(layer.style.display).toBe('none');
+      expect(layer.getAttribute('aria-hidden')).toBe('true');
+    });
+    expect(elements.start.classList.contains('hidden')).toBe(false);
+  });
+
   test('lets the campaign key handler route Escape into one network pause toggle', () => {
     const preventDefault = jest.fn();
     const pauseGame = jest.fn();

@@ -9451,10 +9451,47 @@ button.alt.danger {
   color: #ffadb2;
 }
 
-/* Multiplayer entry is a two-part composition: a large identity banner sits
-   outside the framed control surface, while the surface itself owns scrolling.
-   This keeps MULTIPLAYER visually prominent without consuming card space. */
-.multiplayer-panel.competitive-panel {
+/* Multiplayer is a dedicated menu destination, not a panel layered into the
+   main-menu card. It owns its background and navigation just like Credits. */
+.multiplayer-page {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  width: 100dvw;
+  height: 100dvh;
+  padding: 24px;
+  overflow: auto;
+  background: #05070f;
+}
+
+.multiplayer-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(110% 80% at 50% -15%, rgba(42, 126, 178, .24), transparent 62%),
+    linear-gradient(180deg, rgba(3, 8, 14, .48), rgba(3, 7, 12, .76));
+}
+
+.multiplayer-page__bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.multiplayer-page__back {
+  position: fixed;
+  z-index: 4;
+}
+
+.multiplayer-page__layout {
+  position: relative;
+  z-index: 2;
   width: min(780px, calc(100vw - 28px));
   max-height: min(94dvh, 900px);
   gap: 18px;
@@ -9465,6 +9502,19 @@ button.alt.danger {
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+  opacity: 0;
+  transform: translateY(16px) scale(.985);
+}
+
+.multiplayer-page.is-open .multiplayer-page__layout {
+  animation: multiplayer-page-enter .3s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+@keyframes multiplayer-page-enter {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .multiplayer-banner {
@@ -9621,9 +9671,22 @@ button.alt.danger {
 }
 
 @media (max-width: 700px) {
-  .multiplayer-panel.competitive-panel {
+  .multiplayer-page {
+    justify-content: flex-start;
+    padding: 86px 8px 8px;
+  }
+
+  .multiplayer-page__back {
+    top: 12px;
+    left: 12px;
+    min-height: 50px;
+    padding: 9px 17px 9px 13px;
+    font-size: calc(14px * var(--font-scale, 1));
+  }
+
+  .multiplayer-page__layout {
     width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 94px);
     gap: 12px;
   }
 

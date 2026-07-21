@@ -456,15 +456,29 @@ async function main() {
       && !document.body.classList.contains('render3d')
       && document.querySelector('#c3d')?.style.display === 'none'
     ), undefined, { timeout: 10_000 });
-    report.leaveProof = await host.evaluate(() => ({
-      gameViewReleased: !globalThis.Neo?.multiplayerGameView,
-      menuVisible: !document.querySelector('#start')?.classList.contains('hidden'),
-      networkClassRemoved: !document.body.classList.contains('network-multiplayer-active'),
-      webglSuspended: !document.body.classList.contains('render3d')
-        && document.querySelector('#c3d')?.style.display === 'none',
-      pauseClosed: document.querySelector('#pause')?.classList.contains('hidden') === true,
-      settingsClosed: document.querySelector('#settingsModal')?.classList.contains('hidden') === true,
-    }));
+    report.leaveProof = await host.evaluate(() => {
+      const hudLayerIds = [
+        'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
+        'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
+      ];
+      const visibleHudLayers = hudLayerIds.filter(id => {
+        const element = document.getElementById(id);
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        return !element.classList.contains('hidden') && style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      return {
+        gameViewReleased: !globalThis.Neo?.multiplayerGameView,
+        menuVisible: !document.querySelector('#start')?.classList.contains('hidden'),
+        networkClassRemoved: !document.body.classList.contains('network-multiplayer-active'),
+        webglSuspended: !document.body.classList.contains('render3d')
+          && document.querySelector('#c3d')?.style.display === 'none',
+        pauseClosed: document.querySelector('#pause')?.classList.contains('hidden') === true,
+        settingsClosed: document.querySelector('#settingsModal')?.classList.contains('hidden') === true,
+        hudHidden: visibleHudLayers.length === 0,
+        visibleHudLayers,
+      };
+    });
     report.resultsProof = resultsProof;
     console.log(JSON.stringify(report, null, 2));
     if (!converged || !moved || report.gameViewActive !== true
@@ -486,7 +500,7 @@ async function main() {
       || !report.itemNotificationProof.visible || !report.itemNotificationProof.title.includes('Neo-Knife')
       || !report.leaveProof.gameViewReleased || !report.leaveProof.menuVisible
       || !report.leaveProof.networkClassRemoved || !report.leaveProof.webglSuspended
-      || !report.leaveProof.pauseClosed || !report.leaveProof.settingsClosed
+      || !report.leaveProof.pauseClosed || !report.leaveProof.settingsClosed || !report.leaveProof.hudHidden
       || (report.resultsProof.shown && (!report.resultsProof.playAgainVisible || !report.resultsProof.rematched))
       || report.fpsProof.threeRendererCalls < 1 || !report.fpsProof.gameViewActive
       || report.fpsProof.sessionStatus !== 'running' || errors.length) process.exitCode = 1;
