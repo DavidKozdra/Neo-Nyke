@@ -597,13 +597,15 @@ export function loop(timestamp) {
       if (Neo.isBeamStruggleActive?.()) {
         // Releasing the laser control must not end the channel during a clash;
         // every fresh press is one mash, shared by mouse, touch and gamepad.
-        if (laserPressEdge && !overlayOpen) Neo.registerBeamStruggleMash?.();
+        const touchMashPress = !!NeoTouch?.beamMash && !Neo._touchBeamMashWasHeld;
+        if ((laserPressEdge || touchMashPress) && !overlayOpen) Neo.registerBeamStruggleMash?.();
       } else {
         const fireLaser = laserHeld && !loveBombChargeActive && (laserPressEdge || !Neo.isInstantLaserMove?.());
         if (!laserHeld && Neo.laserActive && !Neo.isInstantLaserMove?.()) Neo.endActiveLaser?.();
         if (!overlayOpen && !playerStunned && fireLaser) Neo.tryLaser();
       }
       Neo._laserWasHeld = laserHeld;
+      Neo._touchBeamMashWasHeld = !!NeoTouch?.beamMash;
     }
 
     if (Neo.player.lavaWalkTime > 0) {

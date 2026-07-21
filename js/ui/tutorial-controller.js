@@ -609,16 +609,6 @@ function createSteps() {
       complete: state => !!state.completed?.forge_open,
     },
     {
-      id: 'forge_item_select',
-      chapter: 'FORGE',
-      title: 'Pick an item',
-      text: () => 'Switch to the Moves tab and pick a move to upgrade.',
-      command: () => 'SELECT AN ITEM',
-      target: targetDom('#anvilMovesTab .anvil-item-btn[data-item]', 10),
-      roomKey: 'forgeRoomKey',
-      complete: state => !!state.completed?.forge_item_select,
-    },
-    {
       id: 'forge_pay_currency',
       chapter: 'FORGE',
       title: 'Choose XP or gold',
@@ -723,11 +713,32 @@ function getNextDoorPoint(destinationKey) {
   const destination = roomFromKey(destinationKey);
   const current = Neo.currentRoom;
   const path = findRoomPath(Neo.rooms, current, destination);
-  const next = path[1];
-  if (!current || !next) return null;
-  if (next.gx > current.gx) return { x: Neo.ROOM_W - Neo.WALL - 12, y: Neo.ROOM_H / 2, tutorialDoor: true };
-  if (next.gx < current.gx) return { x: Neo.WALL + 12, y: Neo.ROOM_H / 2, tutorialDoor: true };
-  if (next.gy > current.gy) return { x: Neo.ROOM_W / 2, y: Neo.ROOM_H - Neo.WALL - 12, tutorialDoor: true };
+  if (!current) return null;
+  let next = path[1];
+  // If a generated room graph is temporarily stale, choose the live doorway
+  // whose neighboring room is closest to the destination instead of pointing
+  // at a nonexistent/stale edge.
+  if (!next) {
+    const vectors = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+    const neighbors = Object.entries(vectors)
+      .filter(([direction]) => current.doors?.[direction] || current.secretPassages?.[direction]?.open)
+      .map(([direction, [dx, dy]]) => ({
+        direction,
+        gx: current.gx + dx,
+        gy: current.gy + dy,
+      }))
+      .sort((a, b) => Math.abs(a.gx - (destination?.gx ?? current.gx)) + Math.abs(a.gy - (destination?.gy ?? current.gy))
+        - (Math.abs(b.gx - (destination?.gx ?? current.gx)) + Math.abs(b.gy - (destination?.gy ?? current.gy))));
+    next = neighbors[0];
+  }
+  if (!next) return null;
+  const direction = next.direction || (next.gx > current.gx ? 'e' : next.gx < current.gx ? 'w' : next.gy > current.gy ? 's' : 'n');
+  // Only highlight a doorway that is actually present in the live room. This
+  // protects the route lesson from stale/generated room graphs.
+  if (!current.doors?.[direction] && !current.secretPassages?.[direction]?.open) return null;
+  if (direction === 'e') return { x: Neo.ROOM_W - Neo.WALL - 12, y: Neo.ROOM_H / 2, tutorialDoor: true };
+  if (direction === 'w') return { x: Neo.WALL + 12, y: Neo.ROOM_H / 2, tutorialDoor: true };
+  if (direction === 's') return { x: Neo.ROOM_W / 2, y: Neo.ROOM_H - Neo.WALL - 12, tutorialDoor: true };
   return { x: Neo.ROOM_W / 2, y: Neo.WALL + 12, tutorialDoor: true };
 }
 
@@ -1003,7 +1014,7 @@ export function createTutorialController() {
     if (type === 'panel-open' && payload.panel === 'shop' && currentRoomKey === state.shopRoomKey) setCompleted('shop_open');
     if (type === 'shop-purchase' && payload.tutorialOffer) setCompleted('shop_buy');
     if (type === 'panel-open' && payload.panel === 'forge' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_open');
-    if (type === 'forge-item-select' && payload.itemType === 'move' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_item_select');
+    if (type === 'forge-item-select' && ['move', 'weapon'].includes(payload.itemType) && currentRoomKey === state.forgeRoomKey) setCompleted('forge_item_select');
     if (type === 'forge-pay-currency' && payload.currency === 'gold' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_pay_currency');
     if (type === 'forge-stage' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_stage');
     if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');

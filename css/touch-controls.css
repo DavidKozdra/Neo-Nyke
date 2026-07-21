@@ -117,6 +117,26 @@
   opacity: 1;
 }
 
+.btn-mash {
+  display: none;
+  background: radial-gradient(circle at 40% 35%, #f5f5ff, #5864c8);
+  width: 58px;
+  height: 58px;
+  right: 112px;
+  bottom: 0;
+  box-shadow: 0 0 14px rgba(160, 180, 255, 0.7);
+}
+
+#touch-overlay.beam-struggle-active .btn-mash {
+  display: flex;
+  animation: beam-mash-pulse 0.55s ease-in-out infinite alternate;
+}
+
+@keyframes beam-mash-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
 .btn-label {
   font-size: calc(13px * var(--font-scale, 1));
   font-weight: 800;
