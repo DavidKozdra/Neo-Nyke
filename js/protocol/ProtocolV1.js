@@ -227,6 +227,7 @@
         removedEntityIds: field('array', { required: true, maxLength: 4096 }),
         floorState: field('nullableObject'),
         bossState: field('nullableObject'),
+        bossStateChanged: field('boolean', { required: true }),
       },
     },
     ENTITY_SPAWNED: {

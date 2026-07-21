@@ -13,7 +13,7 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v27');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v28');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v26');
   });
 
@@ -45,6 +45,24 @@ describe('network multiplayer game view', () => {
     view.localPredictedPlayer = { id: 'p1', x: 100, y: 100, radius: 18, moveSpeed: 180 };
     view._sendInput();
     expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
+  });
+
+  test('transmits input changes immediately without resending identical 20 Hz samples', () => {
+    const sent = [];
+    const session = {
+      snapshot: () => ({ status: 'running' }),
+      sendInput: input => sent.push(input),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.active = true;
+    view._sendInput();
+    view._sendInput();
+    expect(sent).toHaveLength(1);
+
+    view.keys.add('KeyD');
+    view._sendInput();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual(expect.objectContaining({ moveX: 1, moveY: 0 }));
   });
 
   describe('touch movement', () => {

@@ -23,6 +23,29 @@
     return Math.abs(next) < 4 ? 0 : next;
   }
 
+  // Canonical movement adapter for both the offline campaign and every online
+  // player slot. Raw controls use screen-style axes (W/up is negative Y). In
+  // first-person 3D, forward follows the camera yaw and A/D strafe across it.
+  function resolveCampaignMovementInput(moveX = 0, moveY = 0, cameraYaw = null) {
+    let x = Number(moveX) || 0;
+    let y = Number(moveY) || 0;
+    const magnitude = Math.hypot(x, y);
+    if (magnitude > 1) {
+      x /= magnitude;
+      y /= magnitude;
+    }
+    if (cameraYaw == null || (!x && !y)) return { moveX: x, moveY: y };
+    const yaw = Number(cameraYaw) || 0;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    const forward = -y;
+    const strafe = x;
+    return {
+      moveX: cosine * forward - sine * strafe,
+      moveY: sine * forward + cosine * strafe,
+    };
+  }
+
   function applyCampaignImpulse(entity, angle, magnitude, resistance = 0) {
     const direction = Number(angle);
     const force = Number(magnitude);
@@ -73,6 +96,7 @@
 
   return {
     applyResponsiveVelocity,
+    resolveCampaignMovementInput,
     applyCampaignImpulse,
     getCampaignPlayerMovementSpeed,
     isCampaignPlayerDashing,

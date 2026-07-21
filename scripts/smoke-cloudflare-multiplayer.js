@@ -107,14 +107,32 @@ async function main() {
       waitForSessionStatus(host, 'running', 'host match start'),
       waitForSessionStatus(guest, 'running', 'guest match start'),
     ]);
-    await Promise.all([host, guest].map(page => page.waitForFunction(() => (
-      globalThis.Neo?.multiplayerGameView?.active === true
-      && globalThis.Neo.gameSession.snapshot().gameState?.floorState?.layout?.rooms?.length >= 8
-      && Object.values(globalThis.Neo.gameSession.snapshot().gameState?.enemies || {}).some(enemy => !enemy.dead)
-      && document.querySelector('#start')?.classList.contains('hidden')
-      && !document.querySelector('#hud')?.classList.contains('hidden')
-      && !document.querySelector('#actionBar')?.classList.contains('hidden')
-    ), undefined, { timeout: 45_000 })));
+    await Promise.all([['host', host], ['guest', guest]].map(async ([name, page]) => {
+      try {
+        await page.waitForFunction(() => (
+          globalThis.Neo?.multiplayerGameView?.active === true
+          && globalThis.Neo.gameSession.snapshot().gameState?.floorState?.layout?.rooms?.length >= 8
+          && Object.values(globalThis.Neo.gameSession.snapshot().gameState?.enemies || {}).some(enemy => !enemy.dead)
+          && document.querySelector('#start')?.classList.contains('hidden')
+          && !document.querySelector('#hud')?.classList.contains('hidden')
+          && !document.querySelector('#actionBar')?.classList.contains('hidden')
+        ), undefined, { timeout: 45_000 });
+      } catch (error) {
+        const diagnostic = await page.evaluate(() => {
+          const snapshot = globalThis.Neo?.gameSession?.snapshot?.();
+          return {
+            status: snapshot?.status,
+            gameViewActive: globalThis.Neo?.multiplayerGameView?.active === true,
+            roomCount: snapshot?.gameState?.floorState?.layout?.rooms?.length || 0,
+            livingEnemies: Object.values(snapshot?.gameState?.enemies || {}).filter(enemy => !enemy.dead).length,
+            startHidden: document.querySelector('#start')?.classList.contains('hidden') === true,
+            hudHidden: document.querySelector('#hud')?.classList.contains('hidden') === true,
+            actionBarHidden: document.querySelector('#actionBar')?.classList.contains('hidden') === true,
+          };
+        });
+        throw new Error(`${name} gameplay readiness failed: ${JSON.stringify(diagnostic)} (${error.message})`);
+      }
+    }));
     const initialEnemyCount = await host.evaluate(() => Object.values(
       globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
     ).filter(enemy => !enemy.dead).length);
@@ -294,7 +312,7 @@ async function main() {
     const movementStart = await host.evaluate(() => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const player = snapshot.gameState.players[snapshot.playerId];
-      return { x: player.x, y: player.y };
+      return { x: player.x, y: player.y, cameraYaw: globalThis.Neo?.getFirstPersonYaw?.() };
     });
     await holdKey(host, 'd', 750);
     await host.waitForFunction(start => {
@@ -327,10 +345,27 @@ async function main() {
         ) <= 2;
     });
     const movedPlayer = hostPlayers[hostSnapshot.playerId];
-    const moved = Math.hypot(
-      Number(movedPlayer?.x || 0) - movementStart.x,
-      Number(movedPlayer?.y || 0) - movementStart.y,
-    ) > 20;
+    const movementDelta = {
+      x: Number(movedPlayer?.x || 0) - movementStart.x,
+      y: Number(movedPlayer?.y || 0) - movementStart.y,
+    };
+    const movementDistance = Math.hypot(movementDelta.x, movementDelta.y);
+    // D is camera-right. With the shared campaign transform that is the
+    // (-sin(yaw), cos(yaw)) world vector for every local network player.
+    const expectedStrafe = {
+      x: -Math.sin(Number(movementStart.cameraYaw) || 0),
+      y: Math.cos(Number(movementStart.cameraYaw) || 0),
+    };
+    const movementAlignment = movementDistance > 0
+      ? (movementDelta.x * expectedStrafe.x + movementDelta.y * expectedStrafe.y) / movementDistance
+      : 0;
+    const cameraRelativeMovementProof = {
+      cameraYaw: movementStart.cameraYaw,
+      delta: movementDelta,
+      distance: movementDistance,
+      alignment: movementAlignment,
+    };
+    const moved = movementDistance > 20 && movementAlignment > 0.7;
     const [hostCanvasRendered, guestCanvasRendered] = await Promise.all([
       canvasHasRenderedDungeon(host),
       canvasHasRenderedDungeon(guest),
@@ -358,6 +393,7 @@ async function main() {
       thirdPersonProof,
       beamProof,
       bladeJusticeProof,
+      cameraRelativeMovementProof,
       hostCanvasRendered,
       guestCanvasRendered,
       hostRenderedPlayerCount,

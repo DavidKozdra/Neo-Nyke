@@ -29,6 +29,10 @@
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
+  const INPUT_AIM_SEND_INTERVAL_MS = 100;
+  const INPUT_HEARTBEAT_MS = 250;
+  const INPUT_VECTOR_EPSILON = 0.01;
+  const INPUT_AIM_EPSILON = 0.02;
   const INTERPOLATION_DELAY_MS = 100;
   const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
   // Matches the touch deadzone the single-player loop uses in js/core/update.js.
@@ -54,6 +58,10 @@
 
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
+  }
+
+  function angularDistance(first, second) {
+    return Math.abs(Math.atan2(Math.sin(Number(first || 0) - Number(second || 0)), Math.cos(Number(first || 0) - Number(second || 0))));
   }
 
   function stableNumericId(value) {
@@ -133,6 +141,9 @@
   }
 
   function normalizeMovement(moveX = 0, moveY = 0) {
+    if (movementRules.resolveCampaignMovementInput) {
+      return movementRules.resolveCampaignMovementInput(moveX, moveY);
+    }
     let x = Number(moveX) || 0;
     let y = Number(moveY) || 0;
     const magnitude = Math.hypot(x, y);
@@ -273,6 +284,8 @@
       this.lastPresentationFrameAt = 0;
       this.lastWorldTransform = null;
       this.paused = false;
+      this.lastTransmittedInput = null;
+      this.lastInputSentAt = 0;
       this.spectatorPlayerId = null;
       this.localWasDowned = false;
       this.spectatorRenderSignature = '';
@@ -338,6 +351,8 @@
       if (!this.canvas || !this.ctx) throw new Error('NetworkGameView requires the Neo Nyke canvas');
       this._captureCampaignPresentationState();
       this.active = true;
+      this.lastTransmittedInput = null;
+      this.lastInputSentAt = 0;
       // Use the campaign's real presentation/UI state. The main update loop
       // explicitly skips local simulation while this adapter is active, so this
       // enables canonical mouse-look, panels, pause and settings without running
@@ -393,6 +408,8 @@
       this.document?.getElementById('multiplayerChat')?.classList.add('hidden');
       this.document?.getElementById('multiplayerSpectator')?.classList.add('hidden');
       this.keys.clear();
+      this.lastTransmittedInput = null;
+      this.lastInputSentAt = 0;
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
@@ -1151,16 +1168,9 @@
       // Network input must use the same camera-relative controls as the normal
       // campaign update loop. Without this, W continued to mean world-up while
       // the first-person camera faced world-right, which felt inverted.
-      const firstPersonYaw = this.neo.getFirstPersonYaw?.();
-      if (firstPersonYaw == null || (!movement.moveX && !movement.moveY)) return movement;
-      const cosine = Math.cos(firstPersonYaw);
-      const sine = Math.sin(firstPersonYaw);
-      const forward = -movement.moveY;
-      const strafe = movement.moveX;
-      return {
-        moveX: cosine * forward - sine * strafe,
-        moveY: sine * forward + cosine * strafe,
-      };
+      return movementRules.resolveCampaignMovementInput
+        ? movementRules.resolveCampaignMovementInput(movement.moveX, movement.moveY, this.neo.getFirstPersonYaw?.())
+        : movement;
     }
 
     _sendInput() {
@@ -1182,8 +1192,22 @@
           this.currentSample?.tick,
         );
       }
+      const now = root.performance?.now?.() || Date.now();
+      const previous = this.lastTransmittedInput;
+      const movementOrButtonChanged = !previous
+        || Math.abs(input.moveX - previous.moveX) > INPUT_VECTOR_EPSILON
+        || Math.abs(input.moveY - previous.moveY) > INPUT_VECTOR_EPSILON
+        || input.buttons !== previous.buttons;
+      const aimChanged = !previous || angularDistance(input.aimDirection, previous.aimDirection) > INPUT_AIM_EPSILON;
+      const sinceLastSend = Math.max(0, now - this.lastInputSentAt);
+      const shouldTransmit = movementOrButtonChanged
+        || (aimChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
+        || sinceLastSend >= INPUT_HEARTBEAT_MS;
+      if (!shouldTransmit) return;
       try {
         this.session.sendInput(input);
+        this.lastTransmittedInput = { ...input };
+        this.lastInputSentAt = now;
       } catch {
         // Session state changes are surfaced by its normal disconnect handler.
       }
@@ -1806,6 +1830,8 @@
 
   return {
     INPUT_INTERVAL_MS,
+    INPUT_AIM_SEND_INTERVAL_MS,
+    INPUT_HEARTBEAT_MS,
     INTERPOLATION_DELAY_MS,
     normalizeMovement,
     computeWorldTransform,

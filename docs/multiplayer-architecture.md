@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable authoritative network-run slice. Cloudflare rooms now support 2–4 player Co-op Expedition and Rival Expedition rules, independent occupied-room simulation, ten deterministic floors, group-gated co-op floor exits, bosses and terminal victory/defeat, down/revive, Rival PvP/respawn, shared combat XP/levels, seeded relic chests with server-validated choices, reliable floor transitions, and 45-second reconnect reservations. Full legacy item/shop/forge parity, authored per-boss scripting, authority-owned structures/hazards, durable cold-restart recovery, production deployment, Electron, and Steamworks are not implemented yet.
+Status: playable authoritative network-run slice. Cloudflare rooms now support 2–4 player Co-op Expedition and Rival Expedition rules, independent occupied-room simulation, ten deterministic floors, group-gated co-op floor exits, bosses and terminal victory/defeat, down/revive, Rival PvP/respawn, shared combat XP/levels, seeded relic chests with server-validated choices, reliable floor transitions, and 45-second reconnect reservations. Full legacy item/shop/forge parity, authored per-boss scripting, production deployment, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -160,12 +160,15 @@ Lobby hosts can copy a same-origin invite URL in the form `?join=:code`. Opening
 
 D1 may store match history and leaderboard metadata. Queues may process post-match analytics. R2 may store replays/diagnostics. None of D1, Queues, or R2 may carry live movement or combat.
 
-The development authority currently uses the standard Durable Object WebSocket API and an active interval because its 20 Hz simulation must remain awake. Hibernation, alarm-based lifecycle work, reconnect persistence, production deployment, and measured CPU/bandwidth tuning remain separate follow-up work.
+The room uses the Durable Object WebSocket Hibernation API. Lobby and empty rooms keep no simulation interval, so the object can be evicted while accepted sockets stay connected; a 20 Hz interval exists only while a match is running and at least one peer is present. Serializable socket attachments plus the persisted authority/runtime checkpoint rebuild peer ownership, input sequencing, reconnect reservations, and simulation state after a cold wake. Empty rooms receive a cleanup alarm and expire after ten minutes.
+
+Cost controls deliberately separate hot simulation from persistence and delivery. A running room checkpoints at most every 15 seconds, plus forced checkpoints at lifecycle/floor/save-revision boundaries; unchanged waiting ticks never write. Input changes are sent immediately, but unchanged controls use a 250 ms heartbeat and aim-only changes are capped at 10 Hz. Snapshots send entity deltas between periodic full corrections, and each broadcast envelope is serialized once before being fanned out to sockets. These controls reduce billed active duration, incoming WebSocket messages, storage row writes, and per-peer JSON work without lowering the 20 Hz authority tick.
 
 ## Determinism, snapshots, and responsiveness
 
 - Authority simulation begins at 20 Hz (`1/20` second); increase toward 30 only after profiling.
 - Initial snapshots target 10 Hz and may be tuned within 10–20 Hz.
+- Normal play and all four network clients resolve normalized first-person movement through the same camera-relative movement rule before prediction or authority submission.
 - Match metadata includes `matchSeed`, `floorSeed`, `generationVersion`, and `contentVersion`.
 - Static geometry may be regenerated locally only after compatibility validation. Dynamic outcomes always come from authority.
 - Named RNG streams prevent a loot draw from changing floor topology or boss patterns.
@@ -201,4 +204,4 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 Milestones A–D now have a playable network-run proof: room creation/joining, selectable Co-op/Rival rules, hero choice, ready state, 2–4 authoritative players, seeded multi-floor encounters, campaign-parity door rules (ordinary combat is escapable while challenge/boss commitments lock), players splitting across persistent rooms, complete input slots, server combat/PvP, shared XP and automatic levels, exactly-once coins and relic claims, authored campaign chest/ladder presentation, party-gated stairs, down/revive or Rival respawn, run results, campaign presentation reuse, prediction/interpolation, and reconnect recovery. Automated tests cover catalog completeness, protocol validation, progression races, floor consensus, fault-injected convergence, PvP, and reconnect identity continuity.
 
-The next gate is content fidelity and operations: port each move's hold/charge/channel rules and each catalog enemy's authored AI script; extract the full legacy relic, shop, forge, structure, hazard, challenge, and boss systems; persist authority checkpoints in Durable Object storage; then load-test CPU, bandwidth, snapshot size, reconnect, and abuse limits. The current run lifecycle is real, but it must not be represented as complete legacy-campaign parity until those ports land. Electron and Steam remain out of scope until the Cloudflare run survives that gate.
+The next gate is content fidelity and operations: port each move's hold/charge/channel rules and each catalog enemy's authored AI script; extract the full legacy relic, shop, forge, structure, hazard, challenge, and boss systems; then load-test CPU, bandwidth, snapshot size, hibernation wake/reconnect, storage cadence, and abuse limits. The current run lifecycle is real, but it must not be represented as complete legacy-campaign parity until those ports land. Electron and Steam remain out of scope until the Cloudflare run survives that gate.
