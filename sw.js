@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v94';
+const CACHE_VERSION = 'neonyke-v95';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -120,6 +120,7 @@ const PRECACHE = [
   "/css/theme-princess.css",
   "/css/touch-controls.css",
   "/css/tutorial.css",
+  "/game.html",
   "/index.html",
   "/js/achievementManager.js",
   "/js/achievements.js",
@@ -317,7 +318,10 @@ self.addEventListener('fetch', e => {
           }
           return res;
         })
-        .catch(() => caches.match(e.request))
+        .catch(async () => (
+          await caches.match(e.request)
+          || (isDocument ? await caches.match('/index.html') : undefined)
+        ))
     );
     return;
   }

@@ -110,6 +110,7 @@ function buildPrecacheList() {
   // them). sw.js is intentionally NOT self-cached.
   urls.add('/');
   urls.add('/index.html');
+  urls.add('/game.html');
   urls.add('/manifest.json');
 
   for (const fileAbs of collectModuleGraph(path.join(ROOT, 'js', 'main.js'))) {

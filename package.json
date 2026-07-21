@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "node scripts/install-git-hooks.js",
     "icons": "node generate-icons.js",
-    "test": "node scripts/run-tests.js",
+    "test": "npm run precache:check && node scripts/run-tests.js",
     "i18n:check": "node scripts/check-i18n.js --strict",
     "i18n:check:structure": "node scripts/check-i18n.js",
     "i18n:check:strict": "node scripts/check-i18n.js --strict",
