@@ -28,6 +28,17 @@ describe('multiplayer social and death UI', () => {
     expect(controller).toContain("view.multiplayerJoinPanel?.addEventListener('toggle'");
   });
 
+  test('mounts multiplayer as a dedicated menu page with its own live background and back navigation', () => {
+    const html = read('index.html');
+    const controller = read('js/ui/controller.js');
+    const background = read('js/ui/menu-background.js');
+
+    expect(html).toMatch(/id="multiplayerPanel" class="overlay multiplayer-page multiplayer-panel hidden"/);
+    expect(html).toMatch(/id="multiplayerBg"[\s\S]*id="multiplayerBack" class="back-btn multiplayer-page__back"/);
+    expect(controller).toContain("document.body.append(view.multiplayerPanel)");
+    expect(background).toContain("document.getElementById('multiplayerBg')");
+  });
+
   test('uses a vertical party rail and exposes live lobby connection activity', () => {
     const html = read('index.html');
     const styles = read('css/style.css');

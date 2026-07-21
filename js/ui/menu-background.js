@@ -31,15 +31,18 @@
   const bg  = document.getElementById('menuBg');
   const bg2 = document.getElementById('charBg');
   const bg3 = document.getElementById('creditsBg');
+  const bg4 = document.getElementById('multiplayerBg');
   if (!bg) return;
   let ctx  = bg.getContext('2d');
   let ctx2 = bg2 ? bg2.getContext('2d') : null;
   let ctx3 = bg3 ? bg3.getContext('2d') : null;
+  let ctx4 = bg4 ? bg4.getContext('2d') : null;
   function resetContexts() {
     ctx = bg.getContext('2d');
     ctx2 = bg2 ? bg2.getContext('2d') : null;
     ctx3 = bg3 ? bg3.getContext('2d') : null;
-    [ctx, ctx2, ctx3].forEach(g => { if (g) g.imageSmoothingEnabled = false; });
+    ctx4 = bg4 ? bg4.getContext('2d') : null;
+    [ctx, ctx2, ctx3, ctx4].forEach(g => { if (g) g.imageSmoothingEnabled = false; });
     tileCache = null;
     atlas = null;
     atlasIndex = {};
@@ -52,6 +55,7 @@
     bg.height = window.innerHeight;
     if (bg2) { bg2.width = window.innerWidth; bg2.height = window.innerHeight; }
     if (bg3) { bg3.width = window.innerWidth; bg3.height = window.innerHeight; }
+    if (bg4) { bg4.width = window.innerWidth; bg4.height = window.innerHeight; }
     tileCache = null;
   }
   resize();
@@ -454,15 +458,18 @@
     const startEl   = document.getElementById('start');
     const charEl    = document.getElementById('charSelect');
     const creditsEl = document.getElementById('creditsPanel');
+    const multiplayerEl = document.getElementById('multiplayerPanel');
     const startVis   = startEl   && !startEl.classList.contains('hidden');
     const charVis    = charEl    && !charEl.classList.contains('hidden');
     const creditsVis = creditsEl && !creditsEl.classList.contains('hidden');
-    if (!startVis && !charVis && !creditsVis) { cancelAnimationFrame(raf); return; }
+    const multiplayerVis = multiplayerEl && !multiplayerEl.classList.contains('hidden');
+    if (!startVis && !charVis && !creditsVis && !multiplayerVis) { cancelAnimationFrame(raf); return; }
 
     const W = bg.width, H = bg.height;
     if (startVis) renderScene(ctx,  W, H, dt);
     if (charVis && ctx2) renderScene(ctx2, W, H, dt);
     if (creditsVis && ctx3) renderScene(ctx3, W, H, dt);
+    if (multiplayerVis && ctx4) renderScene(ctx4, W, H, dt);
 
     raf = requestAnimationFrame(draw);
   }
@@ -470,13 +477,15 @@
   const startEl = document.getElementById('start');
   const charEl  = document.getElementById('charSelect');
   const creditsEl = document.getElementById('creditsPanel');
+  const multiplayerEl = document.getElementById('multiplayerPanel');
   function onVisChange() {
     const startVis = startEl && !startEl.classList.contains('hidden');
     const charVis  = charEl  && !charEl.classList.contains('hidden');
     const creditsVis = creditsEl && !creditsEl.classList.contains('hidden');
-    if (startVis || charVis || creditsVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+    const multiplayerVis = multiplayerEl && !multiplayerEl.classList.contains('hidden');
+    if (startVis || charVis || creditsVis || multiplayerVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
   }
-  [bg, bg2, bg3].forEach(canvas => {
+  [bg, bg2, bg3, bg4].forEach(canvas => {
     if (!canvas) return;
     canvas.addEventListener('contextlost', event => event.preventDefault());
     canvas.addEventListener('contextrestored', () => {
@@ -488,6 +497,7 @@
   if (startEl) new MutationObserver(onVisChange).observe(startEl, { attributes: true, attributeFilter: ['class'] });
   if (charEl)  new MutationObserver(onVisChange).observe(charEl,  { attributes: true, attributeFilter: ['class'] });
   if (creditsEl) new MutationObserver(onVisChange).observe(creditsEl, { attributes: true, attributeFilter: ['class'] });
+  if (multiplayerEl) new MutationObserver(onVisChange).observe(multiplayerEl, { attributes: true, attributeFilter: ['class'] });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastTs = 0; onVisChange(); } });
   raf = requestAnimationFrame(draw);
 

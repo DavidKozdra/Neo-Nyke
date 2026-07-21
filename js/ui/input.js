@@ -986,7 +986,6 @@ export const ui = {
     coopLobbyReady: document.getElementById('coopLobbyReady'),
     coopLobbyLeave: document.getElementById('coopLobbyLeave'),
     multiplayerBack: document.getElementById('multiplayerBack'),
-    multiplayerBackButton: document.getElementById('multiplayerBackButton'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),
     runHistoryPanel: document.getElementById('runHistoryPanel'),
     runHistoryPanelTitle: document.getElementById('runHistoryPanelTitle'),
