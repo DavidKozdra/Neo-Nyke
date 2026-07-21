@@ -1895,6 +1895,13 @@ const FLAT_BAKED_PICKUP_TYPES = new Set(['challengeSwitch']);
 // canvas is centered on the simulation point, so it must be lifted by half its
 // world height or the lower half sits below the 3D floor.
 const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion']);
+// Trial targets are centered around their simulation point in 2D. In 3D that
+// point cannot sit at floor height or half of the visible rune/bomb is buried.
+// These measured lifts put each target's lowest authored stroke above ground.
+const BAKED_PICKUP_FLOOR_LIFT = {
+  challengeRune: 16,
+  challengeBomb: 24,
+};
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
 // Sized from each type's actual draw extents in drawPickups, doubled (the bake
@@ -2021,7 +2028,8 @@ function syncPickups() {
         // origin; loose coins/items/potions float wholly above the floor.
         const floating = FLOATING_BAKED_PICKUP_TYPES.has(pickup.type);
         const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
-        obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : 1;
+        const floorLift = BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
+        obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : floorLift;
         return;
       }
       if (pickup.type === 'ladder') {
@@ -2167,17 +2175,17 @@ const HAZARD_STYLES = {
 // circles, graffiti, spikes and thorn mines all read as missing sprites. Bake
 // the real art instead.
 //
-// Spikes, mines and graffiti are floor features and bake flat; the turret and
-// fire circle stand up as billboards.
+// Spikes, mines and graffiti are floor features and bake flat. Holy turrets
+// have a dedicated textured 3D assembly below. The fire circle remains upright
+// as a billboard.
 const BAKED_2D_HAZARD_KINDS = new Set([
-  'holy_turret', 'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine',
+  'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine',
 ]);
 const FLAT_BAKED_HAZARD_KINDS = new Set(['red_spikes', 'thorn_mine', 'el_barto_graffiti']);
 // These hazards scale every stroke off hazard.r, so a fixed band would clip a
 // large instance. Size the bake as a multiple of r instead -- the widest stroke
 // each kind draws, plus headroom for shadowBlur.
 const BAKED_HAZARD_SIZE_FACTOR = {
-  holy_turret: 3.2,
   fire_circle: 2.8,
   // Reaches r * 2 for the paint splatter, so it needs the widest band.
   el_barto_graffiti: 5,
@@ -2351,6 +2359,121 @@ function updateExplosiveTrap(hazard, group) {
   body.position.set(0, 1, 0);
 }
 
+function makeHolyTurretObject() {
+  const group = new THREE.Group();
+  group.name = 'holyTurret3d';
+
+  // Preserve the authored gold platform markings as a texture beneath the
+  // physical build. The rotating barrel is omitted from this bake.
+  const decal = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
+    transparent: true, depthWrite: false,
+  }));
+  decal.rotation.x = -Math.PI / 2;
+  decal.position.y = 1.2;
+  decal.renderOrder = 2;
+  decal.name = 'platformTexture';
+  group.add(decal);
+
+  const gold = new THREE.MeshStandardMaterial({
+    color: 0xe2bd62, emissive: 0x735618, emissiveIntensity: 0.45,
+    roughness: 0.5, metalness: 0.65,
+  });
+  const armor = new THREE.MeshStandardMaterial({
+    color: 0x283246, roughness: 0.42, metalness: 0.72,
+  });
+  const dark = new THREE.MeshStandardMaterial({
+    color: 0x101724, roughness: 0.5, metalness: 0.65,
+  });
+  const holy = new THREE.MeshStandardMaterial({
+    color: 0xfff0a8, emissive: 0xffd85a, emissiveIntensity: 1.1,
+    roughness: 0.28, metalness: 0.35,
+  });
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.08, 1, 8), armor);
+  base.scale.set(19, 8, 19);
+  base.position.y = 5;
+  base.name = 'pedestal';
+  group.add(base);
+
+  for (let index = 0; index < 4; index += 1) {
+    const angle = Math.PI / 4 + index * Math.PI / 2;
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(18, 5, 8), gold);
+    foot.position.set(Math.cos(angle) * 22, 3.2, Math.sin(angle) * 22);
+    foot.rotation.y = -angle;
+    foot.name = `foot-${index}`;
+    group.add(foot);
+  }
+
+  const cannon = new THREE.Group();
+  cannon.name = 'cannon';
+  cannon.position.y = 13;
+  group.add(cannon);
+
+  const housing = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, 10, 12), armor);
+  housing.position.y = 0;
+  housing.name = 'housing';
+  cannon.add(housing);
+
+  const barrel = new THREE.Mesh(new THREE.BoxGeometry(31, 8, 9), dark);
+  barrel.position.set(18, 2, 0);
+  barrel.name = 'barrel';
+  cannon.add(barrel);
+
+  const barrelLight = new THREE.Mesh(new THREE.BoxGeometry(24, 2.4, 3), holy);
+  barrelLight.position.set(20, 2.5, 0);
+  barrelLight.name = 'barrelLight';
+  cannon.add(barrelLight);
+
+  const muzzle = new THREE.Mesh(new THREE.BoxGeometry(6, 12, 14), gold);
+  muzzle.position.set(34, 2, 0);
+  muzzle.name = 'muzzle';
+  cannon.add(muzzle);
+
+  const flash = new THREE.Mesh(new THREE.OctahedronGeometry(7, 0), holy.clone());
+  flash.position.set(42, 2, 0);
+  flash.name = 'muzzleFlash';
+  flash.visible = false;
+  cannon.add(flash);
+  return group;
+}
+
+function updateHolyTurret(hazard, group) {
+  group.position.set(hazard.x, 0, hazard.y);
+  const radiusScale = Math.max(0.65, Number(hazard.r || 26) / 26);
+  group.scale.setScalar(radiusScale);
+
+  const decal = group.getObjectByName('platformTexture');
+  if (decal) {
+    const worldSize = Math.max(72, Number(hazard.r || 26) * 3.2);
+    rasterizeHazard2D(ensureBakeSurface(decal, worldSize), {
+      ...hazard, threeBaseOnly: true, aimAngle: 0, recoil: 0,
+    }, worldSize, {
+      top: -worldSize / 2, height: worldSize, offsetY: 0,
+    });
+  }
+
+  const cannon = group.getObjectByName('cannon');
+  if (!cannon) return;
+  // 2D +Y maps to Three.js +Z after the floor projection, hence the negative
+  // yaw used throughout this renderer for world-space simulation angles.
+  cannon.rotation.y = -Number(hazard.aimAngle || 0);
+  const recoilRatio = Math.max(0, Math.min(1, Number(hazard.recoil || 0) / 0.14));
+  const kick = recoilRatio * 5;
+  const barrel = cannon.getObjectByName('barrel');
+  const barrelLight = cannon.getObjectByName('barrelLight');
+  const muzzle = cannon.getObjectByName('muzzle');
+  const flash = cannon.getObjectByName('muzzleFlash');
+  if (barrel) barrel.position.x = 18 - kick;
+  if (barrelLight) barrelLight.position.x = 20 - kick;
+  if (muzzle) muzzle.position.x = 34 - kick;
+  if (flash) {
+    flash.position.x = 42 - kick;
+    flash.visible = recoilRatio > 0.25;
+    flash.scale.setScalar(0.75 + recoilRatio * 0.65);
+    flash.rotation.x += 0.18;
+  }
+}
+
 const LIGHTNING_COLUMN_HEIGHT = 150; // tall enough to read as a floor-to-ceiling bolt
 
 // Sarge's Lightning Columns (turrets) and lightning-cross (line) hazards need
@@ -2463,6 +2586,7 @@ function syncHazards() {
     hazard => {
       if (hazard.kind === 'chaos_burst') return makeChaosBurstObject();
       if (hazard.kind === 'healing_zone') return makeHealingZoneObject();
+      if (hazard.kind === 'holy_turret') return makeHolyTurretObject();
       if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
       if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
       if (hazard.kind === 'explosive_trap') return makeExplosiveTrapObject();
@@ -2519,6 +2643,10 @@ function syncHazards() {
       }
       if (hazard.kind === 'healing_zone') {
         updateHealingZone(hazard, mesh);
+        return;
+      }
+      if (hazard.kind === 'holy_turret') {
+        updateHolyTurret(hazard, mesh);
         return;
       }
       if (hazard.kind === 'lightning_column') {

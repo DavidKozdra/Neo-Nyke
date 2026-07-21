@@ -45,7 +45,12 @@ describe('gameplay polish regressions', () => {
   test('3D potions reuse their authored 2D art and loose loot floats above the floor', () => {
     expect(renderer3d).toContain("const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion'])");
     expect(renderer3d).not.toContain("bottle.name = 'potion3d'");
-    expect(renderer3d).toContain('floating ? worldSize * 0.5 + bob : 1');
+    expect(renderer3d).toContain('floating ? worldSize * 0.5 + bob : floorLift');
+  });
+
+  test('3D rune and bomb trial targets are lifted above the floor', () => {
+    expect(renderer3d).toMatch(/BAKED_PICKUP_FLOOR_LIFT = \{\s*challengeRune: 16,\s*challengeBomb: 24,/);
+    expect(renderer3d).toContain("const floorLift = BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1");
   });
 
   test('3D chests contain only the authored chest sprite', () => {
