@@ -71,6 +71,7 @@ let playerShadow = null;
 let playerDeathPool = null;
 const dashAfterimages = [];
 const lastDashAfterimageAt = new WeakMap();
+const actorDamageFeedback = new WeakMap();
 let playerMeleeIndicator = null;
 let playerWeaponPreview = null;
 let warpPreview = null;
@@ -1267,6 +1268,29 @@ function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
   if (sprite.material.color.getHex() !== tint) sprite.material.color.setHex(tint);
 }
 
+// Invulnerability is shared by damage recovery, dashes, and defensive moves,
+// so it cannot tell the renderer whether an actor was actually hurt. Track HP
+// loss independently to keep dash i-frames from producing a false red blink.
+function isActorDamageFlashActive(actor) {
+  if (!actor || window.NeoSettings?.getAccess?.()?.reduceFlash) return false;
+  const hp = Number(actor.hp);
+  if (!Number.isFinite(hp)) return false;
+  const now = performance.now();
+  const feedback = actorDamageFeedback.get(actor) || { hp, until: 0 };
+  if (hp < feedback.hp) {
+    feedback.until = now + Math.max(0, Number(Neo.LOW_HEALTH_HIT_FLASH_MS || 700));
+  }
+  // Local damage can be followed by an immediate heal before the next render;
+  // the combat-side timestamp still preserves the hit feedback in that case.
+  if (actor === Neo.player) {
+    const remaining = Number(Neo.lowHealthHitFlashUntil || 0) - Date.now();
+    if (remaining > 0) feedback.until = Math.max(feedback.until, now + remaining);
+  }
+  feedback.hp = hp;
+  actorDamageFeedback.set(actor, feedback);
+  return now < feedback.until && Math.floor(Neo.frameId / 3) % 2 === 0;
+}
+
 function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const arm = group.getObjectByName('arm');
   const weapon3d = group.getObjectByName('weapon-3d');
@@ -1735,7 +1759,7 @@ function syncPlayer() {
     && (Neo.isPlayerHidden?.(p) ?? true);
   let alpha = capeActive ? 0.34 : 1;
   let tint = godTime > 0 ? 0xfff5dc
-    : p.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+    : isActorDamageFlashActive(p) ? 0xff9999 : 0xffffff;
   let fallEase = 0;
   if (anim) {
     const t = Neo.clamp?.(anim.timer / anim.duration, 0, 1) ?? Math.max(0, Math.min(1, anim.timer / anim.duration));
@@ -1820,7 +1844,7 @@ function syncOtherPlayers() {
       }
       const tint = actor.networkDowned
         ? 0x641b2a
-        : actor.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+        : isActorDamageFlashActive(actor) ? 0xff9999 : 0xffffff;
       group.visible = true;
       group.position.set(actor.x, 0, actor.y);
       const actorScale = Number(Neo.getActorSpriteScale?.(actor) || 1);

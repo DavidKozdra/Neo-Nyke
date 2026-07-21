@@ -20,6 +20,15 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDeathPool(anim, size, fallEase)');
   });
 
+  test('uses actual health loss instead of dash invulnerability for the red damage flash', () => {
+    expect(renderer).toContain('const actorDamageFeedback = new WeakMap();');
+    expect(renderer).toContain('if (hp < feedback.hp)');
+    expect(renderer).toContain('isActorDamageFlashActive(p) ? 0xff9999 : 0xffffff');
+    expect(renderer).toContain('isActorDamageFlashActive(actor) ? 0xff9999 : 0xffffff');
+    expect(renderer).not.toMatch(/p\.inv > 0[^\n]*0xff9999/);
+    expect(renderer).not.toMatch(/actor\.inv > 0[^\n]*0xff9999/);
+  });
+
   test('renders network peers through the normal first- and third-person scene', () => {
     expect(renderer).toContain('function syncOtherPlayers()');
     expect(renderer).toContain('const projectedSlots = Neo.presentationPlayerSlots;');
