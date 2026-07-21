@@ -36,7 +36,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v27';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v28';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v26';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v26';
@@ -48,6 +48,9 @@
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
   const RECONNECT_RESERVATION_TICKS = SIMULATION_TICK_RATE * 45;
   const CHAT_COOLDOWN_MS = 500;
+  const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
+    'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',
+  ]);
 
   function createReconnectToken() {
     const uuid = globalThis.crypto?.randomUUID?.();
@@ -240,6 +243,12 @@
       this.invalidMessageCount = new Map();
       this.reconnectReservations = new Map();
       this.lastChatAtByPlayer = new Map();
+      this.pendingFloorTransition = null;
+      this.pendingRunEnd = null;
+      this.runEndedBroadcast = false;
+      this.snapshotEntitySignatures = {};
+      this.snapshotFloorSignature = '';
+      this.snapshotBossSignature = '';
       this.metrics = {
         acceptedInputs: 0,
         duplicateInputs: 0,
@@ -252,6 +261,63 @@
       this.simulation = this._createSimulation(this.matchSeed, this.baseMatchId);
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected((identity, reason) => this._onPeerDisconnected(identity, reason));
+    }
+
+    exportRuntimeCheckpoint() {
+      return cloneSerializable({
+        outgoingSequence: this.outgoingSequence,
+        snapshotSequence: this.snapshotSequence,
+        rematchSerial: this.rematchSerial,
+        chatSequence: this.chatSequence,
+        mode: this.mode,
+        minPlayers: this.minPlayers,
+        maxPlayers: this.maxPlayers,
+        peerRecords: Array.from(this.peerRecords.entries()),
+        playerIdByPeer: Array.from(this.playerIdByPeer.entries()),
+        pendingInputs: this.pendingInputs,
+        pendingActions: this.pendingActions,
+        lastProcessedInput: this.lastProcessedInput,
+        lastProcessedAction: this.lastProcessedAction,
+        pendingGameplayEvents: this.pendingGameplayEvents,
+        pendingFloorTransition: this.pendingFloorTransition,
+        pendingRunEnd: this.pendingRunEnd,
+        runEndedBroadcast: this.runEndedBroadcast,
+        reconnectReservations: Array.from(this.reconnectReservations.entries()),
+        seenReliableSequences: Array.from(this.seenReliableSequences.entries())
+          .map(([peerId, sequences]) => [peerId, Array.from(sequences)]),
+        lastReplaceableSequence: Array.from(this.lastReplaceableSequence.entries()),
+        invalidMessageCount: Array.from(this.invalidMessageCount.entries()),
+      });
+    }
+
+    restoreRuntimeCheckpoint(runtime = {}) {
+      if (!runtime || typeof runtime !== 'object') return false;
+      this.outgoingSequence = Math.max(0, Math.trunc(Number(runtime.outgoingSequence) || 0));
+      this.snapshotSequence = Math.max(0, Math.trunc(Number(runtime.snapshotSequence) || 0));
+      this.rematchSerial = Math.max(0, Math.trunc(Number(runtime.rematchSerial) || 0));
+      this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
+      this.mode = runtime.mode === 'rival' ? 'rival' : 'coop';
+      this.minPlayers = Math.max(1, Math.min(4, Math.trunc(Number(runtime.minPlayers) || this.minPlayers)));
+      this.maxPlayers = Math.max(this.minPlayers, Math.min(4, Math.trunc(Number(runtime.maxPlayers) || this.maxPlayers)));
+      this.peerRecords = new Map(Array.isArray(runtime.peerRecords) ? runtime.peerRecords : []);
+      this.playerIdByPeer = new Map(Array.isArray(runtime.playerIdByPeer) ? runtime.playerIdByPeer : []);
+      this.pendingInputs = cloneSerializable(runtime.pendingInputs || {});
+      this.pendingActions = cloneSerializable(runtime.pendingActions || {});
+      this.lastProcessedInput = cloneSerializable(runtime.lastProcessedInput || {});
+      this.lastProcessedAction = cloneSerializable(runtime.lastProcessedAction || {});
+      this.pendingGameplayEvents = cloneSerializable(runtime.pendingGameplayEvents || []);
+      this.pendingFloorTransition = cloneSerializable(runtime.pendingFloorTransition || null);
+      this.pendingRunEnd = cloneSerializable(runtime.pendingRunEnd || null);
+      this.runEndedBroadcast = runtime.runEndedBroadcast === true;
+      this.reconnectReservations = new Map(Array.isArray(runtime.reconnectReservations) ? runtime.reconnectReservations : []);
+      this.seenReliableSequences = new Map((Array.isArray(runtime.seenReliableSequences) ? runtime.seenReliableSequences : [])
+        .map(([peerId, sequences]) => [peerId, new Set(Array.isArray(sequences) ? sequences : [])]));
+      this.lastReplaceableSequence = new Map(Array.isArray(runtime.lastReplaceableSequence) ? runtime.lastReplaceableSequence : []);
+      this.invalidMessageCount = new Map(Array.isArray(runtime.invalidMessageCount) ? runtime.invalidMessageCount : []);
+      this.snapshotEntitySignatures = {};
+      this.snapshotFloorSignature = '';
+      this.snapshotBossSignature = '';
+      return true;
     }
 
     _createSimulation(matchSeed, matchId) {
@@ -625,6 +691,9 @@
       this.rematchSerial += 1;
       this.simulation = this._createSimulation(this.matchSeed, `${this.baseMatchId}:rematch:${this.rematchSerial}`);
       this.snapshotSequence = 0;
+      this.snapshotEntitySignatures = {};
+      this.snapshotFloorSignature = '';
+      this.snapshotBossSignature = '';
       this.pendingInputs = {};
       this.pendingActions = {};
       this.lastProcessedInput = {};
@@ -853,24 +922,45 @@
     }
 
     _publishSnapshot(full) {
+      const actualFull = full || !SNAPSHOT_ENTITY_COLLECTIONS.every(collection => this.snapshotEntitySignatures[collection]);
+      const entities = {};
+      const removedEntityIds = [];
+      SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
+        const current = this.simulation.state[collection] || {};
+        const previous = this.snapshotEntitySignatures[collection] || {};
+        const next = {};
+        const changed = {};
+        Object.entries(current).forEach(([entityId, entity]) => {
+          const signature = JSON.stringify(entity);
+          next[entityId] = signature;
+          if (actualFull || previous[entityId] !== signature) changed[entityId] = cloneSerializable(entity);
+        });
+        if (!actualFull) {
+          Object.keys(previous).forEach(entityId => {
+            if (!Object.prototype.hasOwnProperty.call(next, entityId)) removedEntityIds.push(entityId);
+          });
+        }
+        this.snapshotEntitySignatures[collection] = next;
+        entities[collection] = changed;
+      });
+      const floorSignature = JSON.stringify(this.simulation.state.floorState || null);
+      const floorChanged = actualFull || floorSignature !== this.snapshotFloorSignature;
+      this.snapshotFloorSignature = floorSignature;
+      const bossSignature = JSON.stringify(this.simulation.state.bossState || null);
+      const bossStateChanged = actualFull || bossSignature !== this.snapshotBossSignature;
+      this.snapshotBossSignature = bossSignature;
       const payload = {
         snapshotSequence: this.snapshotSequence++,
         serverTick: this.simulation.state.tick,
-        full,
+        full: actualFull,
         lastProcessedInput: { ...this.lastProcessedInput },
-        entities: {
-          players: cloneSerializable(this.simulation.state.players),
-          enemies: cloneSerializable(this.simulation.state.enemies),
-          projectiles: cloneSerializable(this.simulation.state.projectiles),
-          abilityEntities: cloneSerializable(this.simulation.state.abilityEntities),
-          pickups: cloneSerializable(this.simulation.state.pickups),
-          interactables: cloneSerializable(this.simulation.state.interactables),
-        },
-        removedEntityIds: [],
-        floorState: cloneSerializable(this.simulation.state.floorState),
-        bossState: null,
+        entities,
+        removedEntityIds,
+        floorState: floorChanged ? cloneSerializable(this.simulation.state.floorState) : null,
+        bossState: bossStateChanged ? cloneSerializable(this.simulation.state.bossState || null) : null,
+        bossStateChanged,
       };
-      const delivery = full
+      const delivery = actualFull
         ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }
         : getDeliveryIntent('WORLD_SNAPSHOT');
       this._broadcast('WORLD_SNAPSHOT', payload, delivery);
@@ -1115,14 +1205,16 @@
       this.latestSnapshotSequence = snapshot.snapshotSequence;
       if (!this.state) return;
       this.state.tick = snapshot.serverTick;
-      this.state.players = cloneSerializable(snapshot.entities.players || {});
-      this.state.enemies = cloneSerializable(snapshot.entities.enemies || {});
-      this.state.projectiles = cloneSerializable(snapshot.entities.projectiles || {});
-      this.state.abilityEntities = cloneSerializable(snapshot.entities.abilityEntities || {});
-      this.state.pickups = cloneSerializable(snapshot.entities.pickups || {});
-      this.state.interactables = cloneSerializable(snapshot.entities.interactables || {});
+      SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
+        const changed = cloneSerializable(snapshot.entities[collection] || {});
+        if (snapshot.full) this.state[collection] = changed;
+        else Object.assign(this.state[collection] || (this.state[collection] = {}), changed);
+      });
+      (snapshot.removedEntityIds || []).forEach(entityId => {
+        SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => { delete this.state[collection]?.[entityId]; });
+      });
       this.state.floorState = cloneSerializable(snapshot.floorState || this.state.floorState);
-      this.state.bossState = snapshot.bossState == null ? null : cloneSerializable(snapshot.bossState);
+      if (snapshot.bossStateChanged) this.state.bossState = snapshot.bossState == null ? null : cloneSerializable(snapshot.bossState);
       this.lastAcknowledgedInput = snapshot.lastProcessedInput[this.playerId] ?? this.lastAcknowledgedInput;
     }
 

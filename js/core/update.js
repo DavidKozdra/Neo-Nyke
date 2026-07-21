@@ -418,25 +418,20 @@ export function loop(timestamp) {
       Neo.mouse.downQueued = false;
       Neo.mouse.rightQueued = false;
     }
-    const moveLength = Math.hypot(moveX, moveY) || 1;
-    moveX /= moveLength;
-    moveY /= moveLength;
+    const moveLength = Math.hypot(moveX, moveY);
     if (moveLength < 0.1) {
       moveX = 0;
       moveY = 0;
     }
-    // First-person camera (3D renderer): movement input is camera-relative —
-    // W walks along the view yaw, A/D strafe. Rotation preserves the vector
-    // length, so speed is identical to the world-relative path.
-    const _fpMoveYaw = Neo.getFirstPersonYaw?.();
-    if (_fpMoveYaw != null && (moveX || moveY)) {
-      const _fpCos = Math.cos(_fpMoveYaw);
-      const _fpSin = Math.sin(_fpMoveYaw);
-      const _fpForward = -moveY;
-      const _fpStrafe = moveX;
-      moveX = _fpCos * _fpForward - _fpSin * _fpStrafe;
-      moveY = _fpSin * _fpForward + _fpCos * _fpStrafe;
-    }
+    // Normal play and all four authoritative multiplayer slots share this exact
+    // camera-relative 3D conversion (see NetworkGameView._readMovement).
+    const resolvedMovement = globalThis.NeoNyke?.simulation?.resolveCampaignMovementInput?.(
+      moveX,
+      moveY,
+      Neo.getFirstPersonYaw?.(),
+    ) || { moveX, moveY };
+    moveX = resolvedMovement.moveX;
+    moveY = resolvedMovement.moveY;
     // Exposed so Nimrod Stomp's hold-to-charge (ticked later this frame, outside
     // this function's scope) can aim toward wherever the player is currently
     // holding, not just the direction at the moment the charge started.

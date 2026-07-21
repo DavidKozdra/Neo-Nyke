@@ -256,6 +256,48 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.metrics.snapshots).toBe(16);
   });
 
+  test('sends entity deltas between periodic full correction snapshots', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+    authority.sendFullCorrection();
+    clock.runAll();
+    authority.simulation.state.players[clientA.playerId].x += 1;
+    authority._publishSnapshot(false);
+    clock.runAll();
+
+    const delta = snapshots.at(-1);
+    expect(delta.full).toBe(false);
+    expect(Object.keys(delta.entities.players)).toEqual([clientA.playerId]);
+    expect(delta.entities.enemies).toEqual({});
+    expect(delta.floorState).toBeNull();
+    expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
+  });
+
+  test('exports and restores authority peer runtime required after hibernation', async () => {
+    const { authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+    });
+    const runtime = authority.exportRuntimeCheckpoint();
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const restored = new LocalMultiplayerAuthority({ transport: transport(network, 'restored-authority', 'Authority') });
+    restored.simulation.state = GameState.deserialize(authority.simulation.serialize());
+
+    expect(restored.restoreRuntimeCheckpoint(runtime)).toBe(true);
+    expect(restored.playerIdByPeer.get('client-a')).toBe(clientA.playerId);
+    expect(restored.playerIdByPeer.get('client-b')).toBe(clientB.playerId);
+    expect(restored.peerRecords.get('client-a')).toEqual(expect.objectContaining({ playerId: clientA.playerId }));
+    expect(restored.lastProcessedInput).toEqual(authority.lastProcessedInput);
+  });
+
   test('rejects stale input sequences even when the envelope itself is new', async () => {
     const { clock, authority, clientA, clientATransport } = await createRunningHarness({
       unreliablePacketLoss: 0,

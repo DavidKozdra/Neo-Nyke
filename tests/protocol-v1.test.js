@@ -85,6 +85,21 @@ describe('gameplay protocol v1 runtime validation', () => {
       .toContain('payload.text is too long');
   });
 
+  test('requires snapshots to state whether nullable boss state changed', () => {
+    const snapshot = createEnvelope('WORLD_SNAPSHOT', 9, 40, {
+      snapshotSequence: 3,
+      serverTick: 40,
+      full: false,
+      lastProcessedInput: {},
+      entities: {},
+      removedEntityIds: [],
+      floorState: null,
+      bossState: null,
+      bossStateChanged: false,
+    });
+    expect(validateEnvelope(snapshot, { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
+  });
+
   test('rejects wrong direction, unknown fields, invalid movement, and oversized messages', () => {
     const input = createEnvelope('PLAYER_INPUT', 1, 1, {
       inputSequence: 1,

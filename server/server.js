@@ -30,6 +30,8 @@ const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
 const MULTIPLAYER_ROOM_LIMIT = 4;
 const MULTIPLAYER_MIN_PLAYERS = 1;
 const ROOM_TICK_INTERVAL_MS = 50;
+const CHECKPOINT_INTERVAL_TICKS = 20 * 15;
+const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 
 const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
 const protocolApi = globalThis.NeoNyke?.protocol || {};
@@ -73,9 +75,9 @@ class DurableObjectRoomTransport extends NetworkTransport {
     throw new Error('The Durable Object transport is authority-only');
   }
 
-  attach(peerId, socket, identity) {
+  attach(peerId, socket, identity, announce = true) {
     this.peers.set(peerId, { socket, identity });
-    this._emit('peerConnected', identity);
+    if (announce) this._emit('peerConnected', identity);
   }
 
   receive(peerId, data) {
@@ -92,16 +94,21 @@ class DurableObjectRoomTransport extends NetworkTransport {
   }
 
   send(peerId, message) {
+    return this.sendSerialized(peerId, JSON.stringify(message));
+  }
+
+  sendSerialized(peerId, serialized) {
     const peer = this.peers.get(String(peerId));
     if (!peer || peer.socket.readyState !== 1) throw new Error(`Room peer is unavailable: ${peerId}`);
-    peer.socket.send(JSON.stringify(message));
+    peer.socket.send(serialized);
     return { queued: true, dropped: false };
   }
 
   broadcast(message) {
+    const serialized = JSON.stringify(message);
     const results = [];
     this.peers.forEach((_peer, peerId) => {
-      try { results.push(this.send(peerId, message)); } catch { /* disconnect cleanup handles stale sockets */ }
+      try { results.push(this.sendSerialized(peerId, serialized)); } catch { /* disconnect cleanup handles stale sockets */ }
     });
     return results;
   }
@@ -139,6 +146,13 @@ export class MultiplayerRoom {
     this.tickTimer = null;
     this.checkpointLoaded = false;
     this.checkpointWrite = null;
+    this.checkpointQueued = false;
+    this.lastCheckpointTick = -1;
+    this.initialization = this.ctx.blockConcurrencyWhile?.(async () => {
+      await this.ensureStarted();
+      this.restoreAcceptedSockets();
+      this.syncTicking();
+    }) || Promise.resolve();
   }
 
   async ensureStarted() {
@@ -150,6 +164,8 @@ export class MultiplayerRoom {
           const restored = GameState.deserialize(checkpoint.serialized);
           this.authority.simulation.state = restored;
           if (restored.randomState) this.authority.simulation.random.restore(restored.randomState);
+          this.authority.restoreRuntimeCheckpoint?.(checkpoint.runtime);
+          this.lastCheckpointTick = Math.max(-1, Math.trunc(Number(checkpoint.tick) || 0));
         }
       }
       return this.authority.start();
@@ -157,17 +173,68 @@ export class MultiplayerRoom {
     await this.startPromise;
   }
 
-  persistCheckpoint() {
-    if (this.checkpointWrite) return this.checkpointWrite;
+  persistCheckpoint(options = {}) {
+    const force = options.force === true;
+    const tick = Math.max(0, Math.trunc(Number(this.authority.simulation.state.tick) || 0));
+    if (!force) {
+      if (this.authority.simulation.state.status !== 'running') return Promise.resolve(false);
+      if (tick <= this.lastCheckpointTick || tick - this.lastCheckpointTick < CHECKPOINT_INTERVAL_TICKS) {
+        return Promise.resolve(false);
+      }
+    }
+    if (this.checkpointWrite) {
+      // The in-flight periodic write already represents this cadence window.
+      // Only a lifecycle boundary needs a guaranteed follow-up snapshot.
+      this.checkpointQueued = this.checkpointQueued || force;
+      return this.checkpointWrite;
+    }
     const serialized = this.authority.simulation.serialize();
     this.checkpointWrite = this.ctx.storage.put('checkpoint', {
       serialized,
-      tick: this.authority.simulation.state.tick,
+      runtime: this.authority.exportRuntimeCheckpoint?.() || null,
+      tick,
       saveRevision: this.authority.simulation.state.runServices?.saveRevision || 0,
       updatedAt: Date.now(),
-    }).finally(() => { this.checkpointWrite = null; });
+    }).then(() => {
+      this.lastCheckpointTick = Math.max(this.lastCheckpointTick, tick);
+      return true;
+    }).finally(() => {
+      this.checkpointWrite = null;
+      if (this.checkpointQueued) {
+        this.checkpointQueued = false;
+        const followUp = this.persistCheckpoint({ force: true });
+        this.ctx.waitUntil(followUp);
+      }
+    });
     this.ctx.waitUntil(this.checkpointWrite);
     return this.checkpointWrite;
+  }
+
+  restoreAcceptedSockets() {
+    const sockets = this.ctx.getWebSockets?.() || [];
+    sockets.forEach(socket => {
+      const attachment = socket.deserializeAttachment?.();
+      const peerId = String(attachment?.peerId || '');
+      const identity = attachment?.identity;
+      if (!peerId || !identity?.id) {
+        try { socket.close(1008, 'Missing room identity'); } catch { /* already closed */ }
+        return;
+      }
+      this.transport.attach(peerId, socket, identity, false);
+    });
+  }
+
+  socketAttachment(socket) {
+    const attachment = socket?.deserializeAttachment?.();
+    return attachment && typeof attachment === 'object' ? attachment : null;
+  }
+
+  ensureSocketAttached(socket) {
+    const attachment = this.socketAttachment(socket);
+    const peerId = String(attachment?.peerId || '');
+    if (!peerId || !attachment?.identity?.id) return null;
+    if (!this.transport.peers.has(peerId)) this.transport.attach(peerId, socket, attachment.identity, false);
+    return { peerId, identity: attachment.identity };
   }
 
   async fetch(request) {
@@ -202,6 +269,7 @@ export class MultiplayerRoom {
       status: 'waiting',
     };
     await this.ctx.storage.put('room', room);
+    await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
     await this.ensureStarted();
     return json(room, 201);
   }
@@ -230,34 +298,91 @@ export class MultiplayerRoom {
     await this.ensureStarted();
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    server.accept();
     const peerId = `guest-${crypto.randomUUID()}`;
     const identity = { provider: 'guest', id: peerId, displayName: `Player ${this.transport.peers.size + 1}` };
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ peerId, identity });
     this.transport.attach(peerId, server, identity);
-    server.addEventListener('message', event => {
-      try {
-        this.transport.receive(peerId, event.data);
-      } catch {
-        this.transport.disconnectPeer(peerId, 'invalid-message');
-      }
-    });
-    server.addEventListener('close', event => this.transport.detach(peerId, event.reason || `socket-${event.code}`));
-    server.addEventListener('error', () => this.transport.detach(peerId, 'socket-error'));
-    this.ensureTicking();
+    await this.ctx.storage.deleteAlarm();
+    this.syncTicking();
     return new Response(null, { status: 101, webSocket: client });
   }
 
   ensureTicking() {
-    if (this.tickTimer !== null) return;
+    if (this.tickTimer !== null || this.authority.simulation.state.status !== 'running' || this.transport.peers.size === 0) return;
     this.tickTimer = setInterval(() => {
-      if (this.transport.peers.size === 0) {
-        clearInterval(this.tickTimer);
-        this.tickTimer = null;
+      if (this.transport.peers.size === 0 || this.authority.simulation.state.status !== 'running') {
+        this.stopTicking();
         return;
       }
+      const previousFloor = Number(this.authority.simulation.state.floorNumber || 1);
+      const previousRevision = Number(this.authority.simulation.state.runServices?.saveRevision || 0);
       this.authority.step(1);
-      if (this.authority.simulation.state.tick % 20 === 0) this.persistCheckpoint();
+      const crossedBoundary = Number(this.authority.simulation.state.floorNumber || 1) !== previousFloor
+        || Number(this.authority.simulation.state.runServices?.saveRevision || 0) !== previousRevision
+        || this.authority.simulation.state.status !== 'running';
+      this.persistCheckpoint({ force: crossedBoundary });
+      if (this.authority.simulation.state.status !== 'running') this.stopTicking();
     }, ROOM_TICK_INTERVAL_MS);
+  }
+
+  stopTicking() {
+    if (this.tickTimer === null) return;
+    clearInterval(this.tickTimer);
+    this.tickTimer = null;
+  }
+
+  syncTicking() {
+    if (this.authority.simulation.state.status === 'running' && this.transport.peers.size > 0) this.ensureTicking();
+    else this.stopTicking();
+  }
+
+  async webSocketMessage(socket, message) {
+    await this.ensureStarted();
+    const attached = this.ensureSocketAttached(socket);
+    if (!attached) {
+      try { socket.close(1008, 'Missing room identity'); } catch { /* already closed */ }
+      return;
+    }
+    const previousStatus = this.authority.simulation.state.status;
+    try {
+      this.transport.receive(attached.peerId, message);
+    } catch {
+      this.transport.disconnectPeer(attached.peerId, 'invalid-message');
+      return;
+    }
+    const currentStatus = this.authority.simulation.state.status;
+    this.syncTicking();
+    if (currentStatus !== 'running' || currentStatus !== previousStatus) {
+      await this.persistCheckpoint({ force: true });
+    }
+  }
+
+  async webSocketClose(socket, code, reason) {
+    await this.ensureStarted();
+    const attached = this.ensureSocketAttached(socket);
+    if (attached) this.transport.detach(attached.peerId, reason || `socket-${code}`);
+    this.syncTicking();
+    await this.persistCheckpoint({ force: true });
+    if (this.transport.peers.size === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+    try { socket.close(code, reason); } catch { /* runtime may already have closed it */ }
+  }
+
+  async webSocketError(socket) {
+    await this.ensureStarted();
+    const attached = this.ensureSocketAttached(socket);
+    if (attached) this.transport.detach(attached.peerId, 'socket-error');
+    this.syncTicking();
+    await this.persistCheckpoint({ force: true });
+    if (this.transport.peers.size === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+  }
+
+  async alarm() {
+    await this.ensureStarted();
+    this.restoreAcceptedSockets();
+    if (this.transport.peers.size > 0 || (this.ctx.getWebSockets?.() || []).length > 0) return;
+    this.stopTicking();
+    await this.ctx.storage.deleteAll();
   }
 }
 
