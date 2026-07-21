@@ -560,7 +560,9 @@ export function createUIController(view) {
       }
       view.multiplayerRoomCodeShare?.classList.toggle('hidden', !roomCode);
       if (view.multiplayerCopyRoomCode) view.multiplayerCopyRoomCode.disabled = !roomCode;
+      if (view.multiplayerCopyInviteLink) view.multiplayerCopyInviteLink.disabled = !roomCode;
       if (view.coopLobbyCopyRoomCode) view.coopLobbyCopyRoomCode.disabled = !roomCode;
+      if (view.coopLobbyCopyInviteLink) view.coopLobbyCopyInviteLink.disabled = !roomCode;
       const latestError = snapshot.errors?.[snapshot.errors.length - 1];
       const statusMessages = {
         disconnected: 'Not connected.',
@@ -705,6 +707,17 @@ export function createUIController(view) {
     }
 
     let multiplayerCopyFeedbackTimer = null;
+    let multiplayerInviteFeedbackTimer = null;
+
+    function renderMultiplayerCopyFeedback(buttons, state, labels) {
+      buttons.filter(Boolean).forEach(button => {
+        const label = labels[state] || labels.idle;
+        if (!button.classList.contains('coop-lobby__icon-btn')) button.textContent = label.text;
+        button.dataset.copyState = state;
+        button.setAttribute('aria-label', label.aria);
+        if (button.classList.contains('coop-lobby__icon-btn')) button.title = label.aria;
+      });
+    }
 
     function setMultiplayerCopyFeedback(state = 'idle') {
       const buttons = [view.multiplayerCopyRoomCode, view.coopLobbyCopyRoomCode].filter(Boolean);
@@ -712,53 +725,80 @@ export function createUIController(view) {
       clearTimeout(multiplayerCopyFeedbackTimer);
       multiplayerCopyFeedbackTimer = null;
       const labels = {
-        idle: 'COPY CODE',
-        copied: 'COPIED ✓',
-        error: 'COPY FAILED',
+        idle: { text: 'COPY CODE', aria: 'Copy multiplayer room code' },
+        copied: { text: 'COPIED ✓', aria: 'Multiplayer room code copied' },
+        error: { text: 'COPY FAILED', aria: 'Could not copy multiplayer room code' },
       };
-      buttons.forEach(button => {
-        button.textContent = labels[state] || labels.idle;
-        button.dataset.copyState = state;
-        button.setAttribute('aria-label', state === 'copied'
-          ? 'Multiplayer room code copied'
-          : state === 'error' ? 'Could not copy multiplayer room code' : 'Copy multiplayer room code');
-      });
+      renderMultiplayerCopyFeedback(buttons, state, labels);
       if (state !== 'idle') {
         multiplayerCopyFeedbackTimer = setTimeout(() => setMultiplayerCopyFeedback('idle'), 1800);
       }
+    }
+
+    function setMultiplayerInviteFeedback(state = 'idle') {
+      const buttons = [view.multiplayerCopyInviteLink, view.coopLobbyCopyInviteLink].filter(Boolean);
+      if (!buttons.length) return;
+      clearTimeout(multiplayerInviteFeedbackTimer);
+      multiplayerInviteFeedbackTimer = null;
+      const labels = {
+        idle: { text: 'COPY INVITE', aria: 'Copy multiplayer invite link' },
+        copied: { text: 'LINK COPIED ✓', aria: 'Multiplayer invite link copied' },
+        error: { text: 'COPY FAILED', aria: 'Could not copy multiplayer invite link' },
+      };
+      renderMultiplayerCopyFeedback(buttons, state, labels);
+      if (state !== 'idle') {
+        multiplayerInviteFeedbackTimer = setTimeout(() => setMultiplayerInviteFeedback('idle'), 1800);
+      }
+    }
+
+    async function copyTextToClipboard(text) {
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch {
+          // Fall through for browsers that expose Clipboard API but deny it.
+        }
+      }
+      if (!copied) {
+        const fallback = document.createElement('textarea');
+        fallback.value = text;
+        fallback.setAttribute('readonly', '');
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.appendChild(fallback);
+        try {
+          fallback.select();
+          copied = document.execCommand?.('copy') === true;
+        } finally {
+          fallback.remove();
+        }
+      }
+      if (!copied) throw new Error('Clipboard copy is unavailable');
     }
 
     async function copyMultiplayerRoomCode() {
       const roomCode = browserMultiplayerSession?.roomCode;
       if (!roomCode) return;
       try {
-        let copied = false;
-        if (navigator.clipboard?.writeText) {
-          try {
-            await navigator.clipboard.writeText(roomCode);
-            copied = true;
-          } catch {
-            // Fall through for browsers that expose Clipboard API but deny it.
-          }
-        }
-        if (!copied) {
-          const fallback = document.createElement('textarea');
-          fallback.value = roomCode;
-          fallback.setAttribute('readonly', '');
-          fallback.style.position = 'fixed';
-          fallback.style.opacity = '0';
-          document.body.appendChild(fallback);
-          try {
-            fallback.select();
-            copied = document.execCommand?.('copy') === true;
-          } finally {
-            fallback.remove();
-          }
-        }
-        if (!copied) throw new Error('Clipboard copy is unavailable');
+        await copyTextToClipboard(roomCode);
         setMultiplayerCopyFeedback('copied');
       } catch {
         setMultiplayerCopyFeedback('error');
+      }
+    }
+
+    async function copyMultiplayerInviteLink() {
+      const roomCode = browserMultiplayerSession?.roomCode;
+      const buildInviteUrl = globalThis.NeoNyke?.multiplayer?.buildMultiplayerInviteUrl;
+      if (!roomCode || typeof buildInviteUrl !== 'function') return;
+      try {
+        const inviteUrl = buildInviteUrl(roomCode, window.location.href);
+        await copyTextToClipboard(inviteUrl);
+        setMultiplayerInviteFeedback('copied');
+      } catch {
+        setMultiplayerInviteFeedback('error');
       }
     }
 
@@ -772,6 +812,7 @@ export function createUIController(view) {
       browserMultiplayerSession = null;
       if (Neo.gameSession === disposedSession) Neo.gameSession = null;
       setMultiplayerCopyFeedback('idle');
+      setMultiplayerInviteFeedback('idle');
       setCoopLobbyOpen(false);
       renderBrowserMultiplayerState({ status: 'disconnected' });
       renderMultiplayerResumeCard();
@@ -813,6 +854,21 @@ export function createUIController(view) {
         multiplayerRequestBusy = false;
         syncMultiplayerFeatureUI();
       }
+    }
+
+    function joinBrowserMultiplayerInviteFromLocation() {
+      const readInviteRoomCode = globalThis.NeoNyke?.multiplayer?.readMultiplayerInviteRoomCode;
+      if (typeof readInviteRoomCode !== 'function') return;
+      const roomCode = readInviteRoomCode(window.location.href);
+      if (!roomCode) return;
+
+      if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = roomCode;
+      setMultiplayerPanelOpen(true);
+      if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'This invite cannot be joined because multiplayer is disabled in this build.';
+        return;
+      }
+      void runBrowserMultiplayerAction(session => session.joinRoom(roomCode));
     }
 
     const CHARACTER_PAGE_SIZE = 8;
@@ -3375,7 +3431,7 @@ export function createUIController(view) {
           void runBrowserMultiplayerAction(session => session.joinRoom(code));
         });
         view.multiplayerRoomCode?.addEventListener('input', () => {
-          view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8);
+          view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 8);
         });
         view.multiplayerRoomCode?.addEventListener('keydown', event => {
           if (event.key !== 'Enter') return;
@@ -3396,8 +3452,14 @@ export function createUIController(view) {
         view.multiplayerCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
         });
+        view.multiplayerCopyInviteLink?.addEventListener('click', () => {
+          void copyMultiplayerInviteLink();
+        });
         view.coopLobbyCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
+        });
+        view.coopLobbyCopyInviteLink?.addEventListener('click', () => {
+          void copyMultiplayerInviteLink();
         });
 
         // ── Custom lobby code ────────────────────────────────────────────
@@ -3413,6 +3475,7 @@ export function createUIController(view) {
           if (view.coopLobbyRoomCodeInput) view.coopLobbyRoomCodeInput.hidden = !editing;
           if (view.coopLobbyEditRoomCode) view.coopLobbyEditRoomCode.hidden = editing;
           if (view.coopLobbyCopyRoomCode) view.coopLobbyCopyRoomCode.hidden = editing;
+          if (view.coopLobbyCopyInviteLink) view.coopLobbyCopyInviteLink.hidden = editing;
           if (view.coopLobbyConfirmRoomCode) view.coopLobbyConfirmRoomCode.hidden = !editing;
           if (view.coopLobbyCancelRoomCode) view.coopLobbyCancelRoomCode.hidden = !editing;
           if (!editing) showRoomCodeError('');
@@ -3603,6 +3666,7 @@ export function createUIController(view) {
           if (key) Neo.collectItem(key);
         });
         if (view.practiceEnemyGrid) Neo.buildPracticeEnemyGrid();
+        joinBrowserMultiplayerInviteFromLocation();
         menuBound = true;
       },
       bindRestartActions(actions) {

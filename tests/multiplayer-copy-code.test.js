@@ -19,4 +19,12 @@ describe('multiplayer room-code sharing', () => {
     expect(controller).toContain("setMultiplayerCopyFeedback('copied')");
     expect(controller).toContain("setMultiplayerCopyFeedback('error')");
   });
+
+  test('copying code and copying an invite remain separate actions', () => {
+    const controller = read('js/ui/controller.js');
+
+    expect(controller).toContain('copyMultiplayerRoomCode');
+    expect(controller).toContain('copyMultiplayerInviteLink');
+    expect(controller).toContain('buildMultiplayerInviteUrl');
+  });
 });
