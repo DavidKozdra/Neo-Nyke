@@ -1762,19 +1762,23 @@
       const winner = playerWon ? player : opponent;
       const loser = playerWon ? opponent : player;
       if (loser && !loser.downed) {
-        loser.stunnedUntilTick = Math.max(Number(loser.stunnedUntilTick || 0), state.tick + 14);
-        damagePlayer(state, loser, 22, winner?.id, emitEvent, 'beam_struggle', {
+        const damage = Math.max(1, Math.round(Number(winner?.beamDamage || 0) + Number(loser.beamDamage || 0)));
+        loser.stunnedUntilTick = Math.max(Number(loser.stunnedUntilTick || 0), state.tick + 24);
+        damagePlayer(state, loser, damage, winner?.id, emitEvent, 'beam_struggle', {
           angle: Math.atan2(Number(loser.y) - Number(winner?.y || 0), Number(loser.x) - Number(winner?.x || 0)),
-          knockback: 330,
+          knockback: 520,
+          ignoreInv: true,
+          maxHitRatio: 0.6,
         });
       }
     } else if (playerWon && enemy && !enemy.dead) {
       enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 25);
       damageEnemy(state, enemy, 30, player?.id, emitEvent, { attackKind: 'beam_struggle', knockback: 360 });
     } else if (player && !player.downed) {
-      player.stunnedUntilTick = Math.max(Number(player.stunnedUntilTick || 0), state.tick + 14);
-      damagePlayer(state, player, Math.max(18, Number(enemy?.contactDamage || enemy?.dmg || 14) * 1.35), enemy?.id, emitEvent, 'beam_struggle', {
-        angle: Number(enemy?.beamAngle || 0), knockback: 330,
+      player.stunnedUntilTick = Math.max(Number(player.stunnedUntilTick || 0), state.tick + 30);
+      const damage = Math.max(1, Math.round(Number(enemy?.dmg || enemy?.contactDamage || 0) + Number(player.beamDamage || 0)));
+      damagePlayer(state, player, damage, enemy?.id, emitEvent, 'beam_struggle', {
+        angle: Number(enemy?.beamAngle || 0), knockback: 560, ignoreInv: true, maxHitRatio: 0.6,
       });
     }
     emitEvent('BEAM_STRUGGLE_RESOLVED', {
@@ -2482,12 +2486,18 @@
       * (1 - Math.max(0, Math.min(0.85, Number(itemStats.damageReduction || 0))));
     incoming = Math.max(0, incoming - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
     const room = currentRoom(state, player.roomId);
-    if (itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god') {
+    if (!options.ignoreDamageCaps && itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god') {
       incoming = Math.min(incoming, Math.max(1, Number(player.maxHp || 100)) * 0.2);
     }
     const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
     player.barrier = Math.max(0, Number(player.barrier || 0) - absorbed);
-    const dealt = incoming - absorbed;
+    const uncappedDealt = incoming - absorbed;
+    const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
+      ? Math.max(0, Math.min(1, Number(options.maxHitRatio)))
+      : null;
+    const dealt = maxHitRatio == null
+      ? uncappedDealt
+      : Math.min(uncappedDealt, Math.max(1, Number(player.maxHp || 120)) * maxHitRatio);
     player.hp = Math.max(0, Number(player.hp || 0) - dealt);
     player.hitTick = state.tick;
     const impulse = dealt > 0 && Number(options.knockback || 0) > 0

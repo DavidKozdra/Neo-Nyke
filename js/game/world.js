@@ -354,9 +354,9 @@
     return hitSegment;
   }
 
-  function damagePlayer2(amount, angle, knockback, source = '') {
+  function damagePlayer2(amount, angle, knockback, source = '', options = {}) {
     if (!Neo.player2 || Neo.p2DeadInCoop) return;
-    if (Neo.player2.inv > 0) return;
+    if (Neo.player2.inv > 0 && !options.ignoreInv) return;
     Neo.player2.hp -= amount;
     Neo.applyImpulse(Neo.player2, angle, knockback);
     Neo.player2.inv = 0.75;
@@ -458,7 +458,7 @@
     let finalAmount = critAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
     if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
     finalAmount = Math.max(0, finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
-    if (ironLungApplies) {
+    if (ironLungApplies && !options.ignoreDamageCaps) {
       finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
     }
     finalAmount = Math.max(0, finalAmount);
@@ -485,7 +485,7 @@
         return;
       }
     }
-    if (applyHitstop && !options.ignoreOneShotGuard && Neo.player.maxHp > 0) {
+    if (applyHitstop && !options.ignoreDamageCaps && !options.ignoreOneShotGuard && Neo.player.maxHp > 0) {
       const sourceKey = String(options.sourceKey || source || '').toLowerCase();
       const bossLike = Neo.isBossFightActive?.()
         || Neo.BOSS_TYPES?.has(sourceKey)
@@ -494,7 +494,9 @@
         || sourceKey.includes('queen')
         || sourceKey.includes('artificer')
         || sourceKey.includes('golem');
-      const maxHitRatio = bossLike ? 0.62 : 0.48;
+      const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
+        ? Neo.clamp(Number(options.maxHitRatio), 0, 1)
+        : bossLike ? 0.62 : 0.48;
       const maxSingleHit = Math.max(18, Neo.player.maxHp * maxHitRatio);
       finalAmount = Math.min(finalAmount, maxSingleHit);
       if (hpBeforeHit > Neo.player.maxHp * 0.35 && hpBeforeHit - finalAmount <= 0) {

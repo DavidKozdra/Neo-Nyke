@@ -5,7 +5,7 @@ import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 window.NeoTutorialScenes = TUTORIAL_SCENES;
 window.NeoI18n?.localizeTutorialScenes?.(TUTORIAL_SCENES);
 
-export const TUTORIAL_VERSION = 7;
+export const TUTORIAL_VERSION = 8;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -352,6 +352,17 @@ function createSteps() {
       target: targetDom('[data-skill="laser"]', 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.laser,
+    },
+    {
+      id: 'beam_struggle',
+      chapter: 'COMBAT',
+      title: 'Win a beam struggle',
+      text: () => `Aim your laser directly into the red training beam. When the beams lock, release and repeatedly press ${getActionLabel('laser', 'RMB')} to drive the clash back. Losing a struggle in a real run is devastating.`,
+      command: () => `AIM + MASH ${getActionLabel('laser', 'RMB')}`,
+      commandLabel: 'CLASH',
+      target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialBeamUser), { padding: 30 }),
+      roomKey: 'trainingRoomKey',
+      complete: state => !!state.completed?.beam_struggle,
     },
     {
       id: 'smash',
@@ -969,6 +980,7 @@ export function createTutorialController() {
     const currentRoomKey = getCurrentRoomKey();
     if (type === 'move') setCompleted('move');
     if (type === 'attack' && ['melee', 'laser', 'smash'].includes(payload.action)) setCompleted(payload.action);
+    if (type === 'beam-struggle-won') setCompleted('beam_struggle');
     if (type === 'dash') setCompleted('dash');
     if (type === 'crit-dealt') setCompleted('crit_lesson');
     // status-applied: the player landed a status themselves (kept as a fast path
@@ -1355,7 +1367,7 @@ export function createTutorialController() {
         setCompleted('ladder_fight');
       }
       const step = getStep();
-      if (isInStepRoom(step, state) && (state.step === 'melee' || state.step === 'laser' || state.step === 'smash' || state.step === 'fight')) {
+      if (isInStepRoom(step, state) && (state.step === 'melee' || state.step === 'laser' || state.step === 'beam_struggle' || state.step === 'smash' || state.step === 'fight')) {
         Neo.ensureTutorialDummyEnemy?.();
       }
       if (isInStepRoom(step, state) && state.step === 'relic') Neo.ensureTutorialRelicPickup?.();
