@@ -9451,6 +9451,216 @@ button.alt.danger {
   color: #ffadb2;
 }
 
+/* Multiplayer entry is a two-part composition: a large identity banner sits
+   outside the framed control surface, while the surface itself owns scrolling.
+   This keeps MULTIPLAYER visually prominent without consuming card space. */
+.multiplayer-panel.competitive-panel {
+  width: min(780px, calc(100vw - 28px));
+  max-height: min(94dvh, 900px);
+  gap: 18px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.multiplayer-banner {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 4px 24px 0;
+  text-align: center;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .72));
+}
+
+.multiplayer-banner::before,
+.multiplayer-banner::after {
+  content: '';
+  position: absolute;
+  top: 58%;
+  width: min(16vw, 116px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(129, 211, 255, .68));
+}
+
+.multiplayer-banner::before { left: 5%; }
+.multiplayer-banner::after { right: 5%; transform: scaleX(-1); }
+
+.multiplayer-banner__eyebrow,
+.multiplayer-banner__subtitle {
+  display: block;
+  color: #86abc4;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .28em;
+  line-height: 1.2;
+}
+
+.multiplayer-banner__title {
+  margin: 2px 0 4px;
+  color: #eefaff;
+  font-size: clamp(34px, 6vw, calc(52px * var(--font-scale, 1)));
+  font-weight: 900;
+  letter-spacing: .18em;
+  line-height: .95;
+  text-indent: .18em;
+  text-shadow: 0 0 22px rgba(89, 190, 255, .26), 0 3px 0 #172630;
+}
+
+.multiplayer-banner__subtitle {
+  color: #b8d9eb;
+  letter-spacing: .18em;
+}
+
+.multiplayer-panel__surface {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  max-height: calc(min(94dvh, 900px) - 112px);
+  overflow: hidden;
+  flex: 1 1 auto;
+  flex-direction: column;
+  border: 1px solid rgba(135, 207, 246, .32);
+  border-top: 2px solid rgba(176, 226, 255, .58);
+  border-radius: var(--ui-frame-radius, 4px);
+  background: linear-gradient(180deg, rgba(20, 28, 34, .98), rgba(11, 16, 20, .99));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .68), inset 0 1px 0 rgba(255, 255, 255, .06);
+  backdrop-filter: blur(14px);
+}
+
+.multiplayer-panel__close {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  right: 12px;
+}
+
+.multiplayer-panel__body {
+  padding: 24px;
+  padding-top: 56px;
+}
+
+.multiplayer-create-card {
+  border-color: rgba(91, 194, 255, .28);
+  background: linear-gradient(105deg, rgba(69, 151, 204, .13), rgba(255, 255, 255, .035));
+}
+
+/* The second card is a native disclosure: its lobby-code field exists in the
+   DOM for invites and keyboard users, but only expands when requested. */
+.multiplayer-panel .multiplayer-join-card {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.multiplayer-join-summary {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 24px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.multiplayer-join-summary::-webkit-details-marker { display: none; }
+.multiplayer-join-summary::marker { content: ''; }
+.multiplayer-join-summary .altmode-card__name,
+.multiplayer-join-summary .altmode-card__desc { display: block; }
+
+.multiplayer-join-summary__action {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(142, 213, 255, .28);
+  color: #bce6ff;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.multiplayer-join-summary__chevron {
+  display: inline-block;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform .16s ease;
+}
+
+.multiplayer-join-card[open] {
+  border-color: rgba(120, 200, 255, .42);
+  background: rgba(84, 160, 207, .075);
+}
+
+.multiplayer-join-card[open] .multiplayer-join-summary__chevron {
+  transform: rotate(180deg);
+}
+
+.multiplayer-join-summary:focus-visible {
+  outline: 2px solid #8ed8ff;
+  outline-offset: -3px;
+}
+
+.multiplayer-join-dropdown {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 150px;
+  align-items: end;
+  gap: 18px;
+  padding: 18px 24px 22px 92px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(0, 0, 0, .18);
+}
+
+.multiplayer-panel .multiplayer-join-dropdown .multiplayer-mode-picker {
+  width: 100%;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .multiplayer-panel.competitive-panel {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    gap: 12px;
+  }
+
+  .multiplayer-banner { padding-inline: 8px; }
+  .multiplayer-banner::before,
+  .multiplayer-banner::after { width: 13vw; }
+  .multiplayer-banner__title { font-size: clamp(28px, 10vw, 40px); }
+  .multiplayer-banner__eyebrow,
+  .multiplayer-banner__subtitle { font-size: calc(8px * var(--font-scale, 1)); }
+
+  .multiplayer-panel__surface {
+    max-height: calc(100dvh - 100px);
+  }
+
+  .multiplayer-panel__body {
+    padding: 52px 12px 16px;
+  }
+
+  .multiplayer-panel .altmode-card,
+  .multiplayer-join-summary {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 14px;
+  }
+
+  .multiplayer-panel .altmode-card > .altmode-card__btn,
+  .multiplayer-join-summary__action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .multiplayer-join-dropdown {
+    grid-template-columns: 1fr;
+    padding: 16px 14px 18px;
+  }
+}
+
 .multiplayer-member-list {
   display: grid;
   gap: 4px;
@@ -10057,6 +10267,330 @@ button.alt.danger {
     width: 100%;
     min-width: 0;
   }
+}
+
+/* ── Co-op lobby command-center layout ───────────────────────────────────
+   The party roster is a stable vertical rail; hero/loadout work owns the
+   larger stage. This removes the old full-width strip and makes the eye travel
+   party → hero → ready instead of bouncing between unrelated blocks. */
+#coopLobby .coop-lobby__layout {
+  width: min(1320px, calc(100vw - 48px));
+  max-width: 1320px;
+  margin-top: 28px;
+  padding: 22px;
+  border: 1px solid rgba(132, 199, 235, .24);
+  border-top: 2px solid rgba(160, 220, 251, .48);
+  background: linear-gradient(145deg, rgba(12, 18, 23, .985), rgba(7, 11, 15, .99));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .72), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+.coop-lobby__header {
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 0 2px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .075);
+}
+
+.coop-lobby__kicker,
+.coop-lobby__section-kicker {
+  display: block;
+  color: #6fa9c8;
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .22em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.coop-lobby__authority-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8bb0c5;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.coop-lobby__authority-state > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #69e49d;
+  box-shadow: 0 0 10px rgba(105, 228, 157, .7);
+}
+
+.coop-lobby__workspace {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.coop-lobby__party-panel,
+.coop-lobby__hero-panel {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-top-color: rgba(134, 204, 243, .35);
+  border-radius: var(--ui-frame-radius);
+  background: rgba(14, 21, 27, .9);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, .25);
+}
+
+.coop-lobby__party-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.coop-lobby__party-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.coop-lobby__party-head h3 {
+  margin: 3px 0 0;
+  color: #edf8ff;
+  font-size: calc(20px * var(--font-scale, 1));
+  letter-spacing: .12em;
+}
+
+.coop-lobby__party-count {
+  color: #9de9ff;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.coop-lobby__slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.coop-slot {
+  position: relative;
+  min-height: 76px;
+  padding: 9px 10px;
+  border-width: 1px;
+  border-radius: var(--ui-control-radius);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--slot-color, #9de9ff) 11%, rgba(8, 13, 18, .96)),
+    rgba(8, 13, 18, .96));
+}
+
+.coop-slot::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: color-mix(in srgb, var(--slot-color, #9de9ff) 80%, transparent);
+}
+
+.coop-slot--empty {
+  min-height: 58px;
+  justify-content: flex-start;
+  background: rgba(7, 11, 15, .62);
+}
+
+.coop-slot--empty::before { opacity: .25; }
+.coop-slot__art { width: 52px; height: 52px; }
+.coop-slot__badge { width: 25px; font-size: calc(11px * var(--font-scale, 1)); }
+.coop-slot__name { font-size: calc(13px * var(--font-scale, 1)); }
+.coop-slot__hero,
+.coop-slot__status { font-size: calc(10px * var(--font-scale, 1)); }
+.coop-slot__empty-label { font-size: calc(11px * var(--font-scale, 1)); }
+
+.coop-slot--disconnected {
+  border-color: rgba(255, 170, 89, .6);
+  filter: saturate(.5);
+}
+
+.coop-slot--disconnected .coop-slot__status {
+  color: #ffbd7a;
+  opacity: 1;
+}
+
+.coop-lobby__activity {
+  display: grid;
+  gap: 6px;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(0, 0, 0, .18);
+}
+
+.coop-lobby__activity-label {
+  color: #7191a4;
+  font-size: calc(8px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.coop-lobby__activity-empty,
+.coop-lobby__activity-item {
+  color: #8296a3;
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.35;
+}
+
+.coop-lobby__activity-item {
+  position: relative;
+  padding-left: 12px;
+  color: #bed0da;
+}
+
+.coop-lobby__activity-item::before {
+  content: '';
+  position: absolute;
+  top: .42em;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffb66d;
+}
+
+.coop-lobby__activity-item[data-kind="left"]::before { background: #8fa5b1; }
+.coop-lobby__activity-item[data-kind="reconnected"]::before { background: #69e49d; }
+
+.coop-lobby__share {
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.coop-lobby__code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+}
+
+.coop-lobby__roomcode,
+.coop-lobby__roomcode-input {
+  font-size: calc(26px * var(--font-scale, 1));
+  letter-spacing: .2em;
+}
+
+.coop-lobby__code-actions { gap: 4px; }
+.coop-lobby__icon-btn { width: 34px; height: 34px; }
+.coop-lobby__icon-btn[hidden] { display: none; }
+.coop-lobby__code-actions .coop-lobby__icon-btn {
+  flex: 0 0 34px;
+  min-width: 34px;
+}
+.coop-lobby__icon-btn svg { width: 17px; height: 17px; }
+
+.coop-lobby__demo-banner {
+  gap: 7px;
+  margin: 0;
+  padding: 8px 9px;
+  box-shadow: none;
+  font-size: calc(9px * var(--font-scale, 1));
+}
+
+.coop-lobby__demo-tag {
+  padding: 2px 5px;
+  font-size: calc(8px * var(--font-scale, 1));
+}
+
+.coop-lobby__main { min-width: 0; }
+
+.coop-lobby__hero-panel {
+  min-height: 100%;
+  padding: 18px;
+  gap: 12px;
+}
+
+.coop-lobby__hero-head {
+  display: flex;
+  min-height: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.coop-lobby__hero-head .char-roster-kicker {
+  display: block;
+  margin-top: 3px;
+  color: #eef8ff;
+  font-size: calc(18px * var(--font-scale, 1));
+  letter-spacing: .1em;
+}
+
+.coop-lobby__hero-hint {
+  max-width: 280px;
+  color: #7892a2;
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.35;
+  text-align: right;
+}
+
+.coop-lobby__actions {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+#coopLobbyLeave { width: 170px; min-width: 170px; }
+#coopLobbyReady { width: 310px; min-width: 310px; }
+
+@media (max-width: 1040px) {
+  #coopLobby .coop-lobby__layout {
+    width: min(920px, calc(100vw - 24px));
+  }
+
+  .coop-lobby__workspace {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+
+  #coopLobby .char-card {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  #coopLobby .char-card-art,
+  #coopLobby .char-card.sel .char-card-art { width: 46px; height: 46px; }
+}
+
+@media (max-width: 780px) {
+  #coopLobby .coop-lobby__layout {
+    width: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .coop-lobby__authority-state { display: none; }
+  .coop-lobby__workspace { grid-template-columns: 1fr; }
+
+  .coop-lobby__party-panel { padding: 12px; }
+  .coop-lobby__slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .coop-slot { min-height: 68px; }
+  .coop-slot__art { width: 42px; height: 42px; }
+  .coop-lobby__share { margin-top: 0; }
+  .coop-lobby__hero-hint { display: none; }
+}
+
+@media (max-width: 480px) {
+  .coop-lobby__slots { grid-template-columns: 1fr; }
+  .coop-lobby__code { grid-template-columns: 1fr; }
+  .coop-lobby__code-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .coop-lobby__actions { flex-direction: column-reverse; }
+  #coopLobbyLeave,
+  #coopLobbyReady { width: 100%; min-width: 0; }
 }
 body.network-multiplayer-active #c {
   cursor: crosshair;

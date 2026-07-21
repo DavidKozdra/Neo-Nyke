@@ -86,6 +86,7 @@ async function main() {
       throw new Error(`Invite URL did not contain room ${roomCode}: ${copiedInviteUrl}`);
     }
     await guest.evaluate(inviteUrl => navigator.clipboard.writeText(inviteUrl), copiedInviteUrl);
+    await guest.locator('#multiplayerJoinPanel summary').click();
     await guest.locator('#multiplayerJoinClipboard').click();
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);

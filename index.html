@@ -967,11 +967,14 @@
   </section>
 
   <section id="multiplayerPanel" class="panel-shell competitive-panel multiplayer-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="multiplayerPanelTitle">
-    <div class="altmodes-head">
-      <span id="multiplayerPanelTitle" class="altmodes-title">MULTIPLAYER</span>
-      <button id="multiplayerBack" class="panel-close" type="button" aria-label="Back to main menu">X</button>
-    </div>
-    <div class="competitive-screen-body">
+    <header class="multiplayer-banner">
+      <span class="multiplayer-banner__eyebrow">ONLINE EXPEDITIONS</span>
+      <h2 id="multiplayerPanelTitle" class="multiplayer-banner__title">MULTIPLAYER</h2>
+      <p class="multiplayer-banner__subtitle">ENTER THE DUNGEON TOGETHER</p>
+    </header>
+    <div class="multiplayer-panel__surface">
+      <button id="multiplayerBack" class="panel-close multiplayer-panel__close" type="button" aria-label="Back to main menu">X</button>
+      <div class="competitive-screen-body multiplayer-panel__body">
       <p id="multiplayerDevelopmentNote" class="multiplayer-development-note">Multiplayer is under development. Network services are not initialized from this screen.</p>
       <div id="multiplayerResumeCard" class="altmode-card multiplayer-resume-card hidden">
         <div class="altmode-card__icon" aria-hidden="true">▸</div>
@@ -981,7 +984,7 @@
         </div>
         <button id="multiplayerResumeBtn" class="nav-btn altmode-card__btn" type="button">RETURN TO GAME</button>
       </div>
-      <div class="altmode-card">
+      <div class="altmode-card multiplayer-create-card">
         <div class="altmode-card__icon" aria-hidden="true">+</div>
         <div class="altmode-card__text">
           <h3 class="altmode-card__name">CREATE ROOM</h3>
@@ -996,21 +999,29 @@
         </div>
         <button id="multiplayerCreateRoom" class="nav-btn altmode-card__btn" type="button" disabled>CREATE</button>
       </div>
-      <div class="altmode-card">
-        <div class="altmode-card__icon" aria-hidden="true">#</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">JOIN ROOM</h3>
-          <p class="altmode-card__desc">Enter a room code to connect to the same authoritative test room.</p>
+      <details id="multiplayerJoinPanel" class="altmode-card multiplayer-join-card">
+        <summary class="multiplayer-join-summary">
+          <span class="altmode-card__icon" aria-hidden="true">#</span>
+          <span class="altmode-card__text">
+            <span class="altmode-card__name">JOIN ROOM</span>
+            <span class="altmode-card__desc">Already have a lobby code? Open the lobby-code entry.</span>
+          </span>
+          <span class="multiplayer-join-summary__action" aria-hidden="true">
+            <span>LOBBY CODE</span>
+            <span class="multiplayer-join-summary__chevron">⌄</span>
+          </span>
+        </summary>
+        <div class="multiplayer-join-dropdown">
           <label class="multiplayer-character-picker multiplayer-mode-picker">
-            <span>ROOM CODE</span>
-            <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ROOM CODE" aria-label="Multiplayer room code">
+            <span>LOBBY CODE</span>
+            <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ENTER CODE" aria-label="Multiplayer lobby code">
           </label>
+          <div class="multiplayer-join-actions">
+            <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN LOBBY</button>
+            <button id="multiplayerJoinClipboard" class="nav-btn nav-btn--minor altmode-card__btn" type="button" disabled>PASTE INVITE</button>
+          </div>
         </div>
-        <div class="multiplayer-join-actions">
-          <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN</button>
-          <button id="multiplayerJoinClipboard" class="nav-btn nav-btn--minor altmode-card__btn" type="button" disabled>PASTE INVITE</button>
-        </div>
-      </div>
+      </details>
       <div id="multiplayerRoomState" class="multiplayer-room-state" aria-live="polite">
         <div id="multiplayerRoomCodeShare" class="multiplayer-room-code-share hidden">
           <div id="multiplayerRoomCodeDisplay" class="multiplayer-room-code-display"></div>
@@ -1034,6 +1045,7 @@
         <button id="multiplayerReady" class="nav-btn multiplayer-ready hidden" type="button">READY</button>
       </div>
       <button id="multiplayerBackButton" class="nav-btn nav-btn--minor multiplayer-back-button" type="button">BACK</button>
+      </div>
     </div>
   </section>
 
@@ -1450,57 +1462,75 @@
   <div class="menu-content charselect-layout coop-lobby__layout">
     <header class="charselect-header coop-lobby__header">
       <div class="charselect-titlewrap">
+        <span class="coop-lobby__kicker">ONLINE PARTY</span>
         <h2 class="screen-title" id="coopLobbyTitle">CO-OP LOBBY</h2>
         <p id="coopLobbyStatus" class="charselect-subtitle coop-lobby__status" aria-live="polite">Waiting for players…</p>
       </div>
+      <div class="coop-lobby__authority-state"><span aria-hidden="true"></span> AUTHORITY CONNECTED</div>
     </header>
 
-    <p class="coop-lobby__demo-banner" role="note">
-      <span class="coop-lobby__demo-tag">DEMO</span>
-      <span>Online co-op is an early demo — expect rough edges, desyncs and the odd crash. Thanks for testing!</span>
-    </p>
-
-    <section class="coop-lobby__room-strip" aria-label="Players and lobby code">
-      <div class="coop-lobby__share" aria-label="Lobby invite code">
-        <span class="coop-lobby__code-label" id="coopLobbyCodeLabel">LOBBY CODE</span>
-        <div class="coop-lobby__code" data-editing="false">
-          <code id="coopLobbyRoomCode" class="coop-lobby__roomcode" aria-describedby="coopLobbyCodeLabel"></code>
-          <input id="coopLobbyRoomCodeInput" class="coop-lobby__roomcode-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Enter a custom lobby code" hidden>
-          <div class="coop-lobby__code-actions">
-            <button id="coopLobbyEditRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Edit lobby code" title="Edit lobby code">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            </button>
-            <button id="coopLobbyConfirmRoomCode" class="coop-lobby__icon-btn coop-lobby__icon-btn--confirm" type="button" aria-label="Save lobby code" title="Save lobby code" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-            </button>
-            <button id="coopLobbyCancelRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Cancel editing lobby code" title="Cancel" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-            </button>
-            <button id="coopLobbyCopyRoomCode" class="coop-lobby__icon-btn multiplayer-copy-room-code" type="button" aria-label="Copy lobby code" title="Copy lobby code">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
-            </button>
-            <button id="coopLobbyCopyInviteLink" class="coop-lobby__icon-btn multiplayer-copy-invite-link" type="button" aria-label="Copy multiplayer invite link" title="Copy invite link">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.9 12a5 5 0 0 1 5-5H12v2H8.9a3 3 0 1 0 0 6H12v2H8.9a5 5 0 0 1-5-5zm5-1h6.2v2H8.9v-2zm6.2-4H12V5h3.1a7 7 0 0 1 0 14H12v-2h3.1a5 5 0 0 0 0-10z"/></svg>
-            </button>
+    <div class="coop-lobby__workspace">
+      <aside class="coop-lobby__party-panel" aria-label="Party and invitation details">
+        <div class="coop-lobby__party-head">
+          <div>
+            <span class="coop-lobby__section-kicker">YOUR FIRETEAM</span>
+            <h3>PARTY</h3>
           </div>
+          <span id="coopLobbyPartyCount" class="coop-lobby__party-count">1 / 4</span>
         </div>
-        <p id="coopLobbyRoomCodeError" class="coop-lobby__code-error" role="alert" hidden></p>
-      </div>
-      <div id="coopLobbySlots" class="coop-lobby__slots" role="list" aria-label="Players in this room"></div>
-    </section>
+        <div id="coopLobbySlots" class="coop-lobby__slots" role="list" aria-label="Players in this room"></div>
+        <div id="coopLobbyActivity" class="coop-lobby__activity" role="log" aria-live="polite" aria-relevant="additions text">
+          <span class="coop-lobby__activity-label">LOBBY ACTIVITY</span>
+          <div class="coop-lobby__activity-empty">No recent activity</div>
+        </div>
+        <div class="coop-lobby__share" aria-label="Lobby invite code">
+          <span class="coop-lobby__code-label" id="coopLobbyCodeLabel">INVITE CODE</span>
+          <div class="coop-lobby__code" data-editing="false">
+            <code id="coopLobbyRoomCode" class="coop-lobby__roomcode" aria-describedby="coopLobbyCodeLabel"></code>
+            <input id="coopLobbyRoomCodeInput" class="coop-lobby__roomcode-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Enter a custom lobby code" hidden>
+            <div class="coop-lobby__code-actions">
+              <button id="coopLobbyEditRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Edit lobby code" title="Edit lobby code">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              </button>
+              <button id="coopLobbyConfirmRoomCode" class="coop-lobby__icon-btn coop-lobby__icon-btn--confirm" type="button" aria-label="Save lobby code" title="Save lobby code" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              </button>
+              <button id="coopLobbyCancelRoomCode" class="coop-lobby__icon-btn" type="button" aria-label="Cancel editing lobby code" title="Cancel" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+              <button id="coopLobbyCopyRoomCode" class="coop-lobby__icon-btn multiplayer-copy-room-code" type="button" aria-label="Copy lobby code" title="Copy lobby code">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="coopLobbyCopyInviteLink" class="coop-lobby__icon-btn multiplayer-copy-invite-link" type="button" aria-label="Copy multiplayer invite link" title="Copy invite link">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.9 12a5 5 0 0 1 5-5H12v2H8.9a3 3 0 1 0 0 6H12v2H8.9a5 5 0 0 1-5-5zm5-1h6.2v2H8.9v-2zm6.2-4H12V5h3.1a7 7 0 0 1 0 14H12v-2h3.1a5 5 0 0 0 0-10z"/></svg>
+              </button>
+            </div>
+          </div>
+          <p id="coopLobbyRoomCodeError" class="coop-lobby__code-error" role="alert" hidden></p>
+        </div>
+        <p class="coop-lobby__demo-banner" role="note">
+          <span class="coop-lobby__demo-tag">BETA</span>
+          <span>Online co-op preview. Connection recovery is active.</span>
+        </p>
+      </aside>
 
-    <div class="charselect-main coop-lobby__main">
-      <section class="charselect-roster coop-lobby__hero-panel" aria-labelledby="coopLobbyHeroHeading">
-        <div class="char-roster-head">
-          <span class="char-roster-kicker" id="coopLobbyHeroHeading">Choose your hero</span>
-        </div>
-        <div id="coopLobbyPicker" class="coop-lobby__picker" role="radiogroup" aria-label="Choose your hero"></div>
-        <section id="coopLobbyHeroDetail" class="hero-detail-panel coop-lobby__hero-detail" aria-live="polite" aria-label="Selected hero details"></section>
-        <div class="coop-lobby__actions">
-          <button id="coopLobbyLeave" class="nav-btn nav-btn--minor" type="button">LEAVE</button>
-          <button id="coopLobbyReady" class="nav-btn coop-lobby__ready" type="button">ENTER DUNGEON</button>
-        </div>
-      </section>
+      <main class="charselect-main coop-lobby__main">
+        <section class="charselect-roster coop-lobby__hero-panel" aria-labelledby="coopLobbyHeroHeading">
+          <div class="char-roster-head coop-lobby__hero-head">
+            <div>
+              <span class="coop-lobby__section-kicker">LOADOUT</span>
+              <span class="char-roster-kicker" id="coopLobbyHeroHeading">Choose your hero</span>
+            </div>
+            <span class="coop-lobby__hero-hint">You can change heroes until you ready up.</span>
+          </div>
+          <div id="coopLobbyPicker" class="coop-lobby__picker" role="radiogroup" aria-label="Choose your hero"></div>
+          <section id="coopLobbyHeroDetail" class="hero-detail-panel coop-lobby__hero-detail" aria-live="polite" aria-label="Selected hero details"></section>
+          <div class="coop-lobby__actions">
+            <button id="coopLobbyLeave" class="nav-btn nav-btn--minor" type="button">LEAVE PARTY</button>
+            <button id="coopLobbyReady" class="nav-btn coop-lobby__ready" type="button">READY UP</button>
+          </div>
+        </section>
+      </main>
     </div>
   </div>
 </div>

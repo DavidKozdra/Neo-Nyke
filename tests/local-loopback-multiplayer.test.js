@@ -90,6 +90,45 @@ describe('LocalLoopbackTransport', () => {
 });
 
 describe('protocol-driven local multiplayer session', () => {
+  test('keeps lobby slots stable and reports intentional leaves versus dropped connections', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+      minPlayers: 4,
+      maxPlayers: 4,
+    });
+    const clientA = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    const clientB = new LocalMultiplayerClient({ transport: transport(network, 'client-b', 'Client B') });
+    const clientC = new LocalMultiplayerClient({ transport: transport(network, 'client-c', 'Client C') });
+    await authority.start();
+    await clientA.connect('neo-local-room');
+    await clientB.connect('neo-local-room');
+    await clientC.connect('neo-local-room');
+    clock.runAll();
+
+    expect(clientA.lobbyState.members.map(member => member.slotIndex)).toEqual([0, 1, 2]);
+    await clientB.leave('left');
+    clock.runAll();
+    expect(clientA.lobbyState.members.map(member => member.slotIndex)).toEqual([0, 2]);
+    expect(clientA.connectionNotices.at(-1)).toEqual(expect.objectContaining({
+      displayName: 'Client B', kind: 'left', slotIndex: 1,
+    }));
+
+    const clientD = new LocalMultiplayerClient({ transport: transport(network, 'client-d', 'Client D') });
+    await clientD.connect('neo-local-room');
+    clock.runAll();
+    expect(clientA.lobbyState.members.map(member => member.slotIndex)).toEqual([0, 1, 2]);
+    expect(clientA.lobbyState.members.find(member => member.displayName === 'Client C').slotIndex).toBe(2);
+    expect(clientA.lobbyState.members.find(member => member.displayName === 'Client D').slotIndex).toBe(1);
+
+    expect(network.disconnectPeer('client-c', 'socket-1006')).toBe(true);
+    clock.runAll();
+    expect(clientA.connectionNotices.at(-1)).toEqual(expect.objectContaining({
+      displayName: 'Client C', kind: 'disconnected', slotIndex: 2,
+    }));
+  });
+
   test('authority validates and broadcasts lobby character selection', async () => {
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
