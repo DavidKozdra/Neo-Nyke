@@ -4,6 +4,7 @@ const {
   MOVE_SLOT_KEYS,
   DEFAULT_MOVE_LOADOUTS,
   KIT_ALTERNATIVES,
+  isContinuousBeamMove,
   getDefaultMoveLoadout,
   getMoveSlot,
   createPowerDiskBurstDescriptors,
@@ -38,6 +39,13 @@ describe('shared Neo Nyke move content', () => {
         options.forEach(moveKey => expect(getMoveSlot(moveKey)).toBe(slot));
       });
     });
+  });
+
+  test('distinguishes channelled beams from other laser-slot moves', () => {
+    ['blood_beam', 'love_beam', 'turtle_wave', 'holy_eye_beams', 'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer']
+      .forEach(moveKey => expect(isContinuousBeamMove(moveKey)).toBe(true));
+    ['power_disks', 'blade_justice', 'nail_shot', 'hammer_throw', 'love_bomb_laser', 'ghost_ball']
+      .forEach(moveKey => expect(isContinuousBeamMove(moveKey)).toBe(false));
   });
 
   test('defines Power Disks once as the campaign radial burst with shard emitters', () => {

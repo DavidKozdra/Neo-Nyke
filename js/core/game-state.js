@@ -350,6 +350,7 @@ export function resumeGame() {
       dummySpawned: false,
       relicSpawned: false,
       resourcesGranted: false,
+      beamLessonsEnabled: null,
       trainingRoomKey: '',
       treasureRoomKey: '',
       shopRoomKey: '',
@@ -403,7 +404,11 @@ export function resumeGame() {
   }
 
   function grantTutorialResources() {
-    if (!isTutorialRun() || !Neo.player || Neo.tutorialState.resourcesGranted) return;
+    if (!isTutorialRun() || !Neo.player) return;
+    if (typeof Neo.tutorialState.beamLessonsEnabled !== 'boolean') {
+      Neo.tutorialState.beamLessonsEnabled = tutorialLoadoutHasBeam(Neo.player);
+    }
+    if (Neo.tutorialState.resourcesGranted) return;
     Neo.player.coins = Math.max(Number(Neo.player.coins || 0), 60);
     if (!Neo.player.items || typeof Neo.player.items !== 'object') Neo.player.items = {};
     Neo.player.items[Neo.FORGE_VOUCHER_KEY || 'forge_voucher'] = Math.max(
@@ -434,34 +439,33 @@ export function resumeGame() {
     return true;
   }
 
-  // Prep the player's laser slot so two later lessons can be fully interactive:
-  //  - Status lesson: equip a status-applying laser (prefer blood_beam, which
-  //    bleeds) so firing the ranged attack on the dummy reliably applies a
-  //    status. Falls back to the equipped default if no status laser is legal.
-  //  - Moves lesson: also own a *different* spare laser move so there is
-  //    something distinct to swap to. Idempotent via the equipped/owned checks.
+  function tutorialLoadoutHasBeam(player = Neo.player) {
+    return !!globalThis.NeoNyke?.content?.isContinuousBeamMove?.(player?.equippedMoves?.laser);
+  }
+
+  // Preserve the character-select loadout. The tutorial used to replace any
+  // non-beam laser-slot move with Blood Beam, which taught controls the player
+  // had explicitly chosen not to bring. We still provide one spare move for the
+  // inventory swap lesson, but a non-beam loadout never receives a beam from
+  // the tutorial.
   function grantTutorialTeachingMoves() {
     const player = Neo.player;
     if (!player || !Neo.MOVE_DEFS) return;
     if (!player.ownedMoves || typeof player.ownedMoves !== 'object') player.ownedMoves = {};
     if (!player.equippedMoves || typeof player.equippedMoves !== 'object') player.equippedMoves = {};
     const allowed = key => Neo.MOVE_DEFS[key]
-      && Neo.MOVE_DEFS[key].slot === 'laser'
       && Neo.isMoveAllowedForCharacter?.(key, player.character);
-
-    // Equip a status laser if one is legal for this character.
-    const statusLaser = ['blood_beam'].find(allowed);
-    if (statusLaser) {
-      player.ownedMoves[statusLaser] = true;
-      if (Neo.equipMove) Neo.equipMove('laser', statusLaser);
-      else player.equippedMoves.laser = statusLaser;
-    }
-
-    // Own a different spare laser to swap to in the Moves lesson.
+    const beamLoadout = tutorialLoadoutHasBeam(player);
+    const isAllowedTeachingMove = key => allowed(key)
+      && (beamLoadout || !globalThis.NeoNyke?.content?.isContinuousBeamMove?.(key));
     const equipped = new Set(Object.values(player.equippedMoves).filter(Boolean));
-    const ownsSpare = Object.keys(player.ownedMoves).some(key => allowed(key) && !equipped.has(key));
+    const ownsSpare = Object.keys(player.ownedMoves)
+      .some(key => isAllowedTeachingMove(key) && !equipped.has(key));
     if (!ownsSpare) {
-      const spare = Object.keys(Neo.MOVE_DEFS).find(key => allowed(key) && !equipped.has(key));
+      const slotPriority = ['laser', 'smash', 'dash', 'melee'];
+      const spare = Object.keys(Neo.MOVE_DEFS)
+        .filter(key => isAllowedTeachingMove(key) && !equipped.has(key))
+        .sort((a, b) => slotPriority.indexOf(Neo.MOVE_DEFS[a].slot) - slotPriority.indexOf(Neo.MOVE_DEFS[b].slot))[0];
       if (spare) player.ownedMoves[spare] = true;
     }
   }

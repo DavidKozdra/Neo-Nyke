@@ -112,10 +112,14 @@ describe('Sarge tutorial v2', () => {
     expect(controller).not.toMatch(/id: 'tools_fire'[\s\S]{0,900}manual: true/);
   });
 
-  test('teaches beam struggles with a safe live clash the player must win', () => {
+  test('only teaches beam struggles when the chosen loadout actually has a beam', () => {
     expect(controller).toContain("id: 'beam_struggle'");
+    expect(controller).toContain('beamOnly: true');
+    expect(controller).toContain('allSteps.filter(step => isStepAvailable(step))');
     expect(controller).toContain("if (type === 'beam-struggle-won') setCompleted('beam_struggle')");
     expect(controller).toContain('enemy?.tutorialBeamUser');
+    expect(gameState).toContain('tutorialLoadoutHasBeam(Neo.player)');
+    expect(gameState).not.toContain("Neo.equipMove('laser', statusLaser)");
     expect(gameState).toContain('function ensureTutorialBeamStruggleEnemy()');
     expect(gameState).toContain("state.step !== 'beam_struggle'");
     expect(gameState).toContain("dummy.beamColor = '#ff365f'");

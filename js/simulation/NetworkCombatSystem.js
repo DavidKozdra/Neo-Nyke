@@ -1774,7 +1774,7 @@
           angle: Math.atan2(Number(loser.y) - Number(winner?.y || 0), Number(loser.x) - Number(winner?.x || 0)),
           knockback: 520,
           ignoreInv: true,
-          maxHitRatio: 0.6,
+          ignoreDamageCaps: true,
         });
       }
     } else if (playerWon && enemy && !enemy.dead) {
@@ -1784,7 +1784,7 @@
       player.stunnedUntilTick = Math.max(Number(player.stunnedUntilTick || 0), state.tick + 30);
       const damage = Math.max(1, Math.round(Number(enemy?.dmg || enemy?.contactDamage || 0) + Number(player.beamDamage || 0)));
       damagePlayer(state, player, damage, enemy?.id, emitEvent, 'beam_struggle', {
-        angle: Number(enemy?.beamAngle || 0), knockback: 560, ignoreInv: true, maxHitRatio: 0.6,
+        angle: Number(enemy?.beamAngle || 0), knockback: 560, ignoreInv: true, ignoreDamageCaps: true,
       });
     }
     emitEvent('BEAM_STRUGGLE_RESOLVED', {
