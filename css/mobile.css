@@ -1175,6 +1175,20 @@
     font-size: calc(20px * var(--font-scale, 1));
   }
 
+  .sandbox-config-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sandbox-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sandbox-panel__actions {
+    bottom: -14px;
+    margin: 14px -14px -14px;
+    padding: 12px 14px 14px;
+  }
+
   .sandbox-row {
     grid-template-columns: 96px minmax(0, 1fr) 56px;
   }
@@ -1478,6 +1492,17 @@
   .sandbox-panel__actions {
     flex-direction: column;
     align-items: stretch;
+    bottom: -12px;
+    margin: 12px -12px -12px;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sandbox-panel__save-note {
+    text-align: center;
+  }
+
+  .sandbox-save-btn {
+    width: 100%;
   }
 
 }

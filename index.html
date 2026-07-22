@@ -1180,9 +1180,22 @@
         <button id="sandboxClose" class="panel-close" aria-label="Close sandbox config">X</button>
       </div>
       <p class="sandbox-panel__desc">Adjust global multipliers, choose allowed enemies and items, then launch from Alternate Modes.</p>
+      <div class="sandbox-config-nav mods-tabs" role="tablist" aria-label="Sandbox configuration sections">
+        <button class="sandbox-config-tab mods-tab active is-active" data-sbox-tab="rules" type="button" role="tab" aria-selected="true">RULES</button>
+        <button class="sandbox-config-tab mods-tab" data-sbox-tab="loadout" type="button" role="tab" aria-selected="false">LOADOUT</button>
+        <button class="sandbox-config-tab mods-tab" data-sbox-tab="gear" type="button" role="tab" aria-selected="false">STARTING GEAR</button>
+        <button class="sandbox-config-tab mods-tab" data-sbox-tab="pools" type="button" role="tab" aria-selected="false">WORLD POOLS</button>
+      </div>
       <div class="sandbox-grid" id="sandboxGrid">
-        <div class="sandbox-card">
+        <div class="sandbox-card is-active" data-sandbox-section="rules" role="tabpanel">
           <h4>Core Multipliers</h4>
+          <p class="sandbox-card__hint">Start with a preset, then fine-tune any value below.</p>
+          <div class="sandbox-presets" role="group" aria-label="Sandbox rule presets">
+            <button class="sandbox-preset is-active" data-sbox-preset="standard" type="button"><b>Standard</b><small>Normal balance</small></button>
+            <button class="sandbox-preset" data-sbox-preset="power_trip" type="button"><b>Power Trip</b><small>Strong and stocked</small></button>
+            <button class="sandbox-preset" data-sbox-preset="mayhem" type="button"><b>Mayhem</b><small>Fast and lethal</small></button>
+            <button class="sandbox-preset" data-sbox-preset="invincible" type="button"><b>Invincible</b><small>God mode lab</small></button>
+          </div>
           <div class="sandbox-rows">
             <div class="sandbox-row" data-sbox-param="enemyStatMultiplier">
               <span>Enemy Stats</span>
@@ -1216,7 +1229,7 @@
             </div>
           </div>
         </div>
-        <div class="sandbox-card">
+        <div class="sandbox-card" data-sandbox-section="loadout" role="tabpanel" hidden>
           <h4>Move Loadout</h4>
           <p class="sandbox-card__hint">Pick a move per slot, or leave on Default to use the character's set.</p>
           <div class="sandbox-move-slots" id="sandboxMoveLoadout">
@@ -1250,7 +1263,7 @@
             </div>
           </div>
         </div>
-        <div class="sandbox-card">
+        <div class="sandbox-card" data-sandbox-section="loadout" role="tabpanel" hidden>
           <h4>Weapon Loadout</h4>
           <p class="sandbox-card__hint">Pick the weapon you start equipped with, or leave on Default to use the character's weapon.</p>
           <div class="sandbox-move-slots" id="sandboxWeaponLoadout">
@@ -1263,7 +1276,7 @@
             </div>
           </div>
         </div>
-        <div class="sandbox-card">
+        <div class="sandbox-card sandbox-card--wide" data-sandbox-section="gear" role="tabpanel" hidden>
           <h4>Starting Inventory</h4>
           <div class="sandbox-search-row">
             <input id="sandboxStartItemSearch" class="sandbox-search" type="search" placeholder="Search starting items..." aria-label="Search starting inventory items" autocomplete="off" spellcheck="false">
@@ -1274,7 +1287,7 @@
           </div>
           <div id="sandboxStartItemList" class="sandbox-token-grid sandbox-token-grid--items"></div>
         </div>
-        <div class="sandbox-card">
+        <div class="sandbox-card" data-sandbox-section="pools" role="tabpanel" hidden>
           <h4>Enemy Types</h4>
           <div class="sandbox-search-row">
             <input id="sandboxEnemySearch" class="sandbox-search" type="search" placeholder="Search enemy types..." aria-label="Search enemy types" autocomplete="off" spellcheck="false">
@@ -1285,7 +1298,7 @@
           </div>
           <div id="sandboxEnemyList" class="sandbox-token-grid"></div>
         </div>
-        <div class="sandbox-card">
+        <div class="sandbox-card" data-sandbox-section="pools" role="tabpanel" hidden>
           <h4>Items</h4>
           <div class="sandbox-search-row">
             <input id="sandboxItemSearch" class="sandbox-search" type="search" placeholder="Search items..." aria-label="Search items" autocomplete="off" spellcheck="false">
@@ -1296,14 +1309,16 @@
           </div>
           <div id="sandboxItemList" class="sandbox-token-grid sandbox-token-grid--items"></div>
         </div>
-      </div>
-      <div class="sandbox-flags">
-        <label><input id="sandboxGodMode" type="checkbox"> God mode (ignore incoming damage)</label>
-        <label><input id="sandboxUnlockEverything" type="checkbox"> Unlock everything (own all weapons &amp; moves, swap freely in-run)</label>
+        <div class="sandbox-flags sandbox-card is-active" data-sandbox-section="rules" role="tabpanel">
+          <h4>Run Permissions</h4>
+          <label><input id="sandboxGodMode" type="checkbox"><span><b>God Mode</b><small>Ignore all incoming damage.</small></span></label>
+          <label><input id="sandboxUnlockEverything" type="checkbox"><span><b>Unlock Everything</b><small>Own every weapon and move, with free in-run swapping.</small></span></label>
+        </div>
       </div>
       <div class="sandbox-panel__actions">
         <button id="sandboxReset" class="sandbox-mini-btn" type="button">Reset Defaults</button>
-        <button id="sandboxSaveClose" class="nav-btn nav-btn--minor" type="button">Save & Close</button>
+        <span class="sandbox-panel__save-note">Changes save automatically</span>
+        <button id="sandboxSaveClose" class="sandbox-save-btn primary-action-btn" type="button">DONE</button>
       </div>
     </div>
   </section>
@@ -1781,7 +1796,7 @@
             <small><span id="challengeToggleStatus">0 challenges</span> · <span id="legacyToggleStatus">0 legacy</span></small>
           </button>
         </div>
-        <button id="go" class="charselect-start-btn">ENTER DUNGEON</button>
+        <button id="go" class="charselect-start-btn primary-action-btn">ENTER DUNGEON</button>
       </aside>
     </div>
     <!-- legacy hidden row kept for JS compatibility -->
@@ -2459,7 +2474,7 @@
           <span class="access-label">Play tutorial</span>
           <span class="access-desc">Start Sarge's standalone guided tutorial.</span>
         </div>
-        <button class="settings-action-btn" id="settingsPlayTutorial" type="button">PLAY TUTORIAL</button>
+        <button class="settings-action-btn primary-action-btn" id="settingsPlayTutorial" type="button">PLAY TUTORIAL</button>
       </div>
       </section>
     </div>
