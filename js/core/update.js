@@ -312,74 +312,40 @@ export function loop(timestamp) {
     if (Neo.p1DeadInCoop) { Neo.keys[_right] = false; Neo.keys[_left] = false; Neo.keys[_down] = false; Neo.keys[_up] = false; }
     const _nt = window.NeoTouch;
     if (_nt?.active) {
-      // Inject touch move vector — auto-aim fires in last joystick direction
-      if (Math.abs(_nt.moveX) > 0.08 || Math.abs(_nt.moveY) > 0.08) {
-        Neo.keys[_right] = _nt.moveX > 0.08;
-        Neo.keys[_left]  = _nt.moveX < -0.08;
-        Neo.keys[_down]  = _nt.moveY > 0.08;
-        Neo.keys[_up]    = _nt.moveY < -0.08;
-      } else {
-        Neo.keys[_right] = false; Neo.keys[_left] = false;
-        Neo.keys[_down]  = false; Neo.keys[_up]   = false;
+      if (window.NeoSettings?.getEffectiveInputMode?.() === 'touch') {
+        // Auto-aim toward nearest enemy, fallback to last joystick direction.
+        const _aimTarget = _getNearestEnemyForAim();
+        const _aimDX = _aimTarget ? (_aimTarget.x - Neo.player.x) : (_nt.lastAimX * 200);
+        const _aimDY = _aimTarget ? (_aimTarget.y - Neo.player.y) : (_nt.lastAimY * 200);
+        Neo.mouse.worldX = Neo.player.x + _aimDX;
+        Neo.mouse.worldY = Neo.player.y + _aimDY;
+        Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
+        Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
       }
-      // Auto-aim toward nearest enemy, fallback to last joystick direction
-      const _aimTarget = _getNearestEnemyForAim();
-      const _aimDX = _aimTarget ? (_aimTarget.x - Neo.player.x) : (_nt.lastAimX * 200);
-      const _aimDY = _aimTarget ? (_aimTarget.y - Neo.player.y) : (_nt.lastAimY * 200);
-      Neo.mouse.worldX = Neo.player.x + _aimDX;
-      Neo.mouse.worldY = Neo.player.y + _aimDY;
-      Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
-      Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
-      // Attack buttons — hold while button pressed, release otherwise
-      if (_nt.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
-      if (_nt.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
       // Touch smash: NT.smash stays true while the button is held (cleared on
       // touchend), so use it directly for hold-to-charge. Edge-latch the cast.
       Neo.smashHeld = !!_nt.smash;
       if (_nt.smash) { if (!_nt.smashLatch) { _nt.smashLatch = true; Neo.trySmash(); } }
       else { _nt.smashLatch = false; }
-      const _ascendKey = _b ? _b.ascend : ' ';
-      if (_nt.ascend) Neo.keys[_ascendKey] = true; else Neo.keys[_ascendKey] = false;
-      if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
-      else Neo.keys[_b ? _b.dash : 'shift'] = false;
-      // Touch dash button level-tracks its held state (same as smash above), so
-      // Nimrod Stomp's hold-to-charge can read it directly for release.
-      Neo.dashHeld = !!_nt.dash;
     }
     // Gamepad 0 → P1
     const _gp0 = window.NeoGamepad?.[0];
-    if (_gp0?.active && !_nt?.active) {
-      if (Math.abs(_gp0.moveX) > 0.18 || Math.abs(_gp0.moveY) > 0.18) {
-        Neo.keys[_right] = _gp0.moveX > 0.18;
-        Neo.keys[_left]  = _gp0.moveX < -0.18;
-        Neo.keys[_down]  = _gp0.moveY > 0.18;
-        Neo.keys[_up]    = _gp0.moveY < -0.18;
-      } else {
-        Neo.keys[_right] = false; Neo.keys[_left] = false;
-        Neo.keys[_down] = false; Neo.keys[_up] = false;
+    if (_gp0?.active) {
+      if (window.NeoSettings?.getEffectiveInputMode?.() === 'gamepad') {
+        const _gpAimTarget = _gp0.hasAim ? null : _getNearestEnemyForAim();
+        const _gpAimX = _gp0.hasAim ? _gp0.aimX * 200 : (_gpAimTarget ? _gpAimTarget.x - Neo.player.x : _gp0.lastAimX * 200);
+        const _gpAimY = _gp0.hasAim ? _gp0.aimY * 200 : (_gpAimTarget ? _gpAimTarget.y - Neo.player.y : _gp0.lastAimY * 200);
+        Neo.mouse.worldX = Neo.player.x + _gpAimX;
+        Neo.mouse.worldY = Neo.player.y + _gpAimY;
+        Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
+        Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
       }
-      const _gpAimTarget = _gp0.hasAim ? null : _getNearestEnemyForAim();
-      const _gpAimX = _gp0.hasAim ? _gp0.aimX * 200 : (_gpAimTarget ? _gpAimTarget.x - Neo.player.x : _gp0.lastAimX * 200);
-      const _gpAimY = _gp0.hasAim ? _gp0.aimY * 200 : (_gpAimTarget ? _gpAimTarget.y - Neo.player.y : _gp0.lastAimY * 200);
-      Neo.mouse.worldX = Neo.player.x + _gpAimX;
-      Neo.mouse.worldY = Neo.player.y + _gpAimY;
-      Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
-      Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
-      if (_gp0.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
-      if (_gp0.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
       // Gamepad smash button is re-polled each frame from its held state, so use
       // it for hold-to-charge. Edge-latch so the cast only fires once per press.
       Neo.smashHeld = !!_gp0.smash;
       if (_gp0.smash) { if (!_gp0.smashLatch) { _gp0.smashLatch = true; Neo.trySmash(); } }
       else { _gp0.smashLatch = false; }
-      if (_gp0.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
-      else if (!Neo.keys[_b ? _b.dash : 'shift']) Neo.keys[_b ? _b.dash : 'shift'] = false;
-      // Gamepad dash button re-polled each frame, same as smash above — read
-      // directly for Nimrod Stomp's hold-to-charge release.
-      Neo.dashHeld = !!_gp0.dash;
       const _gpConsume = action => window.NeoGamepad?.consumeAction?.(0, action);
-      const _gpAscendKey = _b ? _b.ascend : ' ';
-      Neo.keys[_gpAscendKey] = !!_gp0.ascend;
       if (_gpConsume('interact')) window._neoGame?.triggerInteract?.();
       // The ascend button still uses the ladder (its other "climb/exit" uses are
       // contextual); route it through the same interact path when at a ladder.
@@ -398,6 +364,22 @@ export function loop(timestamp) {
     }
     let moveX = (Neo.keys[_right] || Neo.keys.arrowright ? 1 : 0) - (Neo.keys[_left] || Neo.keys.arrowleft ? 1 : 0);
     let moveY = (Neo.keys[_down]  || Neo.keys.arrowdown  ? 1 : 0) - (Neo.keys[_up]   || Neo.keys.arrowup   ? 1 : 0);
+    const _touchMoveX = _nt?.active && Math.abs(Number(_nt.moveX) || 0) > 0.08 ? Number(_nt.moveX) : 0;
+    const _touchMoveY = _nt?.active && Math.abs(Number(_nt.moveY) || 0) > 0.08 ? Number(_nt.moveY) : 0;
+    if (Math.hypot(_touchMoveX, _touchMoveY) > Math.hypot(moveX, moveY)) {
+      moveX = _touchMoveX;
+      moveY = _touchMoveY;
+    }
+    const _gamepadMoveX = _gp0?.active && Math.abs(Number(_gp0.moveX) || 0) > 0.18 ? Number(_gp0.moveX) : 0;
+    const _gamepadMoveY = _gp0?.active && Math.abs(Number(_gp0.moveY) || 0) > 0.18 ? Number(_gp0.moveY) : 0;
+    if (Math.hypot(_gamepadMoveX, _gamepadMoveY) > Math.hypot(moveX, moveY)) {
+      moveX = _gamepadMoveX;
+      moveY = _gamepadMoveY;
+    }
+    const dashKey = _b ? _b.dash : 'shift';
+    const smashKey = _b ? _b.smash : 'r';
+    Neo.dashHeld = !!Neo.keys[dashKey] || !!_nt?.dash || !!_gp0?.dash;
+    Neo.smashHeld = !!Neo.keys[smashKey] || !!_nt?.smash || !!_gp0?.smash;
     if (Neo.currentRoom?.type !== 'shop' && Neo.isPanelOpen(Neo.ui.shopPanel)) Neo.setShopPanelOpen(false);
     if (Neo.currentRoom?.type !== 'anvil' && Neo.isPanelOpen(Neo.ui.anvilPanel)) Neo.setAnvilPanelOpen(false);
     if (!Neo.isSpecialRoom?.() && Neo.isPanelOpen(document.getElementById('specialRoomPanel'))) Neo.setSpecialRoomPanelOpen?.(false);
@@ -439,8 +421,7 @@ export function loop(timestamp) {
     Neo.moveInputX = moveX;
     Neo.moveInputY = moveY;
 
-    const dashKey = _b ? _b.dash : 'shift';
-    const dashHeld = !!Neo.keys[dashKey];
+    const dashHeld = Neo.dashHeld;
     if (!overlayOpen && !playerStunned && dashHeld && !Neo.dashKeyLatch) {
       Neo.tryDash(moveX, moveY);
       Neo.dashKeyLatch = true;

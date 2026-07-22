@@ -104,7 +104,7 @@
       if (Neo.getItemCount('charged_adapter') > 0) {
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
         const slotLetter = slotIdx >= 0 ? Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F' : 'F';
-        const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
+        const warpHint = slotIdx >= 0 ? (Neo.getEquipmentSlotControlLabel?.(slotIdx) || slotLetter) : slotLetter;
         const needed = Neo.getChargeRequirement(20);
         const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
         if (Neo.player?.escapeReady) {
@@ -781,10 +781,9 @@
     }
 
     if (Neo.ui.interactPrompt) {
-      const shopHint = Neo.getControlHint('interact', 'e');
-      const touchHint = window.NeoSettings?.isTouchControlsEnabled?.()
-        ? ` / X BUTTON`
-        : '';
+      const inputMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+      const shopHint = Neo.getActiveControlHint?.('interact', 'e') || Neo.getControlHint('interact', 'e');
+      const promptHint = inputMode === 'touch' ? 'TAP' : `[${shopHint}]`;
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
       const isSpecial = Neo.isSpecialRoom?.() && !Neo.currentRoom?.serviceUsed && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
@@ -792,22 +791,25 @@
       const bountyAction = Neo.getBountyTargetInteractLabel?.() || '';
       const isLadder = !bountyAction && !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
       if (bountyAction) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  ${bountyAction}`;
+        Neo.ui.interactPrompt.textContent = `${promptHint}  ${bountyAction}`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isShop) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Shop`;
+        Neo.ui.interactPrompt.textContent = `${promptHint}  Open Shop`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isAnvil) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Forge`;
+        Neo.ui.interactPrompt.textContent = `${promptHint}  Open Forge`;
         Neo.ui.interactPrompt.classList.remove('hidden');
         Neo.ui.interactPrompt.classList.add('interact-prompt--forge');
       } else if (isSpecial) {
         Neo.ui.interactPrompt.textContent = specialChoiceAction
-          ? `[${shopHint}]${touchHint}  ${specialChoiceAction}`
+          ? `${promptHint}  ${specialChoiceAction}`
           : 'Approach a pictured choice';
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isLadder) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Use Ladder`;
+        const ladderHint = Neo.getLadderControlHint?.() || shopHint;
+        Neo.ui.interactPrompt.textContent = inputMode === 'touch'
+          ? `TAP  Use Ladder`
+          : `[${ladderHint}]  Use Ladder`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else {
         Neo.ui.interactPrompt.classList.add('hidden');
@@ -1209,6 +1211,17 @@
     if (Array.isArray(custom) && custom.length === DEFAULT_EQUIPMENT_SLOT_KEYS.length) return custom;
     return DEFAULT_EQUIPMENT_SLOT_KEYS;
   }
+  function getEquipmentSlotControlLabel(index) {
+    const mode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+    if (mode === 'touch') return 'TAP';
+    if (mode === 'gamepad') {
+      const direct = window.NeoSettings?.getActionBindingLabel?.(`tool${index + 1}`, '', 'gamepad');
+      if (direct && direct !== 'UNBOUND') return direct;
+      const all = window.NeoSettings?.getActionBindingLabel?.('activateAll', '', 'gamepad');
+      return all && all !== 'UNBOUND' ? `${all} ALL` : 'UNBOUND';
+    }
+    return getEquipmentSlotKeys()[index] || String(index + 1);
+  }
   // Skill card -> binding action. Melee uses the 'slash' binding; the rest match.
   const SKILL_KEY_ACTIONS = { dash: 'dash', melee: 'slash', laser: 'laser', smash: 'smash' };
   // Hardcoded fallbacks matching index.html, used if NeoSettings isn't ready yet.
@@ -1216,7 +1229,7 @@
   function updateSkillKeyLabels() {
     const keys = Neo.ui?.skillKeys;
     if (!keys) return;
-    const getLabel = window.NeoSettings?.getBindingLabel;
+    const getLabel = window.NeoSettings?.getActionBindingLabel;
     let sig = '';
     const labels = {};
     for (const skill in SKILL_KEY_ACTIONS) {
@@ -1698,6 +1711,7 @@
   // Live getter so remapped tool-slot keys are honored everywhere without rewiring.
   Object.defineProperty(Neo, 'EQUIPMENT_SLOT_KEYS', { get: getEquipmentSlotKeys, configurable: true });
   Neo.getEquipmentSlotKeys = getEquipmentSlotKeys;
+  Neo.getEquipmentSlotControlLabel = getEquipmentSlotControlLabel;
   Neo.ACTIVATABLE_ITEMS = ACTIVATABLE_ITEMS;
   Neo.isActivatableItem = (itemKey) => Boolean(ACTIVATABLE_ITEMS[itemKey]);
 
@@ -1766,6 +1780,10 @@
   Neo.getItemKeyForSlotKey = getItemKeyForSlotKey;
 
   function activateEquipmentSlotKey(letter) {
+    if (Neo.multiplayerGameView?.active) {
+      const index = getEquipmentSlotKeys().indexOf(String(letter || '').toUpperCase());
+      return index >= 0 && !!Neo.multiplayerGameView.activateEquipmentSlot?.(index);
+    }
     const itemKey = getItemKeyForSlotKey(letter);
     if (!itemKey) return false;
     const def = ACTIVATABLE_ITEMS[itemKey];
@@ -1778,6 +1796,7 @@
 
   // Fire every equipped tool at once (Space activates all). Returns true if any fired.
   function activateAllEquipmentSlots() {
+    if (Neo.multiplayerGameView?.active) return !!Neo.multiplayerGameView.activateAllEquipment?.();
     if (!Neo.player) return false;
     syncEquipmentSlotsFromInventory();
     let activated = false;
@@ -1806,6 +1825,7 @@
     const slotKeys = getEquipmentSlotKeys();
     nodes.forEach((node, idx) => {
       const letter = slotKeys[idx];
+      const controlLabel = getEquipmentSlotControlLabel(idx);
       if (!node._equipmentRefs) {
         node._equipmentRefs = {
           keySpan: node.querySelector('.equip-slot__key'),
@@ -1825,10 +1845,10 @@
       const itemName = itemDef?.name || itemKey || '';
       const itemDesc = itemDef?.description || itemDef?.desc || '';
       const rarity = itemDef?.rarity || itemDef?.category || '';
-      const signature = `${letter}|${itemKey || ''}|${state}|${statusText}|${itemName}|${itemDesc}|${rarity}`;
+      const signature = `${letter}|${controlLabel}|${itemKey || ''}|${state}|${statusText}|${itemName}|${itemDesc}|${rarity}`;
       if (node._equipmentSignature === signature) return;
       node._equipmentSignature = signature;
-      if (keySpan && keySpan.textContent !== letter) keySpan.textContent = letter;
+      if (keySpan && keySpan.textContent !== controlLabel) keySpan.textContent = controlLabel;
       if (node.dataset.equipKey !== letter) node.dataset.equipKey = letter;
       node.classList.toggle('is-filled', !!(def && itemDef));
       node.classList.toggle('is-empty', !(def && itemDef));
@@ -1840,7 +1860,7 @@
           node._equipmentIconKey = itemKey;
         }
         if (labelSpan && labelSpan.textContent !== statusText) labelSpan.textContent = statusText;
-        const header = `${itemName} [${letter}]${statusText ? ' · ' + statusText : ''}`;
+        const header = `${itemName} [${controlLabel}]${statusText ? ' · ' + statusText : ''}`;
         node.dataset.tipName = header;
         node.dataset.tipDesc = itemDesc;
         node.dataset.tipRarity = rarity;

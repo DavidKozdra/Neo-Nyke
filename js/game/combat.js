@@ -3130,7 +3130,7 @@
       radius: (Neo.ATTACKS.smash.radius || 130) * (itemStats.aoeRadiusMultiplier || 1) * 0.75,
       swingsLeft: TITAN_HAMMER_MAX_SWINGS,
       contactCooldowns: new Map(),
-      _wasDown: !!Neo.mouse.down || !!Neo.mouse.downQueued,
+      _wasDown: !!Neo.isMouseActionHeld?.('slash'),
     };
     Neo.tutorialController?.signal?.('attack', { action: 'smash' });
     Neo.ringBurst(Neo.player.x, Neo.player.y, 26, '#7da3ff', 0.4);
@@ -3163,7 +3163,7 @@
     // ourselves rather than relying on Neo.mouse.downQueued, since that flag
     // is already consumed earlier in the frame by the melee-attack input
     // handling (LMB doubles as both melee and, while the hammer is out, smash).
-    const mouseDown = !!Neo.mouse.down || !!Neo.mouse.downQueued;
+    const mouseDown = !!Neo.isMouseActionHeld?.('slash');
     const clicked = mouseDown && !hammer._wasDown;
     hammer._wasDown = mouseDown;
     if (clicked && hammer.swingCooldown <= 0 && hammer.swingsLeft > 0) {

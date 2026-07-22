@@ -64,8 +64,10 @@ function roomFromKey(key) {
 }
 
 function getInputMode() {
-  if (window.NeoTouch?.active || window.NeoSettings?.isTouchControlsEnabled?.()) return 'touch';
-  if (window.NeoGamepad?.[0]?.active) return 'gamepad';
+  const resolved = window.NeoSettings?.getEffectiveInputMode?.();
+  if (resolved) return resolved;
+  if (window.NeoTouch?.active || window.NeoSettings?.isTouchControlsEnabled?.() || window.NeoSettings?.getControlMode?.() === 'mobile') return 'touch';
+  if (window.NeoGamepad?.[0]?.active || (window.NeoGamepad?.getConnectedPads?.().length || 0) > 0) return 'gamepad';
   return 'keyboard';
 }
 
@@ -92,6 +94,8 @@ function closeSettingsAndResume() {
 
 function getActionLabel(action, fallback) {
   const mode = getInputMode();
+  const resolved = window.NeoSettings?.getActionBindingLabel?.(action, fallback, mode);
+  if (resolved) return resolved;
   if (mode === 'touch') {
     const bindings = { ...DEFAULT_TOUCH_BINDINGS, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
     const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchX: 'X BUTTON', touchY: 'Y BUTTON', touchDash: 'DASH BUTTON' };
@@ -124,11 +128,16 @@ function getActivateAllLabel() {
 }
 
 function getLadderLabel() {
-  if (getInputMode() !== 'touch') return getActionLabel('interact', 'E');
-  const bindings = { ...DEFAULT_TOUCH_BINDINGS, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
-  const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchX: 'X BUTTON', touchY: 'Y BUTTON', touchDash: 'DASH BUTTON' };
-  const match = Object.entries(bindings).find(([, value]) => value === 'ascend');
-  return match ? `${labels[match[0]]} / TAP LADDER` : 'TAP LADDER';
+  const mode = getInputMode();
+  if (mode === 'touch') {
+    const label = getActionLabel('ascend', '');
+    return label && label !== 'UNBOUND' ? `${label} / TAP LADDER` : 'TAP LADDER';
+  }
+  if (mode === 'gamepad') {
+    const ascend = getActionLabel('ascend', '');
+    return ascend && ascend !== 'UNBOUND' ? ascend : getActionLabel('interact', 'UNBOUND');
+  }
+  return getActionLabel('ascend', 'SPACE');
 }
 
 // A route step asks the player to walk to a doorway, but a gameplay panel

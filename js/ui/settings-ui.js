@@ -14,6 +14,15 @@
     4:'inventory', 5:'dash', 6:'activateAll', 7:'interact',
     8:'inventory', 9:'pause', 10:'ascend', 11:'interact',
   };
+  const TOUCH_BUTTON_NAMES = {
+    touchA: 'A BUTTON', touchB: 'B BUTTON', touchX: 'X BUTTON',
+    touchY: 'Y BUTTON', touchDash: 'DASH BUTTON',
+  };
+  const GAMEPAD_BUTTON_NAMES = {
+    0: 'A', 1: 'B', 2: 'X', 3: 'Y',
+    4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT',
+    8: 'VIEW', 9: 'MENU', 10: 'L3', 11: 'R3',
+  };
   const GAMEPAD_ACTIONS = [
     ['none', 'None'], ['slash', 'Slash'], ['laser', 'Laser'], ['smash', 'Smash'], ['dash', 'Dash'],
     ['ascend', 'Climb / Exit'], ['interact', 'Interact'], ['inventory', 'Inventory'],
@@ -329,6 +338,7 @@
   let gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
   let controlMode = null;
   let touchControlsEnabled = null;
+  let lastInputMode = '';
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
   let gameplay = { ...DEFAULT_GAMEPLAY };
@@ -411,6 +421,39 @@
            (navigator.maxTouchPoints > 0);
   }
 
+  function noteInputMode(mode) {
+    if (!['keyboard', 'touch', 'gamepad'].includes(mode)) return;
+    lastInputMode = mode;
+  }
+
+  // Prompts follow the most recently used device. Merely showing the touch
+  // overlay must not pin every hint to touch or suppress a connected pad.
+  function getEffectiveInputMode() {
+    if (lastInputMode) return lastInputMode;
+    if (window.NeoGamepad?.[0]?.active) return 'gamepad';
+    if (touchControlsEnabled || controlMode === 'mobile') return 'touch';
+    if ((window.NeoGamepad?.getConnectedPads?.().length || 0) > 0) return 'gamepad';
+    return 'keyboard';
+  }
+
+  function getActionBindingLabel(action, fallback = '', requestedMode = null) {
+    const mode = requestedMode || getEffectiveInputMode();
+    if (mode === 'touch') {
+      const entry = Object.entries(touchBindings).find(([, value]) => value === action);
+      if (entry) return TOUCH_BUTTON_NAMES[entry[0]] || '';
+      if (action === 'inventory') return 'MENU → INVENTORY';
+      if (action === 'interact') return 'TAP THE PROMPT';
+      if (action === 'pause') return 'MENU → PAUSE';
+      if (action === 'activateAll' || /^tool[1-8]$/.test(action)) return 'TAP A TOOL SLOT';
+      return 'UNBOUND';
+    }
+    if (mode === 'gamepad') {
+      const entry = Object.entries(gamepadBindings).find(([, value]) => value === action);
+      return entry ? (GAMEPAD_BUTTON_NAMES[Number(entry[0])] || '') : 'UNBOUND';
+    }
+    return keyLabel(bindings[action]) || String(fallback || '').toUpperCase();
+  }
+
   function applyControlsSectionVisibility() {
     const mode = controlMode || (isTouchDevice() ? 'mobile' : 'desktop');
     const desktopSec = document.querySelector('.controls-desktop-section');
@@ -477,6 +520,9 @@
     getGamepadBindings: () => ({ ...gamepadBindings }),
     getControlMode: () => controlMode,
     isTouchControlsEnabled: () => touchControlsEnabled,
+    noteInputMode,
+    getEffectiveInputMode,
+    getActionBindingLabel,
     getEquipmentSlotKeys,
     getActivateAllKey: () => String(bindings.activateAll || ' '),
     // Display label for a bound action (e.g. 'smash' -> 'R'), honoring rebinds.
@@ -512,6 +558,12 @@
     // syncCharacterUiTheme() in player.js on character / settings changes.
     applyEffectiveTheme,
   };
+
+  window.addEventListener('keydown', () => noteInputMode('keyboard'), true);
+  window.addEventListener('pointerdown', event => {
+    noteInputMode(event.pointerType === 'touch' ? 'touch' : 'keyboard');
+  }, true);
+  window.addEventListener('touchstart', () => noteInputMode('touch'), { capture: true, passive: true });
 
   const modal = document.getElementById('settingsModal');
   const SettingsUIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
@@ -710,7 +762,12 @@
     select.addEventListener('change', () => {
       const key = select.dataset.touchbind;
       if (!key) return;
-      touchBindings[key] = String(select.value || DEFAULT_TOUCH_BINDINGS[key] || 'slash');
+      const previousAction = touchBindings[key] || DEFAULT_TOUCH_BINDINGS[key] || 'slash';
+      const nextAction = String(select.value || previousAction);
+      const occupiedKey = Object.keys(touchBindings).find(bindingKey => bindingKey !== key && touchBindings[bindingKey] === nextAction);
+      if (occupiedKey) touchBindings[occupiedKey] = previousAction;
+      touchBindings[key] = nextAction;
+      refreshTouchBindControls();
       save();
     });
   });

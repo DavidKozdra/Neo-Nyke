@@ -12,6 +12,11 @@ const {
 const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/LocalMultiplayerSession');
 
 describe('network multiplayer game view', () => {
+  afterEach(() => {
+    delete globalThis.NeoSettings;
+    delete globalThis.NeoGamepad;
+  });
+
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
     expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v31');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v28');
@@ -45,6 +50,101 @@ describe('network multiplayer game view', () => {
     view.localPredictedPlayer = { id: 'p1', x: 100, y: 100, radius: 18, moveSpeed: 180 };
     view._sendInput();
     expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
+  });
+
+  test('honors remapped keyboard movement, combat, and equipment controls online', () => {
+    const sent = [];
+    const noteInputMode = jest.fn();
+    globalThis.NeoSettings = {
+      noteInputMode,
+      getBindings: () => ({
+        up: 'z', down: 's', left: 'a', right: 'd', slash: 'q', laser: 'f',
+        smash: 'g', dash: 'h', interact: 'x', ascend: 'c', activateAll: 'b',
+        tool1: 'v',
+      }),
+    };
+    const session = {
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendAction: (...args) => sent.push(['action', ...args]),
+      sendAbility: (...args) => sent.push(['ability', ...args]),
+      sendDash: (...args) => sent.push(['dash', ...args]),
+      sendGameCommand: (...args) => sent.push(['command', ...args]),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.active = true;
+    view.localPredictedPlayer = {
+      id: 'p1', equippedMoves: { laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+    };
+    view.currentSample = {
+      state: { players: { p1: { id: 'p1', equipmentSlots: ['panic_button'] } }, interactables: {} },
+    };
+    const keyEvent = (key, code) => ({ key, code, repeat: false, preventDefault: jest.fn() });
+
+    const forward = keyEvent('z', 'KeyZ');
+    view._onKey(forward, true);
+    expect(view._readMovement()).toEqual({ moveX: 0, moveY: -1 });
+    view._onKey(forward, false);
+    expect(view._readMovement()).toEqual({ moveX: 0, moveY: 0 });
+
+    view._onKey(keyEvent('q', 'KeyQ'), true);
+    view._onKey(keyEvent('g', 'KeyG'), true);
+    view._onKey(keyEvent('h', 'KeyH'), true);
+    view._onKey(keyEvent('f', 'KeyF'), true);
+    expect(view.keyboardLaserHeld).toBe(true);
+    view._onKey(keyEvent('f', 'KeyF'), false);
+    expect(view.keyboardLaserHeld).toBe(false);
+    view._onKey(keyEvent('v', 'KeyV'), true);
+
+    expect(sent).toEqual([
+      ['action', 'ATTACK', 0],
+      ['ability', 'crimson_smash', 0],
+      ['dash', 'dash', 0],
+      ['ability', 'blood_beam', 0],
+      ['command', 'ACTIVATE_EQUIPMENT', { itemKey: 'panic_button' }],
+    ]);
+    expect(noteInputMode).toHaveBeenCalledWith('keyboard');
+  });
+
+  test('uses normalized controller movement and remapped action queues online', () => {
+    const sent = [];
+    const queued = new Set(['slash', 'laser', 'smash', 'dash', 'interact', 'tool1']);
+    globalThis.NeoGamepad = [{
+      active: true, connected: true, moveX: 0, moveY: -1, hasAim: false,
+      slash: false, laser: false, smash: false, dash: false,
+    }];
+    globalThis.NeoGamepad.consumeAction = (_slot, action) => queued.delete(action);
+    const session = {
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendAction: (...args) => sent.push(['action', ...args]),
+      sendAbility: (...args) => sent.push(['ability', ...args]),
+      sendDash: (...args) => sent.push(['dash', ...args]),
+      sendInteract: (...args) => sent.push(['interact', ...args]),
+      sendGameCommand: (...args) => sent.push(['command', ...args]),
+    };
+    const view = new NetworkGameView({ session, neo: { getFirstPersonYaw: () => 0 } });
+    view.active = true;
+    view.localPredictedPlayer = {
+      id: 'p1', equippedMoves: { laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+    };
+    view.currentSample = {
+      state: {
+        players: { p1: { id: 'p1', x: 100, y: 100, radius: 18, roomId: 'r1', equipmentSlots: ['panic_button'] } },
+        interactables: { chest: { id: 'chest', x: 105, y: 100, radius: 20, roomId: 'r1' } },
+      },
+    };
+
+    expect(view._readMovement()).toEqual({ moveX: 1, moveY: 0 });
+    view._syncGamepadActions();
+
+    expect(sent).toEqual([
+      ['action', 'ATTACK', 0],
+      ['ability', 'blood_beam', 0],
+      ['ability', 'crimson_smash', 0],
+      ['dash', 'dash', 0],
+      ['interact', 'chest'],
+      ['command', 'ACTIVATE_EQUIPMENT', { itemKey: 'panic_button' }],
+    ]);
+    expect(queued.size).toBe(0);
   });
 
   test('transmits input changes immediately without resending identical 20 Hz samples', () => {
@@ -123,6 +223,26 @@ describe('network multiplayer game view', () => {
       expect(view.aimDirection).toBeCloseTo(Math.PI / 2);
       view._syncTouchActions();
       expect(calls).toHaveLength(4); // held buttons do not resend edge-triggered actions
+    });
+
+    test('does not lose a quick touch tap between network input samples', () => {
+      const sendAction = jest.fn();
+      const view = new NetworkGameView({
+        session: { snapshot: () => ({ status: 'running' }), sendAction },
+        neo: {},
+      });
+      view.active = true;
+      view.localPredictedPlayer = { id: 'p1', equippedMoves: {} };
+      globalThis.NeoTouch = {
+        active: true,
+        slash: false,
+        queuedActions: { slash: true },
+      };
+
+      view._syncTouchActions();
+
+      expect(sendAction).toHaveBeenCalledWith('ATTACK', 0);
+      expect(globalThis.NeoTouch.queuedActions).toEqual({});
     });
   });
 

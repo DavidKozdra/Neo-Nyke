@@ -1722,9 +1722,8 @@ export function createUIController(view) {
         }
       }
       if (view.dialogueHint) {
-        const touchInput = window.NeoTouch?.active || window.NeoSettings?.isTouchControlsEnabled?.();
-        const gamepadInput = !touchInput && window.NeoGamepad?.[0]?.active;
-        const inputLabel = touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER';
+        const inputMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+        const inputLabel = inputMode === 'touch' ? 'TAP' : inputMode === 'gamepad' ? 'A BUTTON' : 'ENTER';
         const hint = `${inputLabel} TO ${snapshot.isFullyTyped ? 'CONTINUE' : 'SKIP'}`;
         if (dialogueRenderCache.hint !== hint) {
           view.dialogueHint.textContent = hint;

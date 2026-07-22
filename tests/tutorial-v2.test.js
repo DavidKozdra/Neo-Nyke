@@ -42,7 +42,7 @@ describe('Sarge tutorial v2', () => {
     expect(tutorialCss).toContain('.tutorial-target-ring--offscreen::before');
     expect(tutorialCss).toContain('font-size: calc(27px * var(--font-scale, 1))');
     expect(tutorialCss).toContain('.tutorial-cutscene-active .dialogue-text');
-    expect(uiController).toContain("touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER'");
+    expect(uiController).toContain("inputMode === 'touch' ? 'TAP' : inputMode === 'gamepad' ? 'A BUTTON' : 'ENTER'");
     expect(gamepadControls).toContain('window.Neo?.uiController?.isDialogueOpen?.()');
   });
 

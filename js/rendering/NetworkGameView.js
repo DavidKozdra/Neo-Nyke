@@ -45,7 +45,12 @@
     centerDisplay: '',
     actionBar: '',
   });
-  const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
+  const DEFAULT_KEYBOARD_BINDINGS = Object.freeze({
+    up: 'w', down: 's', left: 'a', right: 'd', dash: 'shift', inventory: 'i',
+    interact: 'e', ascend: ' ', smash: 'r', slash: 'lmb', laser: 'rmb',
+    activateAll: ' ', tool1: '1', tool2: '2', tool3: '3', tool4: '4',
+    tool5: '5', tool6: '6', tool7: '7', tool8: '8',
+  });
   // Matches the touch deadzone the single-player loop uses in js/core/update.js.
   const TOUCH_DEADZONE = 0.08;
   // Matches the default duration triggerArmRecoil() uses in js/game/combat.js.
@@ -59,13 +64,25 @@
   // Smoothed because a single frame's delta is noisy enough to make the step
   // cycle stutter; the rate is a half-life in Hz, framerate-independent.
   const NETWORK_VELOCITY_SMOOTH_HZ = 18;
-  const ABILITY_KEYS = new Map([['KeyR', 'smash'], ['ShiftLeft', 'dash'], ['ShiftRight', 'dash']]);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
     ['KeyS', [0, 1]], ['ArrowDown', [0, 1]],
     ['KeyA', [-1, 0]], ['ArrowLeft', [-1, 0]],
     ['KeyD', [1, 0]], ['ArrowRight', [1, 0]],
   ]);
+
+  function configuredKeyboardBindings() {
+    return { ...DEFAULT_KEYBOARD_BINDINGS, ...(root.NeoSettings?.getBindings?.() || {}) };
+  }
+
+  function eventKey(event) {
+    if (typeof event?.key === 'string') return event.key.toLowerCase();
+    if (/^Key[A-Z]$/.test(event?.code || '')) return event.code.slice(3).toLowerCase();
+    if (/^Digit[0-9]$/.test(event?.code || '')) return event.code.slice(5);
+    if (event?.code === 'Space') return ' ';
+    if (event?.code === 'ShiftLeft' || event?.code === 'ShiftRight') return 'shift';
+    return '';
+  }
 
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
@@ -263,8 +280,11 @@
       this.keys = new Set();
       this.aimDirection = 0;
       this.laserHeld = false;
+      this.keyboardLaserHeld = false;
+      this.gamepadLaserHeld = false;
       this.touchLaserHeld = false;
-      this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false };
+      this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false, beamMash: false };
+      this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
       this.localBeamAngle = null;
       this.localBeamChannelStart = -1;
       this.previousSample = null;
@@ -335,6 +355,8 @@
       this.boundBlur = () => {
         this.keys.clear();
         this.laserHeld = false;
+        this.keyboardLaserHeld = false;
+        this.gamepadLaserHeld = false;
         this.touchLaserHeld = false;
       };
       this.boundPauseResume = event => {
@@ -425,6 +447,12 @@
       this.keys.clear();
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
+      this.laserHeld = false;
+      this.keyboardLaserHeld = false;
+      this.gamepadLaserHeld = false;
+      this.touchLaserHeld = false;
+      this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false, beamMash: false };
+      this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
@@ -542,6 +570,7 @@
       if (!form || !input) return;
       this.keys.clear();
       this.laserHeld = false;
+      this.keyboardLaserHeld = false;
       form.classList.remove('hidden');
       // Releasing pointer lock normally opens the multiplayer pause menu. Chat
       // is its own intentional focus transition, so disarm that edge first.
@@ -744,32 +773,49 @@
       // network toggle here would process the same window keydown twice; that
       // handler calls togglePause() on this view exactly once.
       if (event.code === 'Escape') return;
-      if (this.active && pressed && !event.repeat && event.code === 'KeyE') {
-        event.preventDefault();
-        this._interact();
-        return;
-      }
-      if (this.active && pressed && !event.repeat && /^Digit[1-8]$/.test(event.code)) {
-        const index = Number(event.code.slice(5)) - 1;
-        const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
-        const itemKey = player?.equipmentSlots?.[index];
-        if (itemKey) this.session.sendGameCommand?.('ACTIVATE_EQUIPMENT', { itemKey });
-        event.preventDefault();
-        return;
-      }
-      if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code) && !ABILITY_KEYS.has(event.code))) return;
+      if (!this.active) return;
       if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      const key = eventKey(event);
+      const bindings = configuredKeyboardBindings();
+      const movementAction = ['up', 'down', 'left', 'right'].find(action => key === String(bindings[action]).toLowerCase());
+      const arrowAction = event.code === 'ArrowUp' ? 'up'
+        : event.code === 'ArrowDown' ? 'down'
+          : event.code === 'ArrowLeft' ? 'left'
+            : event.code === 'ArrowRight' ? 'right'
+              : '';
+      const resolvedMovementAction = movementAction || arrowAction;
+      if (resolvedMovementAction) {
+        event.preventDefault();
+        const token = `action:${resolvedMovementAction}`;
+        if (pressed) this.keys.add(token); else this.keys.delete(token);
+        root.NeoSettings?.noteInputMode?.('keyboard');
+        return;
+      }
+      if (key === String(bindings.laser).toLowerCase() && !['lmb', 'rmb'].includes(key)) {
+        event.preventDefault();
+        this.keyboardLaserHeld = pressed;
+        if (pressed && !event.repeat) this._useSlot('laser');
+        root.NeoSettings?.noteInputMode?.('keyboard');
+        return;
+      }
+      if (!pressed || event.repeat) return;
+      const actions = Object.entries(bindings).filter(([name, value]) => (
+        !['up', 'down', 'left', 'right', 'laser'].includes(name)
+        && key === String(value).toLowerCase()
+      )).map(([name]) => name);
+      if (!actions.length) return;
       event.preventDefault();
-      if (ATTACK_KEYS.has(event.code)) {
-        if (pressed && !event.repeat) this._attack();
-        return;
-      }
-      if (ABILITY_KEYS.has(event.code)) {
-        if (pressed && !event.repeat) this._useSlot(ABILITY_KEYS.get(event.code));
-        return;
-      }
-      if (pressed) this.keys.add(event.code);
-      else this.keys.delete(event.code);
+      root.NeoSettings?.noteInputMode?.('keyboard');
+      let interacted = false;
+      if (actions.includes('interact')) interacted = this._interact();
+      if (actions.includes('ascend') && !interacted) interacted = this._interact();
+      if (actions.includes('ascend') && interacted) return;
+      if (actions.includes('slash')) this._attack();
+      if (actions.includes('smash')) this._useSlot('smash');
+      if (actions.includes('dash')) this._useSlot('dash');
+      if (actions.includes('activateAll')) this.activateAllEquipment();
+      actions.filter(action => /^tool[1-8]$/.test(action))
+        .forEach(action => this.activateEquipmentSlot(Number(action.slice(4)) - 1));
     }
 
     _onPointerDown(event) {
@@ -782,18 +828,40 @@
       if (!this.active || this._isInputBlocked() || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
       event.preventDefault();
       this._onPointerMove(event);
-      if (event.button === 2) {
+      root.NeoSettings?.noteInputMode?.('keyboard');
+      const binding = event.button === 2 ? 'rmb' : 'lmb';
+      const bindings = configuredKeyboardBindings();
+      if (String(bindings.laser).toLowerCase() === binding) {
         // Channelled beams are hold-to-maintain: the held bit rides the input
         // stream so the authority can end the channel the moment RMB lifts.
         this.laserHeld = true;
         this._useSlot('laser');
-      } else {
-        this._attack();
-      }
+      } else if (String(bindings.slash).toLowerCase() === binding) this._attack();
     }
 
     _onPointerUp(event) {
-      if (event.button === 2) this.laserHeld = false;
+      const binding = event.button === 2 ? 'rmb' : event.button === 0 ? 'lmb' : '';
+      if (binding && String(configuredKeyboardBindings().laser).toLowerCase() === binding) this.laserHeld = false;
+    }
+
+    activateEquipmentSlot(index) {
+      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return false;
+      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      const itemKey = player?.equipmentSlots?.[Number(index)];
+      if (!itemKey) return false;
+      this.session.sendGameCommand?.('ACTIVATE_EQUIPMENT', { itemKey });
+      return true;
+    }
+
+    activateAllEquipment() {
+      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return false;
+      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      let activated = false;
+      (player?.equipmentSlots || []).forEach((itemKey, index) => {
+        if (!itemKey) return;
+        activated = this.activateEquipmentSlot(index) || activated;
+      });
+      return activated;
     }
 
     _attack() {
@@ -823,23 +891,31 @@
     }
 
     _interact() {
+      if (!this.active || this._isInputBlocked()) return false;
       const state = this.currentSample?.state;
       const player = state?.players?.[this.session.snapshot().playerId];
-      if (!player || player.downed || player.pendingUpgrade) return;
-      // Shop / anvil / special-room panels (and the ladder) are toggled by the
-      // campaign's global window keydown handler in panels.js, which already runs
+      if (!player || player.downed || player.pendingUpgrade) return false;
+      // Shop / anvil / special-room panels are toggled by the campaign's global
+      // window keydown handler in panels.js, which already runs
       // in multiplayer because the co-op game state sits in `play`. Toggling them
       // here as well made the same E press fire twice — open then instantly close,
       // the shop panel "flickering off right away". This is the same double-listener
       // trap the Escape handler in _onKey documents; keep this path to the one job
       // the campaign handler can't do without a session: sending the INTERACT
-      // command for nearby chests / interactables.
+      // command for nearby server-owned chests / interactables. Network stairs
+      // remain authority-owned and normally advance through their dwell timer.
       const target = Object.values(state.interactables || {})
         .filter(item => !item.opened && item.roomId === player.roomId)
         .map(item => ({ item, distance: Math.hypot(Number(item.x) - Number(player.x), Number(item.y) - Number(player.y)) }))
         .filter(entry => entry.distance <= Number(entry.item.radius || 30) + Number(player.radius || 18) + 38)
         .sort((first, second) => first.distance - second.distance)[0]?.item;
-      if (target) this.session.sendInteract(target.id);
+      if (!target) return false;
+      this.session.sendInteract(target.id);
+      return true;
+    }
+
+    interact() {
+      return this._interact();
     }
 
     _syncAutomaticChestInteraction(localPlayer, state) {
@@ -1165,28 +1241,41 @@
     _readMovement() {
       let moveX = 0;
       let moveY = 0;
+      const actionDirections = {
+        'action:up': [0, -1], 'action:down': [0, 1],
+        'action:left': [-1, 0], 'action:right': [1, 0],
+      };
       this.keys.forEach(code => {
-        const direction = MOVEMENT_KEYS.get(code);
+        const direction = actionDirections[code] || MOVEMENT_KEYS.get(code);
         if (direction) {
           moveX += direction[0];
           moveY += direction[1];
         }
       });
+      const normalizedPad = root.NeoGamepad?.[0];
       const gamepads = root.navigator?.getGamepads?.();
-      const gamepad = gamepads ? Array.from(gamepads).find(Boolean) : null;
+      const gamepad = normalizedPad?.connected || normalizedPad?.active
+        ? normalizedPad
+        : (gamepads ? Array.from(gamepads).find(Boolean) : null);
       if (gamepad) {
-        const axisX = Math.abs(Number(gamepad.axes?.[0]) || 0) > 0.18 ? Number(gamepad.axes[0]) : 0;
-        const axisY = Math.abs(Number(gamepad.axes?.[1]) || 0) > 0.18 ? Number(gamepad.axes[1]) : 0;
+        const rawX = normalizedPad === gamepad ? gamepad.moveX : gamepad.axes?.[0];
+        const rawY = normalizedPad === gamepad ? gamepad.moveY : gamepad.axes?.[1];
+        const axisX = Math.abs(Number(rawX) || 0) > 0.18 ? Number(rawX) : 0;
+        const axisY = Math.abs(Number(rawY) || 0) > 0.18 ? Number(rawY) : 0;
         if (Math.hypot(axisX, axisY) > Math.hypot(moveX, moveY)) {
           moveX = axisX;
           moveY = axisY;
         }
-        const aimX = Math.abs(Number(gamepad.axes?.[2]) || 0) > 0.22 ? Number(gamepad.axes[2]) : 0;
-        const aimY = Math.abs(Number(gamepad.axes?.[3]) || 0) > 0.22 ? Number(gamepad.axes[3]) : 0;
+        const rawAimX = normalizedPad === gamepad ? gamepad.aimX : gamepad.axes?.[2];
+        const rawAimY = normalizedPad === gamepad ? gamepad.aimY : gamepad.axes?.[3];
+        const aimX = Math.abs(Number(rawAimX) || 0) > 0.22 ? Number(rawAimX) : 0;
+        const aimY = Math.abs(Number(rawAimY) || 0) > 0.22 ? Number(rawAimY) : 0;
         if (aimX || aimY) this.aimDirection = Math.atan2(aimY, aimX);
-        const attackPressed = !!gamepad.buttons?.[0]?.pressed;
-        if (attackPressed && !this.gamepadAttackPressed) this._attack();
-        this.gamepadAttackPressed = attackPressed;
+        if (normalizedPad !== gamepad) {
+          const attackPressed = !!gamepad.buttons?.[0]?.pressed;
+          if (attackPressed && !this.gamepadAttackPressed) this._attack();
+          this.gamepadAttackPressed = attackPressed;
+        }
       } else {
         this.gamepadAttackPressed = false;
       }
@@ -1211,24 +1300,63 @@
         : movement;
     }
 
+    _syncGamepadActions() {
+      const pad = root.NeoGamepad?.[0];
+      if (!pad?.active) {
+        this.gamepadLaserHeld = false;
+        this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
+        return;
+      }
+      const current = {
+        slash: !!pad.slash,
+        laser: !!pad.laser,
+        smash: !!pad.smash,
+        dash: !!pad.dash,
+      };
+      if (!this._isInputBlocked() && !this.localPredictedPlayer?.downed) {
+        const consume = action => root.NeoGamepad?.consumeAction?.(0, action);
+        const queued = {
+          slash: consume('slash'), laser: consume('laser'),
+          smash: consume('smash'), dash: consume('dash'),
+        };
+        if (queued.slash || current.slash && !this.previousGamepadActions.slash) this._attack();
+        if (queued.laser || current.laser && !this.previousGamepadActions.laser) this._useSlot('laser');
+        if (queued.smash || current.smash && !this.previousGamepadActions.smash) this._useSlot('smash');
+        if (queued.dash || current.dash && !this.previousGamepadActions.dash) this._useSlot('dash');
+        const interactQueued = consume('interact');
+        const ascendQueued = consume('ascend');
+        if (interactQueued || ascendQueued) this._interact();
+        if (consume('activateAll')) this.activateAllEquipment();
+        for (let index = 1; index <= 8; index += 1) {
+          if (consume(`tool${index}`)) this.activateEquipmentSlot(index - 1);
+        }
+      }
+      this.gamepadLaserHeld = current.laser;
+      this.previousGamepadActions = current;
+    }
+
     _syncTouchActions() {
       const touch = root.NeoTouch;
+      const queued = touch?.queuedActions || {};
       const current = {
         slash: !!touch?.active && !!touch.slash,
         laser: !!touch?.active && !!touch.laser,
         smash: !!touch?.active && !!touch.smash,
         ascend: !!touch?.active && !!touch.ascend,
         dash: !!touch?.active && !!touch.dash,
+        beamMash: !!touch?.active && !!touch.beamMash,
       };
+      if (touch) touch.queuedActions = {};
       if (touch?.active && Math.hypot(Number(touch.lastAimX || 0), Number(touch.lastAimY || 0)) > 0.2) {
         this.aimDirection = Math.atan2(Number(touch.lastAimY || 0), Number(touch.lastAimX || 0));
       }
       if (!this._isInputBlocked() && !this.localPredictedPlayer?.downed) {
-        if (current.slash && !this.previousTouchActions.slash) this._attack();
-        if (current.laser && !this.previousTouchActions.laser) this._useSlot('laser');
-        if (current.smash && !this.previousTouchActions.smash) this._useSlot('smash');
-        if (current.dash && !this.previousTouchActions.dash) this._useSlot('dash');
-        if (current.ascend && !this.previousTouchActions.ascend) this._interact();
+        if (queued.slash || current.slash && !this.previousTouchActions.slash) this._attack();
+        if (queued.laser || current.laser && !this.previousTouchActions.laser) this._useSlot('laser');
+        if (queued.smash || current.smash && !this.previousTouchActions.smash) this._useSlot('smash');
+        if (queued.dash || current.dash && !this.previousTouchActions.dash) this._useSlot('dash');
+        if (queued.ascend || current.ascend && !this.previousTouchActions.ascend) this._interact();
+        if (queued.beamMash || current.beamMash && !this.previousTouchActions.beamMash) this._useSlot('laser');
       }
       this.touchLaserHeld = current.laser;
       this.previousTouchActions = current;
@@ -1236,6 +1364,7 @@
 
     _sendInput() {
       if (!this.active || this.session.snapshot().status !== 'running') return;
+      this._syncGamepadActions();
       this._syncTouchActions();
       const movement = this._isInputBlocked() || this.localPredictedPlayer?.downed
         ? { moveX: 0, moveY: 0 }
@@ -1244,7 +1373,8 @@
       // direction to authority instead of the stale top-down pointer angle.
       const firstPersonYaw = this.neo.getFirstPersonYaw?.();
       if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
-      const input = { ...movement, aimDirection: this.aimDirection, buttons: this.laserHeld || this.touchLaserHeld ? BUTTON_LASER_HELD : 0 };
+      const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
+      const input = { ...movement, aimDirection: this.aimDirection, buttons: beamHeld ? BUTTON_LASER_HELD : 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
           this.localPredictedPlayer,

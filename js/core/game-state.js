@@ -634,6 +634,11 @@ export function resumeGame() {
     return formatControlLabel(bindings[action], fallback);
   }
 
+  function getActiveControlHint(action, fallback) {
+    return window.NeoSettings?.getActionBindingLabel?.(action, fallback)
+      || getControlHint(action, fallback);
+  }
+
   function hasTouchControls() {
     if (window.NeoSettings?.isTouchControlsEnabled) return window.NeoSettings.isTouchControlsEnabled();
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
@@ -642,23 +647,28 @@ export function resumeGame() {
   }
 
   function getAscendControlHint() {
-    if (!hasTouchControls()) return getControlHint('ascend', 'space');
-    const defaults = { touchA: 'slash', touchB: 'laser', touchY: 'smash', touchX: 'ascend', touchDash: 'dash' };
-    const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchY: 'Y BUTTON', touchX: 'X BUTTON', touchDash: 'DASH BUTTON' };
-    const bindings = { ...defaults, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
-    const entry = Object.entries(bindings).find(([, action]) => String(action).toLowerCase() === 'ascend');
-    return labels[entry?.[0]] || 'X BUTTON';
+    return getActiveControlHint('ascend', 'space');
   }
 
-  // Hint label for the ladder, which is driven by the interact action. On touch
-  // the ladder can still be triggered by the X (ascend) button, so show that
-  // button label there; on keyboard/gamepad show the interact key (default E).
+  // Ladders advertise the live Climb / Exit binding on every input device.
   function getLadderControlHint() {
-    if (hasTouchControls()) return getAscendControlHint();
-    return getControlHint('interact', 'e');
+    const mode = window.NeoSettings?.getEffectiveInputMode?.();
+    if (mode === 'touch') {
+      const touchLabel = window.NeoSettings?.getActionBindingLabel?.('ascend', '', 'touch');
+      return touchLabel && touchLabel !== 'UNBOUND' ? touchLabel : 'TAP LADDER';
+    }
+    if (mode === 'gamepad') {
+      const ascendLabel = window.NeoSettings?.getActionBindingLabel?.('ascend', '', 'gamepad');
+      if (ascendLabel && ascendLabel !== 'UNBOUND') return ascendLabel;
+      return window.NeoSettings?.getActionBindingLabel?.('interact', '', 'gamepad') || 'UNBOUND';
+    }
+    return getControlHint('ascend', 'space');
   }
 
   function getMovementControlHint() {
+    const mode = window.NeoSettings?.getEffectiveInputMode?.();
+    if (mode === 'touch') return 'LEFT JOYSTICK';
+    if (mode === 'gamepad') return 'LEFT STICK';
     const up = getControlHint('up', 'w');
     const left = getControlHint('left', 'a');
     const down = getControlHint('down', 's');
@@ -787,12 +797,12 @@ export function resumeGame() {
     if (!isFirstRunTutorialEngaged()) return '';
     if (Neo.tutorialController?.getCurrentMessage) return Neo.tutorialController.getCurrentMessage();
     const moveHint = getMovementControlHint();
-    const slashHint = getControlHint('slash', 'lmb');
-    const laserHint = getControlHint('laser', 'rmb');
-    const smashHint = getControlHint('smash', 'r');
-    const dashHint = getControlHint('dash', 'shift');
-    const inventoryHint = getControlHint('inventory', 'i');
-    const forgeHint = getControlHint('interact', 'e');
+    const slashHint = getActiveControlHint('slash', 'lmb');
+    const laserHint = getActiveControlHint('laser', 'rmb');
+    const smashHint = getActiveControlHint('smash', 'r');
+    const dashHint = getActiveControlHint('dash', 'shift');
+    const inventoryHint = getActiveControlHint('inventory', 'i');
+    const forgeHint = getActiveControlHint('interact', 'e');
     const ladderHint = getLadderControlHint();
     const step = Neo.tutorialState.step;
     if (step === 'move') return `Tutorial: Move with ${moveHint}. Rooms lock until cleared, so positioning is how you survive.`;
@@ -810,11 +820,11 @@ export function resumeGame() {
     if (!isFirstRunTutorialEngaged()) return [];
     if (Neo.tutorialController?.getCurrentObjectiveEntries) return Neo.tutorialController.getCurrentObjectiveEntries();
     const moveHint = getMovementControlHint();
-    const slashHint = getControlHint('slash', 'lmb');
-    const laserHint = getControlHint('laser', 'rmb');
-    const dashHint = getControlHint('dash', 'shift');
-    const inventoryHint = getControlHint('inventory', 'i');
-    const forgeHint = getControlHint('interact', 'e');
+    const slashHint = getActiveControlHint('slash', 'lmb');
+    const laserHint = getActiveControlHint('laser', 'rmb');
+    const dashHint = getActiveControlHint('dash', 'shift');
+    const inventoryHint = getActiveControlHint('inventory', 'i');
+    const forgeHint = getActiveControlHint('interact', 'e');
     const ladderHint = getLadderControlHint();
     const state = Neo.tutorialState;
     return [
@@ -1336,16 +1346,22 @@ export function resumeGame() {
     const hintEl = document.getElementById('mpLobbyHint');
     const subEl = document.querySelector('#mpLobby .mploby-sub');
     const controlsEl = document.querySelector('#mpLobby .mploby-controls');
+    const p1Move = ['up', 'left', 'down', 'right'].map((action, index) => (
+      getControlHint(action, ['w', 'a', 's', 'd'][index])
+    )).join('/');
+    const p1Combat = ['slash', 'laser', 'smash', 'dash'].map((action, index) => (
+      getControlHint(action, ['lmb', 'rmb', 'r', 'shift'][index])
+    )).join('/');
     if (titleEl) titleEl.textContent = mode === 'pvp' ? 'PVP' : 'CO-OP';
     if (hintEl) {
       if (mode === 'pvp') hintEl.textContent = 'First to 3 kills wins. P2 keyboard: IJKL move, U melee, O beam, P smash, ; dash.';
-      else hintEl.textContent = 'P1: WASD + Mouse / Gamepad 1  ·  P2: IJKL + U/; / Gamepad 2';
+      else hintEl.textContent = `P1: ${p1Move} + ${p1Combat} / Gamepad 1  ·  P2: IJKL + U/; / Gamepad 2`;
     }
     if (subEl) subEl.textContent = mode === 'pvp' ? '2-player arena' : 'How many players?';
     if (controlsEl) {
       controlsEl.textContent = mode === 'pvp'
-        ? 'P1: WASD+Mouse/Gamepad1 · P2: IJKL+U/O/P/;/Gamepad2'
-        : 'P1: WASD+Mouse/Gamepad1 · P2: IJKL+U/;/Gamepad2 · P3/P4: Gamepad 3/4';
+        ? `P1: ${p1Move}+${p1Combat}/Gamepad1 · P2: IJKL+U/O/P/;/Gamepad2`
+        : `P1: ${p1Move}+${p1Combat}/Gamepad1 · P2: IJKL+U/;/Gamepad2 · P3/P4: Gamepad 3/4`;
     }
     ['mpLobby1Btn', 'mpLobby3Btn', 'mpLobby4Btn'].forEach(id => {
       const button = document.getElementById(id);
@@ -4259,6 +4275,7 @@ export function resumeGame() {
   Neo.checkTurtleBoyUnlock = checkTurtleBoyUnlock;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
+  Neo.getActiveControlHint = getActiveControlHint;
   Neo.getAscendControlHint = getAscendControlHint;
   Neo.getLadderControlHint = getLadderControlHint;
   Neo.getMovementControlHint = getMovementControlHint;
