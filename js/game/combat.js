@@ -1244,7 +1244,7 @@
           Neo.angleBetween(Neo.player, opponent),
           trainingSafe ? 330 : 520,
           'pvp_beam_struggle',
-          { ignoreInv: !trainingSafe },
+          { ignoreInv: !trainingSafe, ignoreDamageCaps: !trainingSafe },
         );
       } else if (Neo.player) {
         const playerBeamPower = Number(Neo.MOVE_BASE_STATS?.[Neo.player.equippedMoves?.laser || 'blood_beam']?.damage || 10);
@@ -1255,7 +1255,7 @@
           attacker: opponent,
           ignoreInv: !trainingSafe,
           ignoreBlock: !trainingSafe,
-          maxHitRatio: 0.6,
+          ignoreDamageCaps: !trainingSafe,
           noEnemyAggression: true,
         });
       }
@@ -1286,7 +1286,7 @@
         attacker: enemy,
         ignoreInv: !trainingSafe,
         ignoreBlock: !trainingSafe,
-        maxHitRatio: 0.6,
+        ignoreDamageCaps: !trainingSafe,
         noEnemyAggression: true,
       });
       Neo.spawnParticle({

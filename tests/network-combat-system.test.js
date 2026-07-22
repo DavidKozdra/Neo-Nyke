@@ -242,6 +242,10 @@ describe('authoritative network combat system', () => {
     }, 0.05);
 
     expect(state.beamStruggles.p1).toBe(state.beamStruggles.p2);
+    state.players.p1.beamDamage = 80;
+    state.players.p2.beamDamage = 80;
+    state.players.p2.maxHp = 100;
+    state.players.p2.hp = 100;
     for (let index = 0; index < 7; index += 1) {
       simulation.updateGame({
         p1: { buttons: 1, aimDirection: 0, actions: [{ action: 'BEAM_MASH', aimDirection: 0 }] },
@@ -249,6 +253,8 @@ describe('authoritative network combat system', () => {
       }, 0.05);
     }
     expect(state.beamStruggles.p1).toBeUndefined();
+    expect(state.players.p2.hp).toBe(0);
+    expect(state.players.p2.downed).toBe(true);
     expect(state.players.p2.stunnedUntilTick).toBeGreaterThan(state.tick);
     expect(events.some(event => event.eventType === 'BEAM_STRUGGLE_RESOLVED' && event.data.opponentPlayerId === 'p2')).toBe(true);
   });

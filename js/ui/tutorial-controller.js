@@ -345,6 +345,7 @@ function createSteps() {
     },
     {
       id: 'laser',
+      beamOnly: true,
       chapter: 'COMBAT',
       title: 'Use your ranged attack',
       text: () => 'Aim at the dummy and use your ranged attack.',
@@ -355,6 +356,7 @@ function createSteps() {
     },
     {
       id: 'beam_struggle',
+      beamOnly: true,
       chapter: 'COMBAT',
       title: 'Win a beam struggle',
       text: () => `Aim your laser directly into the red training beam. When the beams lock, release and repeatedly press ${getActionLabel('laser', 'RMB')} to drive the clash back. Losing a struggle in a real run is devastating.`,
@@ -791,6 +793,7 @@ function createTutorialState(active = false) {
     dummySpawned: false,
     relicSpawned: false,
     resourcesGranted: false,
+    beamLessonsEnabled: null,
     trainingRoomKey: '',
     treasureRoomKey: '',
     shopRoomKey: '',
@@ -804,7 +807,7 @@ function createTutorialState(active = false) {
 }
 
 export function createTutorialController() {
-  const steps = createSteps();
+  const allSteps = createSteps();
   const overlay = document.getElementById('tutorialOverlay');
   const spotlight = overlay?.querySelector('.tutorial-spotlight');
   const card = document.getElementById('tutorialCard');
@@ -837,7 +840,7 @@ export function createTutorialController() {
     const liveStep = getStep();
     const liveId = liveStep?.id || '';
     if (liveId === lastLiveStepId) return;
-    const prev = steps.find(step => step.id === lastLiveStepId);
+    const prev = allSteps.find(step => step.id === lastLiveStepId);
     lastLiveStepId = liveId;
     try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break the tutorial */ }
     try { liveStep?.onEnter?.(); } catch (e) { /* same */ }
@@ -846,8 +849,23 @@ export function createTutorialController() {
   if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
 
   const getState = () => Neo.tutorialState;
-  const getIndex = () => Math.max(0, steps.findIndex(step => step.id === getState()?.step));
-  const getStep = () => steps[getIndex()] || steps[0];
+  const beamLessonsEnabled = state => typeof state?.beamLessonsEnabled === 'boolean'
+    ? state.beamLessonsEnabled
+    : !!globalThis.NeoNyke?.content?.isContinuousBeamMove?.(Neo.player?.equippedMoves?.laser);
+  const isStepAvailable = (step, state = getState()) => !step?.beamOnly || beamLessonsEnabled(state);
+  const getSteps = () => allSteps.filter(step => isStepAvailable(step));
+  const getIndex = () => {
+    const steps = getSteps();
+    const exactIndex = steps.findIndex(step => step.id === getState()?.step);
+    if (exactIndex >= 0) return exactIndex;
+    const fullIndex = allSteps.findIndex(step => step.id === getState()?.step);
+    const nextStep = allSteps.slice(Math.max(0, fullIndex + 1)).find(step => isStepAvailable(step));
+    return Math.max(0, steps.indexOf(nextStep));
+  };
+  const getStep = () => {
+    const steps = getSteps();
+    return steps[getIndex()] || steps[0];
+  };
   const getCurrentRoomKey = () => roomKey(Neo.currentRoom);
 
   // When the player hits Back we park on an earlier step to re-read it without
@@ -855,7 +873,10 @@ export function createTutorialController() {
   // we're on the live step.
   const isReviewing = () => Number.isInteger(getState()?.reviewIndex);
   const getDisplayIndex = () => (isReviewing() ? getState().reviewIndex : getIndex());
-  const getDisplayStep = () => steps[getDisplayIndex()] || steps[0];
+  const getDisplayStep = () => {
+    const steps = getSteps();
+    return steps[getDisplayIndex()] || steps[0];
+  };
 
   function isInStepRoom(step, state = getState()) {
     if (!step?.roomKey) return true;
@@ -900,7 +921,7 @@ export function createTutorialController() {
       completed: state.completed && typeof state.completed === 'object' ? { ...state.completed } : {},
       seenScenes: state.seenScenes && typeof state.seenScenes === 'object' ? { ...state.seenScenes } : {},
     };
-    if (!steps.some(step => step.id === merged.step)) {
+    if (!allSteps.some(step => step.id === merged.step)) {
       const legacyMap = { move: 'move', dash: 'dash', fight: 'fight', relic: 'relic', forge: 'route_forge', panel: 'inventory_open', ladder: 'route_ladder' };
       merged.step = legacyMap[state.step] || 'welcome';
       if (state.moved) merged.completed.move = true;
@@ -917,6 +938,7 @@ export function createTutorialController() {
   function isStepComplete(step = getStep()) {
     const state = getState();
     if (!state || !step) return false;
+    if (!isStepAvailable(step, state)) return true;
     if (step.manual) return !!state.completed?.[step.id];
     if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state);
     return typeof step.complete === 'function' ? !!step.complete(state) : !!state.completed?.[step.id];
@@ -953,17 +975,17 @@ export function createTutorialController() {
     // the card doesn't jump out from under them. Completions still register on
     // state.completed; we catch up the moment they leave review.
     if (isReviewing()) return;
-    let index = getIndex();
+    let index = Math.max(0, allSteps.findIndex(step => step.id === state.step));
     let changed = false;
     const cleared = [];
-    while (index < steps.length - 1 && isStepComplete(steps[index])) {
-      cleared.push(steps[index]);
+    while (index < allSteps.length - 1 && isStepComplete(allSteps[index])) {
+      cleared.push(allSteps[index]);
       index += 1;
-      state.step = steps[index].id;
+      state.step = allSteps[index].id;
       changed = true;
     }
     if (changed) {
-      const justCleared = cleared[cleared.length - 1];
+      const justCleared = cleared.filter(step => isStepAvailable(step, state)).at(-1);
       if (justCleared && state.lastCelebratedStep !== justCleared.id) {
         Neo.playSfx?.('powerup');
         celebrateStep(justCleared);
@@ -1060,6 +1082,7 @@ export function createTutorialController() {
   function back() {
     const state = getState();
     if (!state?.active) return;
+    const steps = getSteps();
     const fromIndex = getDisplayIndex();
     if (fromIndex <= 0) return;
     state.reviewIndex = fromIndex - 1;
@@ -1322,6 +1345,7 @@ export function createTutorialController() {
     if (commandValue) commandValue.textContent = nextCommand;
     const reviewing = isReviewing();
     const displayIndex = getDisplayIndex();
+    const steps = getSteps();
     if (progress) progress.textContent = `${displayIndex + 1} / ${steps.length}`;
     if (progressBar) progressBar.style.width = `${((displayIndex + 1) / steps.length) * 100}%`;
     if (gate) gate.hidden = true;
@@ -1351,7 +1375,7 @@ export function createTutorialController() {
     // editor) so skipping/completing the tutorial never strands an open overlay.
     // Guarded so the per-tick hide() while inactive only runs onExit once.
     if (lastLiveStepId) {
-      const prev = steps.find(step => step.id === lastLiveStepId);
+      const prev = allSteps.find(step => step.id === lastLiveStepId);
       lastLiveStepId = '';
       try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break teardown */ }
     }
@@ -1479,7 +1503,7 @@ export function createTutorialController() {
 
   bind();
   return {
-    steps,
+    get steps() { return getSteps(); },
     start,
     tick,
     signal,

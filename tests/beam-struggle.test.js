@@ -60,10 +60,11 @@ describe('beam struggles', () => {
   test('makes real losses devastating while keeping training modes forgiving', () => {
     expect(combatSource).toContain("const trainingSafe = Neo.gameMode === 'practice' || Neo.isTutorialRun?.()");
     expect(combatSource).toContain('attackerBeamPower + playerBeamPower');
-    expect(combatSource).toContain('maxHitRatio: 0.6');
+    expect(combatSource).toContain('ignoreDamageCaps: !trainingSafe');
+    expect(combatSource).not.toContain('maxHitRatio: 0.6');
     expect(combatSource).toContain("text: devastatingLoss ? 'BEAM BREAK!' : 'OVERPOWERED!'");
     expect(networkSource).toContain('winner?.beamDamage || 0) + Number(loser.beamDamage || 0)');
-    expect(networkSource).toContain('knockback: 560, ignoreInv: true, maxHitRatio: 0.6');
+    expect(networkSource).toContain('knockback: 560, ignoreInv: true, ignoreDamageCaps: true');
   });
 
   test('draws a beam-colored shared HUD and a mixed clash sphere in 2D and 3D', () => {

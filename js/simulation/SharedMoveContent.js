@@ -169,6 +169,9 @@
     'blood_beam', 'love_beam', 'turtle_wave', 'holy_eye_beams', 'god_sweep',
     'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer',
   ]);
+  function isContinuousBeamMove(moveKey) {
+    return CONTINUOUS_BEAM_MOVES.includes(String(moveKey || ''));
+  }
   const BEAM_CHANNEL_PROFILES = Object.freeze({
     blood_beam: Object.freeze({ duration: 0.58, tickDamage: 10, tickInterval: 0.08, range: 430, padding: 6, knockback: 60 }),
     love_beam: Object.freeze({ duration: 1.275, tickDamage: 14, tickInterval: 0.06, range: 500, padding: 6, knockback: 52 }),
@@ -294,6 +297,7 @@
     DEFAULT_MOVE_LOADOUTS,
     KIT_ALTERNATIVES,
     CONTINUOUS_BEAM_MOVES,
+    isContinuousBeamMove,
     BEAM_CHANNEL_PROFILES,
     BEAM_RECOIL_ACCEL,
     WIZARD_LAZER_EXTRA_RECOIL,
