@@ -71,6 +71,32 @@ describe('CloudflareWebSocketTransport', () => {
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
+  test('only reports availability after the multiplayer health route responds successfully', async () => {
+    const fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, multiplayer: true }),
+    }));
+    const transport = new CloudflareWebSocketTransport({
+      apiBase: 'https://game.example/api/multiplayer',
+      fetch,
+      WebSocket: FakeWebSocket,
+    });
+
+    await expect(transport.checkAvailability()).resolves.toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://game.example/api/multiplayer/health',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
+  });
+
+  test('reports unavailable when the health request cannot be fetched', async () => {
+    const transport = new CloudflareWebSocketTransport({
+      fetch: jest.fn(async () => { throw new TypeError('Failed to fetch'); }),
+      WebSocket: FakeWebSocket,
+    });
+    await expect(transport.checkAvailability()).resolves.toBe(false);
+  });
+
   test('joins, sends protocol envelopes, and emits authority messages', async () => {
     const transport = new CloudflareWebSocketTransport({
       apiBase: 'https://game.example/api/multiplayer',

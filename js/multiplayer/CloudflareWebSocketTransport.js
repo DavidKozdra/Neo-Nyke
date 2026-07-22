@@ -61,6 +61,25 @@
       await super.initialize();
     }
 
+    async checkAvailability(options = {}) {
+      if (typeof this.fetchImpl !== 'function') return false;
+      const timeoutMs = Math.max(250, Number(options.timeoutMs) || 4000);
+      const signal = options.signal
+        || (typeof root.AbortSignal?.timeout === 'function' ? root.AbortSignal.timeout(timeoutMs) : undefined);
+      try {
+        const response = await this.fetchImpl(`${this.apiBase}/health`, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+          ...(signal ? { signal } : {}),
+        });
+        const payload = await response.json().catch(() => ({}));
+        return response.ok && payload.ok === true && payload.multiplayer === true;
+      } catch {
+        return false;
+      }
+    }
+
     async createSession(options = {}) {
       if (!this.initialized) await this.initialize();
       const response = await this.fetchImpl(`${this.apiBase}/rooms`, {
