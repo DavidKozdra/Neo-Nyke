@@ -20,10 +20,44 @@
 }
 
 #touch-overlay:not(.touch-overlay--gameplay) .joy-zone,
+#touch-overlay:not(.touch-overlay--gameplay) .touch-look-zone,
 #touch-overlay:not(.touch-overlay--gameplay) .btn-cluster,
 #touch-overlay:not(.touch-overlay--gameplay) .touch-hamburger,
 #touch-overlay:not(.touch-overlay--gameplay) .touch-ham-menu {
   pointer-events: none;
+}
+
+/* ── First-person look surface ────────────────────────────────────────────── */
+
+.touch-look-zone {
+  position: absolute;
+  inset: 0 0 0 38%;
+  z-index: 1;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+}
+
+#touch-overlay.touch-overlay--fps .touch-look-zone {
+  background: radial-gradient(circle at 72% 42%, rgba(140, 190, 255, 0.055), transparent 34%);
+}
+
+#touch-overlay.touch-overlay--fps .touch-look-zone::after {
+  content: 'DRAG TO LOOK';
+  position: absolute;
+  top: 31%;
+  right: max(22%, 92px);
+  color: rgba(210, 230, 255, 0.42);
+  font-family: var(--font-pixel);
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.72);
+  transition: opacity 0.14s;
+}
+
+#touch-overlay.touch-overlay--fps .touch-look-zone--active::after,
+#touch-overlay.touch-overlay--fps .touch-look-zone--learned::after {
+  opacity: 0;
 }
 
 /* ── Joystick ──────────────────────────────────────────────────────────────── */
@@ -42,6 +76,7 @@
   border-radius: 50% 50% 0 0;
   touch-action: none;
   user-select: none;
+  z-index: 2;
 }
 
 .joy-base {
@@ -88,6 +123,7 @@
   height: 170px;
   touch-action: none;
   user-select: none;
+  z-index: 2;
 }
 
 /* Diamond: Y=top, X=right, B=left, A=bottom  — standard SNES-ish layout */

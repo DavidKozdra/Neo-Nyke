@@ -9,6 +9,9 @@
 // on, environment.js skips the 2D world pass, leaving #c transparent there, so
 // the minimap / overlays / HUD keep drawing on top unchanged.
 import * as THREE from '../vendor/three.module.js';
+import '../core/first-person-look.js';
+
+const { applyFirstPersonLookDelta } = globalThis.NeoNyke.input;
 
 const RENDER3D_STORE_KEY = 'neonyke:render3d';
 const CAMERA_MODE_STORE_KEY = 'neonyke:camera3d';
@@ -3937,7 +3940,6 @@ let fpPitch = -0.08;
 // completely untouched otherwise.
 function isFirstPersonActive() {
   return ready && Neo.render3D && cameraMode === 'fp'
-    && !window.NeoTouch?.active
     && (!Neo.presentationViewpointPlayer || Neo.presentationViewpointPlayer === Neo.player);
 }
 
@@ -3996,7 +3998,11 @@ function hasPointerLockBlockingUi() {
 }
 
 function syncPointerLock() {
-  const wantLock = isFirstPersonActive() && Neo.gameState === 'play' && !hasPointerLockBlockingUi();
+  const effectiveInputMode = window.NeoSettings?.getEffectiveInputMode?.();
+  const touchLookActive = !!window.NeoTouch?.active
+    && (effectiveInputMode ? effectiveInputMode === 'touch' : !!window.matchMedia?.('(pointer: coarse)')?.matches);
+  const wantLock = isFirstPersonActive() && !touchLookActive
+    && Neo.gameState === 'play' && !hasPointerLockBlockingUi();
   if (!wantLock && document.pointerLockElement === Neo.canvas) {
     pointerLockReleasedByGame = true;
     document.exitPointerLock?.();
@@ -4051,6 +4057,7 @@ document.addEventListener('mousemove', event => {
 
 function requestGameplayPointerLock(event) {
   if (event.button != null && event.button !== 0) return;
+  if (event.pointerType === 'touch') return;
   if (!isFirstPersonActive() || Neo.gameState !== 'play' || hasPointerLockBlockingUi()) return;
   const canvas = Neo.canvas;
   if (!canvas) return;
@@ -4120,8 +4127,21 @@ function syncCamera() {
     camFocus.z += (rawFocusZ - camFocus.z) * k;
   }
   if (isFirstPersonActive() && p) {
+    const touch = window.NeoTouch;
+    const touchLookX = Number(touch?.lookDeltaX || 0);
+    const touchLookY = Number(touch?.lookDeltaY || 0);
+    if (touch) {
+      touch.lookDeltaX = 0;
+      touch.lookDeltaY = 0;
+    }
+    if (touchLookX || touchLookY) {
+      const look = applyFirstPersonLookDelta(fpYaw, fpPitch, touchLookX, touchLookY);
+      fpYaw = look.yaw;
+      fpPitch = look.pitch;
+    }
     const gp = window.NeoGamepad?.[0];
-    if (gp?.active && gp.hasAim && Math.hypot(gp.aimX || 0, gp.aimY || 0) > 0.25) {
+    if (gp?.active && window.NeoSettings?.getEffectiveInputMode?.() !== 'touch'
+      && gp.hasAim && Math.hypot(gp.aimX || 0, gp.aimY || 0) > 0.25) {
       fpYaw = Math.atan2(gp.aimY, gp.aimX);
     }
     const shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
@@ -4221,7 +4241,7 @@ function renderSceneViews() {
   renderer.setScissorTest(true);
   const playerWasVisible = playerSprite?.visible;
   slots.forEach((slot, index) => {
-    const firstPersonView = cameraMode === 'fp' && !window.NeoTouch?.active;
+    const firstPersonView = cameraMode === 'fp';
     let viewCamera = firstPersonView ? camera : splitCameras[index];
     if (!viewCamera) {
       viewCamera = new THREE.PerspectiveCamera(50, viewW / viewH, 10, 3000);
