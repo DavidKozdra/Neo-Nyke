@@ -113,11 +113,24 @@ export function createUIController(view) {
       if (view.multiplayerJoinClipboard) view.multiplayerJoinClipboard.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerMode) view.multiplayerMode.disabled = !enabled || multiplayerRequestBusy;
+      document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
+        button.disabled = !enabled || multiplayerRequestBusy;
+      });
       if (view.multiplayerDevelopmentNote) {
         view.multiplayerDevelopmentNote.textContent = enabled
-          ? 'Development multiplayer is enabled. Create or join an authoritative test room.'
-          : 'Multiplayer networking is disabled in this build. It is enabled automatically on localhost.';
+          ? 'ONLINE'
+          : 'ONLINE UNAVAILABLE';
       }
+    }
+
+    function setMultiplayerModeChoice(mode) {
+      const next = mode === 'rival' ? 'rival' : 'coop';
+      if (view.multiplayerMode) view.multiplayerMode.value = next;
+      document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
+        const active = button.dataset.multiplayerModeOption === next;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
     }
     window.addEventListener('neo-feature-flags-changed', syncMultiplayerFeatureUI);
     syncMultiplayerFeatureUI();
@@ -594,6 +607,8 @@ export function createUIController(view) {
 
     function renderBrowserMultiplayerState(snapshot = {}) {
       const roomCode = snapshot.roomCode || '';
+      const showRoomState = !!roomCode || ![undefined, '', 'disconnected'].includes(snapshot.status);
+      view.multiplayerRoomState?.classList.toggle('hidden', !showRoomState);
       if (view.multiplayerRoomCodeDisplay) {
         view.multiplayerRoomCodeDisplay.textContent = roomCode ? `ROOM ${roomCode}` : '';
       }
@@ -950,7 +965,6 @@ export function createUIController(view) {
       if (!roomCode) return;
 
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = roomCode;
-      if (view.multiplayerJoinPanel) view.multiplayerJoinPanel.open = true;
       setMultiplayerPanelOpen(true);
       if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'This invite cannot be joined because multiplayer is disabled in this build.';
@@ -3637,9 +3651,12 @@ export function createUIController(view) {
         view.multiplayerJoinClipboard?.addEventListener('click', () => {
           void joinBrowserMultiplayerFromClipboard();
         });
-        view.multiplayerJoinPanel?.addEventListener('toggle', () => {
-          if (view.multiplayerJoinPanel.open) view.multiplayerRoomCode?.focus?.({ preventScroll: true });
+        document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
+          button.addEventListener('click', () => {
+            setMultiplayerModeChoice(button.dataset.multiplayerModeOption || 'coop');
+          });
         });
+        setMultiplayerModeChoice(view.multiplayerMode?.value || 'coop');
         view.multiplayerRoomCode?.addEventListener('input', () => {
           view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 8);
         });

@@ -4753,7 +4753,7 @@ p.sub {
 
 .hero-detail-skill-readout-desc {
   display: block;
-  font-size: calc(11px * var(--font-scale, 1));
+  font-size: calc(14px * var(--font-scale, 1));
   line-height: 1.4;
   color: var(--menu-text-soft);
 }
@@ -9722,85 +9722,160 @@ button.alt.danger {
 
 .multiplayer-panel__body {
   padding: 24px;
-  padding-top: 56px;
+  gap: 14px;
+}
+
+.multiplayer-development-note {
+  padding: 10px 14px;
+  border: 1px solid rgba(120, 255, 180, .28);
+  border-radius: var(--ui-control-radius);
+  background: rgba(40, 120, 80, .1);
+  color: #a9e9c4;
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.multiplayer-panel:not([data-multiplayer-development-enabled]) .multiplayer-development-note {
+  border-color: rgba(255, 184, 92, .32);
+  background: rgba(150, 88, 24, .1);
+  color: #ffd29a;
+}
+
+.multiplayer-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.multiplayer-choice-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 280px;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid rgba(135, 207, 246, .25);
+  border-radius: var(--ui-control-radius);
+  background: rgba(255, 255, 255, .025);
 }
 
 .multiplayer-create-card {
-  border-color: rgba(91, 194, 255, .28);
-  background: linear-gradient(105deg, rgba(69, 151, 204, .13), rgba(255, 255, 255, .035));
+  border-color: rgba(91, 194, 255, .38);
+  background: linear-gradient(145deg, rgba(69, 151, 204, .14), rgba(255, 255, 255, .025));
 }
 
-/* The second card is a native disclosure: its lobby-code field exists in the
-   DOM for invites and keyboard users, but only expands when requested. */
-.multiplayer-panel .multiplayer-join-card {
-  display: block;
+.multiplayer-choice-card > h3 {
+  margin: 0 0 22px;
+  color: #ecf9ff;
+  font-size: calc(22px * var(--font-scale, 1));
+  letter-spacing: .07em;
+}
+
+.multiplayer-mode-options {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 16px;
   padding: 0;
-  overflow: hidden;
+  border: 0;
 }
 
-.multiplayer-join-summary {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 150px;
-  align-items: center;
-  gap: 20px;
-  padding: 22px 24px;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
+.multiplayer-mode-options legend,
+.multiplayer-code-field > span {
+  margin-bottom: 8px;
+  color: var(--menu-accent-strong);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
 }
 
-.multiplayer-join-summary::-webkit-details-marker { display: none; }
-.multiplayer-join-summary::marker { content: ''; }
-.multiplayer-join-summary .altmode-card__name,
-.multiplayer-join-summary .altmode-card__desc { display: block; }
-
-.multiplayer-join-summary__action {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border: 1px solid rgba(142, 213, 255, .28);
-  color: #bce6ff;
-  font-size: calc(11px * var(--font-scale, 1));
-  font-weight: 800;
-  letter-spacing: .1em;
-}
-
-.multiplayer-join-summary__chevron {
-  display: inline-block;
-  font-size: 20px;
-  line-height: 1;
-  transition: transform .16s ease;
-}
-
-.multiplayer-join-card[open] {
-  border-color: rgba(120, 200, 255, .42);
-  background: rgba(84, 160, 207, .075);
-}
-
-.multiplayer-join-card[open] .multiplayer-join-summary__chevron {
-  transform: rotate(180deg);
-}
-
-.multiplayer-join-summary:focus-visible {
-  outline: 2px solid #8ed8ff;
-  outline-offset: -3px;
-}
-
-.multiplayer-join-dropdown {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 150px;
-  align-items: end;
-  gap: 18px;
-  padding: 18px 24px 22px 92px;
-  border-top: 1px solid rgba(255, 255, 255, .08);
-  background: rgba(0, 0, 0, .18);
-}
-
-.multiplayer-panel .multiplayer-join-dropdown .multiplayer-mode-picker {
+.multiplayer-mode-option {
+  display: block;
   width: 100%;
-  margin: 0;
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: rgba(5, 10, 15, .5);
+  color: var(--menu-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.multiplayer-mode-option b {
+  display: block;
+  font-size: calc(14px * var(--font-scale, 1));
+  letter-spacing: .07em;
+}
+
+.multiplayer-mode-option:hover:not(:disabled),
+.multiplayer-mode-option:focus-visible:not(:disabled) {
+  border-color: rgba(142, 213, 255, .55);
+  color: #e6f7ff;
+  outline: none;
+}
+
+.multiplayer-mode-option.is-active {
+  border-color: #71cffa;
+  background: rgba(66, 153, 202, .2);
+  color: #eefaff;
+  box-shadow: inset 3px 0 0 #71cffa;
+}
+
+.multiplayer-mode-option:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.multiplayer-code-field {
+  display: grid;
+  margin-bottom: 16px;
+}
+
+.multiplayer-code-field .multiplayer-room-code-input {
+  height: 54px;
+  font-size: calc(18px * var(--font-scale, 1));
+  text-align: center;
+}
+
+.multiplayer-choice-card__primary {
+  width: 100%;
+  margin-top: auto;
+}
+
+.multiplayer-paste-btn {
+  min-height: 38px;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: #9fcce5;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 850;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.multiplayer-paste-btn:hover:not(:disabled),
+.multiplayer-paste-btn:focus-visible:not(:disabled) {
+  color: #e7f7ff;
+  text-decoration: underline;
+  outline: none;
+}
+
+.multiplayer-paste-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.multiplayer-room-state {
+  padding: 16px;
+  border: 1px solid rgba(135, 207, 246, .25);
+  border-radius: var(--ui-control-radius);
+  background: rgba(0, 0, 0, .22);
+}
+
+.multiplayer-room-state.hidden {
+  display: none;
 }
 
 @media (max-width: 700px) {
@@ -9835,7 +9910,7 @@ button.alt.danger {
   }
 
   .multiplayer-panel__body {
-    padding: 52px 12px 16px;
+    padding: 16px 12px;
   }
 
   .multiplayer-panel .altmode-card,
@@ -9855,6 +9930,16 @@ button.alt.danger {
     grid-template-columns: 1fr;
     padding: 16px 14px 18px;
   }
+
+  .multiplayer-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .multiplayer-choice-card {
+    min-height: 0;
+    padding: 18px;
+  }
+
 }
 
 .multiplayer-member-list {
@@ -11124,7 +11209,7 @@ body.network-multiplayer-active #c {
   margin: 0 0 6px;
 }
 .altmode-card__desc {
-  font-size: 0.82rem;
+  font-size: calc(16px * var(--font-scale, 1));
   color: #8ca8c0;
   margin: 0;
   line-height: 1.5;
@@ -11355,7 +11440,7 @@ body.network-multiplayer-active #c {
   border: 1px solid rgba(132, 168, 204, .24);
   border-radius: 10px;
   background: rgba(255, 255, 255, .02);
-  padding: 10px;
+  padding: 50px;
 }
 
 .sandbox-card h4 {

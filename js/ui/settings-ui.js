@@ -47,7 +47,10 @@
   const FONT_SCALE_STEP = 0.05;
   function normalizeFontScale(value) {
     const n = Number(value);
-    if (!Number.isFinite(n)) return DEFAULT_ACCESS.fontScale;
+    if (!Number.isFinite(n)) {
+      
+      return DEFAULT_ACCESS.fontScale;
+    }
     return Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, Math.round(n / FONT_SCALE_STEP) * FONT_SCALE_STEP));
   }
 

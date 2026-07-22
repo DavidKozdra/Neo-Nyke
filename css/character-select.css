@@ -503,7 +503,7 @@
 }
 
 #charSelect .hero-detail-skill-readout-desc {
-  font-size: calc(12px * var(--font-scale, 1));
+  font-size: calc(15px * var(--font-scale, 1));
   line-height: 1.4;
 }
 
@@ -1376,7 +1376,7 @@
   #charSelect .hero-detail-skill-readout-desc,
   #charSelect .hero-detail-item-pip,
   #charSelect .hero-detail-item-empty {
-    font-size: calc(10px * var(--font-scale, 1));
+    font-size: calc(13px * var(--font-scale, 1));
   }
 
   #charSelect .hero-detail-inventory {
