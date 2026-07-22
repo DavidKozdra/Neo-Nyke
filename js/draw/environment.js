@@ -89,7 +89,10 @@
         : String(struggle.enemy?.type || 'ENEMY').replaceAll('_', ' ').toUpperCase();
     const { playerColor, opponentColor } = Neo.getBeamStruggleVisualColors?.(struggle)
       || { playerColor: '#ff00aa', opponentColor: '#aa66ff' };
-    const laserHint = Neo.getControlHint?.('laser', 'rmb') || 'RMB';
+    const laserHint = Neo.getActiveControlHint?.('laser', 'rmb')
+      || window.NeoSettings?.getActionBindingLabel?.('laser', 'rmb')
+      || Neo.getControlHint?.('laser', 'rmb')
+      || 'RMB';
     const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
     const pulse = reduceFlash ? 1 : 0.9 + Math.sin(Date.now() / 80) * 0.1;
     // Give the mash prompt a subtle size beat so it reads as an urgent,
@@ -240,7 +243,10 @@
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
     const ladderHint = Neo.getLadderControlHint ? Neo.getLadderControlHint() : Neo.formatControlLabel('e', 'e');
-    const text = `Press [${ladderHint}] to go to next floor`;
+    const inputMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+    const text = inputMode === 'touch'
+      ? 'Tap the ladder to go to next floor'
+      : `Press [${ladderHint}] to go to next floor`;
     const pad = 14;
     const tw = Neo.ctx.measureText(text).width;
     Neo.ctx.fillStyle = 'rgba(10,24,14,0.86)';

@@ -18,6 +18,7 @@
     ascend: false,
     dash: false,
     beamMash: false,
+    queuedActions: {},
     active: false, // true once any touch fires
   };
 
@@ -204,12 +205,14 @@
       if (!isGameplayTouchAllowed()) return;
       const action = getTouchAction(bindingKey, fallbackAction);
       el.dataset.touchAction = action;
+      window.NeoSettings?.noteInputMode?.('touch');
       if (action === 'ascend' && triggerWorldInteract()) {
         el.classList.add('pressed');
         setNTActive();
         return;
       }
       NT[action] = true;
+      NT.queuedActions[action] = true;
       el.classList.add('pressed');
       setNTActive();
     }
@@ -327,6 +330,7 @@
   if (interactPrompt) {
     interactPrompt.addEventListener('touchstart', e => {
       e.preventDefault();
+      if (window.Neo?.multiplayerGameView?.active && window.Neo.multiplayerGameView.interact?.()) return;
       window._neoGame?.triggerInteract?.();
     }, { passive: false });
   }
@@ -387,6 +391,9 @@
     const canAnvil = roomType === 'anvil' && !isPanelOpen(window.Neo?.ui?.anvilPanel);
     const canLadder = !!window.Neo?.isAtLadder?.();
     if (!canShop && !canAnvil && !canLadder) return false;
+    // Online chests/stairs belong to authority. Let the network view issue the
+    // interaction instead of running the local floor transition.
+    if (window.Neo?.multiplayerGameView?.active && window.Neo.multiplayerGameView.interact?.()) return true;
     window._neoGame?.triggerInteract?.();
     window.setTimeout(syncOverlayMode, 0);
     return true;
@@ -397,6 +404,7 @@
     NT.moveX = 0;
     NT.moveY = 0;
     TOUCH_ACTIONS.forEach(action => { NT[action] = false; });
+    NT.queuedActions = {};
     releaseAscendKey();
     joyKnob.style.transform = '';
     joyBase.classList.remove('joy-active');

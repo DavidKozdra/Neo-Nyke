@@ -461,8 +461,12 @@
     const accent = bountyReady ? '#83f0b0' : enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
       : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';
     const dangerous = Neo.isEnemyDangerous?.(enemy);
+    const interactionMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+    const interactionHint = interactionMode === 'touch'
+      ? 'TAP'
+      : Neo.getActiveControlHint?.('interact', 'E') || 'E';
     const text = bountyReady
-      ? `${label}  [E] ${enemy.bountyCaptureReady ? 'CAPTURE' : 'STEAL'}`
+      ? `${label}  [${interactionHint}] ${enemy.bountyCaptureReady ? 'CAPTURE' : 'STEAL'}`
       : `${label}  ${level}  ${hpText}`;
     const barrierValue = Math.max(0, Number(enemy.barrier || 0));
     const healthColor = bountyReady ? '#83f0b0' : getCombatHealthColor(enemy);
@@ -1343,7 +1347,11 @@
           Neo.ctx.fill();
           Neo.ctx.font = 'bold 9px system-ui';
           Neo.ctx.textAlign = 'center';
-          Neo.ctx.fillText('PRESS E', 0, -20);
+          const interactionMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+          const interactionHint = interactionMode === 'touch'
+            ? 'TAP'
+            : Neo.getActiveControlHint?.('interact', 'E') || 'E';
+          Neo.ctx.fillText(interactionMode === 'touch' ? interactionHint : `PRESS ${interactionHint}`, 0, -20);
         }
         Neo.ctx.restore();
       }

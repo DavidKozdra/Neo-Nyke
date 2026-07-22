@@ -349,8 +349,10 @@
     return false;
   }
 
-  function handleNavigation(slot, pressedNow) {
+  function handleNavigation(slot, pressedNow, immediateHandled = {}) {
     if (typeof document === 'undefined') return;
+    const mapper = document.getElementById?.('gamepadMapperOverlay');
+    if (mapper && !mapper.classList.contains('hidden')) return;
     if (!hasOpenBlockingPanel() && window.Neo?.gameState === 'play') return;
 
     const navX = Math.abs(slot.moveX) > 0.55 ? Math.sign(slot.moveX) : 0;
@@ -370,21 +372,21 @@
       slot.nav.nextAt = 0;
     }
 
-    if (pressedNow[0]) {
+    if (pressedNow[0] && !immediateHandled[0]) {
       if (window.Neo?.uiController?.isDialogueOpen?.()) window.Neo.uiController.advanceDialogue();
       else clickFocused();
     }
-    if (pressedNow[1]) backOrCancel();
-    if (pressedNow[9]) {
+    if (pressedNow[1] && !immediateHandled[1]) backOrCancel();
+    if (pressedNow[9] && !immediateHandled[9]) {
       if (window.Neo?.gameState === 'pause') window._neoGame?.resumeGame?.();
       else backOrCancel();
     }
   }
 
   function handleImmediateAction(slotIndex, action) {
-    if (slotIndex !== 0) return false;
     const game = window._neoGame;
     const state = window.Neo?.gameState;
+    const networkView = window.Neo?.multiplayerGameView;
     const inventoryPanel = window.Neo?.ui?.invPanel;
     const inventoryOpen = !!inventoryPanel && !inventoryPanel.classList.contains('hidden');
     if (action === 'inventory' && (state === 'play' || inventoryOpen)) {
@@ -393,8 +395,14 @@
     }
     if (action === 'pause') {
       if (inventoryOpen) game?.toggleInventoryPanel?.();
+      else if (networkView?.active) networkView.togglePause?.();
       else if (state === 'play') game?.pauseGame?.();
       else if (state === 'pause') game?.resumeGame?.();
+      return true;
+    }
+    if (slotIndex > 0 && (action === 'interact' || action === 'ascend') && state === 'play') {
+      if (networkView?.active) networkView.interact?.();
+      else game?.triggerInteract?.();
       return true;
     }
     return false;
@@ -460,6 +468,7 @@
     slot.slash = slot.laser = slot.smash = slot.dash = slot.ascend = false;
     slot.start = false;
     const pressedNow = {};
+    const immediateHandled = {};
     for (let index = 0; index <= 11; index += 1) {
       const button = readButton(index);
       const pressed = isButtonPressed(button);
@@ -467,25 +476,29 @@
       pressedNow[index] = pressed && !slot.buttonStates[index];
       const action = String(configured[index] || DEFAULT_GAMEPAD_BINDINGS[index] || 'none');
       if (['slash', 'laser', 'smash', 'dash', 'ascend'].includes(action) && pressed) slot[action] = true;
-      if (pressed && !slot.buttonStates[index] && action !== 'none' && !handleImmediateAction(slotIndex, action) && !uiNavigationMode) {
-        slot.queuedActions[action] = true;
+      if (pressed && !slot.buttonStates[index] && action !== 'none') {
+        immediateHandled[index] = handleImmediateAction(slotIndex, action);
+        if (!immediateHandled[index] && !uiNavigationMode) slot.queuedActions[action] = true;
       }
       slot.buttonStates[index] = pressed;
       slot.buttonValues[index] = value;
     }
     slot.start = !!slot.queuedActions.pause;
-    handleNavigation(slot, pressedNow);
+    handleNavigation(slot, pressedNow, immediateHandled);
 
     // P2 aliases (used by updatePlayer2)
     slot.p2MeleeHeld = slot.slash;
     slot.p2DashHeld  = slot.dash;
 
     const hasInput = Math.hypot(slot.moveX, slot.moveY) > 0.05
-      || Math.hypot(slot.aimX, slot.aimY) > 0.05
+      || (slot.hasAim && Math.hypot(slot.aimX, slot.aimY) > 0.05)
       || slot.buttonStates.some(Boolean)
       || Math.abs(applyAxis(ax[6] || 0)) > 0
       || Math.abs(applyAxis(ax[7] || 0)) > 0;
-    if (hasInput) slot.lastInputAt = nowMs();
+    if (hasInput) {
+      slot.lastInputAt = nowMs();
+      if (slotIndex === 0) window.NeoSettings?.noteInputMode?.('gamepad');
+    }
     slot.active = nowMs() - slot.lastInputAt < 5000;
   }
 

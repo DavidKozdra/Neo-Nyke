@@ -1163,8 +1163,12 @@ function syncEnemyReadability(group, enemy) {
   const marker = group.getObjectByName('enemy-marker');
   if (marker) {
     const bountyReady = !!(enemy.bountyCaptureReady || enemy.bountyTheftReady);
+    const interactionMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
+    const interactionHint = interactionMode === 'touch'
+      ? 'TAP'
+      : Neo.getActiveControlHint?.('interact', 'E') || 'E';
     const text = enemy.type === 'boss_spawner' ? `${Math.max(0, Math.ceil(Number(enemy.bossSpawnTimer || 0)))}`
-      : bountyReady ? 'PRESS E'
+      : bountyReady ? (interactionMode === 'touch' ? interactionHint : `PRESS ${interactionHint}`)
         : enemy.bountyTarget ? '◎'
           : enemy.elite ? '♛' : '';
     marker.visible = !!text;

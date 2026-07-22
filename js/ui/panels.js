@@ -85,6 +85,7 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       const interactKey = b ? b.interact : 'e';
+      const ascendKey = String(b?.ascend ?? ' ').toLowerCase();
       if (isWizardPawOpen()) {
         if (event.key === 'Escape') event.preventDefault();
         return;
@@ -121,6 +122,12 @@ export function bindInput() {
         Neo.skipFirstRunTutorial();
         return;
       }
+      if (!Neo.multiplayerGameView?.active && key === ascendKey && Neo.gameState === 'play' && Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+        event.preventDefault();
+        Neo.ladderUseKeyLatch = true;
+        Neo.useLadder?.();
+        return;
+      }
       if (key === interactKey && Neo.gameState === 'play') {
         const bountyTargetHandled = Neo.tryBountyTargetInteract?.() || false;
         if (bountyTargetHandled) Neo.specialRoomKeyLatch = true;
@@ -139,7 +146,7 @@ export function bindInput() {
           toggleAnvilPanel();
           Neo.anvilKeyLatch = true;
         }
-        if (!bountyTargetHandled && Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+        if (!Neo.multiplayerGameView?.active && !bountyTargetHandled && Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
           Neo.ladderUseKeyLatch = true;
           Neo.useLadder?.();
         }
@@ -148,13 +155,13 @@ export function bindInput() {
         toggleInventoryPanel();
         Neo.invKeyLatch = true;
       }
-      if (b && key === b.smash && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
-      else if (!b && key === 'r' && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
+      if (!Neo.multiplayerGameView?.active && b && key === b.smash && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
+      else if (!Neo.multiplayerGameView?.active && !b && key === 'r' && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
       // Nimrod Stomp (hold-to-charge dash) needs a persistent held-flag, mirroring
       // smash above — the generic Neo.keys[dashKey] map is only used for the
       // initial press edge-latch in update.js, not a release signal.
       if ((b ? key === b.dash : key === 'shift') && Neo.gameState === 'play') Neo.dashHeld = true;
-      if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
+      if (!Neo.multiplayerGameView?.active && Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
         if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
         const letter = key.toUpperCase();
         if (!Neo.equipKeyLatch[letter]) {
@@ -163,7 +170,7 @@ export function bindInput() {
         }
       }
       const activateAllKey = String(b?.activateAll ?? ' ').toLowerCase();
-      if (key === activateAllKey && Neo.gameState === 'play' && !Neo.activateAllKeyLatch) {
+      if (!Neo.multiplayerGameView?.active && key === activateAllKey && Neo.gameState === 'play' && !Neo.activateAllKeyLatch) {
         Neo.activateAllKeyLatch = true;
         Neo.activateAllEquipmentSlots?.();
       }
@@ -179,7 +186,7 @@ export function bindInput() {
       const inventoryKey = b ? b.inventory : 'i';
       if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
       if (b ? key === b.dash : key === 'shift') Neo.dashHeld = false;
-      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.specialRoomKeyLatch = false; Neo.ladderUseKeyLatch = false; }
+      if (key === String(b?.interact || 'e').toLowerCase() || key === String(b?.ascend ?? ' ').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.specialRoomKeyLatch = false; Neo.ladderUseKeyLatch = false; }
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();

@@ -16,17 +16,19 @@ export function getMouseBindings() {
 export function isMouseActionHeld(action) {
     const bindings = window.NeoSettings?.getBindings?.();
     const binding = String(action === 'slash' ? (bindings?.slash || 'lmb') : (bindings?.laser || 'rmb')).toLowerCase();
+    const touchHeld = !!window.NeoTouch?.active && !!window.NeoTouch?.[action === 'slash' ? 'slash' : 'laser'];
+    const gamepadHeld = !!window.NeoGamepad?.[0]?.active && !!window.NeoGamepad?.[0]?.[action === 'slash' ? 'slash' : 'laser'];
     if (binding === 'rmb') {
       const held = !!Neo.mouse.right || !!Neo.mouse.rightQueued;
       Neo.mouse.rightQueued = false;
-      return held;
+      return held || touchHeld || gamepadHeld;
     }
     if (binding === 'lmb') {
       const held = !!Neo.mouse.down || !!Neo.mouse.downQueued;
       Neo.mouse.downQueued = false;
-      return held;
+      return held || touchHeld || gamepadHeld;
     }
-    return !!Neo.keys?.[binding];
+    return !!Neo.keys?.[binding] || touchHeld || gamepadHeld;
   }
 
 export function formatMouseBindingLabel(value, fallback) {
@@ -38,10 +40,10 @@ export function formatMouseBindingLabel(value, fallback) {
 
 export function getSlotKeyLabel(slot) {
     const bindings = window.NeoSettings?.getBindings?.();
-    if (slot === 'melee') return formatMouseBindingLabel(bindings?.slash, 'lmb');
-    if (slot === 'laser') return formatMouseBindingLabel(bindings?.laser, 'rmb');
-    if (slot === 'smash') return String(bindings?.smash || Neo.SLOT_KEYS.smash || 'r').toUpperCase();
-    if (slot === 'dash') return String(bindings?.dash || Neo.SLOT_KEYS.dash || 'shift').toUpperCase();
+    if (slot === 'melee') return window.NeoSettings?.getActionBindingLabel?.('slash', 'LMB') || formatMouseBindingLabel(bindings?.slash, 'lmb');
+    if (slot === 'laser') return window.NeoSettings?.getActionBindingLabel?.('laser', 'RMB') || formatMouseBindingLabel(bindings?.laser, 'rmb');
+    if (slot === 'smash') return window.NeoSettings?.getActionBindingLabel?.('smash', 'R') || String(bindings?.smash || Neo.SLOT_KEYS.smash || 'r').toUpperCase();
+    if (slot === 'dash') return window.NeoSettings?.getActionBindingLabel?.('dash', 'SHIFT') || String(bindings?.dash || Neo.SLOT_KEYS.dash || 'shift').toUpperCase();
     return Neo.SLOT_KEYS[slot] || '';
   }
 

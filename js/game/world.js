@@ -2842,8 +2842,8 @@
   }
 
   // Descend to the next floor (or win in treasure-hunt at MAX_FLOOR). Routed
-  // through the shared interact action (E / gamepad / mobile button) rather than
-  // self-triggering from the pickup loop, so all input methods share one path.
+  // through the shared climb/interact path rather than self-triggering from the
+  // pickup loop, so all input methods share one transition.
   function useLadder() {
     const runState = { floor: Neo.floor };
     const result = globalThis.NeoNyke.simulation.useCampaignLadder(runState, {
