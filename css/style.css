@@ -9705,12 +9705,11 @@ button.alt.danger {
   overflow: hidden;
   flex: 1 1 auto;
   flex-direction: column;
-  border: 1px solid rgba(135, 207, 246, .32);
-  border-top: 2px solid rgba(176, 226, 255, .58);
-  border-radius: var(--ui-frame-radius, 4px);
-  background: linear-gradient(180deg, rgba(20, 28, 34, .98), rgba(11, 16, 20, .99));
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .68), inset 0 1px 0 rgba(255, 255, 255, .06);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--menu-border);
+  border-top-color: rgba(101, 217, 232, .62);
+  border-radius: var(--ui-frame-radius);
+  background: rgba(10, 13, 16, .94);
+  box-shadow: 0 12px 0 rgba(0, 0, 0, .34), 0 24px 58px rgba(0, 0, 0, .5);
 }
 
 .multiplayer-panel__close {
