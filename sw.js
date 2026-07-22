@@ -9,6 +9,7 @@ const PRECACHE = [
   "/assets/credits-images/Explorer2000.png",
   "/assets/credits-images/forrest.gif",
   "/assets/credits-images/ihave13digits.webp",
+  "/assets/credits-images/pixelDavid.png",
   "/assets/fonts/PressStart2P-Latin.woff2",
   "/assets/fonts/PressStart2P.ttf",
   "/assets/fonts/VT323-LatinExt.woff2",
