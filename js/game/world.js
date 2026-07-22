@@ -2823,6 +2823,14 @@
     return Math.max(0, Number(playerMoveSpeed) || 0) * 1.2;
   }
 
+  // Fleeing runes should reward a close catch without requiring pixel-perfect
+  // overlap. Ordinary pickups keep their 26-unit trigger; runes get a small
+  // extra cushion to account for their movement between simulation frames.
+  function getChallengeRuneTriggerRadius(baseRadius = 26) {
+    const bufferRadius = 15;
+    return Math.max(0, Number(baseRadius) || 0) + bufferRadius;
+  }
+
   // True when the player is standing on/near a usable ladder. Mirrors the
   // proximity check drawLadderPrompt uses so the interact prompt and the actual
   // descend agree. The ladder is only usable once the room is cleared.
@@ -3003,6 +3011,8 @@
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'challengePracticePortal'
           ? 34
+        : pickup.type === 'challengeRune'
+          ? getChallengeRuneTriggerRadius()
         : pickup.type === 'challengeSwitch'
           ? 32
         : pickup.type === 'ladder'

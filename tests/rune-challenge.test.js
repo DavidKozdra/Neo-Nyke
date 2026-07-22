@@ -42,6 +42,7 @@ describe('rune challenge movement', () => {
 
   test('caps combined rune drift and flee movement', () => {
     const getChallengeRuneMaxSpeed = extractFunction(worldSource, 'getChallengeRuneMaxSpeed');
+    const getChallengeRuneTriggerRadius = extractFunction(worldSource, 'getChallengeRuneTriggerRadius');
     const Neo = {
       pickups: [{ type: 'challengeRune', x: 600, y: 300, vx: 82, vy: 0 }],
       player: { x: 500, y: 300 },
@@ -59,6 +60,7 @@ describe('rune challenge movement', () => {
     const updatePickups = extractFunction(worldSource, 'updatePickups', {
       Neo,
       getChallengeRuneMaxSpeed,
+      getChallengeRuneTriggerRadius,
     });
     const startX = Neo.pickups[0].x;
     const dt = 0.1;
