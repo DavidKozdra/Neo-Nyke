@@ -938,6 +938,20 @@
         this.seenGameplayEvents.add(event.eventId);
         if (this.seenGameplayEvents.size > 512) this.seenGameplayEvents.delete(this.seenGameplayEvents.values().next().value);
         runServices.getClientRunServiceIntents?.(event.eventType, event.data || {}, localPlayerId).forEach(intent => {
+          if (intent.kind === 'achievement' && intent.name === 'run:won') {
+            const state = this.currentSample?.state || {};
+            const localPlayer = state.players?.[localPlayerId] || {};
+            const challengeModifiers = state.matchRules?.challengeModifiers || {};
+            intent.data = {
+              ...intent.data,
+              elapsedSeconds: Number(state.elapsedSeconds || 0),
+              playerHp: Math.round(Number(localPlayer.hp || 0)),
+              gameMode: String(state.gameMode || 'normal'),
+              difficulty: String(state.matchRules?.difficultyKey || 'medium'),
+              challengeKeys: Object.keys(challengeModifiers).filter(key => challengeModifiers[key]),
+              characterKey: localPlayer.characterKey || localPlayer.character || '',
+            };
+          }
           if (intent.kind === 'achievement') root.achievementEvents?.emit?.(intent.name, intent.data);
           else if (intent.kind === 'tutorial') this.neo.tutorialController?.signal?.(intent.name, intent.data);
         });

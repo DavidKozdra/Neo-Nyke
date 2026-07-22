@@ -16,6 +16,14 @@ const ACHIEVEMENTS = [
   { id: 'extinction',     name: 'Extinction',       desc: 'Kill 1,000 enemies total',              icon: '☠' },
   { id: 'double_bane',    name: 'Twice the Grave',  desc: "Find and kill Bowman's Bane twice in one run", icon: '🏹' },
   { id: 'trial_master',   name: 'Trial Master',     desc: 'Beat every trial challenge in one run', icon: '🛡' },
+  { id: 'the_long_haul',  name: 'The Long Haul',    desc: 'Clear wave 20 in Endless mode',          icon: '∞' },
+  { id: 'rush_hour',      name: 'Rush Hour',        desc: 'Complete Boss Rush',                     icon: '⏱' },
+  { id: 'crown_thief',    name: 'Crown Thief',      desc: 'Escape successfully in Treasure Hunt',  icon: '♛' },
+  { id: 'mortal_no_more', name: 'Mortal No More',   desc: 'Win a run on God difficulty',           icon: '✧' },
+  { id: 'against_all_odds', name: 'Against All Odds', desc: 'Win with at least 3 prestige challenges active', icon: '✹' },
+  { id: 'master_huntsman', name: 'Master Huntsman', desc: 'Complete all 3 bounty contract types in one run', icon: '◎' },
+  { id: 'relic_alchemist', name: 'Relic Alchemist', desc: 'Use Fuse, Distill, and Echo at the Reliquary in one run', icon: '⚗' },
+  { id: 'seven_heroes_one_crown', name: 'Seven Heroes, One Crown', desc: 'Win with every non-custom hero', icon: '♕' },
 ];
 
 const ACHIEVEMENT_PROGRESS = {
@@ -33,6 +41,11 @@ const ACHIEVEMENT_PROGRESS = {
   extinction:     { key: 'enemies_killed', target: 1000, label: 'Enemies slain' },
   double_bane:    { key: 'runBowmanKills', target: 2, label: "Banes slain this run" },
   trial_master:   { key: 'runTrialTypesBeaten', target: 6, label: 'Trial types beaten this run' },
+  the_long_haul:  { key: 'maxEndlessWave', target: 20, label: 'Highest Endless wave' },
+  against_all_odds: { key: 'maxActiveChallengesWon', target: 3, label: 'Challenges on a winning run' },
+  master_huntsman: { key: 'runBountyTypesCompleted', target: 3, label: 'Bounty types this run' },
+  relic_alchemist: { key: 'runReliquaryServicesUsed', target: 3, label: 'Reliquary services this run' },
+  seven_heroes_one_crown: { key: 'heroWins', target: 7, label: 'Heroes with a win' },
 };
 
 window.ACHIEVEMENTS = ACHIEVEMENTS;

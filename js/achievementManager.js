@@ -24,6 +24,11 @@ const achievementManager = (() => {
   const pendingCumulativeWrites = new Map();
   let cumulativeFlushTimer = 0;
   let cumulativeFlushPromise = Promise.resolve();
+  const HERO_WINS_RECORD = 'seven_heroes_one_crown_values';
+  const CHALLENGE_WIN_RECORD = 'against_all_odds_best';
+  let persistentProgressPromise = null;
+  let heroWins = new Set();
+  let maxActiveChallengesWon = 0;
 
   // Per-run counters
   let statusesApplied = new Set();
@@ -41,6 +46,8 @@ const achievementManager = (() => {
   let metaCoins = 0;
   let runBowmanKills = 0;
   let runTrialTypesBeaten = new Set();
+  let runBountyTypesCompleted = new Set();
+  let runReliquaryServicesUsed = new Set();
 
   function openDB() {
     return new Promise((resolve, reject) => {
@@ -90,6 +97,39 @@ const achievementManager = (() => {
     const count = await readCumulativeCountFromStore(id);
     cumulativeCounts.set(id, count);
     return count;
+  }
+
+  function loadPersistentProgress() {
+    if (persistentProgressPromise) return persistentProgressPromise;
+    persistentProgressPromise = (async () => {
+      const d = await getDB();
+      const records = await new Promise((resolve, reject) => {
+        const tx = d.transaction(STORE, 'readonly');
+        const store = tx.objectStore(STORE);
+        const heroRequest = store.get(HERO_WINS_RECORD);
+        const challengeRequest = store.get(CHALLENGE_WIN_RECORD);
+        tx.oncomplete = () => resolve({ heroes: heroRequest.result, challenges: challengeRequest.result });
+        tx.onerror = () => reject(tx.error || new Error('failed to load achievement progress'));
+        tx.onabort = () => reject(tx.error || new Error('aborted achievement progress load'));
+      });
+      heroWins = new Set(Array.isArray(records.heroes?.values) ? records.heroes.values.filter(Boolean) : []);
+      maxActiveChallengesWon = Math.max(0, Number(records.challenges?.value) || 0);
+    })().catch(error => {
+      persistentProgressPromise = null;
+      throw error;
+    });
+    return persistentProgressPromise;
+  }
+
+  async function putPersistentProgress(record) {
+    const d = await getDB();
+    await new Promise((resolve, reject) => {
+      const tx = d.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('failed to save achievement progress'));
+      tx.onabort = () => reject(tx.error || new Error('aborted achievement progress save'));
+    });
   }
 
   function scheduleCumulativeFlush(delay = 300) {
@@ -169,6 +209,9 @@ const achievementManager = (() => {
     cumulativeFlushTimer = 0;
     pendingCumulativeWrites.clear();
     cumulativeCounts.clear();
+    persistentProgressPromise = null;
+    heroWins = new Set();
+    maxActiveChallengesWon = 0;
     resetRunCounters();
     metaCoins = 0;
 
@@ -198,6 +241,9 @@ const achievementManager = (() => {
     cumulativeFlushTimer = 0;
     pendingCumulativeWrites.clear();
     cumulativeCounts.clear();
+    persistentProgressPromise = null;
+    heroWins = new Set();
+    maxActiveChallengesWon = 0;
     resetRunCounters();
     metaCoins = 0;
 
@@ -231,10 +277,12 @@ const achievementManager = (() => {
     maxEndlessWave = 0;
     runBowmanKills = 0;
     runTrialTypesBeaten = new Set();
+    runBountyTypesCompleted = new Set();
+    runReliquaryServicesUsed = new Set();
   }
 
   async function getProgressSnapshot() {
-    await flushPendingCumulativeWrites();
+    await Promise.all([flushPendingCumulativeWrites(), loadPersistentProgress()]);
     const cumulativeIds = ['rival_kills', 'gods_killed', 'enemies_killed'];
     const cumulativeEntries = await Promise.all(
       cumulativeIds.map(async id => [id, await getCumulativeCount(id)])
@@ -255,6 +303,10 @@ const achievementManager = (() => {
       metaCoins,
       runBowmanKills,
       runTrialTypesBeaten: runTrialTypesBeaten.size,
+      runBountyTypesCompleted: runBountyTypesCompleted.size,
+      runReliquaryServicesUsed: runReliquaryServicesUsed.size,
+      heroWins: heroWins.size,
+      maxActiveChallengesWon,
     };
   }
 
@@ -279,7 +331,7 @@ const achievementManager = (() => {
     if (count >= 100) await unlock('rival_rumble');
   });
 
-  achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp, gameMode }) => {
+  achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp, gameMode, difficulty, challengeKeys, characterKey }) => {
     // "Beat the game in under 5 minutes" means a genuine campaign speedrun, so
     // gate it to the full-clear campaign modes via an allowlist. Blocklisting
     // boss_rush alone let endless slip through (no floor-10 finish, dies-only),
@@ -288,6 +340,26 @@ const achievementManager = (() => {
     const SPEEDRUN_MODES = new Set(['normal', 'competitive']);
     if (SPEEDRUN_MODES.has(gameMode) && elapsedSeconds <= 300) await unlock('gotta_meet_god');
     if (playerHp <= 1) await unlock('glass_cannon');
+    if (gameMode === 'boss_rush') await unlock('rush_hour');
+    if (gameMode === 'treasure_hunt') await unlock('crown_thief');
+    if (difficulty === 'god') await unlock('mortal_no_more');
+
+    const challengeCount = new Set(Array.isArray(challengeKeys) ? challengeKeys.filter(Boolean) : []).size;
+    await loadPersistentProgress();
+    if (challengeCount > maxActiveChallengesWon) {
+      maxActiveChallengesWon = challengeCount;
+      await putPersistentProgress({ id: CHALLENGE_WIN_RECORD, value: maxActiveChallengesWon });
+    }
+    if (challengeCount >= 3) await unlock('against_all_odds');
+
+    const validHeroKeys = Object.keys(window.Neo?.CHARACTER_DEFS || {}).filter(key => key !== 'custom_character');
+    if (gameMode !== 'sandbox' && validHeroKeys.includes(characterKey) && !heroWins.has(characterKey)) {
+      heroWins.add(characterKey);
+      await putPersistentProgress({ id: HERO_WINS_RECORD, values: [...heroWins] });
+    }
+    if (validHeroKeys.length > 0 && validHeroKeys.every(key => heroWins.has(key))) {
+      await unlock('seven_heroes_one_crown');
+    }
   });
 
   achievementEvents.on('heal:applied', async ({ amount }) => {
@@ -310,8 +382,9 @@ const achievementManager = (() => {
     if (floor >= 10) await unlock('floor_muncher');
   });
 
-  achievementEvents.on('endless:wave', ({ wave }) => {
+  achievementEvents.on('endless:wave', async ({ wave }) => {
     maxEndlessWave = Math.max(maxEndlessWave, Math.max(0, Number(wave) || 0));
+    if (maxEndlessWave >= 20) await unlock('the_long_haul');
   });
 
   achievementEvents.on('player:leveled', async ({ level }) => {
@@ -358,6 +431,18 @@ const achievementManager = (() => {
     // from the canonical list so adding a trial type keeps this honest.
     const requiredTypes = window.Neo?.CHALLENGE_TRIAL_TYPES?.length || 6;
     if (runTrialTypesBeaten.size >= requiredTypes) await unlock('trial_master');
+  });
+
+  achievementEvents.on('bounty:completed', async ({ contractType }) => {
+    if (!contractType) return;
+    runBountyTypesCompleted.add(contractType);
+    if (runBountyTypesCompleted.size >= 3) await unlock('master_huntsman');
+  });
+
+  achievementEvents.on('reliquary:used', async ({ service }) => {
+    if (!['fuse', 'distill', 'echo'].includes(service)) return;
+    runReliquaryServicesUsed.add(service);
+    if (runReliquaryServicesUsed.size >= 3) await unlock('relic_alchemist');
   });
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {

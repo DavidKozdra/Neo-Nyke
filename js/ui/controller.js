@@ -310,10 +310,10 @@ export function createUIController(view) {
         Neo.updateCharacterSelectionUI?.();
       });
       const kitLocked = options.kitLocked === true;
-      const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
-      const statsHtml = disp.stats.map(s =>
-        `<div class="char-stat-row"><canvas class="char-stat-icon" data-inv-ui-icon="${Neo.escapeHtml(STAT_ICON_KEYS[s.label] || 'crit')}" width="24" height="24" aria-hidden="true"></canvas><span class="stat-label">${s.label}</span>` +
-        `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
+      const STAT_ICON_KEYS = { HP: 'hp', DMG: 'attack', MOVE: 'speed', AOE: 'range' };
+      const statsHtml = Neo.getCharacterDisplayStats(selected).map(s =>
+        `<div class="char-stat-row" title="${Neo.escapeHtml(`${s.label}: ${s.value} — ${s.description}`)}"><canvas class="char-stat-icon" data-inv-ui-icon="${Neo.escapeHtml(STAT_ICON_KEYS[s.label] || 'crit')}" width="24" height="24" aria-hidden="true"></canvas><span class="stat-label">${Neo.escapeHtml(s.label)}</span><span class="stat-value">${Neo.escapeHtml(s.value)}</span>` +
+        `<div class="stat-bar" role="meter" aria-label="${Neo.escapeHtml(`${s.label} ${s.value}`)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${s.pct}"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
       ).join('');
       const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
       const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
@@ -2356,15 +2356,16 @@ export function createUIController(view) {
         view.rhInfoContent.innerHTML = `${getInfoResultSummary(tab, infoCharacters.length)}<div class="info-char-grid" role="list">${infoCharacters.map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
           const lockNote = getCharacterInfoLockNote(c.key);
-          const statBars = (display.stats || []).map(s => {
+          const statBars = Neo.getCharacterDisplayStats(c.key).map(s => {
             const pct = Math.max(0, Math.min(100, Number(s.pct) || 0));
             const label = String(s.label || '');
             return (
-            `<div class="info-char-stat">
+            `<div class="info-char-stat" title="${infoEsc(`${label}: ${s.value} — ${s.description}`)}">
               <span class="info-char-stat__label">${infoEsc(label)}</span>
-              <div class="info-char-stat__bar" role="meter" aria-label="${infoEsc(label)} ${pct} percent" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+              <div class="info-char-stat__bar" role="meter" aria-label="${infoEsc(`${label} ${s.value}`)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
                 <div class="info-char-stat__fill" style="width:${pct}%;background:${infoEsc(s.color || '#f0c040')}"></div>
               </div>
+              <span class="info-char-stat__value">${infoEsc(s.value)}</span>
             </div>`
             );
           }).join('');
@@ -2442,6 +2443,14 @@ export function createUIController(view) {
       extinction: { type: 'enemy', key: 'hunter' },
       double_bane: { type: 'enemy', key: 'bowman_bane' },
       trial_master: { type: 'pixel', color: '#d7f6ff', pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[1,2],[3,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[3,4],[4,4],[3,5]] },
+      the_long_haul: { type: 'pixel', color: '#78d7ff', pixels: [[1,2],[2,1],[3,2],[4,1],[5,2],[1,3],[2,4],[3,3],[4,4],[5,3]] },
+      rush_hour: { type: 'enemy', key: 'god' },
+      crown_thief: { type: 'item', key: 'rich_mans_luck' },
+      mortal_no_more: { type: 'enemy', key: 'god' },
+      against_all_odds: { type: 'item', key: 'jesters_dice' },
+      master_huntsman: { type: 'enemy', key: 'sniper' },
+      relic_alchemist: { type: 'item', key: 'wizards_paw' },
+      seven_heroes_one_crown: { type: 'pixel', color: '#ffd27d', pixels: [[1,1],[2,3],[3,1],[4,3],[5,1],[1,4],[2,4],[3,4],[4,4],[5,4],[2,5],[3,5],[4,5]] },
     };
 
     function drawAchievementIcon(canvas, achievementId) {
@@ -2598,7 +2607,7 @@ export function createUIController(view) {
         })
         .catch(error => {
           const listEl = document.getElementById('competitiveLbList');
-          if (listEl && lbPage === 1) listEl.textContent = 'Server connection required to show competitive runs.';
+          if (listEl && lbPage === 1) listEl.textContent = 'Server connection required to show Seed Speed Run results.';
           if (statusEl) statusEl.textContent = error?.message || '';
         })
         .finally(() => { lbLoading = false; });
@@ -2624,7 +2633,7 @@ export function createUIController(view) {
       if (retryBtn) retryBtn.classList.toggle('hidden', state !== 'offline');
       if (btn) {
         btn.disabled = state !== 'online';
-        btn.textContent = state === 'checking' ? 'CHECKING...' : state === 'offline' ? 'SERVER OFFLINE' : 'COMPETE';
+        btn.textContent = state === 'checking' ? 'CHECKING...' : state === 'offline' ? 'SERVER OFFLINE' : 'RUN SEED';
       }
     }
 
@@ -3529,9 +3538,6 @@ export function createUIController(view) {
         view.sprEditorBtn?.addEventListener('click', handlers.onOpenSprEditor);
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
-        view.mainCompetitiveBtn?.addEventListener('click', () => {
-          setCompetitivePanelOpen(true);
-        });
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.multiplayerBtn?.addEventListener('click', () => setMultiplayerPanelOpen(true));
         view.multiplayerCreateRoom?.addEventListener('click', () => {
@@ -3675,7 +3681,10 @@ export function createUIController(view) {
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));
-        view.competitiveClose?.addEventListener('click', () => setCompetitivePanelOpen(false));
+        view.competitiveClose?.addEventListener('click', () => {
+          setCompetitivePanelOpen(false);
+          setAltModesPanelOpen(true);
+        });
         view.creditsBtn?.addEventListener('click', () => setCreditsPanelOpen(true));
         view.creditsClose?.addEventListener('click', () => setCreditsPanelOpen(false));
         document.addEventListener('keydown', (e) => {
@@ -3710,6 +3719,10 @@ export function createUIController(view) {
         view.altModeTreasureHuntBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('treasure_hunt');
+        });
+        view.altModeSeedSpeedRunBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          setCompetitivePanelOpen(true);
         });
         view.altModeCoopBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
@@ -4225,9 +4238,9 @@ export function createUIController(view) {
         const state = status.state || 'idle';
         el.className = `competitive-submit-status competitive-submit-status--${state}`;
         el.classList.toggle('hidden', state === 'idle');
-        if (state === 'submitting') el.textContent = 'Submitting competitive run to the server...';
-        else if (state === 'ok') el.textContent = status.rank ? `Competitive run submitted - rank #${status.rank}.` : 'Competitive run submitted.';
-        else if (state === 'error') el.textContent = status.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.';
+        if (state === 'submitting') el.textContent = 'Submitting Seed Speed Run to the server...';
+        else if (state === 'ok') el.textContent = status.rank ? `Seed Speed Run submitted - rank #${status.rank}.` : 'Seed Speed Run submitted.';
+        else if (state === 'error') el.textContent = status.message || 'Could not submit Seed Speed Run. Server connection is required for leaderboard credit.';
         else el.textContent = '';
       },
       // Shared run-end progress block: the "UNLOCKED THIS RUN" list plus the

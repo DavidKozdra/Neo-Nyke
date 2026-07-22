@@ -834,7 +834,6 @@
       <div class="main-nav">
         <button id="storyModeBtn" class="nav-btn nav-btn--tutorial"><span class="nav-btn__icon" aria-hidden="true">◆</span><span>STORY MODE</span></button>
         <button id="continueBtn" class="nav-btn hidden" data-i18n="menu.continue">CONTINUE</button>
-        <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive" data-i18n="menu.competitive">COMPETITIVE</button>
         <button id="newRunBtn" class="nav-btn">SINGLE PLAYER</button>
         <button id="multiplayerBtn" class="nav-btn" type="button" aria-expanded="false">MULTIPLAYER</button>
         <button id="altModesBtn"   class="nav-btn nav-btn--minor" data-i18n="menu.altModes">ALT MODES</button>
@@ -943,21 +942,21 @@
 
   <section id="competitivePanel" class="panel-shell competitive-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
-      <span class="altmodes-title">COMPETITIVE</span>
-      <button id="competitiveClose" class="panel-close" aria-label="Close competitive screen">X</button>
+      <span class="altmodes-title">SEED SPEED RUN</span>
+      <button id="competitiveClose" class="panel-close" aria-label="Back to alternate modes">X</button>
     </div>
     <div class="competitive-screen-body">
       <div class="altmode-card" id="altModeCompetitiveCard">
         <div class="altmode-card__icon">&#9733;</div>
         <div class="altmode-card__text">
-          <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
+          <h3 class="altmode-card__name">THIS WEEK'S SEED</h3>
           <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Only winning runs are accepted.</p>
           <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
         </div>
-        <button id="altModeCompetitiveBtn" class="nav-btn nav-btn--competitive altmode-card__btn">COMPETE</button>
+        <button id="altModeCompetitiveBtn" class="nav-btn nav-btn--competitive altmode-card__btn">RUN SEED</button>
       </div>
       <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
-      <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
+      <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the seed server. Check your connection — Seed Speed Run cannot start until it is reachable.</div>
       <div id="competitiveLeaderboardCard" class="competitive-lb-card">
         <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
         <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
@@ -1069,6 +1068,14 @@
     <div class="altmodes-body">
       <!-- CHALLENGES -->
       <div class="altmodes-tab-panel" data-panel="challenges">
+        <div class="altmode-card" id="altModeSeedSpeedRunCard">
+          <div class="altmode-card__icon">&#9733;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">SEED SPEED RUN</h3>
+            <p class="altmode-card__desc">Race the shared weekly seed on Hard with no modifiers, then place your winning time on the leaderboard.</p>
+          </div>
+          <button id="altModeSeedSpeedRunBtn" class="nav-btn nav-btn--competitive altmode-card__btn">VIEW</button>
+        </div>
         <div class="altmode-card" id="altModeEndlessCard">
           <div class="altmode-card__icon">&#9830;</div>
           <div class="altmode-card__text">

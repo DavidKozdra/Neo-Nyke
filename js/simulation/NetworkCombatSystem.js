@@ -766,7 +766,13 @@
       player.y = Number(state.floorState?.height || 700) / 2;
     }
     if (result.advanceFloor) advanceToNextFloor(state, emitEvent);
-    emitEvent('SPECIAL_ROOM_CHOICE_APPLIED', { playerId: player.id, roomId: room.id, ...result });
+    emitEvent('SPECIAL_ROOM_CHOICE_APPLIED', {
+      playerId: player.id,
+      roomId: room.id,
+      roomType: room.type,
+      choiceId: action.choiceId,
+      ...result,
+    });
     return true;
   }
 

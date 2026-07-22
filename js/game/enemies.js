@@ -969,7 +969,7 @@
     const itemStats = Neo.getItemStats?.() || {};
     const attackSpeed = Neo.getAttackSpeedValue?.() || 1;
     const baseDamage = Neo.getPlayerBaseDamage?.() || 24;
-    const moveSpeed = 228 * (itemStats.moveSpeedMultiplier || 1) * (Neo.godTimer > 0 ? 1.25 : 1);
+    const moveSpeed = (Neo.PLAYER_BASE_MOVE_SPEED || 228) * (itemStats.moveSpeedMultiplier || 1) * (Neo.godTimer > 0 ? 1.25 : 1);
     const hp = Math.max(120, Math.round(Number(player.maxHp || 120)));
     return {
       r: 15,
@@ -1572,7 +1572,7 @@
     const godBoost = Neo.godTimer > 0 ? 1.25 : 1;
     const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
     const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
-    const moveSpeed = 228 * flightBoost * zoomiesBoost * godBoost * Number(itemStats.moveSpeedMultiplier || 1) * laserSlow;
+    const moveSpeed = (Neo.PLAYER_BASE_MOVE_SPEED || 228) * flightBoost * zoomiesBoost * godBoost * Number(itemStats.moveSpeedMultiplier || 1) * laserSlow;
     const maxHp = Math.max(1, Number(inventory.maxHp || 120));
     const hp = Neo.clamp(Number(inventory.hp || maxHp), 1, maxHp);
     const currentCooldowns = {};

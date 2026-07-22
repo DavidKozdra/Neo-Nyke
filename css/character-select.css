@@ -403,7 +403,7 @@
 }
 
 #charSelect .char-stat-row {
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 5px;
 }
 
@@ -1337,7 +1337,7 @@
   }
 
   #charSelect .char-stat-row {
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 18px minmax(0, 1fr) auto;
     gap: 3px;
   }
 
@@ -1348,6 +1348,10 @@
 
   #charSelect .stat-label {
     font-size: calc(9px * var(--font-scale, 1));
+  }
+
+  #charSelect .stat-value {
+    font-size: calc(8px * var(--font-scale, 1));
   }
 
   #charSelect .stat-bar {

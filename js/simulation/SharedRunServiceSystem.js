@@ -73,6 +73,9 @@
       intents.push({ kind: 'tutorial', name: 'ladder-use', data });
     }
     if (type === 'CHALLENGE_COMPLETED') intents.push({ kind: 'achievement', name: 'challenge:beaten', data: { challengeType: data.achievementType || data.challengeType } });
+    if (type === 'SPECIAL_ROOM_CHOICE_APPLIED' && local && data.roomType === 'reliquary') {
+      intents.push({ kind: 'achievement', name: 'reliquary:used', data: { service: data.choiceId } });
+    }
     if (type === 'RUN_ENDED' && data.result === 'victory') intents.push({ kind: 'achievement', name: 'run:won', data });
     return intents;
   }
