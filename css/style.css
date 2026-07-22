@@ -5110,7 +5110,7 @@ p.sub {
 
 .char-stat-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 4px;
   align-items: center;
 }
@@ -5132,6 +5132,14 @@ p.sub {
   width: auto;
   flex-shrink: 0;
   text-align: left;
+}
+
+.stat-value {
+  color: var(--menu-text);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: right;
 }
 
 .stat-bar {
@@ -13843,6 +13851,7 @@ body.network-multiplayer-active #c {
 .info-char-stat__label { font-size: calc(11px * var(--font-scale, 1)); font-weight: 700; letter-spacing: 0.08em; color: var(--menu-text-soft); width: 40px; flex-shrink: 0; }
 .info-char-stat__bar { flex: 1; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
 .info-char-stat__fill { height: 100%; border-radius: 3px; }
+.info-char-stat__value { width: 44px; flex-shrink: 0; color: var(--menu-text); font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; font-weight: 800; text-align: right; }
 .info-enemy-layout {
   display: grid;
   grid-template-columns: 1fr 260px;
@@ -14048,6 +14057,7 @@ body.network-multiplayer-active #c {
 .info-char-card__name { font-size: calc(23px * var(--font-scale, 1)) !important; }
 .info-char-card__lore { font-size: calc(18px * var(--font-scale, 1)) !important; line-height: 1.55 !important; }
 .info-char-stat__label { font-size: calc(15px * var(--font-scale, 1)) !important; width: 56px !important; }
+.info-char-stat__value { width: 58px !important; font-size: calc(15px * var(--font-scale, 1)) !important; }
 .info-char-card__lock { font-size: calc(15px * var(--font-scale, 1)) !important; }
 
 /* Enemies grid + detail */

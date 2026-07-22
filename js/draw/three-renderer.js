@@ -13,6 +13,7 @@ import * as THREE from '../vendor/three.module.js';
 const RENDER3D_STORE_KEY = 'neonyke:render3d';
 const CAMERA_MODE_STORE_KEY = 'neonyke:camera3d';
 const WALL_HEIGHT = 112;
+const BOSS_ARENA_WALL_HEIGHT = 320;
 const PILLAR_HEIGHT = 150;
 const BLOCK_HEIGHT = 58;
 const BEAM_Y = 26;          // beams travel at torso height
@@ -575,19 +576,27 @@ function makeWallMaterial(texture, color, lengthUnits, heightUnits = WALL_HEIGHT
   return new THREE.MeshLambertMaterial({ map: tiled, color: 0xcfcfcf });
 }
 
-function addWallSegment(group, wallSkin, x1, x2, z1, z2) {
+function addWallSegment(group, wallSkin, x1, x2, z1, z2, wallHeight = WALL_HEIGHT) {
   const w = Math.max(1, x2 - x1);
   const d = Math.max(1, z2 - z1);
-  const mesh = new THREE.Mesh(unitBox, makeWallMaterial(wallSkin.texture, wallSkin.color, Math.max(w, d)));
-  mesh.scale.set(w, WALL_HEIGHT, d);
-  mesh.position.set(x1 + w / 2, WALL_HEIGHT / 2, z1 + d / 2);
+  const mesh = new THREE.Mesh(unitBox, makeWallMaterial(wallSkin.texture, wallSkin.color, Math.max(w, d), wallHeight));
+  mesh.scale.set(w, wallHeight, d);
+  mesh.position.set(x1 + w / 2, wallHeight / 2, z1 + d / 2);
   group.add(mesh);
 }
 
 // A short dark passage beyond each door gap, so doorways read as tunnels to
 // the next room instead of holes into the void — matters most in first person.
 const CORRIDOR_DEPTH = 96;
-function addDoorCorridor(group, side, wallSkin) {
+
+function getRoomCeilingHeight(room = Neo.currentRoom) {
+  const bossArea = ['boss', 'god', 'ladder'].includes(room?.type)
+    || Neo.gameMode === 'boss_rush'
+    || (Neo.enemies || []).some(enemy => enemy?.type === 'bulk_golem' && !enemy.dead);
+  return bossArea ? BOSS_ARENA_WALL_HEIGHT : WALL_HEIGHT;
+}
+
+function addDoorCorridor(group, side, wallSkin, wallHeight = WALL_HEIGHT) {
   const W = Neo.ROOM_W;
   const H = Neo.ROOM_H;
   const DOOR = Neo.DOOR;
@@ -606,36 +615,36 @@ function addDoorCorridor(group, side, wallSkin) {
     const top = new THREE.Mesh(unitPlane, dark);
     top.rotation.x = Math.PI / 2;
     top.scale.set(w, d, 1);
-    top.position.set(cx, WALL_HEIGHT, cz);
+    top.position.set(cx, wallHeight, cz);
     group.add(top);
   };
   const addCap = (cx, cz, rotY) => {
     const cap = new THREE.Mesh(unitPlane, capMaterial);
-    cap.scale.set(DOOR, WALL_HEIGHT, 1);
-    cap.position.set(cx, WALL_HEIGHT / 2, cz);
+    cap.scale.set(DOOR, wallHeight, 1);
+    cap.position.set(cx, wallHeight / 2, cz);
     cap.rotation.y = rotY;
     group.add(cap);
   };
 
   if (side === 'n') {
     addFloorAndCeiling(midX, -CORRIDOR_DEPTH / 2, DOOR, CORRIDOR_DEPTH);
-    addWallSegment(group, wallSkin, midX - half - 10, midX - half, -CORRIDOR_DEPTH, 0);
-    addWallSegment(group, wallSkin, midX + half, midX + half + 10, -CORRIDOR_DEPTH, 0);
+    addWallSegment(group, wallSkin, midX - half - 10, midX - half, -CORRIDOR_DEPTH, 0, wallHeight);
+    addWallSegment(group, wallSkin, midX + half, midX + half + 10, -CORRIDOR_DEPTH, 0, wallHeight);
     addCap(midX, -CORRIDOR_DEPTH, 0);
   } else if (side === 's') {
     addFloorAndCeiling(midX, H + CORRIDOR_DEPTH / 2, DOOR, CORRIDOR_DEPTH);
-    addWallSegment(group, wallSkin, midX - half - 10, midX - half, H, H + CORRIDOR_DEPTH);
-    addWallSegment(group, wallSkin, midX + half, midX + half + 10, H, H + CORRIDOR_DEPTH);
+    addWallSegment(group, wallSkin, midX - half - 10, midX - half, H, H + CORRIDOR_DEPTH, wallHeight);
+    addWallSegment(group, wallSkin, midX + half, midX + half + 10, H, H + CORRIDOR_DEPTH, wallHeight);
     addCap(midX, H + CORRIDOR_DEPTH, Math.PI);
   } else if (side === 'w') {
     addFloorAndCeiling(-CORRIDOR_DEPTH / 2, midZ, CORRIDOR_DEPTH, DOOR);
-    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ - half - 10, midZ - half);
-    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ + half, midZ + half + 10);
+    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ - half - 10, midZ - half, wallHeight);
+    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ + half, midZ + half + 10, wallHeight);
     addCap(-CORRIDOR_DEPTH, midZ, Math.PI / 2);
   } else if (side === 'e') {
     addFloorAndCeiling(W + CORRIDOR_DEPTH / 2, midZ, CORRIDOR_DEPTH, DOOR);
-    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ - half - 10, midZ - half);
-    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ + half, midZ + half + 10);
+    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ - half - 10, midZ - half, wallHeight);
+    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ + half, midZ + half + 10, wallHeight);
     addCap(W + CORRIDOR_DEPTH, midZ, -Math.PI / 2);
   }
 }
@@ -652,6 +661,7 @@ function buildRoom() {
   const H = Neo.ROOM_H;
   const WALL = Neo.WALL;
   const DOOR = Neo.DOOR;
+  const wallHeight = getRoomCeilingHeight(room);
   const theme = Neo.getRoomArtTheme?.(room) || {};
 
   // Floor: the 2D renderer's cached full-room background as one textured plane.
@@ -682,31 +692,31 @@ function buildRoom() {
   const half = DOOR / 2;
   // North wall (z: 0..WALL)
   if (doors.n) {
-    addWallSegment(roomGroup, wallSkin, 0, midX - half, 0, WALL);
-    addWallSegment(roomGroup, wallSkin, midX + half, W, 0, WALL);
+    addWallSegment(roomGroup, wallSkin, 0, midX - half, 0, WALL, wallHeight);
+    addWallSegment(roomGroup, wallSkin, midX + half, W, 0, WALL, wallHeight);
   } else {
-    addWallSegment(roomGroup, wallSkin, 0, W, 0, WALL);
+    addWallSegment(roomGroup, wallSkin, 0, W, 0, WALL, wallHeight);
   }
   // South wall
   if (doors.s) {
-    addWallSegment(roomGroup, wallSkin, 0, midX - half, H - WALL, H);
-    addWallSegment(roomGroup, wallSkin, midX + half, W, H - WALL, H);
+    addWallSegment(roomGroup, wallSkin, 0, midX - half, H - WALL, H, wallHeight);
+    addWallSegment(roomGroup, wallSkin, midX + half, W, H - WALL, H, wallHeight);
   } else {
-    addWallSegment(roomGroup, wallSkin, 0, W, H - WALL, H);
+    addWallSegment(roomGroup, wallSkin, 0, W, H - WALL, H, wallHeight);
   }
   // West wall
   if (doors.w) {
-    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, midZ - half);
-    addWallSegment(roomGroup, wallSkin, 0, WALL, midZ + half, H);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, midZ - half, wallHeight);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, midZ + half, H, wallHeight);
   } else {
-    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, H);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, H, wallHeight);
   }
   // East wall
   if (doors.e) {
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, midZ - half);
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, midZ + half, H);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, midZ - half, wallHeight);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, midZ + half, H, wallHeight);
   } else {
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, H);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, H, wallHeight);
   }
 
   // Ceiling: a single down-facing plane at wall height. Single-sided, so the
@@ -717,12 +727,12 @@ function buildRoom() {
   }));
   ceiling.rotation.x = Math.PI / 2;
   ceiling.scale.set(W, H, 1);
-  ceiling.position.set(W / 2, WALL_HEIGHT, H / 2);
+  ceiling.position.set(W / 2, wallHeight, H / 2);
   roomGroup.add(ceiling);
 
   // Passage stubs beyond each open door.
   ['n', 's', 'w', 'e'].forEach(side => {
-    if (doors[side]) addDoorCorridor(roomGroup, side, wallSkin);
+    if (doors[side]) addDoorCorridor(roomGroup, side, wallSkin, wallHeight);
   });
 
   // Door glow markers on the floor at each opening.
@@ -925,7 +935,7 @@ function syncWorldFxOverlay() {
 function getRoomBuildKey() {
   const room = Neo.currentRoom;
   if (!room) return '';
-  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}`;
+  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|h${getRoomCeilingHeight(room)}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}`;
 }
 
 // ---------------------------------------------------------------------------

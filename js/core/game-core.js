@@ -13,6 +13,8 @@ export const DOOR = SHARED_ROOM_GEOMETRY.doorWidth;
 export const MAX_FLOOR = 10;
 export const START_X = ROOM_W / 2;
 export const START_Y = ROOM_H / 2;
+export const PLAYER_BASE_MAX_HP = 120;
+export const PLAYER_BASE_MOVE_SPEED = 228;
 
 export const ATTACKS = {
   melee: { baseCooldown: 0.35, range: 72, arc: 1.04, damage: 24, active: 0.17, push: 220 },
@@ -1110,77 +1112,74 @@ export const CHARACTER_DEFS = {
 export const HERO_DISPLAY = {
   princess: {
     lore: 'A confident frontline all-rounder with high damage and high health. Forgiving for new players.',
-    stats: [
-      { label: 'HP',    pct: 90, color: '#f47ebd' },
-      { label: 'DMG',   pct: 80, color: '#ff9ccf' },
-      { label: 'SPD',   pct: 66, color: '#c991ff' },
-      { label: 'RANGE', pct: 60, color: '#ffd1ea' },
-    ],
   },
   thorn_knight: {
     lore: 'A close-range bruiser who stacks Bleed to make every follow-up hit more dangerous.',
-    stats: [
-      { label: 'HP',    pct: 66, color: '#c06060' },
-      { label: 'DMG',   pct: 66, color: '#c08040' },
-      { label: 'SPD',   pct: 66, color: '#8080c0' },
-      { label: 'RANGE', pct: 40, color: '#60a080' },
-    ],
   },
   metao: {
     lore: 'A long-range caster with lower direct damage and powerful area attacks.',
-    stats: [
-      { label: 'HP',    pct: 66, color: '#c06060' },
-      { label: 'DMG',   pct: 48, color: '#c08040' },
-      { label: 'SPD',   pct: 66, color: '#8080c0' },
-      { label: 'RANGE', pct: 90, color: '#60a080' },
-    ],
   },
   gelleh: {
     lore: 'A balanced divine fighter who mixes lightning, healing, and mobility. Unlock by defeating GOD.',
-    stats: [
-      { label: 'HP',    pct: 66, color: '#c06060' },
-      { label: 'DMG',   pct: 66, color: '#c08040' },
-      { label: 'SPD',   pct: 66, color: '#8080c0' },
-      { label: 'RANGE', pct: 66, color: '#60a080' },
-    ],
   },
   mooggy: {
     lore: 'A fast, aggressive assassin built around mobility, pounces, and ranged pressure. Unlock by defeating Mooggy three times.',
-    stats: [
-      { label: 'HP',    pct: 70, color: '#f4f4ef' },
-      { label: 'DMG',   pct: 78, color: '#ff5c6f' },
-      { label: 'SPD',   pct: 92, color: '#d31f35' },
-      { label: 'RANGE', pct: 88, color: '#ff9baa' },
-    ],
   },
   turtle_boy: {
     lore: 'A water-blooded brawler with a turtle shell on his back and a long red extending staff. Tanky and patient — his wave laser grows stronger every few floors. Unlock by equipping the Extending Staff and Turtle Wave at the same time.',
-    stats: [
-      { label: 'HP',    pct: 92, color: '#5fd6a0' },
-      { label: 'DMG',   pct: 58, color: '#3fb6c0' },
-      { label: 'SPD',   pct: 54, color: '#7fe0ff' },
-      { label: 'RANGE', pct: 78, color: '#aef3d0' },
-    ],
   },
   sarge: {
     lore: 'A blue-coated old soldier who never left the war. Smashes with his hammer up close and hurls it at range. Double-kills feed his homing hammer. Unlock by defeating Bowman\'s Bane.',
-    stats: [
-      { label: 'HP',    pct: 72, color: '#6fa8ff' },
-      { label: 'DMG',   pct: 84, color: '#9bbcff' },
-      { label: 'SPD',   pct: 50, color: '#5f7fd6' },
-      { label: 'RANGE', pct: 58, color: '#c0d4ff' },
-    ],
   },
   custom_character: {
     lore: 'A saved custom build that can mix any weapon and move set.',
-    stats: [
-      { label: 'HP',    pct: 66, color: '#83f3ff' },
-      { label: 'DMG',   pct: 66, color: '#ffd23f' },
-      { label: 'SPD',   pct: 66, color: '#ff8ccc' },
-      { label: 'RANGE', pct: 66, color: '#90ffba' },
-    ],
   },
 };
+
+const CHARACTER_STAT_COLORS = Object.freeze({
+  HP: '#f47ebd',
+  DMG: '#ff9c72',
+  MOVE: '#83f3ff',
+  AOE: '#90ffba',
+});
+
+function getCharacterStatDef(characterKey) {
+  const key = String(characterKey || 'thorn_knight');
+  if (key.startsWith('custom_character_')) {
+    const custom = globalThis.Neo?.getCustomCharacterSettings?.(key);
+    if (custom) return { ...CHARACTER_DEFS.custom_character, ...custom, key };
+  }
+  return CHARACTER_DEFS[key] || CHARACTER_DEFS.thorn_knight;
+}
+
+// Character stat bars are derived from the same multipliers gameplay consumes.
+// Their widths are comparisons against the strongest current roster value, while
+// `value` exposes the exact underlying number so the bars never imply fake stats.
+export function getCharacterDisplayStats(characterKey) {
+  const def = getCharacterStatDef(characterKey);
+  const roster = Object.values(CHARACTER_DEFS).filter(entry => entry.key !== 'custom_character');
+  if (def.key?.startsWith('custom_character_')) roster.push(def);
+
+  const read = (entry, key) => {
+    const value = Number(entry?.[key] ?? 1);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  };
+  const maxOf = key => Math.max(1, ...roster.map(entry => read(entry, key)));
+  const hpMultiplier = read(def, 'hpMultiplier');
+  const damageMultiplier = read(def, 'damageMultiplier');
+  const moveSpeedMultiplier = read(def, 'moveSpeedMultiplier');
+  const aoeRadiusMultiplier = read(def, 'aoeRadiusMultiplier');
+  const maxHpMultiplier = maxOf('hpMultiplier');
+  const bar = (value, maximum) => Math.round(Math.min(1, value / maximum) * 1000) / 10;
+  const multiplierText = value => `${value.toFixed(2)}×`;
+
+  return [
+    { label: 'HP', value: String(Math.round(PLAYER_BASE_MAX_HP * hpMultiplier)), description: 'Starting maximum health', pct: bar(hpMultiplier, maxHpMultiplier), color: CHARACTER_STAT_COLORS.HP },
+    { label: 'DMG', value: multiplierText(damageMultiplier), description: 'Outgoing damage multiplier before move-specific effects', pct: bar(damageMultiplier, maxOf('damageMultiplier')), color: CHARACTER_STAT_COLORS.DMG },
+    { label: 'MOVE', value: multiplierText(moveSpeedMultiplier), description: `Base movement multiplier (${PLAYER_BASE_MOVE_SPEED} before effects)`, pct: bar(moveSpeedMultiplier, maxOf('moveSpeedMultiplier')), color: CHARACTER_STAT_COLORS.MOVE },
+    { label: 'AOE', value: multiplierText(aoeRadiusMultiplier), description: 'Area radius multiplier', pct: bar(aoeRadiusMultiplier, maxOf('aoeRadiusMultiplier')), color: CHARACTER_STAT_COLORS.AOE },
+  ];
+}
 
 export const SPRITE_SOURCE_SIZE = 10;
 export const SPRITE_DEFS = window.NeoNykeSpriteDefs || {};
@@ -1254,6 +1253,9 @@ Neo.LEGACY_ORDER = LEGACY_ORDER;
 Neo.HARD_DIFFICULTIES = HARD_DIFFICULTIES;
 Neo.CHARACTER_DEFS = CHARACTER_DEFS;
 Neo.HERO_DISPLAY = HERO_DISPLAY;
+Neo.PLAYER_BASE_MAX_HP = PLAYER_BASE_MAX_HP;
+Neo.PLAYER_BASE_MOVE_SPEED = PLAYER_BASE_MOVE_SPEED;
+Neo.getCharacterDisplayStats = getCharacterDisplayStats;
 Neo.SPRITE_SOURCE_SIZE = SPRITE_SOURCE_SIZE;
 Neo.SPRITE_DEFS = SPRITE_DEFS;
 Neo.ENV_TILE_ROOT = ENV_TILE_ROOT;

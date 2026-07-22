@@ -21,4 +21,21 @@ describe('SharedRunServiceSystem', () => {
       expect.objectContaining({ kind: 'tutorial', name: 'shop-purchase' }),
     ]));
   });
+
+  test('maps successful Reliquary choices to achievement progress for the acting player', () => {
+    expect(getClientRunServiceIntents('SPECIAL_ROOM_CHOICE_APPLIED', {
+      playerId: 'p1',
+      roomType: 'reliquary',
+      choiceId: 'distill',
+    }, 'p1')).toContainEqual({
+      kind: 'achievement',
+      name: 'reliquary:used',
+      data: { service: 'distill' },
+    });
+    expect(getClientRunServiceIntents('SPECIAL_ROOM_CHOICE_APPLIED', {
+      playerId: 'p2',
+      roomType: 'reliquary',
+      choiceId: 'distill',
+    }, 'p1')).toEqual([]);
+  });
 });

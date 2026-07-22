@@ -952,7 +952,7 @@ export function resumeGame() {
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
     Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
-    const maxHp = Math.round(120 * (character.hpMultiplier || 1));
+    const maxHp = Math.round((Neo.PLAYER_BASE_MAX_HP || 120) * (character.hpMultiplier || 1));
     return {
       character: character.key,
       x: Neo.START_X,
@@ -1372,7 +1372,7 @@ export function resumeGame() {
     if (mode === 'rival_rumble') return 'Rival Rumble';
     if (mode === 'treasure_hunt') return 'Treasure Hunt';
     if (mode === 'sandbox') return 'Sandbox';
-    if (mode === 'competitive') return 'Competitive';
+    if (mode === 'competitive') return 'Seed Speed Run';
     return 'Normal';
   }
 
@@ -2563,7 +2563,7 @@ export function resumeGame() {
     let data = null;
     try { data = await res.json(); } catch { data = null; }
     if (!res.ok) {
-      const message = data?.error || `Competitive server returned ${res.status}`;
+      const message = data?.error || `Seed server returned ${res.status}`;
       throw new Error(message);
     }
     return data || {};
@@ -2587,17 +2587,17 @@ export function resumeGame() {
     if (Neo._competitiveSeedPromise && !force) return Neo._competitiveSeedPromise;
 
     Neo._competitiveSeedFetching = true;
-    setCompetitiveServerStatus('checking', { message: 'Checking competitive server...' });
+    setCompetitiveServerStatus('checking', { message: 'Checking seed server...' });
     const promise = fetchCompetitiveJson('/seed')
       .then(data => {
-        if (!data.seed) throw new Error('Competitive server did not return a seed');
+        if (!data.seed) throw new Error('Seed server did not return a seed');
         Neo._competitiveSeed = String(data.seed);
         setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
         return Neo._competitiveSeed;
       })
       .catch(error => {
         Neo._competitiveSeed = null;
-        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Seed server is unreachable' });
         throw error;
       })
       .finally(() => {
@@ -2636,8 +2636,8 @@ export function resumeGame() {
       if (titleEl) titleEl.textContent = 'PICK HERO';
       if (subtitleEl) subtitleEl.textContent = '';
       if (Neo.gameMode === 'competitive') {
-        if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
-        if (goBtn) goBtn.textContent = 'COMPETE';
+        if (subtitleEl) subtitleEl.textContent = 'Weekly seed speed run. Hard difficulty is locked.';
+        if (goBtn) goBtn.textContent = 'RUN SEED';
       } else if (isStory) {
         if (titleEl) titleEl.textContent = 'CHOOSE YOUR STORY';
         if (subtitleEl) subtitleEl.textContent = skipStoryTutorial
@@ -2675,7 +2675,7 @@ export function resumeGame() {
         setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
         if (competBtn) competBtn.disabled = false;
       } else if (!Neo._competitiveSeedFetching) {
-        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (subtitleEl) subtitleEl.textContent = 'Checking seed server...';
         if (competBtn) competBtn.disabled = true;
         refreshCompetitiveSeed()
           .then(seed => {
@@ -2685,11 +2685,11 @@ export function resumeGame() {
           })
           .catch(() => {
             const el = document.getElementById('charSelectSubtitle');
-            if (el) el.textContent = 'Server connection required for Competitive.';
+            if (el) el.textContent = 'Server connection required for Seed Speed Run.';
             if (competBtn) competBtn.disabled = true;
           });
       } else {
-        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (subtitleEl) subtitleEl.textContent = 'Checking seed server...';
         if (competBtn) competBtn.disabled = true;
       }
     } else {
@@ -3040,7 +3040,7 @@ export function resumeGame() {
       try {
         serverSeed = await refreshCompetitiveSeed({ force: true });
       } catch (error) {
-        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Seed server is unreachable' });
         setGameState('start');
         Neo.uiController?.setCompetitivePanelOpen?.(true);
         return;

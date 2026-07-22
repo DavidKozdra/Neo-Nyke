@@ -1640,7 +1640,6 @@
   }
 
   #start #continueBtn:not(.hidden),
-  #start #mainCompetitiveBtn,
   #start #newRunBtn {
     grid-column: span 1;
   }
@@ -2880,7 +2879,7 @@
 
   #charSelect .char-stat-row {
     display: grid;
-    grid-template-columns: 14px minmax(0, 1fr);
+    grid-template-columns: 14px minmax(0, 1fr) auto;
     align-items: center;
     gap: 3px;
   }

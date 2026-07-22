@@ -848,7 +848,7 @@
       .catch(error => {
         setCompetitiveSubmitStatus({
           state: 'error',
-          message: error?.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.',
+          message: error?.message || 'Could not submit Seed Speed Run. Server connection is required for leaderboard credit.',
         });
       });
   }
@@ -1013,7 +1013,14 @@
       }
     }
     const entry = finalizeRun('win');
-    window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0), gameMode: Neo.gameMode });
+    window.achievementEvents?.emit('run:won', {
+      elapsedSeconds: Neo.gameElapsedTime,
+      playerHp: Math.round(Neo.player?.hp || 0),
+      gameMode: Neo.gameMode,
+      difficulty: Neo.selectedDifficulty,
+      challengeKeys: [...(Neo.selectedChallenges || [])],
+      characterKey: Neo.chosenCharacter,
+    });
     Neo.setGameState('win');
     Neo.uiController.setWinScreen(entry);
   }

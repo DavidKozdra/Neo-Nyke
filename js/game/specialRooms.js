@@ -675,6 +675,7 @@ function applySharedSpecialChoice(choiceId) {
     Neo.gameSession?.sendGameCommand?.('SPECIAL_ROOM_CHOICE', { choiceId });
     return true;
   }
+  const roomType = Neo.currentRoom.type;
   const randomFunction = Neo.createRoomRandom?.(Neo.currentRoom, `special:${choiceId}`) || Neo.rng;
   const result = globalThis.NeoNyke?.simulation?.applySpecialRoomChoice?.({
     floorNumber: Neo.floor,
@@ -690,6 +691,9 @@ function applySharedSpecialChoice(choiceId) {
   if (result.advanceFloor) {
     Neo.floor = Math.min(Neo.MAX_FLOOR, Number(Neo.floor || 1) + 1);
     Neo.generateFloor?.();
+  }
+  if (roomType === 'reliquary') {
+    window.achievementEvents?.emit('reliquary:used', { service: choiceId });
   }
   return true;
 }
@@ -805,6 +809,7 @@ function completeBounty(bounty, result) {
     holdMs: 4000,
   });
   Neo.player.lastBountyStatus = `COMPLETE: ${def.title || 'Bounty'}`;
+  window.achievementEvents?.emit('bounty:completed', { contractType: bounty.contractType, kind });
   Neo.player.activeBounty = null;
   Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.4, text: result || 'BOUNTY COMPLETE', c: '#ffb070' });
   Neo.playSfx?.('item_collect');
