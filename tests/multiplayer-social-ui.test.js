@@ -9,7 +9,7 @@ describe('multiplayer social and death UI', () => {
     const view = read('js/rendering/NetworkGameView.js');
     const controller = read('js/ui/controller.js');
 
-    expect(html).toMatch(/id="multiplayerJoinClipboard"[^>]*>PASTE INVITE</);
+    expect(html).toMatch(/id="multiplayerJoinClipboard"[^>]*>PASTE CODE</);
     expect(html).toMatch(/id="multiplayerChatInput"[^>]*maxlength="180"/);
     expect(html).toMatch(/id="multiplayerSpectatorPlayers"/);
     expect(html).toMatch(/id="multiplayerEndScreen"/);
@@ -19,13 +19,17 @@ describe('multiplayer social and death UI', () => {
     expect(controller).toContain('browserMultiplayerSession.requestRematch(true)');
   });
 
-  test('places the large multiplayer banner outside a collapsible lobby-code card', () => {
+  test('presents create and join as two explicit choices', () => {
     const html = read('index.html');
     const controller = read('js/ui/controller.js');
 
     expect(html).toMatch(/<header class="multiplayer-banner">[\s\S]*id="multiplayerPanelTitle"[\s\S]*<div class="multiplayer-panel__surface">/);
-    expect(html).toMatch(/<details id="multiplayerJoinPanel"[\s\S]*<summary class="multiplayer-join-summary">[\s\S]*id="multiplayerRoomCode"/);
-    expect(controller).toContain("view.multiplayerJoinPanel?.addEventListener('toggle'");
+    expect(html).toMatch(/class="multiplayer-choice-grid">[\s\S]*id="multiplayerCreateTitle">CREATE A PARTY[\s\S]*id="multiplayerJoinTitle">JOIN A PARTY/);
+    expect(html).toContain('data-multiplayer-mode-option="coop"');
+    expect(html).toContain('data-multiplayer-mode-option="rival"');
+    expect(html).toMatch(/id="multiplayerJoinPanel"[\s\S]*id="multiplayerRoomCode"[\s\S]*id="multiplayerJoinRoom"/);
+    expect(controller).toContain('function setMultiplayerModeChoice(mode)');
+    expect(controller).not.toContain("view.multiplayerJoinPanel?.addEventListener('toggle'");
   });
 
   test('mounts multiplayer as a dedicated menu page with its own live background and back navigation', () => {

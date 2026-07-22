@@ -980,60 +980,51 @@
       </header>
       <div class="multiplayer-panel__surface">
         <div class="competitive-screen-body multiplayer-panel__body">
-      <p id="multiplayerDevelopmentNote" class="multiplayer-development-note">Multiplayer is under development. Network services are not initialized from this screen.</p>
-      <div id="multiplayerResumeCard" class="altmode-card multiplayer-resume-card hidden">
-        <div class="altmode-card__icon" aria-hidden="true">▸</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">GAME IN PROGRESS</h3>
-          <p class="altmode-card__desc">You backed out of a live match but are still connected. Jump back in where you left off.</p>
-        </div>
-        <button id="multiplayerResumeBtn" class="nav-btn altmode-card__btn" type="button">RETURN TO GAME</button>
-      </div>
-      <div class="altmode-card multiplayer-create-card">
-        <div class="altmode-card__icon" aria-hidden="true">+</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">CREATE ROOM</h3>
-          <p class="altmode-card__desc">Run a co-op expedition or a rival dungeon where heroes can fight each other.</p>
-          <label class="multiplayer-character-picker multiplayer-mode-picker">
-            <span>RULES</span>
-            <select id="multiplayerMode" aria-label="Multiplayer rules">
-              <option value="coop">CO-OP EXPEDITION</option>
-              <option value="rival">RIVAL EXPEDITION (PVP)</option>
-            </select>
-          </label>
-        </div>
-        <button id="multiplayerCreateRoom" class="nav-btn altmode-card__btn" type="button" disabled>CREATE</button>
-      </div>
-      <details id="multiplayerJoinPanel" class="altmode-card multiplayer-join-card">
-        <summary class="multiplayer-join-summary">
-          <span class="altmode-card__icon" aria-hidden="true">#</span>
-          <span class="altmode-card__text">
-            <span class="altmode-card__name">JOIN ROOM</span>
-            <span class="altmode-card__desc">Already have a lobby code? Open the lobby-code entry.</span>
-          </span>
-          <span class="multiplayer-join-summary__action" aria-hidden="true">
-            <span>LOBBY CODE</span>
-            <span class="multiplayer-join-summary__chevron">⌄</span>
-          </span>
-        </summary>
-        <div class="multiplayer-join-dropdown">
-          <label class="multiplayer-character-picker multiplayer-mode-picker">
-            <span>LOBBY CODE</span>
-            <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ENTER CODE" aria-label="Multiplayer lobby code">
-          </label>
-          <div class="multiplayer-join-actions">
-            <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN LOBBY</button>
-            <button id="multiplayerJoinClipboard" class="nav-btn nav-btn--minor altmode-card__btn" type="button" disabled>PASTE INVITE</button>
+          <p id="multiplayerDevelopmentNote" class="multiplayer-development-note" role="status">Checking online services…</p>
+          <div id="multiplayerResumeCard" class="altmode-card multiplayer-resume-card hidden">
+            <div class="altmode-card__icon" aria-hidden="true">▸</div>
+            <div class="altmode-card__text">
+              <h3 class="altmode-card__name">GAME IN PROGRESS</h3>
+            </div>
+            <button id="multiplayerResumeBtn" class="nav-btn altmode-card__btn" type="button">RETURN TO GAME</button>
           </div>
-        </div>
-      </details>
-      <div id="multiplayerRoomState" class="multiplayer-room-state" aria-live="polite">
+          <div class="multiplayer-choice-grid">
+            <section class="multiplayer-choice-card multiplayer-create-card" aria-labelledby="multiplayerCreateTitle">
+              <h3 id="multiplayerCreateTitle">CREATE A PARTY</h3>
+              <fieldset class="multiplayer-mode-options">
+                <legend>PLAY STYLE</legend>
+                <button class="multiplayer-mode-option is-active" data-multiplayer-mode-option="coop" type="button" aria-pressed="true">
+                  <b>CO-OP EXPEDITION</b>
+                </button>
+                <button class="multiplayer-mode-option" data-multiplayer-mode-option="rival" type="button" aria-pressed="false">
+                  <b>RIVAL EXPEDITION</b>
+                </button>
+                <select id="multiplayerMode" class="sr-only" aria-label="Multiplayer rules" tabindex="-1">
+                  <option value="coop">CO-OP EXPEDITION</option>
+                  <option value="rival">RIVAL EXPEDITION</option>
+                </select>
+              </fieldset>
+              <button id="multiplayerCreateRoom" class="primary-action-btn multiplayer-choice-card__primary" type="button" disabled>CREATE LOBBY</button>
+            </section>
+            <section id="multiplayerJoinPanel" class="multiplayer-choice-card multiplayer-join-card" aria-labelledby="multiplayerJoinTitle">
+              <h3 id="multiplayerJoinTitle">JOIN A PARTY</h3>
+              <label class="multiplayer-code-field" for="multiplayerRoomCode">
+                <span>INVITE CODE</span>
+                <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD1234" aria-label="Multiplayer invite code">
+              
+              <button id="multiplayerJoinClipboard" class="multiplayer-paste-btn" type="button" disabled>PASTE CODE</button>
+              </label>
+
+              <button id="multiplayerJoinRoom" class="primary-action-btn multiplayer-choice-card__primary" type="button" disabled>JOIN LOBBY</button>
+            </section>
+          </div>
+      <div id="multiplayerRoomState" class="multiplayer-room-state hidden" aria-live="polite">
         <div id="multiplayerRoomCodeShare" class="multiplayer-room-code-share hidden">
           <div id="multiplayerRoomCodeDisplay" class="multiplayer-room-code-display"></div>
           <button id="multiplayerCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy multiplayer room code">COPY CODE</button>
           <button id="multiplayerCopyInviteLink" class="nav-btn nav-btn--minor multiplayer-copy-invite-link" type="button" aria-label="Copy multiplayer invite link">COPY INVITE</button>
         </div>
-        <div id="multiplayerRoomStatus">Create a room or enter a room code.</div>
+        <div id="multiplayerRoomStatus">Connecting…</div>
         <div id="multiplayerMemberList" class="multiplayer-member-list"></div>
         <label id="multiplayerCharacterPicker" class="multiplayer-character-picker hidden">
           <span>YOUR HERO</span>

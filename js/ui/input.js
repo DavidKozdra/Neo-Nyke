@@ -953,6 +953,7 @@ export const ui = {
     multiplayerJoinRoom: document.getElementById('multiplayerJoinRoom'),
     multiplayerJoinClipboard: document.getElementById('multiplayerJoinClipboard'),
     multiplayerRoomCode: document.getElementById('multiplayerRoomCode'),
+    multiplayerRoomState: document.getElementById('multiplayerRoomState'),
     multiplayerRoomCodeShare: document.getElementById('multiplayerRoomCodeShare'),
     multiplayerRoomCodeDisplay: document.getElementById('multiplayerRoomCodeDisplay'),
     multiplayerCopyRoomCode: document.getElementById('multiplayerCopyRoomCode'),

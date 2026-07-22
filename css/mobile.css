@@ -868,7 +868,7 @@
   }
 
   .altmode-card__desc {
-    font-size: calc(11px * var(--font-scale, 1));
+    font-size: calc(14px * var(--font-scale, 1));
     line-height: 1.35;
   }
 
@@ -1288,7 +1288,7 @@
   }
 
   .altmode-card__desc {
-    font-size: calc(10px * var(--font-scale, 1));
+    font-size: calc(13px * var(--font-scale, 1));
   }
 
   .altmode-card__btn,
@@ -1708,7 +1708,7 @@
   }
 
   .altmode-card__desc {
-    font-size: calc(10px * var(--font-scale, 1));
+    font-size: calc(13px * var(--font-scale, 1));
     line-height: 1.25;
   }
 
