@@ -9737,11 +9737,11 @@ button.alt.danger {
   padding: 14px 24px;
   box-sizing: border-box;
   border: 0;
-  border-bottom: 2px solid #91f0b7;
+  border-bottom: 2px solid #8ed8ff;
   border-radius: 0;
-  background: linear-gradient(90deg, #102f22, #19744a 50%, #102f22);
+  background: linear-gradient(90deg, #102431, #1c607c 50%, #102431);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 -1px 0 rgba(255,255,255,.12);
-  color: #e2ffed;
+  color: #e5f7ff;
   font-size: calc(16px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .16em;
@@ -9750,7 +9750,14 @@ button.alt.danger {
   text-shadow: 0 2px 0 rgba(0,0,0,.32);
 }
 
-.multiplayer-panel:not([data-multiplayer-development-enabled]) .multiplayer-development-note {
+.multiplayer-panel[data-multiplayer-state="online"] .multiplayer-development-note {
+  border-bottom-color: #91f0b7;
+  background: linear-gradient(90deg, #102f22, #19744a 50%, #102f22);
+  color: #e2ffed;
+}
+
+.multiplayer-panel[data-multiplayer-state="offline"] .multiplayer-development-note,
+.multiplayer-panel[data-multiplayer-state="disabled"] .multiplayer-development-note {
   border-bottom-color: #ffca7c;
   background: linear-gradient(90deg, #352413, #86561e 50%, #352413);
   color: #fff0d7;

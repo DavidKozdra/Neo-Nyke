@@ -557,6 +557,11 @@ async function handleRequest(request, env) {
   const path = url.pathname.replace(/^\/api/, '');
 
   // ── Multiplayer rooms ────────────────────────────────────────────────────
+  if (path === '/multiplayer/health' && request.method === 'GET') {
+    const available = typeof env?.MULTIPLAYER_ROOMS?.getByName === 'function';
+    return json({ ok: available, multiplayer: available }, available ? 200 : 503);
+  }
+
   if (path === '/multiplayer/rooms' && request.method === 'POST') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
     if (!rateLimit(`room-create:${ip}`, 10, 60_000)) return json({ error: 'Too many room creation requests' }, 429);

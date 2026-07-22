@@ -57,6 +57,8 @@ export function createUIController(view) {
     let browserMultiplayerUnsubscribe = null;
     let browserMultiplayerGameView = null;
     let multiplayerRequestBusy = false;
+    let multiplayerServiceState = 'checking';
+    let multiplayerAvailabilityCheckId = 0;
     // The source stays near the other menu destinations for maintainability,
     // but at runtime Multiplayer is a true sibling page like Credits. Moving it
     // out of #start prevents main-menu sizing/visibility rules from leaking into
@@ -106,21 +108,51 @@ export function createUIController(view) {
 
     function syncMultiplayerFeatureUI() {
       const enabled = globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') === true;
+      const serviceState = enabled ? multiplayerServiceState : 'disabled';
+      const available = serviceState === 'online';
       view.multiplayerBtn?.classList.remove('hidden');
-      view.multiplayerPanel?.toggleAttribute('data-multiplayer-development-enabled', enabled);
-      if (view.multiplayerCreateRoom) view.multiplayerCreateRoom.disabled = !enabled || multiplayerRequestBusy;
-      if (view.multiplayerJoinRoom) view.multiplayerJoinRoom.disabled = !enabled || multiplayerRequestBusy;
-      if (view.multiplayerJoinClipboard) view.multiplayerJoinClipboard.disabled = !enabled || multiplayerRequestBusy;
-      if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !enabled || multiplayerRequestBusy;
-      if (view.multiplayerMode) view.multiplayerMode.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerPanel) view.multiplayerPanel.dataset.multiplayerState = serviceState;
+      if (view.multiplayerCreateRoom) view.multiplayerCreateRoom.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerJoinRoom) view.multiplayerJoinRoom.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerJoinClipboard) view.multiplayerJoinClipboard.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerMode) view.multiplayerMode.disabled = !available || multiplayerRequestBusy;
       document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
-        button.disabled = !enabled || multiplayerRequestBusy;
+        button.disabled = !available || multiplayerRequestBusy;
       });
       if (view.multiplayerDevelopmentNote) {
-        view.multiplayerDevelopmentNote.textContent = enabled
+        view.multiplayerDevelopmentNote.textContent = serviceState === 'online'
           ? 'ONLINE'
-          : 'ONLINE UNAVAILABLE';
+          : serviceState === 'checking'
+            ? 'CHECKING ONLINE SERVICES…'
+            : serviceState === 'disabled'
+              ? 'ONLINE DISABLED'
+              : 'SERVER UNREACHABLE';
       }
+    }
+
+    async function refreshMultiplayerAvailability() {
+      const checkId = ++multiplayerAvailabilityCheckId;
+      if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
+        multiplayerServiceState = 'offline';
+        syncMultiplayerFeatureUI();
+        return false;
+      }
+      const Transport = globalThis.NeoNyke?.multiplayer?.CloudflareWebSocketTransport;
+      if (typeof Transport !== 'function') {
+        multiplayerServiceState = 'offline';
+        syncMultiplayerFeatureUI();
+        return false;
+      }
+      multiplayerServiceState = 'checking';
+      syncMultiplayerFeatureUI();
+      const probe = new Transport();
+      const available = await probe.checkAvailability?.({ timeoutMs: 4000 }) === true;
+      probe.dispose?.();
+      if (checkId !== multiplayerAvailabilityCheckId) return multiplayerServiceState === 'online';
+      multiplayerServiceState = available ? 'online' : 'offline';
+      syncMultiplayerFeatureUI();
+      return available;
     }
 
     function setMultiplayerModeChoice(mode) {
@@ -925,6 +957,10 @@ export function createUIController(view) {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer is disabled in this build.';
         return;
       }
+      if (multiplayerServiceState !== 'online' && !(await refreshMultiplayerAvailability())) {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'The multiplayer server is unreachable.';
+        return;
+      }
       const Session = globalThis.NeoNyke?.multiplayer?.BrowserMultiplayerSession;
       if (typeof Session !== 'function') {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer client failed to load.';
@@ -945,6 +981,7 @@ export function createUIController(view) {
           status: 'rejected',
           errors: [{ message: error?.message || 'Could not connect to multiplayer.' }],
         });
+        void refreshMultiplayerAvailability();
       } finally {
         multiplayerRequestBusy = false;
         syncMultiplayerFeatureUI();
@@ -2545,6 +2582,7 @@ export function createUIController(view) {
         setAltModesPanelOpen(false);
         setCompetitivePanelOpen(false);
         renderMultiplayerResumeCard();
+        void refreshMultiplayerAvailability();
         view.multiplayerPanel?.classList.remove('is-open');
         requestAnimationFrame(() => {
           view.multiplayerPanel?.classList.add('is-open');
