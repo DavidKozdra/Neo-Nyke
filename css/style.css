@@ -15545,6 +15545,11 @@ body.network-multiplayer-active #c {
   border-radius: 50%;
 }
 
+#forrest {
+
+  border-radius: 20%;
+}
+
 /* ========================================================================
    Menu UI language — deliberate pixel-game surfaces, not generic glass cards
    ------------------------------------------------------------------------
