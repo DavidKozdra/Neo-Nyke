@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v96';
+const CACHE_VERSION = 'neonyke-v97';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -7,6 +7,8 @@ const PRECACHE = [
   "/",
   "/assets/credits-images/digits.png",
   "/assets/credits-images/Explorer2000.png",
+  "/assets/credits-images/forrest.gif",
+  "/assets/credits-images/ihave13digits.webp",
   "/assets/fonts/PressStart2P-Latin.woff2",
   "/assets/fonts/PressStart2P.ttf",
   "/assets/fonts/VT323-LatinExt.woff2",
