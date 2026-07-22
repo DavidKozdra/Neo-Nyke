@@ -9592,7 +9592,7 @@ button.alt.danger {
   z-index: 35;
   width: 100dvw;
   height: 100dvh;
-  padding: 24px;
+  padding: 92px 24px 24px;
   overflow: auto;
   background: #05070f;
 }
@@ -9620,6 +9620,7 @@ button.alt.danger {
 .multiplayer-page__back {
   position: fixed;
   z-index: 4;
+  top: 80px;
 }
 
 .multiplayer-page__layout {
@@ -9701,7 +9702,7 @@ button.alt.danger {
   position: relative;
   display: flex;
   min-height: 0;
-  max-height: calc(min(94dvh, 900px) - 112px);
+  max-height: calc(min(94dvh, 900px) - 170px);
   overflow: hidden;
   flex: 1 1 auto;
   flex-direction: column;
@@ -9725,20 +9726,34 @@ button.alt.danger {
 }
 
 .multiplayer-development-note {
-  padding: 10px 14px;
-  border: 1px solid rgba(120, 255, 180, .28);
-  border-radius: var(--ui-control-radius);
-  background: rgba(40, 120, 80, .1);
-  color: #a9e9c4;
-  font-size: calc(13px * var(--font-scale, 1));
-  font-weight: 800;
-  letter-spacing: .06em;
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 14px 24px;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 2px solid #91f0b7;
+  border-radius: 0;
+  background: linear-gradient(90deg, #102f22, #19744a 50%, #102f22);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 -1px 0 rgba(255,255,255,.12);
+  color: #e2ffed;
+  font-size: calc(16px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .16em;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 2px 0 rgba(0,0,0,.32);
 }
 
 .multiplayer-panel:not([data-multiplayer-development-enabled]) .multiplayer-development-note {
-  border-color: rgba(255, 184, 92, .32);
-  background: rgba(150, 88, 24, .1);
-  color: #ffd29a;
+  border-bottom-color: #ffca7c;
+  background: linear-gradient(90deg, #352413, #86561e 50%, #352413);
+  color: #fff0d7;
 }
 
 .multiplayer-choice-grid {
@@ -9880,11 +9895,11 @@ button.alt.danger {
 @media (max-width: 700px) {
   .multiplayer-page {
     justify-content: flex-start;
-    padding: 86px 8px 8px;
+    padding: 130px 8px 8px;
   }
 
   .multiplayer-page__back {
-    top: 12px;
+    top: 72px;
     left: 12px;
     min-height: 50px;
     padding: 9px 17px 9px 13px;
@@ -9893,8 +9908,15 @@ button.alt.danger {
 
   .multiplayer-page__layout {
     width: calc(100vw - 16px);
-    max-height: calc(100dvh - 94px);
+    max-height: calc(100dvh - 138px);
     gap: 12px;
+  }
+
+  .multiplayer-development-note {
+    min-height: 58px;
+    padding: 12px 16px;
+    font-size: calc(14px * var(--font-scale, 1));
+    letter-spacing: .1em;
   }
 
   .multiplayer-banner { padding-inline: 8px; }
@@ -9905,7 +9927,7 @@ button.alt.danger {
   .multiplayer-banner__subtitle { font-size: calc(8px * var(--font-scale, 1)); }
 
   .multiplayer-panel__surface {
-    max-height: calc(100dvh - 100px);
+    max-height: calc(100dvh - 238px);
   }
 
   .multiplayer-panel__body {

@@ -309,10 +309,14 @@ self.addEventListener('fetch', e => {
 
   const isDocument = e.request.mode === 'navigate' || e.request.destination === 'document';
   const isCoreAsset = e.request.destination === 'script' || e.request.destination === 'style';
+  // Character sheets are edited independently of the module graph. Serving
+  // them cache-first can leave one hero (most noticeably Princess) stuck on
+  // an older portrait even though the frame mapping and current PNG are right.
+  const isCharacterSheet = url.pathname.startsWith('/assets/sprites/chars/');
 
-  if (isDocument || isCoreAsset) {
+  if (isDocument || isCoreAsset || isCharacterSheet) {
     e.respondWith(
-      fetch(e.request)
+      fetch(isCharacterSheet ? new Request(e.request, { cache: 'no-store' }) : e.request)
         .then(res => {
           if (res && res.status === 200 && res.type !== 'opaque') {
             const clone = res.clone();

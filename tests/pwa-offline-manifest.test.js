@@ -16,4 +16,10 @@ describe('offline PWA entry points', () => {
   test('offline document navigation falls back to the cached application shell', () => {
     expect(worker).toContain("isDocument ? await caches.match('/index.html') : undefined");
   });
+
+  test('refreshes edited character portraits online while retaining the offline cache fallback', () => {
+    expect(worker).toContain("url.pathname.startsWith('/assets/sprites/chars/')");
+    expect(worker).toContain("new Request(e.request, { cache: 'no-store' })");
+    expect(worker).toContain('await caches.match(e.request)');
+  });
 });
