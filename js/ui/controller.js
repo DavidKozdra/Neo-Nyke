@@ -2865,6 +2865,69 @@ export function createUIController(view) {
         }
 
         const sandboxSearch = { enemies: '', items: '', startItems: '' };
+        const SANDBOX_CONFIG_TABS = ['rules', 'loadout', 'gear', 'pools'];
+        const SANDBOX_RULE_PRESETS = Object.freeze({
+          standard: Object.freeze({
+            enemyStatMultiplier: 1, enemySpeedMultiplier: 1, enemyDamageMultiplier: 1,
+            playerDamageMultiplier: 1, startingCoins: 0, startingLevel: 1,
+            godMode: false, unlockEverything: false,
+          }),
+          power_trip: Object.freeze({
+            enemyStatMultiplier: 1, enemySpeedMultiplier: 1, enemyDamageMultiplier: 1,
+            playerDamageMultiplier: 2.5, startingCoins: 250, startingLevel: 10,
+            godMode: false, unlockEverything: true,
+          }),
+          mayhem: Object.freeze({
+            enemyStatMultiplier: 1.75, enemySpeedMultiplier: 1.35, enemyDamageMultiplier: 1.65,
+            playerDamageMultiplier: 2, startingCoins: 100, startingLevel: 8,
+            godMode: false, unlockEverything: true,
+          }),
+          invincible: Object.freeze({
+            enemyStatMultiplier: 2, enemySpeedMultiplier: 1.4, enemyDamageMultiplier: 2,
+            playerDamageMultiplier: 4, startingCoins: 999, startingLevel: 25,
+            godMode: true, unlockEverything: true,
+          }),
+        });
+        let activeSandboxConfigTab = 'rules';
+
+        function setSandboxConfigTab(tab, focus = false) {
+          const next = SANDBOX_CONFIG_TABS.includes(tab) ? tab : 'rules';
+          activeSandboxConfigTab = next;
+          document.querySelectorAll('[data-sbox-tab]').forEach(button => {
+            const active = button.dataset.sboxTab === next;
+            button.classList.toggle('is-active', active);
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+            button.tabIndex = active ? 0 : -1;
+            if (active && focus) button.focus();
+          });
+          document.querySelectorAll('#sandboxGrid > [data-sandbox-section]').forEach(section => {
+            const active = section.dataset.sandboxSection === next;
+            section.hidden = !active;
+            section.classList.toggle('is-active', active);
+          });
+        }
+
+        function getActiveSandboxRulePreset() {
+          return Object.entries(SANDBOX_RULE_PRESETS).find(([, preset]) => (
+            Object.entries(preset).every(([key, value]) => Neo.sandboxSettings?.[key] === value)
+          ))?.[0] || '';
+        }
+
+        function updateSandboxPresetState() {
+          const presetKey = getActiveSandboxRulePreset();
+          document.querySelectorAll('[data-sbox-preset]').forEach(button => {
+            button.classList.toggle('is-active', button.dataset.sboxPreset === presetKey);
+          });
+        }
+
+        function applySandboxRulePreset(key) {
+          const preset = SANDBOX_RULE_PRESETS[key];
+          if (!preset) return;
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings({ ...Neo.sandboxSettings, ...preset });
+          syncSandboxPanelFields();
+          Neo.persistMetaSoon();
+        }
 
         function normalizeSandboxSearchValue(value) {
           return String(value || '').trim().toLowerCase();
@@ -3141,6 +3204,7 @@ export function createUIController(view) {
           if (view.sandboxItemSearch) view.sandboxItemSearch.value = sandboxSearch.items;
           if (view.sandboxStartItemSearch) view.sandboxStartItemSearch.value = sandboxSearch.startItems;
           renderSandboxTokenLists();
+          updateSandboxPresetState();
         }
         buildSandboxMoveLoadoutOptions();
         buildSandboxWeaponLoadoutOptions();
@@ -3165,6 +3229,7 @@ export function createUIController(view) {
             if (slider) slider.value = String(rounded);
             if (numInput) numInput.value = String(rounded);
             Neo.sandboxSettings[param] = rounded;
+            updateSandboxPresetState();
             Neo.persistMetaSoon();
           }
           slider?.addEventListener('input', () => applyValue(slider.value));
@@ -3173,12 +3238,32 @@ export function createUIController(view) {
 
         view.sandboxGodMode?.addEventListener('change', () => {
           Neo.sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
+          updateSandboxPresetState();
           Neo.persistMetaSoon();
         });
 
         view.sandboxUnlockEverything?.addEventListener('change', () => {
           Neo.sandboxSettings.unlockEverything = !!view.sandboxUnlockEverything?.checked;
+          updateSandboxPresetState();
           Neo.persistMetaSoon();
+        });
+
+        document.querySelector('.sandbox-config-nav')?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-sbox-tab]') : null;
+          if (button) setSandboxConfigTab(button.dataset.sboxTab || 'rules');
+        });
+        document.querySelector('.sandbox-config-nav')?.addEventListener('keydown', event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          const current = SANDBOX_CONFIG_TABS.indexOf(activeSandboxConfigTab);
+          const nextIndex = event.key === 'Home' ? 0
+            : event.key === 'End' ? SANDBOX_CONFIG_TABS.length - 1
+              : (current + (event.key === 'ArrowRight' ? 1 : -1) + SANDBOX_CONFIG_TABS.length) % SANDBOX_CONFIG_TABS.length;
+          event.preventDefault();
+          setSandboxConfigTab(SANDBOX_CONFIG_TABS[nextIndex], true);
+        });
+        document.querySelector('.sandbox-presets')?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-sbox-preset]') : null;
+          if (button) applySandboxRulePreset(button.dataset.sboxPreset || '');
         });
 
         view.sandboxMoveLoadout?.addEventListener('click', event => {
@@ -3387,6 +3472,7 @@ export function createUIController(view) {
         view.sandboxReset?.addEventListener('click', () => {
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.SANDBOX_DEFAULT_SETTINGS);
           syncSandboxPanelFields();
+          setSandboxConfigTab('rules');
           Neo.persistMetaSoon();
         });
         view.sandboxSaveClose?.addEventListener('click', handlers.onCloseSandboxConfig);
