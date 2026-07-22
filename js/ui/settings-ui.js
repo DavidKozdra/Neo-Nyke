@@ -1049,8 +1049,11 @@
 
   function getHudPreviewRatios(frame = document.getElementById('hudPreviewFrame')) {
     const rect = frame?.getBoundingClientRect?.();
-    const width = rect?.width || frame?.clientWidth || 0;
-    const height = rect?.height || frame?.clientHeight || 0;
+    // Absolute preview children are laid out inside the frame's border. Use the
+    // client box, not the outer bounding box, so the editor border cannot add a
+    // few pixels of position/scale drift on every edge.
+    const width = frame?.clientWidth || rect?.width || 0;
+    const height = frame?.clientHeight || rect?.height || 0;
     return {
       x: width ? width / Math.max(1, window.innerWidth) : 0.5,
       y: height ? height / Math.max(1, window.innerHeight) : 0.5,
@@ -1077,6 +1080,41 @@
     if (key === 'statustoast') window.Neo?.ensureStatusToastStack?.();
     const def = HUD_ELEMENTS.find(el => el.key === key);
     return def?.selector ? document.querySelector(def.selector) : null;
+  }
+
+  let hudPreviewLayoutSnapshot = {};
+
+  function captureLiveHudLayoutSnapshot() {
+    const snapshot = {};
+    const root = document.documentElement;
+    HUD_ELEMENTS.forEach(def => {
+      if (def.canvas) return;
+      const live = getLiveHudElement(def.key);
+      if (!live) return;
+      // Gameplay hides the HUD while menus are open, and a user-hidden widget
+      // has a root hide class. Reveal it only for this synchronous measurement;
+      // no frame can paint between removal and restoration.
+      const hadHiddenClass = live.classList.contains('hidden');
+      const hadRootHideClass = !!def.hideClass && root.classList.contains(def.hideClass);
+      if (hadHiddenClass) live.classList.remove('hidden');
+      if (hadRootHideClass) root.classList.remove(def.hideClass);
+      const rect = live.getBoundingClientRect();
+      if (hadRootHideClass) root.classList.add(def.hideClass);
+      if (hadHiddenClass) live.classList.add('hidden');
+      if (rect.width > 0 && rect.height > 0) {
+        snapshot[def.key] = {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+    });
+
+    hudPreviewLayoutSnapshot = snapshot;
+    return snapshot;
   }
 
   function syncPreviewAnchorFromLiveCss(box, key, ratio) {
@@ -1110,17 +1148,45 @@
     box.style.right = '';
     box.style.bottom = '';
     box.style.left = '';
-    if (key !== 'minimap') {
-      box.style.width = '';
-      box.style.height = '';
+    box.style.width = '';
+    box.style.height = '';
+    const liveBounds = hudPreviewLayoutSnapshot[key];
+    if (liveBounds?.width > 0 && liveBounds?.height > 0) {
+      box.style.top = `${liveBounds.top * ratio.y}px`;
+      box.style.left = `${liveBounds.left * ratio.x}px`;
+      box.style.right = 'auto';
+      box.style.bottom = 'auto';
+      box.style.width = `${liveBounds.width * ratio.x}px`;
+      box.style.height = `${liveBounds.height * ratio.y}px`;
+      box.dataset.previewSizedFromBounds = 'live';
+      return;
     }
     if (key !== 'minimap' && key !== 'bossbar') {
       syncPreviewAnchorFromLiveCss(box, key, ratio);
       return;
     }
     if (key === 'bossbar') {
-      box.style.top = `${(getHudAnchor('bossbar', 'top') ?? 72) * ratio.y}px`;
-      box.style.left = '50%';
+      const layoutState = window.Neo?.bossBarLayoutState;
+      const bounds = layoutState?.viewportBounds || null;
+      const entry = hudElements.bossbar || {};
+      if (bounds && Number.isFinite(bounds.left) && Number.isFinite(bounds.top)
+        && Number.isFinite(bounds.right) && Number.isFinite(bounds.bottom)) {
+        const capturedOffsetX = Number(layoutState?.offsetX || 0);
+        const capturedOffsetY = Number(layoutState?.offsetY || 0);
+        const capturedHudScale = Number(layoutState?.hudScale);
+        const scaleRatio = Number.isFinite(capturedHudScale) && capturedHudScale > 0
+          ? effectiveHudScale('bossbar') / capturedHudScale
+          : 1;
+        const capturedCenterX = (bounds.left + bounds.right) / 2;
+        box.style.top = `${(bounds.top - capturedOffsetY) * ratio.y}px`;
+        box.style.left = `${(capturedCenterX - capturedOffsetX) * ratio.x}px`;
+        box.style.width = `${Math.max(24, (bounds.right - bounds.left) * ratio.x * scaleRatio)}px`;
+        box.style.height = `${Math.max(8, (bounds.bottom - bounds.top) * ratio.y * scaleRatio)}px`;
+        box.dataset.previewSizedFromBounds = 'canvas';
+      } else {
+        box.style.top = `${(getHudAnchor('bossbar', 'top') ?? 72) * ratio.y}px`;
+        box.style.left = '50%';
+      }
     } else if (key === 'minimap') {
       const layoutState = window.Neo?.minimapLayoutState;
       const bounds = layoutState?.viewportBounds || null;
@@ -1145,7 +1211,7 @@
         box.style.right = `${(window.innerWidth - (bounds.right - offsetX)) * ratio.x}px`;
         box.style.width = `${Math.max(24, (bounds.right - bounds.left) * ratio.x * scaleRatio)}px`;
         box.style.height = `${Math.max(24, (bounds.bottom - bounds.top) * ratio.y * scaleRatio)}px`;
-        box.dataset.previewSizedFromBounds = 'true';
+        box.dataset.previewSizedFromBounds = 'canvas';
       } else {
         // Match drawMinimap()'s live top-right anchor when no captured canvas
         // bounds exist yet, such as opening HUD Layout from menus.
@@ -1161,6 +1227,7 @@
     // The preview frame stands in for the whole screen. Convert real HUD pixel
     // nudges into frame-local pixels per axis so dragging matches the sliders.
     syncHudPreviewFrameSize();
+    captureLiveHudLayoutSnapshot();
     const frame = document.getElementById('hudPreviewFrame');
     const ratio = getHudPreviewRatios(frame);
     const viewportScale = Math.min(ratio.x || 1, ratio.y || 1);
@@ -1185,10 +1252,18 @@
       const ox = normalizeHudOffset(entry.x) * ratio.x;
       const oy = normalizeHudOffset(entry.y) * ratio.y;
       const nudge = (ox || oy) ? `translate(${ox}px, ${oy}px) ` : '';
-      const scale = box.dataset.previewSizedFromBounds === 'true'
-        ? 1
-        : effectiveHudPreviewScale(el.key, viewportScale);
-      box.style.transform = `${base}${nudge}scale(${scale})`;
+      const boundsMode = box.dataset.previewSizedFromBounds;
+      const sizedFromLiveBounds = boundsMode === 'live';
+      const sizedFromCanvasBounds = boundsMode === 'canvas';
+      const scale = effectiveHudPreviewScale(el.key, viewportScale);
+      box.style.transform = sizedFromLiveBounds
+        ? 'none'
+        : sizedFromCanvasBounds ? `${base}${nudge}` : `${base}${nudge}scale(${scale})`;
+      const widget = box.querySelector('.hud-preview-widget');
+      if (widget) {
+        widget.style.setProperty('transform', sizedFromLiveBounds ? `scale(${scale})` : 'none', 'important');
+        widget.style.setProperty('transform-origin', 'center', 'important');
+      }
     });
   }
 
@@ -1197,11 +1272,14 @@
   function getHudPreviewBoxRect(box, frameRect, ratio) {
     const rect = box?.getBoundingClientRect?.();
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    const frame = document.getElementById('hudPreviewFrame');
+    const originLeft = frameRect.left + Number(frame?.clientLeft || 0);
+    const originTop = frameRect.top + Number(frame?.clientTop || 0);
     return {
-      left: ratio.x ? (rect.left - frameRect.left) / ratio.x : 0,
-      top: ratio.y ? (rect.top - frameRect.top) / ratio.y : 0,
-      right: ratio.x ? (rect.right - frameRect.left) / ratio.x : 0,
-      bottom: ratio.y ? (rect.bottom - frameRect.top) / ratio.y : 0,
+      left: ratio.x ? (rect.left - originLeft) / ratio.x : 0,
+      top: ratio.y ? (rect.top - originTop) / ratio.y : 0,
+      right: ratio.x ? (rect.right - originLeft) / ratio.x : 0,
+      bottom: ratio.y ? (rect.bottom - originTop) / ratio.y : 0,
       width: ratio.x ? rect.width / ratio.x : 0,
       height: ratio.y ? rect.height / ratio.y : 0,
     };

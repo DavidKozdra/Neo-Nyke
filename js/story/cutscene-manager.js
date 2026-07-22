@@ -120,26 +120,23 @@ export class StoryCutsceneManager {
     const character = Neo.player?.character || Neo.chosenCharacter;
     const centerX = Neo.ROOM_W / 2;
     const centerY = Neo.ROOM_H / 2;
-    if (id === 'heroes_meeting') {
+    if (id === 'heroes_meeting' || id === 'princess_departure') {
+      const princessIsPlayer = character === 'princess';
       const roster = Story.HERO_ROUTE_CHARACTERS.filter(key => key !== character);
-      return [
+      const focusKeys = princessIsPlayer ? [...roster, 'player'] : [...roster, 'princess', 'player'];
+      const commands = [
         { type: 'placePlayer', x: centerX, y: centerY + 185 },
         ...roster.map((key, index) => ({ type: 'spawn', key, x: centerX - 180 + index * 150, y: centerY - 30 })),
-        { type: 'spawn', key: 'princess', x: centerX + 220, y: centerY + 35 },
-        { type: 'focusGroup', keys: [...roster, 'princess', 'player'], zoom: 0.9, duration: 0.7 },
+        ...(princessIsPlayer ? [] : [{ type: 'spawn', key: 'princess', x: centerX + 220, y: centerY + 35 }]),
+        { type: 'focusGroup', keys: focusKeys, zoom: 0.9, duration: 0.7 },
         { type: 'dialogue', lines: Story.MEETING_LINES },
-        { type: 'move', key: 'princess', x: Neo.ROOM_W - 90, y: centerY + 35, duration: 1.1 },
+        { type: 'move', key: princessIsPlayer ? 'player' : 'princess', x: Neo.ROOM_W - 90, y: centerY + 35, duration: 1.1 },
       ];
-    }
-    if (id === 'princess_departure') {
-      return [
-        { type: 'placePlayer', x: centerX, y: centerY },
-        { type: 'focus', key: 'player', zoom: 1.15, duration: 0.55 },
-        { type: 'dialogue', lines: [storyLine('PRINCESS', 'My heroes thanks for doing all the work while I sit around day dreaming go forth and win')] },
-        { type: 'move', key: 'player', x: centerX + 190, y: centerY + 20, duration: 1 },
+      if (princessIsPlayer) commands.push(
         { type: 'emote', key: 'player', mark: '?', duration: 0.8 },
         { type: 'dialogue', lines: [storyLine('PRINCESS THOUGHT', 'I wonder what it would be like if I saved the day without them')] },
-      ];
+      );
+      return commands;
     }
     if (id === 'secret_beasts') {
       return [

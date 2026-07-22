@@ -14551,6 +14551,7 @@ body.network-multiplayer-active #c {
 }
 .hud-preview-box {
   position: absolute;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;

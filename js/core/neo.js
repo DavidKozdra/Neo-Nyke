@@ -204,6 +204,7 @@ window.Neo = {
   // --- cache ---
   environmentBackgroundCache: { key: '', canvas: null },
   minimapLayoutState: null,
+  bossBarLayoutState: null,
   minimapLegendCache: null,
   minimapLegendDirty: true,
   hideLadderOnMinimap: false,

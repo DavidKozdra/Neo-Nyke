@@ -44,6 +44,15 @@ describe('Story Mode campaigns', () => {
     expect(Story.getFloorPlan('mooggy', 7).scene).toBe('thorn_churu_alliance');
   });
 
+  test('gives Princess the shared hero meeting dialogue before her private thought', () => {
+    const departure = Story.STORY_GALLERY.find(scene => scene.id === 'princess_departure');
+    expect(departure.lines.slice(0, Story.MEETING_LINES.length)).toEqual(Story.MEETING_LINES);
+    expect(departure.lines.at(-1)).toEqual({
+      speaker: 'PRINCESS THOUGHT',
+      text: 'I wonder what it would be like if I saved the day without them',
+    });
+  });
+
   test('normalizes serialized progress without sharing mutable state', () => {
     const original = Story.createStoryState('mooggy');
     original.completedScenes.devil_recruits_mooggy = true;
@@ -121,6 +130,13 @@ describe('Story Mode integration', () => {
     expect(manager).toContain("Neo.storyState.choices.bowmanBane = 'escaped'");
     expect(renderer).toContain('function syncStoryActors()');
     expect(renderer).toContain('function syncStoryEmote(');
+  });
+
+  test('stages Princess in the hero meeting and walks the player-controlled Princess away', () => {
+    expect(manager).toContain("if (id === 'heroes_meeting' || id === 'princess_departure')");
+    expect(manager).toContain("const princessIsPlayer = character === 'princess';");
+    expect(manager).toContain("{ type: 'dialogue', lines: Story.MEETING_LINES }");
+    expect(manager).toContain("key: princessIsPlayer ? 'player' : 'princess'");
   });
 
   test('uses authored rooms and suppresses random rivals in Story Mode', () => {
