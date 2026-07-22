@@ -306,25 +306,62 @@
   grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: 126px minmax(0, 1fr) 164px;
+  grid-template-columns: minmax(168px, .8fr) minmax(220px, 1.2fr);
   grid-auto-rows: min-content;
   align-content: start;
-  gap: 10px 14px;
+  gap: 12px 16px;
 }
 
 #charSelect .hero-detail-portrait {
+  position: relative;
   grid-column: 1;
   grid-row: 1 / span 2;
-  min-height: 128px;
+  display: grid;
+  place-items: center;
+  min-height: 196px;
+  overflow: hidden;
   border-color: var(--menu-border);
+  border-top-color: color-mix(in srgb, var(--menu-accent) 62%, var(--menu-border));
+  border-radius: var(--ui-frame-radius);
   background:
-    radial-gradient(circle at 50% 38%, rgba(101,217,232,.12), transparent 50%),
-    linear-gradient(180deg, #182126, #090c0f);
+    radial-gradient(ellipse at 50% 82%, rgba(101,217,232,.2), transparent 48%),
+    radial-gradient(circle at 50% 34%, rgba(101,217,232,.12), transparent 52%),
+    linear-gradient(180deg, #172126, #080b0e);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    inset 0 -28px 42px rgba(0,0,0,.28);
+}
+
+#charSelect .hero-detail-portrait::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(101,217,232,.1);
+  background:
+    linear-gradient(90deg, transparent 49.7%, rgba(101,217,232,.08) 50%, transparent 50.3%),
+    linear-gradient(transparent 49.7%, rgba(101,217,232,.06) 50%, transparent 50.3%);
+  pointer-events: none;
+}
+
+#charSelect .hero-detail-portrait::after {
+  content: '';
+  position: absolute;
+  right: 15%;
+  bottom: 16px;
+  left: 15%;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(101,217,232,.2);
+  filter: blur(10px);
+  pointer-events: none;
 }
 
 #charSelect .hero-detail-portrait canvas {
-  width: 110px;
-  height: 110px;
+  position: relative;
+  z-index: 1;
+  width: 176px;
+  height: 176px;
+  filter: drop-shadow(0 12px 18px rgba(0,0,0,.5));
 }
 
 #charSelect .hero-detail-head {
@@ -333,13 +370,15 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  gap: 7px;
-  min-height: 54px;
+  justify-content: flex-end;
+  gap: 9px;
+  min-height: 72px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
 
 #charSelect .hero-detail-name {
-  font-size: calc(26px * var(--font-scale, 1));
+  font-size: calc(30px * var(--font-scale, 1));
   line-height: 1.1;
 }
 
@@ -372,16 +411,17 @@
   grid-column: 1 / -1;
 }
 
-/* Vertical stat list beside the lore instead of a full-width band. */
+/* The portrait now owns the space vacated by lore; stats sit beside it as a
+   compact dashboard instead of a narrow third column. */
 #charSelect .hero-detail-stats {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-column: 2;
+  grid-row: 2;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: 8px;
-  padding-left: 14px;
-  border-left: 1px solid rgba(255, 255, 255, .08);
+  gap: 9px 12px;
+  padding: 0;
+  border: 0;
 }
 
 #charSelect .hero-detail-skills {
@@ -994,17 +1034,17 @@
   }
 
   #charSelect .hero-detail-panel {
-    grid-template-columns: 90px minmax(0, 1fr);
+    grid-template-columns: 108px minmax(0, 1fr);
   }
 
   #charSelect .hero-detail-portrait {
     display: flex;
-    min-height: 92px;
+    min-height: 110px;
   }
 
   #charSelect .hero-detail-portrait canvas {
-    width: 80px;
-    height: 80px;
+    width: 96px;
+    height: 96px;
   }
 
   #charSelect .hero-detail-name {
@@ -1048,16 +1088,16 @@
 
 @media (max-width: 420px) {
   #charSelect .hero-detail-panel {
-    grid-template-columns: 74px minmax(0, 1fr);
+    grid-template-columns: 88px minmax(0, 1fr);
   }
 
   #charSelect .hero-detail-portrait {
-    min-height: 76px;
+    min-height: 90px;
   }
 
   #charSelect .hero-detail-portrait canvas {
-    width: 66px;
-    height: 66px;
+    width: 78px;
+    height: 78px;
   }
 
   #charSelect .hero-detail-kit-options,
@@ -1373,9 +1413,12 @@
   }
 
   #charSelect .hero-detail-skill-readout-name,
-  #charSelect .hero-detail-skill-readout-desc,
   #charSelect .hero-detail-item-pip,
   #charSelect .hero-detail-item-empty {
+    font-size: calc(10px * var(--font-scale, 1));
+  }
+
+  #charSelect .hero-detail-skill-readout-desc {
     font-size: calc(13px * var(--font-scale, 1));
   }
 

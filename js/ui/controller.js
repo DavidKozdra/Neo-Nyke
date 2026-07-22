@@ -306,7 +306,7 @@ export function createUIController(view) {
 
     // ── Shared hero dossier ─────────────────────────────────────────────
     // Fills a .hero-detail-panel container with a character's full dossier:
-    // portrait, lore, stats, starting inventory, abilities with selectable
+    // portrait, stats, starting inventory, abilities with selectable
     // alt-kit options, and the hover readout with its live move preview.
     // Used by the single-player champion select and the networked co-op
     // lobby; callers differ only in where kit choices are stored and what
@@ -416,22 +416,15 @@ export function createUIController(view) {
       const charDef = Neo.isCustomCharacterKey?.(selected)
         ? { ...(Neo.CHARACTER_DEFS.custom_character || {}), key: selected, name: Neo.getCustomCharacterSettings?.(selected).name || 'Custom' }
         : (Neo.CHARACTER_DEFS[selected] || {});
-      const customIsActive = Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active;
-      const lore = Neo.isCustomCharacterKey?.(selected)
-        ? (customIsActive
-          ? `Saved Plus character. Edit the name, weapon, move set, and starter relics from the roster card.`
-          : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
-        : disp.lore;
       detail.innerHTML =
-        `<div class="hero-detail-portrait"><canvas class="hero-detail-sprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
+        `<div class="hero-detail-portrait"><canvas class="hero-detail-sprite" width="192" height="192" aria-hidden="true"></canvas></div>` +
         `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
-        `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
         `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
         `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>` +
         `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
         `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
       const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
-      Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 104, {
+      Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 168, {
         tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
       });
       detail.querySelectorAll('[data-hero-move]').forEach(el => {
