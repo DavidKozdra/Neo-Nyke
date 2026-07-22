@@ -2303,6 +2303,10 @@ const BAKED_PICKUP_FLOOR_LIFT = {
   challengeRune: 16,
   challengeBomb: 24,
 };
+// The five post-boss relic choices are upright billboards, not floor decals.
+// Lift them enough to clear the arena floor while leaving dwell-choice circles
+// anchored to the ground.
+const BOSS_REWARD_CHOICE_FLOOR_LIFT = 24;
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
 // Sized from each type's actual draw extents in drawPickups, doubled (the bake
@@ -2429,7 +2433,11 @@ function syncPickups() {
         // origin; loose coins/items/potions float wholly above the floor.
         const floating = FLOATING_BAKED_PICKUP_TYPES.has(pickup.type);
         const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
-        const floorLift = BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
+        const isBossRewardChoice = pickup.type === 'rewardChoice'
+          && String(pickup.groupId || '').startsWith('boss:');
+        const floorLift = isBossRewardChoice
+          ? BOSS_REWARD_CHOICE_FLOOR_LIFT
+          : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
         obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : floorLift;
         return;
       }

@@ -50,7 +50,13 @@ describe('gameplay polish regressions', () => {
 
   test('3D rune and bomb trial targets are lifted above the floor', () => {
     expect(renderer3d).toMatch(/BAKED_PICKUP_FLOOR_LIFT = \{\s*challengeRune: 16,\s*challengeBomb: 24,/);
-    expect(renderer3d).toContain("const floorLift = BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1");
+    expect(renderer3d).toContain(': BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;');
+  });
+
+  test('3D post-boss reward choices are raised above the arena floor', () => {
+    expect(renderer3d).toContain('const BOSS_REWARD_CHOICE_FLOOR_LIFT = 24;');
+    expect(renderer3d).toContain("String(pickup.groupId || '').startsWith('boss:')");
+    expect(renderer3d).toContain('? BOSS_REWARD_CHOICE_FLOOR_LIFT');
   });
 
   test('3D chests contain only the authored chest sprite', () => {
