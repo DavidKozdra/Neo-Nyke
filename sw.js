@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v97';
+const CACHE_VERSION = 'neonyke-v98';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -128,6 +128,7 @@ const PRECACHE = [
   "/js/achievements.js",
   "/js/config/FeatureFlags.js",
   "/js/core/canvas-recovery.js",
+  "/js/core/first-person-look.js",
   "/js/core/game-core.js",
   "/js/core/game-state.js",
   "/js/core/math-utils.js",

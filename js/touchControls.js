@@ -12,6 +12,9 @@
     moveY: 0,
     lastAimX: 1,  // last non-zero move direction for auto-aim
     lastAimY: 0,
+    lookDeltaX: 0,
+    lookDeltaY: 0,
+    lookActive: false,
     slash: false,
     laser: false,
     smash: false,
@@ -41,6 +44,13 @@
   joyBase.appendChild(joyKnob);
   joyZone.appendChild(joyBase);
   overlay.appendChild(joyZone);
+
+  // Open-screen drag surface for first-person camera look. It sits underneath
+  // the action buttons, allowing movement + look + an action as independent
+  // touches without stealing button presses.
+  const lookZone = mkEl('div', 'touch-look-zone');
+  lookZone.setAttribute('aria-hidden', 'true');
+  overlay.appendChild(lookZone);
 
   // Right button cluster
   const btnCluster = mkEl('div', 'btn-cluster');
@@ -156,6 +166,77 @@
   window.addEventListener('orientationchange', invalidateJoyZoneRect, { passive: true });
   window.addEventListener('scroll', invalidateJoyZoneRect, { passive: true });
 
+  // ── First-person look logic ───────────────────────────────────────────────
+
+  let lookTouch = null;
+  let lookClientX = 0;
+  let lookClientY = 0;
+
+  function isFirstPersonLookAllowed() {
+    return isGameplayTouchAllowed() && window.Neo?.getViewMode?.() === 'fp';
+  }
+
+  function startLook(clientX, clientY, identifier) {
+    if (!isFirstPersonLookAllowed() || lookTouch !== null) return;
+    lookTouch = identifier;
+    lookClientX = clientX;
+    lookClientY = clientY;
+    NT.lookActive = true;
+    lookZone.classList.add('touch-look-zone--active');
+    window.NeoSettings?.noteInputMode?.('touch');
+    setNTActive();
+  }
+
+  function updateLook(clientX, clientY) {
+    const deltaX = clientX - lookClientX;
+    const deltaY = clientY - lookClientY;
+    lookClientX = clientX;
+    lookClientY = clientY;
+    // Ignore only implausible browser jumps; ordinary fast swipes remain intact.
+    if (Math.abs(deltaX) > 180 || Math.abs(deltaY) > 180) return;
+    NT.lookDeltaX += deltaX;
+    NT.lookDeltaY += deltaY;
+    if (deltaX || deltaY) lookZone.classList.add('touch-look-zone--learned');
+  }
+
+  function resetLook() {
+    lookTouch = null;
+    NT.lookActive = false;
+    lookZone.classList.remove('touch-look-zone--active');
+  }
+
+  function isTouchLookTarget(target) {
+    if (!(target instanceof Element)) return true;
+    return !target.closest(
+      '.joy-zone, .btn-cluster, .touch-hamburger, .touch-ham-menu, '
+      + 'button, input, select, textarea, a, [contenteditable="true"], [role="button"], '
+      + '#interactPrompt, [data-no-touch-look]',
+    );
+  }
+
+  document.addEventListener('touchstart', event => {
+    if (!isFirstPersonLookAllowed()) return;
+    if (!isTouchLookTarget(event.target)) return;
+    const touch = Array.from(event.changedTouches).find(candidate => candidate.clientX >= window.innerWidth * 0.38);
+    if (!touch) return;
+    event.preventDefault();
+    startLook(touch.clientX, touch.clientY, touch.identifier);
+  }, { capture: true, passive: false });
+  document.addEventListener('touchmove', event => {
+    for (const touch of event.changedTouches) {
+      if (touch.identifier !== lookTouch) continue;
+      event.preventDefault();
+      updateLook(touch.clientX, touch.clientY);
+    }
+  }, { capture: true, passive: false });
+  function releaseLook(event) {
+    for (const touch of event.changedTouches) {
+      if (touch.identifier === lookTouch) resetLook();
+    }
+  }
+  document.addEventListener('touchend', releaseLook, { capture: true, passive: true });
+  document.addEventListener('touchcancel', releaseLook, { capture: true, passive: true });
+
   // ── Button logic ───────────────────────────────────────────────────────────
 
   bindBtn(btnA,    'touchA',    'slash');
@@ -199,6 +280,7 @@
     refreshButtonLabels();
     syncOverlayMode();
   });
+  window.addEventListener('neo-view-mode-changed', syncOverlayMode);
 
   function bindBtn(el, bindingKey, fallbackAction) {
     function press() {
@@ -279,7 +361,10 @@
     return b;
   }
 
-  hamMenu.appendChild(mkHamBtn('PAUSE', 'pause', () => { if (window._neoGame?.pauseGame)             window._neoGame.pauseGame();             }));
+  hamMenu.appendChild(mkHamBtn('PAUSE', 'pause', () => {
+    if (window.Neo?.multiplayerGameView?.active) window.Neo.multiplayerGameView.togglePause?.();
+    else window._neoGame?.pauseGame?.();
+  }));
   hamMenu.appendChild(mkHamBtn('INVENTORY', 'inventory', () => { if (window._neoGame?.toggleInventoryPanel)   window._neoGame.toggleInventoryPanel();   }));
 
   const warpHamBtn = mkHamBtn('WARP', 'warp', () => { if (window.Neo?.tryChargedLadderWarp) window.Neo.tryChargedLadderWarp(); });
@@ -401,8 +486,11 @@
 
   function clearTouchState() {
     joyTouch = null;
+    resetLook();
     NT.moveX = 0;
     NT.moveY = 0;
+    NT.lookDeltaX = 0;
+    NT.lookDeltaY = 0;
     TOUCH_ACTIONS.forEach(action => { NT[action] = false; });
     NT.queuedActions = {};
     releaseAscendKey();
@@ -420,7 +508,9 @@
 
   function syncOverlayMode() {
     const allowed = isGameplayTouchAllowed();
+    const firstPerson = allowed && window.Neo?.getViewMode?.() === 'fp';
     overlay.classList.toggle('touch-overlay--gameplay', allowed);
+    overlay.classList.toggle('touch-overlay--fps', firstPerson);
     overlay.classList.toggle('beam-struggle-active', allowed && !!window.Neo?.beamStruggle?.active);
     if (!allowed) {
       clearTouchState();
