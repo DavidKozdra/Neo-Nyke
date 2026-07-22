@@ -872,7 +872,10 @@
 
   function drawBossHealthBars() {
     const bosses = Neo.enemies.filter(enemy => Neo.isBossType(enemy.type) || enemy?.bountyTarget);
-    if (!bosses.length) return;
+    if (!bosses.length) {
+      Neo.bossBarLayoutState = null;
+      return;
+    }
 
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const lowFx = perfMode && Neo.particles.length > 48;
@@ -929,6 +932,29 @@
     ));
     const startY = Math.round(visibleTop + topInset + barOffsetY / scaleY);
     const labelX = startX + width / 2;
+
+    // Publish the exact on-screen footprint used by the HUD layout editor.
+    // Include the label/shield clearance above the first bar and the complete
+    // multi-boss stack below it, then convert from canvas to viewport pixels.
+    const hasBarrier = bosses.some(boss => Number(boss?.barrier || 0) > 0);
+    const shieldHeight = hasBarrier ? Math.max(3, Math.round(height * 0.42)) : 0;
+    const topExtra = Math.max(labelFontSize + 6, shieldHeight + 6);
+    const viewportBounds = {
+      left: canvasRect.left + (startX - 4) * scaleX,
+      top: canvasRect.top + (startY - topExtra) * scaleY,
+      right: canvasRect.left + (startX + width + 4) * scaleX,
+      bottom: canvasRect.top + (startY + (count - 1) * gap + height + 3) * scaleY,
+    };
+    Neo.bossBarLayoutState = {
+      x: startX,
+      y: startY,
+      width,
+      height: (count - 1) * gap + height,
+      hudScale,
+      offsetX: barOffsetX,
+      offsetY: barOffsetY,
+      viewportBounds,
+    };
 
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const ctx = Neo.ctx;

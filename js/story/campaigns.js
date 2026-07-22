@@ -44,7 +44,7 @@
     ] },
     { id: 'devil_trance', title: 'Trance of Hate', subtitle: 'The Devil turns allies into rivals', storyMode: true, characters: HERO_ROUTE_CHARACTERS, lines: DEVIL_POEM },
     { id: 'princess_departure', title: 'Day Dream Hero', subtitle: 'Princess decides to save the day', storyMode: true, characters: ['princess'], lines: [
-      { speaker: 'PRINCESS', text: 'My heroes thanks for doing all the work while I sit around day dreaming go forth and win' },
+      ...MEETING_LINES,
       { speaker: 'PRINCESS THOUGHT', text: 'I wonder what it would be like if I saved the day without them' },
     ] },
     { id: 'dragon_orb_quest', title: 'Quest for the Dragon Orbs', subtitle: 'Turtle Boy seeks strength', storyMode: true, characters: ['turtle_boy'], lines: [
