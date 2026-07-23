@@ -7,6 +7,7 @@ const {
   interpolatePlayers,
   predictPosition,
   deriveAbilityPresentation,
+  INPUT_HEARTBEAT_MS,
   NetworkGameView,
 } = require('../js/rendering/NetworkGameView');
 const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/LocalMultiplayerSession');
@@ -163,6 +164,22 @@ describe('network multiplayer game view', () => {
     view._sendInput();
     expect(sent).toHaveLength(2);
     expect(sent[1]).toEqual(expect.objectContaining({ moveX: 1, moveY: 0 }));
+  });
+
+  test('uses a one-second unchanged-input refresh and sends nothing while hidden', () => {
+    expect(INPUT_HEARTBEAT_MS).toBe(1000);
+    const sendInput = jest.fn();
+    const view = new NetworkGameView({
+      session: { status: 'running', sendInput },
+      neo: {},
+    });
+    view.active = true;
+    globalThis.document = { hidden: true, visibilityState: 'hidden' };
+
+    view._sendInput();
+
+    expect(sendInput).not.toHaveBeenCalled();
+    delete globalThis.document;
   });
 
   describe('touch movement', () => {

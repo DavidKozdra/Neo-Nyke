@@ -1,5 +1,7 @@
 const {
   AUTHORITY_PEER_ID,
+  SOCKET_HEARTBEAT_REQUEST,
+  SOCKET_HEARTBEAT_RESPONSE,
   normalizeRoomCode,
   websocketUrl,
   CloudflareWebSocketTransport,
@@ -122,6 +124,11 @@ describe('CloudflareWebSocketTransport', () => {
     };
     transport.send(AUTHORITY_PEER_ID, input, { reliability: 'unreliable', channel: 'simulation', replaceable: true });
     expect(JSON.parse(socket.sent[0])).toEqual(input);
+
+    transport.sendHeartbeat();
+    expect(socket.sent[1]).toBe(SOCKET_HEARTBEAT_REQUEST);
+    socket.emit('message', { data: SOCKET_HEARTBEAT_RESPONSE });
+    expect(received).toEqual([]);
 
     const pong = {
       protocolVersion: 1,

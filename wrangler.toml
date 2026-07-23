@@ -17,6 +17,22 @@ preview_id = "021d5bfc72ad4344a7ba58f1155c5dee"
 name = "MULTIPLAYER_ROOMS"
 class_name = "MultiplayerRoom"
 
+[[ratelimits]]
+name = "MULTIPLAYER_CREATE_LIMITER"
+namespace_id = "82024001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[ratelimits]]
+name = "MULTIPLAYER_SOCKET_LIMITER"
+namespace_id = "82024002"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
 [[migrations]]
 tag = "multiplayer-rooms-v1"
 new_sqlite_classes = ["MultiplayerRoom"]

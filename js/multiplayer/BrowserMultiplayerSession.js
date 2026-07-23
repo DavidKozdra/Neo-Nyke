@@ -27,10 +27,20 @@
       this.reconnectAttempts = 0;
       this.reconnectTimer = null;
       this.reconnectInFlight = false;
+      this.reconnectPausedUntilWake = false;
       this.heartbeatTimer = null;
-      this.unsubscribeMessage = this.transport.onMessage(() => queueMicrotask(() => this._notify()));
+      this.notifyQueued = false;
+      this.unsubscribeMessage = this.transport.onMessage((_peerId, message) => {
+        if (message?.type !== 'PONG') this._scheduleNotify();
+      });
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected(() => {
-        queueMicrotask(() => this._notify());
+        this._scheduleNotify();
+        if (root.document?.visibilityState === 'hidden' || root.document?.hidden === true) {
+          // Do not let an abandoned background tab reconnect forever and keep a
+          // running Durable Object hot. The visibility/focus hook resumes it.
+          this.reconnectPausedUntilWake = true;
+          return;
+        }
         this._scheduleReconnect();
       });
       this.boundConnectionWake = () => this._handleConnectionWake();
@@ -98,6 +108,10 @@
       return this.client.sendChat(text);
     }
 
+    get status() {
+      return this.client.status;
+    }
+
     requestRematch(ready = true) {
       return this.client.requestRematch(ready);
     }
@@ -129,6 +143,15 @@
       this.listeners.forEach(listener => listener(snapshot));
     }
 
+    _scheduleNotify() {
+      if (this.notifyQueued || this.disposed) return;
+      this.notifyQueued = true;
+      queueMicrotask(() => {
+        this.notifyQueued = false;
+        if (!this.disposed) this._notify();
+      });
+    }
+
     _startHeartbeat() {
       if (this.heartbeatTimer !== null || this.disposed) return;
       this.heartbeatTimer = root.setInterval?.(() => this._sendHeartbeat(), HEARTBEAT_INTERVAL_MS) ?? null;
@@ -137,7 +160,13 @@
     _sendHeartbeat() {
       if (this.disposed || !this.roomCode || !this.client.authorityPeerId) return;
       try {
-        this.client.ping();
+        const hidden = root.document?.visibilityState === 'hidden' || root.document?.hidden === true;
+        // Running rooms are already awake for simulation, so a visible client's
+        // protocol ping is free liveness evidence for the idle-player cutoff.
+        // Waiting/hidden rooms use Cloudflare's hibernation auto-response path.
+        if (this.client.status === 'running' && !hidden) this.client.ping();
+        else if (typeof this.transport.sendHeartbeat === 'function') this.transport.sendHeartbeat();
+        else this.client.ping();
       } catch {
         this._scheduleReconnect(true);
       }
@@ -146,6 +175,7 @@
     _handleConnectionWake() {
       if (root.document?.visibilityState === 'hidden' || root.document?.hidden === true) return;
       if (this.disposed || !this.roomCode) return;
+      this.reconnectPausedUntilWake = false;
       const socket = this.transport.socket;
       if (this.client.status === 'disconnected' || (socket && socket.readyState !== 1)) {
         this._scheduleReconnect(true);
@@ -158,7 +188,8 @@
     }
 
     _scheduleReconnect(immediate = false) {
-      if (this.disposed || !this.roomCode || !this.client.reconnectToken || this.reconnectInFlight) return;
+      if (this.disposed || this.reconnectPausedUntilWake
+        || !this.roomCode || !this.client.reconnectToken || this.reconnectInFlight) return;
       if (this.reconnectTimer !== null) {
         if (!immediate) return;
         root.clearTimeout?.(this.reconnectTimer);
