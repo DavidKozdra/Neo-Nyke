@@ -440,6 +440,7 @@ function findSecretPassage() {
 
 function oracleChoices(room) {
   const hiddenRooms = (Neo.rooms || []).filter(candidate => !candidate.secret && !candidate.explored);
+  const mapObscured = !!Neo.floorRivalCurses?.obscureMap;
   const secret = findSecretPassage();
   const transmute = (Neo.rooms || []).find(candidate => candidate.type === 'combat' && !candidate.visited);
   const activeHunt = Neo.player?.activeBounty;
@@ -453,7 +454,7 @@ function oracleChoices(room) {
       Neo.minimapLegendDirty = true;
       consumeService(room, 'The floor is revealed');
       return true;
-    }, hiddenRooms.length > 0, 'The floor is already revealed.'),
+    }, hiddenRooms.length > 0 || mapObscured, 'The floor is already revealed.'),
     makeChoice('secret', 'Whispered Door', 'Open the hidden passage.', 'ONE VISION', () => {
       const passage = findSecretPassage();
       if (!passage) return false;

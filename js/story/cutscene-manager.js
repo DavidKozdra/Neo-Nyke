@@ -113,6 +113,10 @@ export class StoryCutsceneManager {
       this.startEncounter(plan.encounter, room);
     }
     if (plan.scene === 'five_dragon_orbs') this.ensureDragonOrbCache(room);
+    if (plan.scene === 'thorn_churu_alliance') {
+      this.grantItem('churu_stick', 1, 'story:thorn_churu');
+      this.formThornAlliance({ announce: false });
+    }
     if (Neo.storyState.ally?.character === 'thorn_knight') this.ensureThornAlly();
   }
 
@@ -233,11 +237,11 @@ export class StoryCutsceneManager {
         { type: 'spawn', key: 'thorn_knight', x: centerX, y: centerY - 125 },
         { type: 'focusGroup', keys: ['player', 'thorn_knight'], zoom: 1.04, duration: 0.5 },
         { type: 'dialogue', lines: [
-          storyLine('THORN', 'You have fought everyone else. Before we fight, take this churu.'),
+          storyLine('THORN', 'I am not here to fight you. Take this Churu. We stop the Devil together.'),
           storyLine('MOOGGY', '...mrow.'),
         ] },
         { type: 'grantChuru' },
-        { type: 'startEncounter', encounter: 'hero_duel:thorn_knight', room, alliance: true },
+        { type: 'formThornAlliance' },
       ];
     }
     return [];
@@ -320,6 +324,9 @@ export class StoryCutsceneManager {
     } else if (command.type === 'grantChuru') {
       this.grantItem('churu_stick', 1, 'story:thorn_churu');
       if (Neo.player) Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.player.maxHp * 0.3);
+      this.completeCommand();
+    } else if (command.type === 'formThornAlliance') {
+      this.formThornAlliance();
       this.completeCommand();
     } else if (command.type === 'lava') {
       this.ensureLavaPit(command.room);
@@ -408,6 +415,7 @@ export class StoryCutsceneManager {
       }
       if (command.type === 'grantOrb') this.ensureQuestOrb();
       if (command.type === 'grantChuru') this.grantItem('churu_stick', 1, 'story:thorn_churu');
+      if (command.type === 'formThornAlliance') this.formThornAlliance();
       if (command.type === 'orbCache') this.ensureDragonOrbCache(command.room);
       if (command.type === 'lava') this.ensureLavaPit(command.room);
       if (command.type === 'transformBane') this.transformSargeIntoBane(command.room);
@@ -510,8 +518,14 @@ export class StoryCutsceneManager {
     this.actors.forEach(actor => {
       if (actor.combatConverted) return;
       const drawY = actor.y - Number(actor.jumpZ || 0);
+      const attackRemaining = Math.max(0, Number(actor.attackAnimT || 0));
+      const attackProgress = attackRemaining > 0 ? Math.max(0.001, 1 - Math.min(1, attackRemaining / 0.5)) : 0;
       Neo.drawActorSprite(actor, actor.spriteKey, actor.x, drawY, 54, {
-        animation: { attackTime: 0, isMoving: Math.hypot(actor.vx || 0, actor.vy || 0) > 1 },
+        animation: {
+          attackProgress,
+          actionPulse: attackRemaining > 0 ? Math.sin(attackProgress * Math.PI) : 0,
+          isMoving: Math.hypot(actor.vx || 0, actor.vy || 0) > 1,
+        },
       });
       this.drawEmote(actor, drawY);
     });
@@ -627,9 +641,12 @@ export class StoryCutsceneManager {
   spawnStoryRival(character, encounter, index, options = {}) {
     const def = Neo.RIVAL_DEFS?.[character];
     if (!def) return null;
+    const level = Story.getStoryRivalLevel?.(Neo.player?.level, Neo.floor)
+      || Math.max(1, Number(Neo.player?.level || 1), Number(Neo.floor || 1));
     const rivalSource = {
       rivalId: `story:${encounter}:${character}`,
       characterKey: character,
+      storyEncounter: encounter,
       name: def.name,
       color: def.color,
       attackStyle: def.attackStyle,
@@ -637,7 +654,7 @@ export class StoryCutsceneManager {
       roomGx: Neo.currentRoom.gx, roomGy: Neo.currentRoom.gy,
       baseHp: def.hp, baseDmg: def.dmg, baseSpeed: def.speed, baseAttackCd: def.attackCd,
       hp: def.hp, max: def.hp, dmg: def.dmg, speed: def.speed, r: def.r, attackCd: def.attackCd,
-      level: Math.max(1, Neo.floor), xp: 0, xpToNext: 99, growthTick: 0,
+      level, xp: 0, xpToNext: 99, growthTick: 0,
       loot: [], homeGx: Neo.currentRoom.gx, homeGy: Neo.currentRoom.gy,
       objectiveGx: Neo.currentRoom.gx, objectiveGy: Neo.currentRoom.gy, objectiveKind: 'engage', route: [], aggroTimer: 0,
       relationship: -10, vendetta: true, lives: 1, dead: false,
@@ -672,9 +689,9 @@ export class StoryCutsceneManager {
     Neo.storyState.objective = `Reach the ladder on Floor ${Neo.floor}`;
     if (encounter === 'bowman_bane') this.grantBaneInsignia();
     if (encounter === 'hero_duel:thorn_knight') {
-      Neo.storyState.ally = { character: 'thorn_knight', hp: 1 };
-      this.ensureThornAlly();
-      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.5, text: 'THORN JOINS YOU', c: '#8dc7ff' });
+      // Compatibility for an in-progress save from the former Floor 7 truce
+      // encounter. New runs ally immediately and never enter this fight.
+      this.formThornAlliance();
     }
     Neo.scheduleRunSave?.();
     Neo.updateObjective?.();
@@ -690,10 +707,39 @@ export class StoryCutsceneManager {
     Neo.scheduleRunSave?.();
   }
 
+  formThornAlliance(options = {}) {
+    if (!Neo.storyState || !Neo.player) return null;
+    Neo.storyState.ally = {
+      ...(Neo.storyState.ally || {}),
+      character: 'thorn_knight',
+      hp: Math.max(1, Number(Neo.storyState.ally?.hp || Neo.player.maxHp || 120)),
+    };
+    Neo.storyState.choices.thornAlliance = 'joined';
+    Neo.storyState.objective = 'Defeat the Devil with Thorn';
+    const actor = this.ensureThornAlly();
+    if (actor) {
+      actor.persistent = true;
+      actor.friendly = true;
+      actor.attackCd = Math.min(0.35, Math.max(0, Number(actor.attackCd || 0)));
+      actor.smashCd = Math.min(2, Math.max(0, Number(actor.smashCd || 0)));
+    }
+    if (options.announce !== false) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.5, text: 'THORN JOINS YOU', c: '#8dc7ff' });
+      Neo.playSfx?.('powerup');
+    }
+    Neo.scheduleRunSave?.();
+    Neo.updateObjective?.();
+    return actor;
+  }
+
   ensureThornAlly() {
     if (Neo.gameMode !== 'story' || Neo.storyState?.ally?.character !== 'thorn_knight') return;
-    // Friendly story allies are presentation-followers outside the final boss;
-    // they never consume loot, collide with doors, or enter rival state.
+    const existing = this.actors.find(actor => actor.character === 'thorn_knight' && !actor.combatConverted);
+    if (existing) {
+      existing.persistent = true;
+      existing.friendly = true;
+      return existing;
+    }
     return this.spawnActor('thorn_knight', Neo.player.x - 46, Neo.player.y + 30, { persistent: true, friendly: true });
   }
 
@@ -701,26 +747,119 @@ export class StoryCutsceneManager {
     if (Neo.gameMode !== 'story' || Neo.storyState?.ally?.character !== 'thorn_knight' || !Neo.player) return;
     const actor = this.ensureThornAlly();
     if (!actor || this.active) return;
-    const targetX = Neo.player.x - (Neo.player.vx >= 0 ? 48 : -48);
-    const targetY = Neo.player.y + 34;
-    const k = 1 - Math.exp(-5 * dt);
-    actor.vx = targetX - actor.x;
-    actor.vy = targetY - actor.y;
-    actor.x += actor.vx * k;
-    actor.y += actor.vy * k;
-    if (Math.hypot(actor.vx, actor.vy) < 2) { actor.vx = 0; actor.vy = 0; }
+    actor.attackAnimT = Math.max(0, Number(actor.attackAnimT || 0) - dt);
     actor.attackCd = Math.max(0, Number(actor.attackCd || 0) - dt);
-    if (Neo.gameState === 'play' && actor.attackCd <= 0) {
-      const target = (Neo.enemies || [])
-        .filter(enemy => enemy && !enemy.dead && enemy.hp > 0 && !(enemy.type === 'rival' && enemy.rivalData?.friend))
-        .sort((left, right) => Neo.dist(actor.x, actor.y, left.x, left.y) - Neo.dist(actor.x, actor.y, right.x, right.y))[0];
-      if (target && Neo.dist(actor.x, actor.y, target.x, target.y) <= 280) {
-        actor.attackCd = 1.1;
-        const angle = Math.atan2(target.y - actor.y, target.x - actor.x);
-        actor.facing = Math.cos(angle) < 0 ? -1 : 1;
-        Neo.hitEnemy?.(target, 18 + Neo.floor * 2, angle, 120, '#8dc7ff', { rawDamage: true, bloodOnHit: false });
-        Neo.ringBurst?.(target.x, target.y, 24, '#8dc7ff', 0.25);
+    actor.smashCd = Math.max(0, Number(actor.smashCd || 0) - dt);
+
+    const enemies = (Neo.enemies || []).filter(enemy => (
+      enemy && !enemy.dead && enemy.hp > 0
+      && !(enemy.type === 'rival' && enemy.rivalData?.friend)
+    ));
+    let target = enemies.find(enemy => enemy.id === actor.targetId) || null;
+    if (!target) {
+      target = enemies.reduce((nearest, enemy) => {
+        if (!nearest) return enemy;
+        return Neo.dist(actor.x, actor.y, enemy.x, enemy.y) < Neo.dist(actor.x, actor.y, nearest.x, nearest.y)
+          ? enemy
+          : nearest;
+      }, null);
+    }
+    actor.targetId = target?.id ?? null;
+
+    const followX = Neo.player.x - (Number(Neo.player.facing || (Neo.player.vx < 0 ? -1 : 1)) >= 0 ? 54 : -54);
+    const followY = Neo.player.y + 38;
+    const playerDistance = Neo.dist(actor.x, actor.y, Neo.player.x, Neo.player.y);
+    if (playerDistance > 480) {
+      const safe = Neo.findSafePointNearTarget?.(followX, followY, actor.r, 100, 14);
+      actor.x = safe?.x ?? followX;
+      actor.y = safe?.y ?? followY;
+      actor.vx = 0;
+      actor.vy = 0;
+    }
+
+    let moveX = followX - actor.x;
+    let moveY = followY - actor.y;
+    let moveSpeed = 205;
+    let targetDistance = Infinity;
+    let hasLineOfSight = false;
+    if (target && Neo.gameState === 'play') {
+      const dx = target.x - actor.x;
+      const dy = target.y - actor.y;
+      targetDistance = Math.hypot(dx, dy) || 1;
+      hasLineOfSight = Neo.hasLineOfSight?.(actor.x, actor.y, target.x, target.y) !== false;
+      if (!hasLineOfSight || targetDistance > 112) {
+        moveX = dx;
+        moveY = dy;
+        moveSpeed = 225;
+      } else if (targetDistance < 64) {
+        moveX = -dx;
+        moveY = -dy;
+        moveSpeed = 145;
+      } else {
+        const strafeSide = actor.strafeSide || (actor.strafeSide = Neo.nextRandom?.('encounter') < 0.5 ? -1 : 1);
+        moveX = -dy * strafeSide;
+        moveY = dx * strafeSide;
+        moveSpeed = 105;
       }
+      actor.facing = dx < 0 ? -1 : 1;
+    }
+
+    const moveDistance = Math.hypot(moveX, moveY);
+    if (moveDistance > 8) {
+      const nx = moveX / moveDistance;
+      const ny = moveY / moveDistance;
+      if (Neo.steerEnemy) Neo.steerEnemy(actor, nx, ny, moveSpeed, 6, dt);
+      else {
+        actor.vx += (nx * moveSpeed - Number(actor.vx || 0)) * Math.min(1, 6 * dt);
+        actor.vy += (ny * moveSpeed - Number(actor.vy || 0)) * Math.min(1, 6 * dt);
+      }
+    } else {
+      actor.vx *= Math.exp(-9 * dt);
+      actor.vy *= Math.exp(-9 * dt);
+    }
+    if (Neo.moveCircle) Neo.moveCircle(actor, dt);
+    else {
+      actor.x += actor.vx * dt;
+      actor.y += actor.vy * dt;
+    }
+
+    if (!target || Neo.gameState !== 'play' || actor.attackCd > 0 || !hasLineOfSight) return;
+    const level = Math.max(1, Number(Neo.player.level || 1), Number(Neo.floor || 1));
+    const baseDamage = Math.round(14 + level * 2);
+    const nearbyEnemies = enemies.filter(enemy => Neo.dist(actor.x, actor.y, enemy.x, enemy.y) <= 145);
+    if (actor.smashCd <= 0 && targetDistance <= 145 && (target.boss || nearbyEnemies.length >= 2)) {
+      actor.attackCd = 0.8;
+      actor.smashCd = 5.2;
+      actor.attackAnimT = 0.5;
+      Neo.blastRadius?.(actor.x, actor.y, 132, Math.round(baseDamage * 1.25), '#ff3048');
+      Neo.playSfx?.('heavy_slam');
+    } else if (targetDistance <= 88) {
+      actor.attackCd = 0.68;
+      actor.attackAnimT = 0.34;
+      const angle = Math.atan2(target.y - actor.y, target.x - actor.x);
+      Neo.hitEnemy?.(target, baseDamage, angle, 210, '#8dc7ff', { rawDamage: true, bloodOnHit: false });
+      Neo.ringBurst?.(target.x, target.y, 24, '#8dc7ff', 0.25);
+      Neo.playSfx?.('sword_swing');
+    } else if (targetDistance <= 420) {
+      actor.attackCd = 1.35;
+      actor.attackAnimT = 0.42;
+      const angle = Math.atan2(target.y - actor.y, target.x - actor.x);
+      Neo.spawnProjectile?.({
+        x: actor.x + Math.cos(angle) * 22,
+        y: actor.y + Math.sin(angle) * 22,
+        vx: Math.cos(angle) * 720,
+        vy: Math.sin(angle) * 720,
+        r: 6,
+        life: 0.7,
+        damage: Math.round(baseDamage * 0.72),
+        knockback: 100,
+        enemy: false,
+        fromStoryAlly: true,
+        kind: 'blood_beam',
+        color: '#ff5b72',
+        source: 'story_thorn_ally',
+      });
+      Neo.playSfx?.('laser');
     }
   }
 }

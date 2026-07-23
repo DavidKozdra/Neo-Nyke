@@ -1958,8 +1958,15 @@
     const oldHp = Neo.clamp(Number(rival.hp || oldMax), 1, oldMax);
     // Clamp to the level cap so stat growth can never run past what the cap implies,
     // even if a stale save carries a higher stored level.
-    const levelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
-    const level = Neo.clamp(Math.round(Number(rival.level || 1)), 1, levelCap);
+    const standardLevelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
+    const requestedLevel = Math.max(1, Math.round(Number(rival.level || 1)));
+    // Story rivals are authored boss encounters and may follow the hero beyond
+    // the roaming-rival cap. Their requested level is calculated by the story
+    // campaign; ordinary rivals retain the existing hard ceiling.
+    const levelCap = rival.storyEncounter
+      ? Math.max(standardLevelCap, requestedLevel)
+      : standardLevelCap;
+    const level = Neo.clamp(requestedLevel, 1, levelCap);
     rival.level = level;
     // God-tier gear in the rival's pack makes them hit harder and live longer
     // (the "five God items and sent for you" vendetta loadout).

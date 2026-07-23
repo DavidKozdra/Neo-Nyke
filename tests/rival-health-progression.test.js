@@ -73,6 +73,20 @@ describe('rival health progression', () => {
     expect(rival.max).toBe(200);
   });
 
+  test('allows story rivals to scale beyond the roaming rival level cap', () => {
+    const { applyRivalLevelStats } = makeApplyRivalLevelStats();
+    const rival = {
+      storyEncounter: 'hero_duel:thorn_knight',
+      baseHp: 100, baseDmg: 10, baseSpeed: 100, baseAttackCd: 1,
+      level: 14, lives: 2, hp: 100, max: 100,
+    };
+
+    applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
+
+    expect(rival.level).toBe(14);
+    expect(rival.dmg).toBe(19);
+  });
+
   test('prepares returns from both direct combat and off-screen defeats', () => {
     expect(combatSource.match(/Neo\.prepareRivalReturn\?\.\(rival\)/g)).toHaveLength(2);
   });

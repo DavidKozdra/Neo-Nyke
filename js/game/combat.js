@@ -2252,7 +2252,6 @@
     // Heavy ground slam: trauma + downward lurch + hitstop, matching Crimson Smash.
     Neo.addTrauma?.(0.8, Math.PI / 2, 26);
     Neo.addHitstop?.(0.06);
-    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, rockColor, 'heavy');
     Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius - 24, rockColor, 0.45);
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, slamDamage, rockColor);
     Neo.playSfx?.('aoe');
@@ -2387,7 +2386,6 @@
     Neo.addTrauma?.(0.9, Math.PI / 2, 30);
     Neo.addHitstop?.(0.07);
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, blastDmg, '#ff3070');
-    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, '#ff3070', 'heavy');
     Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius - 24, '#ff3070', 0.5);
     applyStatusInRadius(Neo.player.x, Neo.player.y, aoeRadius, 'bleed', 2, 5);
 
@@ -2395,7 +2393,7 @@
     const targets = pickRandomEnemies(fangCount);
     for (let index = 0; index < fangCount; index += 1) {
       const spreadAngle = (index / fangCount) * Math.PI * 2;
-      const target = targets[index % targets.length];
+      const target = targets.length > 0 ? targets[index % targets.length] : null;
       let vx, vy;
       if (target) {
         const toTarget = Neo.angleBetween(Neo.player, target);
@@ -2425,6 +2423,12 @@
         homingSpeed: 680,
         homingAccel: 4.2,
         homingTurnRate: 3.8,
+        // The pounce already picked one target per fang. Keep that target for
+        // the fang's short lifetime and refresh obstacle paths less often
+        // instead of making eight projectiles repeat both searches every 0.16s.
+        homingTargetRef: target,
+        homingTargetTimer: 1.1,
+        homingPathRefreshInterval: 0.45,
       });
     }
   }
@@ -3480,7 +3484,6 @@
     // Small AOE burst at the player's feet (smaller than crimson/hammer smashes).
     const aoeRadius = (60 + charge * 40) * aoeRadiusMultiplier;
     const aoeDamage = Math.max(1, Math.round((18 + charge * 26) * aoeDamageMultiplier));
-    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, '#7dffb0', 'light');
     Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius * 0.7, '#7dffb0', 0.5);
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, aoeDamage, '#7dffb0');
     // Shell barrier: 25% of current HP as an overheal barrier, stacking onto any
@@ -3525,7 +3528,6 @@
     Neo.addTrauma?.(0.6, Math.PI / 2, 18);
     Neo.addHitstop?.(0.05);
     Neo.ringBurst(Neo.player.x, Neo.player.y, radius - 24, '#85df63', 0.45);
-    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, radius, '#85df63', 'heavy');
     Neo.blastRadius(Neo.player.x, Neo.player.y, radius, damage, '#85df63');
     applyStatusInRadius(Neo.player.x, Neo.player.y, radius, 'poison', 3, 6);
     forEachEnemyNearPlayer(radius, enemy => {
@@ -4084,19 +4086,24 @@
     // Damage/knockback/popups still apply every tick, but throttle the cosmetic
     // hit fleck + blood spray per enemy so a held laser can't flood particles.
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
-    const allowHitFx = !(perfMode && options.beamFx) || canTriggerStatusReaction(enemy, 'beamHitFx', 7);
+    const cosmeticHitEligible = !(perfMode && options.beamFx) || canTriggerStatusReaction(enemy, 'beamHitFx', 7);
+    const allowHitFx = !options.suppressHitFx && cosmeticHitEligible;
     if (allowHitFx) {
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, vx: Neo.rand(-30, 30, 'fx'), vy: Neo.rand(-30, 30, 'fx'), c: color });
       if (shouldBloodOnHit() && options.bloodOnHit !== false) {
         spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
       }
+    }
+    // Keep the encounter RNG sequence stable when dense AOEs cull only their
+    // cosmetic audio/particles; later gameplay proc rolls must not move.
+    const playHurtGrunt = cosmeticHitEligible && Neo.nextRandom('encounter') < 0.57;
+    if (allowHitFx && !options.suppressHitSfx) {
       Neo.playSfx?.('enemy_hit');
-      // 57% chance for a random enemy hurt grunt on top of the hit thunk.
-      if (Neo.nextRandom('encounter') < 0.57) Neo.playSfx?.('enemy_hurt');
+      if (playHurtGrunt) Neo.playSfx?.('enemy_hurt');
     }
     // Game feel: directional trauma scaled to impact (vs target max HP).
     // Chip damage gets nothing; crits and big slams get a kick away from the blow.
-    applyHitFeel(enemy, dealt, angle, isCrit);
+    if (!options.suppressHitFeel) applyHitFeel(enemy, dealt, angle, isCrit);
     Neo.spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
       enemy,
