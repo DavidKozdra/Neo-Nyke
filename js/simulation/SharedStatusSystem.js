@@ -18,6 +18,7 @@
   const STATUS_EFFECT_KEYS = ['bleed', 'fire', 'poison', 'dark_drain', 'slow', 'static'];
   const MAX_STATUS_STACKS = 6;
   const COLD_SECONDS_PER_STACK = 15;
+  const FIRE_FREEZE_DURATION_MULTIPLIER = 0.5;
 
   // Mirrors BLEED_RESIST_SCALING / STATUS_RESIST_SCALING in game-core.js. The
   // browser re-exports these same objects, so there is one set of numbers.
@@ -91,7 +92,8 @@
   function applyCampaignStatus(entity, key, stacks, duration, options = {}) {
     if (!entity || !STATUS_EFFECT_KEYS.includes(key)) return null;
     if (entity[`${key}Immune`]) return null;
-    const state = ensureCampaignStatuses(entity)[key];
+    const statuses = ensureCampaignStatuses(entity);
+    const state = statuses[key];
     const resistanceMultiplier = 1 - Math.max(0, Math.min(0.95, Number(options.resistance || 0)));
     const addedStacks = Math.max(0, Number(stacks || 0)) * resistanceMultiplier;
     const severity = Math.max(0, Number(options.severity ?? 1));
@@ -108,6 +110,16 @@
     } else {
       state.stacks = Math.min(MAX_STATUS_STACKS, Math.max(Number(state.stacks || 0), 0) + addedStacks);
       state.duration = Math.max(Number(state.duration || 0), adjustedDuration);
+    }
+    // Fire thaws an existing freeze/frostbite effect by cutting its remaining
+    // duration in half. Player cold uses duration as a stack-time budget, so
+    // refresh its visible stack count immediately after the reduction.
+    if (key === 'fire' && addedStacks > 0) {
+      const freeze = statuses.slow;
+      if (Number(freeze.stacks || 0) > 0 && Number(freeze.duration || 0) > 0) {
+        freeze.duration *= FIRE_FREEZE_DURATION_MULTIPLIER;
+        if (options.playerColdBudget) freeze.stacks = getColdStacksFromDuration(freeze.duration);
+      }
     }
     if (options.ownerId != null && addedStacks > 0) state.ownerId = options.ownerId;
     if (Number(options.damageMultiplier || 1) > 1 && Number(state.stacks || 0) > 0) {
@@ -307,6 +319,7 @@
     STATUS_EFFECT_KEYS,
     MAX_STATUS_STACKS,
     COLD_SECONDS_PER_STACK,
+    FIRE_FREEZE_DURATION_MULTIPLIER,
     CAMPAIGN_STATUS_TICKS,
     CAMPAIGN_BLEED_RESIST_SCALING,
     CAMPAIGN_STATUS_RESIST_SCALING,

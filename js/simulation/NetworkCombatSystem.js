@@ -1572,8 +1572,12 @@
   }
 
   function abilityTargetsInRadius(state, player, x, y, range) {
-    return livingEncounterEnemies(state, player.roomId)
-      .filter(enemy => Math.hypot(enemy.x - x, enemy.y - y) <= range + Number(enemy.radius || 20));
+    return livingEncounterEnemies(state, player.roomId).filter(enemy => {
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const reach = range + Number(enemy.radius || 20);
+      return dx * dx + dy * dy <= reach * reach;
+    });
   }
 
   function abilityTargetsInBeam(state, player, angle, range, width) {
@@ -1590,7 +1594,10 @@
 
   function damageRivalsInRadius(state, player, x, y, range, damage, emitEvent, attackKind, targetIds) {
     rivalPlayers(state, player).forEach(target => {
-      if (Math.hypot(target.x - x, target.y - y) > range + Number(target.radius || 18)) return;
+      const dx = target.x - x;
+      const dy = target.y - y;
+      const reach = range + Number(target.radius || 18);
+      if (dx * dx + dy * dy > reach * reach) return;
       damagePlayer(state, target, playerDamage(state, player.id, damage), player.id, emitEvent, attackKind);
       targetIds.push(target.id);
     });

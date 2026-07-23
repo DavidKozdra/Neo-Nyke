@@ -60,6 +60,11 @@ describe('special service rooms', () => {
     expect(specialSource).toContain('Neo.pendingRivalCurses.obscureMap = true');
   });
 
+  test('Complete Map remains purchasable while Princess clouds explored rooms', () => {
+    expect(specialSource).toContain('const mapObscured = !!Neo.floorRivalCurses?.obscureMap');
+    expect(specialSource).toContain('hiddenRooms.length > 0 || mapObscured');
+  });
+
   test('bounties create pictured elite contracts that expire by floor depth', () => {
     expect(specialSource).toContain('Neo.player.activeBounty = {');
     expect(specialSource).toContain("enemyType: 'hunter'");

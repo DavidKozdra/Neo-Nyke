@@ -2078,7 +2078,15 @@ function syncStoryActors() {
       group.visible = true;
       const key = actor.spriteKey || actor.character || 'thorn_knight';
       const bob = walkBob(actor, actor.x);
-      const animation = { maxSpeed: 220, stepRate: 7.5, seedKey: key };
+      const attackRemaining = Math.max(0, Number(actor.attackAnimT || 0));
+      const attackProgress = attackRemaining > 0 ? Math.max(0.001, 1 - Math.min(1, attackRemaining / 0.5)) : 0;
+      const animation = {
+        maxSpeed: 220,
+        stepRate: 7.5,
+        seedKey: key,
+        attackProgress,
+        actionPulse: attackRemaining > 0 ? Math.sin(attackProgress * Math.PI) : 0,
+      };
       const frameKey = Neo.getActorSpriteFrameKey?.(key, actor, animation) || key;
       updateActorSprite(group, frameKey, actor.r || 16, Number(actor.vx || 0) < 0, bob);
       syncStoryEmote(group, actor, actor.r || 16);

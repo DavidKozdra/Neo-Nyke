@@ -99,6 +99,14 @@
       const rooms = roomsOf(state);
       if (choiceId === 'map') {
         rooms.filter(candidate => !candidate.secret).forEach(candidate => { candidate.explored = true; });
+        // A paid oracle vision outranks the Princess's current-floor map curse.
+        // Keep every representation used by campaign and authoritative sessions
+        // in sync so the revealed rooms are actually visible to their clients.
+        if (state.floorState?.curses) state.floorState.curses.obscureMap = false;
+        if (state.matchRules) {
+          state.matchRules.obscureMap = false;
+          if (state.matchRules.rivalCurses) state.matchRules.rivalCurses.obscureMap = false;
+        }
         if (player.activeBounty) player.activeBounty.rewardMultiplier = Math.max(1, Number(player.activeBounty.rewardMultiplier || 1)) + 0.25;
         result = 'The floor is revealed';
       } else if (choiceId === 'secret') {

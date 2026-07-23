@@ -24,4 +24,19 @@ describe('shared special-room choices', () => {
     expect(applySpecialRoomChoice(h.state, h.room, h.player, 'medic', h.random).ok).toBe(true);
     expect(applySpecialRoomChoice(h.state, h.room, h.player, 'veteran', h.random)).toMatchObject({ ok: false });
   });
+
+  test('oracle map vision dispels the Princess map curse', () => {
+    const h = harness('oracle');
+    h.state.floorState.curses = { obscureMap: true };
+    h.state.matchRules = {
+      obscureMap: true,
+      rivalCurses: { obscureMap: true, reducePotions: true },
+    };
+
+    expect(applySpecialRoomChoice(h.state, h.room, h.player, 'map', h.random).ok).toBe(true);
+    expect(h.state.floorState.curses.obscureMap).toBe(false);
+    expect(h.state.matchRules.obscureMap).toBe(false);
+    expect(h.state.matchRules.rivalCurses).toMatchObject({ obscureMap: false, reducePotions: true });
+    expect(h.state.floorState.layout.rooms.filter(room => !room.secret).every(room => room.explored)).toBe(true);
+  });
 });

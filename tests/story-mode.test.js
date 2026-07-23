@@ -28,6 +28,13 @@ describe('Story Mode campaigns', () => {
     expect(gameState).toContain("seedRow.style.display = isCompetitive || isStory ? 'none' : ''");
   });
 
+  test('keeps story rivals slightly ahead as the campaign advances', () => {
+    expect(Story.getStoryRivalLevel(5, 1)).toBe(6);
+    expect(Story.getStoryRivalLevel(5, 4)).toBe(7);
+    expect(Story.getStoryRivalLevel(8, 7)).toBe(11);
+    expect(Story.getStoryRivalLevel(12, 10)).toBe(16);
+  });
+
   test('starts every route with training and maps the authored floor beats', () => {
     for (const character of Story.STORY_CHARACTERS) {
       expect(Story.getFloorPlan(character, 1).scene).toBe('tutorial');
@@ -41,7 +48,12 @@ describe('Story Mode campaigns', () => {
     expect(Story.getFloorPlan('turtle_boy', 4).encounter).toBe('mooggy_duel');
     expect(Story.getFloorPlan('turtle_boy', 8).scene).toBe('five_dragon_orbs');
     expect(Story.getFloorPlan('mooggy', 2).scene).toBe('devil_recruits_mooggy');
-    expect(Story.getFloorPlan('mooggy', 7).scene).toBe('thorn_churu_alliance');
+    expect(Story.getFloorPlan('mooggy', 6)).toMatchObject({
+      scene: 'thorn_churu_alliance',
+      encounter: '',
+      objective: 'Join forces with Thorn',
+    });
+    expect(Story.getFloorPlan('mooggy', 7).scene).toBe('');
   });
 
   test('gives Princess the shared hero meeting dialogue before her private thought', () => {
@@ -148,6 +160,21 @@ describe('Story Mode integration', () => {
   test('routes story encounter deaths and the final God victory through story rules', () => {
     expect(combat).toContain('Neo.onStoryEnemyDefeated?.(enemy)');
     expect(combat).toContain("Neo.gameMode === 'story'");
-    expect(manager).toContain("Neo.storyState.ally = { character: 'thorn_knight', hp: 1 }");
+    expect(manager).toContain('this.formThornAlliance();');
+    expect(manager).toContain('Story.getStoryRivalLevel?.(Neo.player?.level, Neo.floor)');
+  });
+
+  test('Thorn allies with Mooggy immediately and fights with companion AI', () => {
+    const allianceStart = manager.indexOf("if (id === 'thorn_churu_alliance')");
+    const allianceEnd = manager.indexOf('return [];', allianceStart);
+    const allianceScene = manager.slice(allianceStart, allianceEnd);
+    expect(allianceScene).toContain("{ type: 'grantChuru' }");
+    expect(allianceScene).toContain("{ type: 'formThornAlliance' }");
+    expect(allianceScene).not.toContain('startEncounter');
+    expect(manager).toContain("Neo.storyState.choices.thornAlliance = 'joined'");
+    expect(manager).toContain('Neo.steerEnemy(actor, nx, ny, moveSpeed, 6, dt)');
+    expect(manager).toContain('Neo.moveCircle(actor, dt)');
+    expect(manager).toContain('Neo.spawnProjectile?.({');
+    expect(manager).toContain('Neo.blastRadius?.(actor.x, actor.y');
   });
 });

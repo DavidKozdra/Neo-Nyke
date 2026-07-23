@@ -52,6 +52,18 @@ describe('shared campaign status system', () => {
     expect(getCampaignSlowMultiplier(player.statuses.slow.stacks)).toBeCloseTo(0.9);
   });
 
+  test('fire halves the remaining freeze duration on enemies and players', () => {
+    const enemy = {};
+    applyCampaignStatus(enemy, 'slow', 2, 8);
+    applyCampaignStatus(enemy, 'fire', 1, 3);
+    expect(enemy.statuses.slow).toEqual(expect.objectContaining({ stacks: 2, duration: 4 }));
+
+    const player = {};
+    applyCampaignStatus(player, 'slow', 4, 4, { playerColdBudget: true });
+    applyCampaignStatus(player, 'fire', 1, 3, { playerColdBudget: true });
+    expect(player.statuses.slow).toEqual(expect.objectContaining({ stacks: 2, duration: 30 }));
+  });
+
   test('owns exact enemy and player tick formulas and cadence', () => {
     expect(getCampaignStatusTickDamage('bleed', 2, 100)).toBeCloseTo(6.2);
     expect(getCampaignStatusTickDamage('fire', 2, 100)).toBeCloseTo(5.1);

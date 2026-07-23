@@ -33,8 +33,6 @@
     3: 'princess',
     4: 'turtle_boy',
     5: 'metao',
-    6: 'gelleh',
-    7: 'thorn_knight',
   });
 
   const STORY_GALLERY = Object.freeze([
@@ -61,7 +59,7 @@
       { speaker: 'MOOGGY', text: 'Yes, uncle.' },
     ] },
     { id: 'thorn_churu_alliance', title: 'Churu Truce', subtitle: 'Thorn and Mooggy join forces', storyMode: true, characters: ['mooggy'], lines: [
-      { speaker: 'THORN', text: 'You have fought everyone else. Before we fight, take this churu.' }, { speaker: 'MOOGGY', text: '...mrow.' },
+      { speaker: 'THORN', text: 'I am not here to fight you. Take this Churu. We stop the Devil together.' }, { speaker: 'MOOGGY', text: '...mrow.' },
     ] },
   ]);
 
@@ -75,6 +73,16 @@
 
   function storySeed(character, floor) {
     return `${STORY_SEED_PREFIX}|${routeForCharacter(character)}|${character}|floor:${Math.max(1, Number(floor) || 1)}`;
+  }
+
+  // Authored rival fights should stay slightly ahead of the hero instead of
+  // using floor number alone. Their lead grows gently as the story advances:
+  // +1 level on floors 1-3, up to +4 levels on the final floor.
+  function getStoryRivalLevel(playerLevel, floorNumber) {
+    const floor = Math.max(1, Math.trunc(Number(floorNumber) || 1));
+    const heroLevel = Math.max(1, Math.trunc(Number(playerLevel) || 1));
+    const levelLead = Math.min(4, 1 + Math.floor((floor - 1) / 3));
+    return Math.max(heroLevel, floor) + levelLead;
   }
 
   function createStoryState(character) {
@@ -140,12 +148,19 @@
     }
     if (route === 'mooggy') {
       if (floorNumber === 2) return { ...plan, scene: 'devil_recruits_mooggy', objective: 'Stop the heroes at all costs' };
+      if (floorNumber === 6) {
+        return {
+          ...plan,
+          scene: 'thorn_churu_alliance',
+          objective: 'Join forces with Thorn',
+        };
+      }
       if (MOOGGY_DUELS[floorNumber]) {
         return {
           ...plan,
-          scene: floorNumber === 7 ? 'thorn_churu_alliance' : `mooggy_duel_${MOOGGY_DUELS[floorNumber]}`,
+          scene: `mooggy_duel_${MOOGGY_DUELS[floorNumber]}`,
           encounter: `hero_duel:${MOOGGY_DUELS[floorNumber]}`,
-          objective: floorNumber === 7 ? 'Face Thorn' : `Defeat ${MOOGGY_DUELS[floorNumber]}`,
+          objective: `Defeat ${MOOGGY_DUELS[floorNumber]}`,
         };
       }
     }
@@ -163,6 +178,7 @@
     STORY_GALLERY,
     routeForCharacter,
     storySeed,
+    getStoryRivalLevel,
     createStoryState,
     normalizeStoryState,
     getFloorPlan,

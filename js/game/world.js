@@ -8,6 +8,18 @@
 
   const LOCAL_COOP_REVIVE_RADIUS = 58;
   const LOCAL_COOP_REVIVE_SECONDS = 1.35;
+  const PRIMARY_AOE_HIT_OPTIONS = Object.freeze({ areaHit: true });
+  const SECONDARY_AOE_HIT_OPTIONS = Object.freeze({
+    areaHit: true,
+    suppressHitFeel: true,
+    suppressHitSfx: true,
+  });
+  const CULLED_AOE_HIT_OPTIONS = Object.freeze({
+    areaHit: true,
+    suppressHitFeel: true,
+    suppressHitFx: true,
+    suppressHitSfx: true,
+  });
 
   function getLocalCoopSlots({ livingOnly = false } = {}) {
     const slots = Neo.getActivePlayerSlots?.() || [];
@@ -937,7 +949,7 @@
     const searchRadius = Math.max(0, Number(radius || 0));
     const index = options.index
       || (Neo.enemySpatialIndexFrame === Neo.simulationTick ? Neo.enemySpatialIndex : null)
-      || buildEnemySpatialIndex();
+      || ensureEnemySpatialIndex();
     const bounds = getEnemyCellBounds(x - searchRadius, y - searchRadius, x + searchRadius, y + searchRadius);
     queryEnemyIndexCells(index, bounds, enemy => {
       if (options.exclude && options.exclude.has?.(enemy)) return;
@@ -950,7 +962,7 @@
     const padding = Math.max(0, Number(options.padding || 0));
     const index = options.index
       || (Neo.enemySpatialIndexFrame === Neo.simulationTick ? Neo.enemySpatialIndex : null)
-      || buildEnemySpatialIndex();
+      || ensureEnemySpatialIndex();
     const bounds = getEnemyCellBounds(left - padding, top - padding, left + width + padding, top + height + padding);
     queryEnemyIndexCells(index, bounds, enemy => {
       if (options.exclude && options.exclude.has?.(enemy)) return;
@@ -1003,7 +1015,7 @@
     const searchRadius = Math.max(0, Number(radius || 0));
     const index = options.index
       || (Neo.destructibleSpatialIndexFrame === Neo.simulationTick ? Neo.destructibleSpatialIndex : null)
-      || buildDestructibleSpatialIndex();
+      || ensureDestructibleSpatialIndex();
     const bounds = getEnemyCellBounds(x - searchRadius, y - searchRadius, x + searchRadius, y + searchRadius);
     // queryEnemyIndexCells already dedupes across cells via its own `seen` set, so
     // a second Set here is redundant allocation on a per-projectile, per-frame hot
@@ -1018,7 +1030,7 @@
     const padding = Math.max(0, Number(options.padding || 0));
     const index = options.index
       || (Neo.destructibleSpatialIndexFrame === Neo.simulationTick ? Neo.destructibleSpatialIndex : null)
-      || buildDestructibleSpatialIndex();
+      || ensureDestructibleSpatialIndex();
     const bounds = getEnemyCellBounds(left - padding, top - padding, left + width + padding, top + height + padding);
     queryEnemyIndexCells(index, bounds, prop => {
       if (!prop || prop.broken || prop.hidden) return;
@@ -1065,12 +1077,28 @@
       damagePlayerSlot(slot, playerDamage, Math.atan2(actor.y - y, actor.x - x), knockback, sourceEnemy.type || 'enemy_aoe');
     });
     if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, knockback, 'pvp_p1_aoe');
+    const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
+    const targetFxBudget = performanceMode ? (adaptiveQuality >= 2 ? 2 : adaptiveQuality >= 1 ? 4 : 8) : Infinity;
+    let hitCount = 0;
     forEachEnemyNearCircle(x, y, radius, enemy => {
-      if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
-      Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), knockback * 0.9, color);
+      const enemyReach = radius + Number(enemy.r || 0);
+      const enemyDx = enemy.x - x;
+      const enemyDy = enemy.y - y;
+      if (enemyDx * enemyDx + enemyDy * enemyDy > enemyReach * enemyReach) return;
+      const hitOptions = !performanceMode || hitCount === 0
+        ? PRIMARY_AOE_HIT_OPTIONS
+        : hitCount < targetFxBudget
+          ? SECONDARY_AOE_HIT_OPTIONS
+          : CULLED_AOE_HIT_OPTIONS;
+      Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), knockback * 0.9, color, hitOptions);
+      hitCount += 1;
     }, { excludeEnemy: sourceEnemy });
     forEachDestructibleNearCircle(x, y, radius + 80, prop => {
-      if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
+      const propReach = radius + Number(prop.r || 0);
+      const propDx = prop.x - x;
+      const propDy = prop.y - y;
+      if (!prop.broken && !prop.hidden && propDx * propDx + propDy * propDy <= propReach * propReach) {
         damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.6 });
       }
     });
@@ -1141,6 +1169,7 @@
     const access = window.NeoSettings?.getAccess?.() || {};
     const reducedParticles = !!access.reduceParticles;
     const reducedFlash = !!access.reduceFlash;
+    const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
     const motionScale = access.reduceMotion ? 0.48 : 1;
     const explosive = style === 'explosion';
     const heavy = explosive || style === 'heavy';
@@ -1151,7 +1180,11 @@
     // readable on top of it. Fast dark puffs make the bright core feel like it
     // displaced volume instead of merely drawing a colored circle.
     if (heavy) {
-      const smokeCount = reducedParticles ? (explosive ? 3 : 2) : (explosive ? 10 : 5);
+      const smokeCount = reducedParticles || adaptiveQuality >= 2
+        ? (explosive ? 3 : 2)
+        : adaptiveQuality >= 1
+          ? (explosive ? 6 : 3)
+          : (explosive ? 10 : 5);
       for (let index = 0; index < smokeCount; index += 1) {
         const angle = (index / smokeCount) * Math.PI * 2 + Neo.rand(0.38, -0.38, 'fx');
         const speed = Neo.rand(explosive ? 105 : 72, 28, 'fx') * motionScale;
@@ -1215,8 +1248,10 @@
     // Evenly distributed angles create the fast circular blast the effect was
     // missing. Jittered speed/size prevents it from looking like a loading
     // spinner; alternating white-hot and colored squares keeps the center hot.
-    const sparks = reducedParticles
+    const sparks = reducedParticles || adaptiveQuality >= 2
       ? (heavy ? 8 : 5)
+      : adaptiveQuality >= 1
+        ? (explosive ? 18 : heavy ? 12 : 6)
       : explosive ? 30 : heavy ? 20 : 7;
     for (let index = 0; index < sparks; index += 1) {
       const angle = (index / sparks) * Math.PI * 2 + Neo.rand(0.22, -0.22, 'fx');
@@ -1246,9 +1281,10 @@
 
     // Heavy impacts also leave a few slower embers after the white fragments
     // have escaped. Their different speed band gives the burst depth and hang.
-    if (heavy && !reducedParticles) {
+    if (heavy && !reducedParticles && adaptiveQuality < 2) {
       const emberCount = explosive ? 12 : 7;
-      for (let index = 0; index < emberCount; index += 1) {
+      const visibleEmberCount = adaptiveQuality >= 1 ? Math.ceil(emberCount / 2) : emberCount;
+      for (let index = 0; index < visibleEmberCount; index += 1) {
         const angle = Neo.rand(Math.PI * 2, 0, 'fx');
         const speed = Neo.rand(175, 65, 'fx') * motionScale;
         const life = Neo.rand(0.78, 0.38, 'fx');
@@ -1349,7 +1385,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
-      homingPath: null, homingPathTimer: 0,
+      homingPath: null, homingPathTimer: 0, homingPathRefreshInterval: 0.16,
       homingTargetRef: null, homingTargetTimer: 0,
       fromRival: false, source: null, sourceLabel: null, statusEffects: null,
     });
@@ -1364,7 +1400,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
-      homingPath: null, homingPathTimer: 0,
+      homingPath: null, homingPathTimer: 0, homingPathRefreshInterval: 0.16,
       homingTargetRef: null, homingTargetTimer: 0,
       fromRival: false, source: null, sourceLabel: null, statusEffects: null, bouncesRemaining: 0,
     };
@@ -1468,8 +1504,9 @@
     }
     p.homingPath = null;
     p.homingPathTimer = 0;
-    p.homingTargetRef = null;
-    p.homingTargetTimer = 0;
+    p.homingPathRefreshInterval = Math.max(0.08, Number(props.homingPathRefreshInterval || 0.16));
+    p.homingTargetRef = props.homingTargetRef ?? null;
+    p.homingTargetTimer = Math.max(0, Number(props.homingTargetTimer || 0));
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     p.sourceLabel = props.sourceLabel ?? null;
@@ -1807,7 +1844,6 @@
       const dx = enemy.x - projectile.x;
       const dy = enemy.y - projectile.y;
       const distSq = dx * dx + dy * dy;
-      const dist = Math.sqrt(distSq);
       let score;
       let path = null;
       if (projectileHasLineOfSight(projectile, enemy.x, enemy.y)) {
@@ -1826,7 +1862,7 @@
     });
     if (best && bestPath) {
       projectile.homingPath = bestPath;
-      projectile.homingPathTimer = 0.16;
+      projectile.homingPathTimer = Number(projectile.homingPathRefreshInterval || 0.16);
     }
     return best;
   }
@@ -1858,7 +1894,7 @@
     projectile.homingPathTimer = Math.max(0, Number(projectile.homingPathTimer || 0) - dt);
     if (!Array.isArray(projectile.homingPath) || projectile.homingPath.length === 0 || projectile.homingPathTimer <= 0) {
       projectile.homingPath = buildProjectileHomingPath(projectile, target.x, target.y);
-      projectile.homingPathTimer = 0.16;
+      projectile.homingPathTimer = Number(projectile.homingPathRefreshInterval || 0.16);
     }
     if (!Array.isArray(projectile.homingPath) || projectile.homingPath.length === 0) return target;
     while (projectile.homingPath.length > 1 && Neo.dist(projectile.x, projectile.y, projectile.homingPath[0].x, projectile.homingPath[0].y) < 22) {
