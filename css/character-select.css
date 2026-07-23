@@ -8,6 +8,204 @@
   overflow: auto;
 }
 
+/* Network lobby phone layout. This file loads after the shared character-card
+   rules, so these explicit columns also retire the old 12-column span model. */
+@media (max-width: 700px) {
+  #coopLobby {
+    padding: 0;
+  }
+
+  #coopLobby .coop-lobby__layout {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 8px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+  }
+
+  #coopLobby .coop-lobby__header {
+    gap: 5px;
+    margin-bottom: 9px;
+    padding: 0 1px 9px;
+  }
+
+  #coopLobby .coop-lobby__header .charselect-titlewrap {
+    gap: 3px;
+  }
+
+  #coopLobby .coop-lobby__header .screen-title {
+    font-size: calc(24px * var(--font-scale, 1));
+  }
+
+  #coopLobby .coop-lobby__status {
+    min-height: 0;
+    font-size: calc(10px * var(--font-scale, 1));
+    line-height: 1.25;
+  }
+
+  #coopLobby .coop-lobby__workspace {
+    gap: 9px;
+  }
+
+  #coopLobby .coop-lobby__party-panel,
+  #coopLobby .coop-lobby__hero-panel {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  #coopLobby .coop-lobby__party-head {
+    padding: 0 1px 7px;
+  }
+
+  #coopLobby .coop-lobby__party-head h3 {
+    font-size: calc(16px * var(--font-scale, 1));
+  }
+
+  #coopLobby .coop-lobby__slots {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #coopLobby .coop-slot,
+  #coopLobby .coop-slot--empty {
+    min-height: 54px;
+    padding: 6px;
+    gap: 5px;
+  }
+
+  #coopLobby .coop-slot__art {
+    width: 34px;
+    height: 34px;
+  }
+
+  #coopLobby .coop-slot__badge {
+    width: 19px;
+    font-size: calc(9px * var(--font-scale, 1));
+  }
+
+  #coopLobby .coop-slot__name,
+  #coopLobby .coop-slot__empty-label {
+    font-size: calc(9px * var(--font-scale, 1));
+    letter-spacing: .06em;
+  }
+
+  #coopLobby .coop-slot__hero,
+  #coopLobby .coop-slot__status {
+    font-size: calc(8px * var(--font-scale, 1));
+    letter-spacing: .04em;
+  }
+
+  #coopLobby .coop-lobby__activity {
+    min-height: 0;
+    gap: 3px;
+    padding: 6px 7px;
+  }
+
+  #coopLobby .coop-lobby__activity-empty,
+  #coopLobby .coop-lobby__activity-item {
+    font-size: calc(9px * var(--font-scale, 1));
+    line-height: 1.2;
+  }
+
+  #coopLobby .coop-lobby__share {
+    gap: 5px;
+  }
+
+  #coopLobby .coop-lobby__code {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    padding: 7px 8px;
+  }
+
+  #coopLobby .coop-lobby__roomcode,
+  #coopLobby .coop-lobby__roomcode-input {
+    font-size: calc(21px * var(--font-scale, 1));
+    letter-spacing: .15em;
+  }
+
+  #coopLobby .coop-lobby__icon-btn,
+  #coopLobby .coop-lobby__code-actions .coop-lobby__icon-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    flex-basis: 32px;
+  }
+
+  #coopLobby .coop-lobby__demo-banner {
+    align-items: center;
+    flex-direction: row;
+    gap: 5px;
+    padding: 6px 7px;
+    font-size: calc(8px * var(--font-scale, 1));
+    line-height: 1.2;
+  }
+
+  #coopLobby .coop-lobby__hero-head {
+    padding-bottom: 7px;
+  }
+
+  #coopLobby .coop-lobby__hero-head .char-roster-kicker {
+    font-size: calc(15px * var(--font-scale, 1));
+  }
+
+  #coopLobby .coop-lobby__picker {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px;
+  }
+
+  #coopLobby .coop-lobby__picker > .char-card,
+  #coopLobby .coop-lobby__picker > .char-card:nth-child(n + 5) {
+    grid-column: auto !important;
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 78px;
+    height: auto !important;
+    padding: 6px;
+    gap: 3px 6px;
+    flex: none !important;
+  }
+
+  #coopLobby .char-card-art-wrap,
+  #coopLobby .char-card.sel .char-card-art-wrap {
+    min-height: 60px;
+  }
+
+  #coopLobby .char-card-art,
+  #coopLobby .char-card.sel .char-card-art {
+    width: 38px;
+    height: 38px;
+  }
+
+  #coopLobby .char-card-name,
+  #coopLobby .char-card.sel .char-card-name {
+    font-size: calc(10px * var(--font-scale, 1));
+    line-height: 1.1;
+  }
+
+  #coopLobby .char-card-hint {
+    font-size: calc(9px * var(--font-scale, 1));
+    line-height: 1.15;
+  }
+
+  #coopLobby .coop-lobby__actions {
+    display: grid;
+    grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
+    gap: 7px;
+    padding-top: 8px;
+  }
+
+  #coopLobby #coopLobbyLeave,
+  #coopLobby #coopLobbyReady {
+    width: auto;
+    min-width: 0;
+  }
+}
+
 #charSelect #charBackBtn {
   z-index: 20;
 }

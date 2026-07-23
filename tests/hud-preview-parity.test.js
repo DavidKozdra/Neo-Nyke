@@ -18,6 +18,14 @@ describe('HUD layout preview parity', () => {
     expect(styles).toMatch(/\.hud-preview-box\s*\{[\s\S]*?box-sizing:\s*border-box;/);
   });
 
+  test('previews the landscape playfield when mobile settings are open in portrait', () => {
+    expect(settings).toContain('function getHudPreviewViewportSize()');
+    expect(settings).toContain("const simulatedLandscape = (isTouchDevice() || controlMode === 'mobile') && height > width;");
+    expect(settings).toContain("frame.dataset.previewOrientation = viewport.simulatedLandscape ? 'landscape' : 'viewport';");
+    expect(settings).toContain('if (getHudPreviewViewportSize().simulatedLandscape) {');
+    expect(settings).toContain('if (getHudPreviewViewportSize().simulatedLandscape) return;');
+  });
+
   test('uses renderer-published viewport bounds for canvas HUD widgets', () => {
     expect(settings).toContain('window.Neo?.minimapLayoutState');
     expect(settings).toContain('window.Neo?.bossBarLayoutState');

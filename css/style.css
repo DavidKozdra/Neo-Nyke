@@ -15064,6 +15064,38 @@ body.network-multiplayer-active #c {
 }
 .hud-preview-close:hover { border-color: var(--menu-accent); }
 
+@media (max-width: 700px) {
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-eye {
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-width: 1px;
+  }
+
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-box--objectives .hud-preview-eye,
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-box--equipment .hud-preview-eye,
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-box--minimap .hud-preview-eye,
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-box--stats .hud-preview-eye,
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-box--actions .hud-preview-eye {
+    right: auto;
+    left: -6px;
+  }
+
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-eye__icon {
+    width: 10px;
+    height: 7px;
+  }
+
+  .hud-preview-frame[data-preview-orientation="landscape"] .hud-preview-resize {
+    right: -5px;
+    bottom: -5px;
+    width: 12px;
+    height: 12px;
+    border-width: 1px;
+  }
+}
+
 
 /* ── Controller mapper overlay ──────────────────────────────────────────────
    Live diagram that mirrors the HUD preview overlay (reuses .hud-preview-overlay

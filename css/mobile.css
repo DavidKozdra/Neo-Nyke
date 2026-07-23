@@ -3693,6 +3693,113 @@
   }
 }
 
+/* The multiplayer destination is a full screen, so its phone layout needs the
+   density of a game menu rather than two desktop setup cards stacked verbatim. */
+@media (max-width: 600px) {
+  .multiplayer-page {
+    padding: 102px 8px 8px;
+  }
+
+  .multiplayer-page__back {
+    top: 52px;
+    left: 8px;
+    min-height: 42px;
+    padding: 7px 13px 7px 10px;
+    font-size: calc(11px * var(--font-scale, 1));
+  }
+
+  .multiplayer-development-note {
+    min-height: 46px;
+    padding: 8px 12px;
+    font-size: calc(11px * var(--font-scale, 1));
+    letter-spacing: .08em;
+  }
+
+  .multiplayer-page__layout {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 110px);
+    gap: 8px;
+  }
+
+  .multiplayer-banner {
+    padding-inline: 6px;
+  }
+
+  .multiplayer-banner__title {
+    margin-block: 1px 2px;
+    font-size: clamp(25px, 8vw, 32px);
+  }
+
+  .multiplayer-banner__eyebrow,
+  .multiplayer-banner__subtitle {
+    font-size: calc(7px * var(--font-scale, 1));
+  }
+
+  .multiplayer-panel__surface {
+    max-height: calc(100dvh - 174px);
+  }
+
+  .multiplayer-panel__body {
+    gap: 8px;
+    padding: 10px;
+    overflow-y: auto;
+  }
+
+  .multiplayer-choice-grid {
+    gap: 8px;
+  }
+
+  .multiplayer-choice-card {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .multiplayer-choice-card > h3 {
+    margin-bottom: 10px;
+    font-size: calc(18px * var(--font-scale, 1));
+  }
+
+  .multiplayer-mode-options {
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+
+  .multiplayer-mode-options legend,
+  .multiplayer-code-field > span {
+    margin-bottom: 5px;
+    font-size: calc(10px * var(--font-scale, 1));
+  }
+
+  .multiplayer-mode-option {
+    min-height: 42px;
+    padding: 8px 10px;
+  }
+
+  .multiplayer-mode-option b {
+    font-size: calc(11px * var(--font-scale, 1));
+  }
+
+  .multiplayer-code-field {
+    margin-bottom: 10px;
+  }
+
+  .multiplayer-code-field .multiplayer-room-code-input {
+    height: 44px;
+    font-size: calc(15px * var(--font-scale, 1));
+  }
+
+  .multiplayer-paste-btn {
+    min-height: 32px;
+    margin-top: 5px;
+    font-size: calc(10px * var(--font-scale, 1));
+  }
+
+  .multiplayer-choice-card__primary {
+    min-height: 44px;
+    padding-block: 10px;
+  }
+}
+
 @media (max-width: 760px) {
   .rh-panel {
     box-sizing: border-box;

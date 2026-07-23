@@ -1107,6 +1107,19 @@
     return `${Math.round(normalizeHudScale(entry.scale) * 100)}%`;
   }
 
+  function getHudPreviewViewportSize() {
+    const width = Math.max(1, window.innerWidth);
+    const height = Math.max(1, window.innerHeight);
+    // Mobile gameplay is landscape-first. Settings can still be opened while
+    // the device is portrait, but projecting that narrow menu viewport makes
+    // every real HUD widget collapse into the top edge of the editor. Preview
+    // the landscape playfield the player will actually return to instead.
+    const simulatedLandscape = (isTouchDevice() || controlMode === 'mobile') && height > width;
+    return simulatedLandscape
+      ? { width: height, height: width, simulatedLandscape }
+      : { width, height, simulatedLandscape };
+  }
+
   function getHudPreviewRatios(frame = document.getElementById('hudPreviewFrame')) {
     const rect = frame?.getBoundingClientRect?.();
     // Absolute preview children are laid out inside the frame's border. Use the
@@ -1114,9 +1127,10 @@
     // few pixels of position/scale drift on every edge.
     const width = frame?.clientWidth || rect?.width || 0;
     const height = frame?.clientHeight || rect?.height || 0;
+    const viewport = getHudPreviewViewportSize();
     return {
-      x: width ? width / Math.max(1, window.innerWidth) : 0.5,
-      y: height ? height / Math.max(1, window.innerHeight) : 0.5,
+      x: width ? width / viewport.width : 0.5,
+      y: height ? height / viewport.height : 0.5,
     };
   }
 
@@ -1124,15 +1138,15 @@
     const frame = document.getElementById('hudPreviewFrame');
     if (!frame) return;
     const gap = window.innerWidth <= 720 ? 96 : 140;
-    const viewportW = Math.max(1, window.innerWidth);
-    const viewportH = Math.max(1, window.innerHeight);
-    const availableW = Math.max(260, viewportW * 0.92);
-    const availableH = Math.max(180, viewportH - gap);
-    const previewScale = Math.min(1, availableW / viewportW, availableH / viewportH);
-    const width = viewportW * previewScale;
-    const height = viewportH * previewScale;
+    const viewport = getHudPreviewViewportSize();
+    const availableW = Math.max(260, window.innerWidth * 0.92);
+    const availableH = Math.max(180, window.innerHeight - gap);
+    const previewScale = Math.min(1, availableW / viewport.width, availableH / viewport.height);
+    const width = viewport.width * previewScale;
+    const height = viewport.height * previewScale;
     frame.style.width = `${width}px`;
     frame.style.height = `${height}px`;
+    frame.dataset.previewOrientation = viewport.simulatedLandscape ? 'landscape' : 'viewport';
   }
 
   function getLiveHudElement(key) {
@@ -1145,6 +1159,10 @@
   let hudPreviewLayoutSnapshot = {};
 
   function captureLiveHudLayoutSnapshot() {
+    if (getHudPreviewViewportSize().simulatedLandscape) {
+      hudPreviewLayoutSnapshot = {};
+      return hudPreviewLayoutSnapshot;
+    }
     const snapshot = {};
     const root = document.documentElement;
     HUD_ELEMENTS.forEach(def => {
@@ -1210,6 +1228,10 @@
     box.style.left = '';
     box.style.width = '';
     box.style.height = '';
+    // In a portrait mobile menu there are no meaningful live landscape bounds
+    // to capture. The percentage anchors on the preview classes are the
+    // landscape HUD schematic and remain editable through the same offsets.
+    if (getHudPreviewViewportSize().simulatedLandscape) return;
     const liveBounds = hudPreviewLayoutSnapshot[key];
     if (liveBounds?.width > 0 && liveBounds?.height > 0) {
       box.style.top = `${liveBounds.top * ratio.y}px`;
@@ -1423,8 +1445,9 @@
   function correctHudPreviewOverlaps({ saveAfter = false } = {}) {
     const frame = document.getElementById('hudPreviewFrame');
     if (!frame) return false;
-    const viewportW = Math.max(1, window.innerWidth);
-    const viewportH = Math.max(1, window.innerHeight);
+    const previewViewport = getHudPreviewViewportSize();
+    const viewportW = previewViewport.width;
+    const viewportH = previewViewport.height;
     const measure = () => {
       refreshHudPreviewBoxes();
       const frameRect = frame.getBoundingClientRect?.();
