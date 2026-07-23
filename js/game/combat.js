@@ -5430,6 +5430,21 @@
       Neo.player.xp -= Neo.player.xpToNext;
       levelUp();
     }
+    if (Neo.gameMode === 'coop') {
+      (Neo.getActivePlayerSlots?.() || []).forEach(slot => {
+        if (slot.id === 1) return;
+        const actor = slot.getEntity?.();
+        if (!actor) return;
+        actor.xp = Number(actor.xp || 0) + gained;
+        actor.xpToNext = Math.max(1, Number(actor.xpToNext || Neo.player.xpToNext || 60));
+        while (actor.xp >= actor.xpToNext) {
+          actor.xp -= actor.xpToNext;
+          const result = globalThis.NeoNyke?.simulation?.applyCampaignLevelUp?.(actor);
+          if (!result) break;
+          Neo.spawnParticle({ x: actor.x, y: actor.y - 20, life: 0.9, text: `LV ${actor.level}`, c: slot.color || '#7dff9e' });
+        }
+      });
+    }
   }
 
   function levelUp() {

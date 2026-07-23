@@ -619,6 +619,7 @@ export function loop(timestamp) {
         else if (slot.id > 2) Neo.updatePlayerN(dt, slot.getEntity(), slot.id);
       });
     }
+    Neo.updateLocalCoopRevives?.(dt);
     Neo.updateChallengeRoomState(dt);
 
     Neo.tickGameFeel(dt);

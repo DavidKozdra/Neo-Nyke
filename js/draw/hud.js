@@ -100,12 +100,13 @@
         const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
         const radius = Number(particle.radius || 48);
         const waveRadius = radius * (0.22 + progress * 0.92);
+        const heavyWave = particle.style === 'heavy' || particle.style === 'explosion';
         Neo.ctx.globalAlpha = (1 - progress) * 0.8;
         Neo.ctx.strokeStyle = particle.c || '#ff66cc';
         setGlow(particle.c || '#ff66cc', 18);
-        Neo.ctx.lineWidth = particle.style === 'heavy' ? 5 : 3;
+        Neo.ctx.lineWidth = particle.style === 'explosion' ? 7 : heavyWave ? 5 : 3;
         Neo.ctx.beginPath();
-        if (particle.style === 'heavy') {
+        if (heavyWave) {
           for (let index = 0; index <= 28; index += 1) {
             const angle = (index / 28) * Math.PI * 2;
             const jag = 1 + Math.sin(index * 2.1 + progress * 12) * 0.055;
@@ -124,6 +125,57 @@
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, radius * (0.3 + progress * 0.45), 0, Math.PI * 2);
         Neo.ctx.fill();
+      } else if (particle.explosionCore) {
+        const maxLife = Math.max(0.01, Number(particle.maxLife || 0.24));
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
+        const remaining = 1 - progress;
+        const radius = Number(particle.radius || 60) * (0.28 + Math.sin(progress * Math.PI * 0.72) * 0.82);
+        const reducedFlash = !!particle.reducedFlash;
+        Neo.ctx.globalCompositeOperation = reducedFlash ? 'source-over' : 'lighter';
+        Neo.ctx.globalAlpha = remaining * (reducedFlash ? 0.62 : 0.95);
+        const glow = Neo.ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, radius));
+        glow.addColorStop(0, reducedFlash ? '#ffd27a' : '#ffffff');
+        glow.addColorStop(0.2, reducedFlash ? particle.c || '#ff8a24' : '#fff6d2');
+        glow.addColorStop(0.58, particle.c || '#ff8a24');
+        glow.addColorStop(1, 'rgba(255,72,0,0)');
+        Neo.ctx.fillStyle = glow;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        Neo.ctx.fill();
+
+        // Uneven diamond rays give the core a violent pixel-art silhouette at
+        // the instant of ignition instead of a soft, generic glow ball.
+        Neo.ctx.globalAlpha = remaining * (reducedFlash ? 0.28 : 0.72);
+        Neo.ctx.fillStyle = reducedFlash ? particle.c || '#ff8a24' : '#ffffff';
+        Neo.ctx.beginPath();
+        const rayCount = 12;
+        for (let index = 0; index < rayCount * 2; index += 1) {
+          const angle = (index / (rayCount * 2)) * Math.PI * 2;
+          const longRay = index % 2 === 0;
+          const rayRadius = radius * (longRay ? 1.08 + (index % 4) * 0.09 : 0.34);
+          const px = Math.cos(angle) * rayRadius;
+          const py = Math.sin(angle) * rayRadius;
+          if (index === 0) Neo.ctx.moveTo(px, py);
+          else Neo.ctx.lineTo(px, py);
+        }
+        Neo.ctx.closePath();
+        Neo.ctx.fill();
+      } else if (particle.square) {
+        const maxLife = Math.max(0.01, Number(particle.maxLife || particle.life || 0.4));
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
+        const remaining = 1 - progress;
+        const size = Number(particle.size || 4) * (0.55 + remaining * 0.65);
+        Neo.ctx.globalAlpha = Math.min(1, remaining * 1.45);
+        Neo.ctx.rotate(Number(particle.rotation || 0));
+        Neo.ctx.fillStyle = particle.c || '#ff9a35';
+        setGlow(particle.c || '#ff9a35', 9);
+        Neo.ctx.fillRect(-size / 2, -size / 2, size, size);
+        if (size > 4) {
+          Neo.ctx.globalAlpha *= 0.72;
+          Neo.ctx.fillStyle = '#fff5cf';
+          const hotSize = Math.max(1, size * 0.34);
+          Neo.ctx.fillRect(-hotSize / 2, -hotSize / 2, hotSize, hotSize);
+        }
       } else if (particle.impact) {
         const maxLife = Number(particle.maxLife || 0.24);
         const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);

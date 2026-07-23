@@ -1422,8 +1422,12 @@
     Neo.mouse.rightQueued = false;
     Neo.gameEvents.emit('room:enter', { room });
     const safeSpawn = findSafeSpawnPoint();
-    Neo.player.x = safeSpawn.x;
-    Neo.player.y = safeSpawn.y;
+    if (Neo.gameMode === 'coop' && Neo.positionLocalCoopParty) {
+      Neo.positionLocalCoopParty(safeSpawn.x, safeSpawn.y);
+    } else {
+      Neo.player.x = safeSpawn.x;
+      Neo.player.y = safeSpawn.y;
+    }
     Neo.reconcileCooldownsOnRoomEnter();
 
     if (room.type === 'start' && !room.cleared && Neo.enemies.length === 0 && Number(room.startRoomEliteCount || 0) > 0) {
