@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable authoritative network-run slice. Cloudflare rooms now support 2–4 player Co-op Expedition and Rival Expedition rules, independent occupied-room simulation, ten deterministic floors, group-gated co-op floor exits, bosses and terminal victory/defeat, down/revive, Rival PvP/respawn, shared combat XP/levels, seeded relic chests with server-validated choices, reliable floor transitions, and 45-second reconnect reservations. Full legacy item/shop/forge parity, authored per-boss scripting, production deployment, Electron, and Steamworks are not implemented yet.
+Status: playable authoritative network-run slice. Cloudflare rooms now support 2–4 player Co-op Expedition and Rival Expedition rules, independent occupied-room simulation, ten deterministic floors, group-gated co-op floor exits, bosses and terminal victory/defeat, down/revive, Rival PvP/respawn, shared combat XP/levels, seeded relic chests with server-validated choices, reliable floor transitions, background-tab heartbeats, and 30-minute reconnect/empty-room grace periods. Full legacy item/shop/forge parity, authored per-boss scripting, production deployment, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 

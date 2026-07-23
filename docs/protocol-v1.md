@@ -183,7 +183,7 @@ connected
 → left/disconnected
 ```
 
-Messages illegal for the current state count as validation failures. Repeated invalid messages are rate-limited and can close the connection. A match already running rejects a new player unless the identity owns a reconnect reservation. Browser reconnect reservations initially last 45 seconds and require the authenticated session proof issued on the original connection.
+Messages illegal for the current state count as validation failures. Repeated invalid messages are rate-limited and can close the connection. A match already running rejects a new player unless the identity owns a reconnect reservation. Browser reconnect reservations last 30 minutes and require the authenticated session proof issued on the original connection. The browser also sends protocol heartbeats and retries immediately when a backgrounded tab becomes visible again.
 
 ## Error codes
 

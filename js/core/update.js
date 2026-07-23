@@ -34,7 +34,15 @@ const interpPrev = new WeakMap();
 const interpRestore = [];
 
 function eachInterpolatedEntity(visit) {
-  if (Neo.player) visit(Neo.player);
+  const activeSlots = Neo.getActivePlayerSlots?.() || [];
+  const visitedPlayers = new Set();
+  activeSlots.forEach(slot => {
+    const actor = slot?.getEntity?.();
+    if (!actor || visitedPlayers.has(actor)) return;
+    visitedPlayers.add(actor);
+    visit(actor);
+  });
+  if (Neo.player && !visitedPlayers.has(Neo.player)) visit(Neo.player);
   INTERPOLATED_LISTS.forEach(key => {
     const list = Neo[key];
     if (Array.isArray(list)) list.forEach(entity => { if (entity) visit(entity); });

@@ -13,6 +13,7 @@
   const { CloudflareWebSocketTransport, normalizeRoomCode } = cloudflareApi;
   const { MultiplayerRoomClient, LocalMultiplayerClient } = clientApi;
   const Client = MultiplayerRoomClient || LocalMultiplayerClient;
+  const HEARTBEAT_INTERVAL_MS = 20_000;
 
   class BrowserMultiplayerSession {
     constructor(options = {}) {
@@ -25,11 +26,16 @@
       this.disposed = false;
       this.reconnectAttempts = 0;
       this.reconnectTimer = null;
+      this.reconnectInFlight = false;
+      this.heartbeatTimer = null;
       this.unsubscribeMessage = this.transport.onMessage(() => queueMicrotask(() => this._notify()));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected(() => {
         queueMicrotask(() => this._notify());
         this._scheduleReconnect();
       });
+      this.boundConnectionWake = () => this._handleConnectionWake();
+      root.document?.addEventListener?.('visibilitychange', this.boundConnectionWake);
+      root.addEventListener?.('focus', this.boundConnectionWake);
     }
 
     async createRoom(options = {}) {
@@ -41,6 +47,7 @@
     async joinRoom(roomCode) {
       this.roomCode = normalizeRoomCode(roomCode);
       await this.client.connect(this.roomCode);
+      this._startHeartbeat();
       this._notify();
       return this.snapshot();
     }
@@ -122,12 +129,46 @@
       this.listeners.forEach(listener => listener(snapshot));
     }
 
-    _scheduleReconnect() {
-      if (this.disposed || !this.roomCode || !this.client.reconnectToken || this.reconnectTimer !== null) return;
-      const delay = Math.min(8_000, 750 * (2 ** Math.min(this.reconnectAttempts, 4)));
+    _startHeartbeat() {
+      if (this.heartbeatTimer !== null || this.disposed) return;
+      this.heartbeatTimer = root.setInterval?.(() => this._sendHeartbeat(), HEARTBEAT_INTERVAL_MS) ?? null;
+    }
+
+    _sendHeartbeat() {
+      if (this.disposed || !this.roomCode || !this.client.authorityPeerId) return;
+      try {
+        this.client.ping();
+      } catch {
+        this._scheduleReconnect(true);
+      }
+    }
+
+    _handleConnectionWake() {
+      if (root.document?.visibilityState === 'hidden' || root.document?.hidden === true) return;
+      if (this.disposed || !this.roomCode) return;
+      const socket = this.transport.socket;
+      if (this.client.status === 'disconnected' || (socket && socket.readyState !== 1)) {
+        this._scheduleReconnect(true);
+        return;
+      }
+      // Browser background throttling can defer interval heartbeats. Send one
+      // immediately when the tab becomes active so intermediaries and the
+      // authority see traffic without waiting for the next interval.
+      this._sendHeartbeat();
+    }
+
+    _scheduleReconnect(immediate = false) {
+      if (this.disposed || !this.roomCode || !this.client.reconnectToken || this.reconnectInFlight) return;
+      if (this.reconnectTimer !== null) {
+        if (!immediate) return;
+        root.clearTimeout?.(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      const delay = immediate ? 0 : Math.min(8_000, 750 * (2 ** Math.min(this.reconnectAttempts, 4)));
       this.reconnectTimer = root.setTimeout?.(async () => {
         this.reconnectTimer = null;
         if (this.disposed) return;
+        this.reconnectInFlight = true;
         this.reconnectAttempts += 1;
         try {
           await this.client.connect(this.roomCode);
@@ -136,8 +177,10 @@
         } catch (error) {
           this.client.errors.push({ code: 'RECONNECT_FAILED', message: String(error?.message || error) });
           this._notify();
-          this._scheduleReconnect();
+        } finally {
+          this.reconnectInFlight = false;
         }
+        if (this.client.status === 'disconnected') this._scheduleReconnect();
       }, delay) ?? null;
     }
 
@@ -145,6 +188,10 @@
       this.disposed = true;
       if (this.reconnectTimer !== null) root.clearTimeout?.(this.reconnectTimer);
       this.reconnectTimer = null;
+      if (this.heartbeatTimer !== null) root.clearInterval?.(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+      root.document?.removeEventListener?.('visibilitychange', this.boundConnectionWake);
+      root.removeEventListener?.('focus', this.boundConnectionWake);
       this.unsubscribeMessage?.();
       this.unsubscribeDisconnect?.();
       const leaveResult = this.client.leave?.(reason);
@@ -154,5 +201,5 @@
     }
   }
 
-  return { BrowserMultiplayerSession };
+  return { HEARTBEAT_INTERVAL_MS, BrowserMultiplayerSession };
 });

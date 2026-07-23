@@ -46,7 +46,10 @@
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
-  const RECONNECT_RESERVATION_TICKS = SIMULATION_TICK_RATE * 45;
+  // Background tabs and sleeping mobile browsers can suspend JavaScript well
+  // beyond the old 45-second window. Preserve the authority entity long enough
+  // for the visibility/focus reconnect path to reclaim it after waking.
+  const RECONNECT_RESERVATION_TICKS = SIMULATION_TICK_RATE * 60 * 30;
   const CHAT_COOLDOWN_MS = 500;
   const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
     'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',

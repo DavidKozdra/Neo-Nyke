@@ -78,7 +78,7 @@
   }
 
   function updateLocalCoopRevives(dt) {
-    if (Neo.gameMode !== 'coop' || Neo.state !== 'play') return;
+    if (Neo.gameMode !== 'coop' || Neo.gameState !== 'play') return;
     const livingSlots = getLocalCoopSlots({ livingOnly: true });
     getLocalCoopSlots().forEach(downedSlot => {
       if (!downedSlot.getDead?.()) return;
