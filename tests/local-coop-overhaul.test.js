@@ -42,6 +42,12 @@ describe('local co-op systems use active player slots', () => {
     expect(world).toContain('const aimAngle = getAuxPlayerAimAngle(pn, nX, nY, _gpN)');
   });
 
+  test('interpolates every active local player to prevent co-op camera and cursor shake', () => {
+    expect(update).toContain('const activeSlots = Neo.getActivePlayerSlots?.() || []');
+    expect(update).toContain('activeSlots.forEach(slot =>');
+    expect(update).toContain('visitedPlayers.add(actor)');
+  });
+
   test('enemy homing and direct projectile hits select living player slots', () => {
     expect(world).toContain('getNearestLivingPlayerSlot(projectile.x, projectile.y)?.entity');
     expect(world).toContain('const hitSlot = getLocalCoopSlots({ livingOnly: true }).find');

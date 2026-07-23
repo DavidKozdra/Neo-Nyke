@@ -31,7 +31,10 @@ const MULTIPLAYER_ROOM_LIMIT = 4;
 const MULTIPLAYER_MIN_PLAYERS = 1;
 const ROOM_TICK_INTERVAL_MS = 50;
 const CHECKPOINT_INTERVAL_TICKS = 20 * 15;
-const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
+// Match the client reconnect reservation: if every browser is suspended at the
+// same time, keep the Durable Object room available long enough for one of the
+// tabs to wake and reclaim it.
+const EMPTY_ROOM_TTL_MS = 30 * 60 * 1000;
 
 const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
 const protocolApi = globalThis.NeoNyke?.protocol || {};

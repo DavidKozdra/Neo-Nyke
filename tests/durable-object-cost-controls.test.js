@@ -20,6 +20,7 @@ describe('Durable Object daily usage controls', () => {
 
   test('debounces checkpoints and expires empty rooms with one alarm', () => {
     expect(server).toContain('const CHECKPOINT_INTERVAL_TICKS = 20 * 15');
+    expect(server).toContain('const EMPTY_ROOM_TTL_MS = 30 * 60 * 1000');
     expect(server).toContain('tick - this.lastCheckpointTick < CHECKPOINT_INTERVAL_TICKS');
     expect(server).toContain('this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS)');
     expect(server).toContain('await this.ctx.storage.deleteAll()');
