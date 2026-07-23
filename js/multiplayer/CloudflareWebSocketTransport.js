@@ -14,6 +14,8 @@
   const { getDeliveryIntent } = protocolApi;
   const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
   const AUTHORITY_PEER_ID = 'cloudflare-authority';
+  const SOCKET_HEARTBEAT_REQUEST = '__neo_ping__';
+  const SOCKET_HEARTBEAT_RESPONSE = '__neo_pong__';
 
   function createGuestIdentity() {
     const suffix = root.crypto?.randomUUID?.() || `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
@@ -143,6 +145,7 @@
 
       socket.addEventListener('message', event => {
         try {
+          if (event.data === SOCKET_HEARTBEAT_RESPONSE) return;
           const message = JSON.parse(typeof event.data === 'string' ? event.data : String(event.data));
           this._emit('message', this.authorityPeerId, message, getDeliveryIntent(message.type));
         } catch {
@@ -172,6 +175,12 @@
       return this.send(this.authorityPeerId, message, options);
     }
 
+    sendHeartbeat() {
+      if (!this.socket || this.socket.readyState !== 1) throw new Error('Cloudflare WebSocket is not connected');
+      this.socket.send(SOCKET_HEARTBEAT_REQUEST);
+      return true;
+    }
+
     async leaveSession(reason = 'left') {
       const socket = this.socket;
       this.socket = null;
@@ -188,6 +197,8 @@
   return {
     ROOM_CODE_PATTERN,
     AUTHORITY_PEER_ID,
+    SOCKET_HEARTBEAT_REQUEST,
+    SOCKET_HEARTBEAT_RESPONSE,
     normalizeRoomCode,
     websocketUrl,
     CloudflareWebSocketTransport,

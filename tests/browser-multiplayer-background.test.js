@@ -12,6 +12,7 @@ class FakeCloudflareTransport extends NetworkTransport {
     this.authorityPeerId = 'cloudflare-authority';
     this.joinCount = 0;
     this.sent = [];
+    this.rawHeartbeats = 0;
     this.socket = { readyState: 1 };
   }
 
@@ -26,6 +27,11 @@ class FakeCloudflareTransport extends NetworkTransport {
     if (this.socket.readyState !== 1) throw new Error('socket unavailable');
     this.sent.push({ peerId, message, delivery });
     return { queued: true, dropped: false };
+  }
+
+  sendHeartbeat() {
+    this.rawHeartbeats += 1;
+    return true;
   }
 
   emitAuthority(type, sequence, payload) {
@@ -46,8 +52,14 @@ class FakeCloudflareTransport extends NetworkTransport {
 }
 
 describe('browser multiplayer background connection recovery', () => {
+  const originalDocument = global.document;
+
   beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => {
+    jest.useRealTimers();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  });
 
   async function connectedSession() {
     const transport = new FakeCloudflareTransport();
@@ -62,11 +74,41 @@ describe('browser multiplayer background connection recovery', () => {
 
   test('sends protocol heartbeats even outside the gameplay input loop', async () => {
     const { transport, session } = await connectedSession();
+    session.client.status = 'running';
     transport.sent.length = 0;
 
     jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
 
     expect(transport.sent.map(entry => entry.message.type)).toContain('PING');
+    expect(transport.rawHeartbeats).toBe(0);
+    session.dispose();
+  });
+
+  test('uses raw hibernation heartbeats and pauses reconnects while hidden', async () => {
+    global.document = {
+      hidden: true,
+      visibilityState: 'hidden',
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    };
+    const { transport, session } = await connectedSession();
+    session.client.status = 'running';
+    transport.sent.length = 0;
+
+    jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+    expect(transport.rawHeartbeats).toBe(1);
+    expect(transport.sent.map(entry => entry.message.type)).not.toContain('PING');
+
+    transport.disconnect('idle-timeout');
+    expect(session.reconnectPausedUntilWake).toBe(true);
+    expect(session.reconnectTimer).toBeNull();
+
+    global.document.hidden = false;
+    global.document.visibilityState = 'visible';
+    session._handleConnectionWake();
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(transport.joinCount).toBe(2);
     session.dispose();
   });
 

@@ -90,6 +90,32 @@ describe('LocalLoopbackTransport', () => {
 });
 
 describe('protocol-driven local multiplayer session', () => {
+  test('defers floor generation until an admitted lobby actually starts', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+      minPlayers: 1,
+      deferFloorGeneration: true,
+    });
+    const client = new LocalMultiplayerClient({
+      transport: transport(network, 'client-a', 'Client A'),
+    });
+    await authority.start();
+    await client.connect('neo-local-room');
+    clock.runAll();
+
+    expect(authority.simulation.state.status).toBe('waiting');
+    expect(authority.simulation.state.floorState.layout.rooms).toEqual([]);
+
+    client.sendReady(true);
+    clock.runAll();
+
+    expect(authority.simulation.state.status).toBe('running');
+    expect(authority.simulation.state.floorState.layout.rooms.length).toBeGreaterThan(0);
+    expect(client.state.floorState).toEqual(authority.simulation.state.floorState);
+  });
+
   test('keeps lobby slots stable and reports intentional leaves versus dropped connections', async () => {
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
@@ -307,6 +333,11 @@ describe('protocol-driven local multiplayer session', () => {
     });
     authority.sendFullCorrection();
     clock.runAll();
+    expect(snapshots.at(-1)).toEqual(expect.objectContaining({
+      full: true,
+      floorState: null,
+      bossState: null,
+    }));
     authority.simulation.state.players[clientA.playerId].x += 1;
     authority._publishSnapshot(false);
     clock.runAll();
@@ -317,6 +348,42 @@ describe('protocol-driven local multiplayer session', () => {
     expect(delta.entities.enemies).toEqual({});
     expect(delta.floorState).toBeNull();
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
+  });
+
+  test('cleans protocol bookkeeping when a handshake-only peer disconnects', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+    });
+    const peer = transport(network, 'handshake-only', 'Handshake Only');
+    await authority.start();
+    await peer.initialize();
+    await peer.joinSession('neo-local-room');
+    peer.send('authority', createEnvelope('CLIENT_HELLO', 0, 0, {
+      buildVersion: authority.buildVersion,
+      generationVersion: authority.generationVersion,
+      contentHash: authority.contentHash,
+      requestedIdentityProvider: 'guest',
+    }), getDeliveryIntent('CLIENT_HELLO'));
+    peer.send('authority', createEnvelope('PING', 1, 0, {
+      nonce: 'handshake-ping',
+      clientTime: 1,
+    }), getDeliveryIntent('PING'));
+    clock.runAll();
+
+    expect(authority.peerRecords.has('handshake-only')).toBe(true);
+    expect(authority.seenReliableSequences.has('handshake-only')).toBe(true);
+    expect(authority.lastReplaceableSequence.has('handshake-only|PING')).toBe(true);
+
+    await peer.leaveSession('left');
+    clock.runAll();
+
+    expect(authority.peerRecords.has('handshake-only')).toBe(false);
+    expect(authority.seenReliableSequences.has('handshake-only')).toBe(false);
+    expect(authority.invalidMessageCount.has('handshake-only')).toBe(false);
+    expect(Array.from(authority.lastReplaceableSequence.keys()))
+      .not.toEqual(expect.arrayContaining([expect.stringMatching(/^handshake-only\|/)]));
   });
 
   test('exports and restores authority peer runtime required after hibernation', async () => {
@@ -501,6 +568,43 @@ describe('protocol-driven local multiplayer session', () => {
     expect(reconnected.playerId).toBe(originalPlayerId);
     expect(authority.simulation.state.players[originalPlayerId]).toEqual(expect.objectContaining({ disconnected: false }));
     expect(reconnected.state.players[originalPlayerId].id).toBe(originalPlayerId);
+  });
+
+  test('removes an intentional leaver immediately instead of reserving a player slot', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const playerId = clientB.playerId;
+    const reconnectToken = clientB.reconnectToken;
+
+    await clientB.leave('left');
+    clock.runAll();
+
+    expect(authority.simulation.state.players[playerId]).toBeUndefined();
+    expect(authority.reconnectReservations.has(reconnectToken)).toBe(false);
+    expect(clientA.state.players[playerId]).toBeUndefined();
+    expect(clientA.connectionNotices.at(-1)).toEqual(expect.objectContaining({
+      playerId,
+      kind: 'left',
+    }));
+  });
+
+  test('ends a running authority match cleanly at a server-enforced time limit', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+
+    expect(authority.endMatch('match-time-limit')).toBe(true);
+    clock.runAll();
+
+    expect(authority.simulation.state.status).toBe('ended');
+    expect(clientA.runEnd).toEqual(expect.objectContaining({ reason: 'match-time-limit' }));
+    expect(clientB.runEnd).toEqual(expect.objectContaining({ reason: 'match-time-limit' }));
+    expect(authority.endMatch('duplicate')).toBe(false);
   });
 
   test('broadcasts bounded authority chat to every connected player', async () => {

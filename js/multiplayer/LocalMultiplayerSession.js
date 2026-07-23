@@ -42,7 +42,10 @@
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
-  const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
+  // WebSocket delivery is reliable and ordered. A five-second correction still
+  // bounds recovery for the fault-injected loopback transport without resending
+  // the complete entity set (and static floor layout) every second in production.
+  const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE * 5;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
@@ -236,6 +239,7 @@
       this.matchSeed = options.matchSeed ?? 'local-match-seed';
       this.baseMatchId = String(options.matchId || 'local-match');
       this.mode = options.mode === 'rival' ? 'rival' : 'coop';
+      this.deferFloorGeneration = options.deferFloorGeneration === true;
       this.rematchSerial = 0;
       this.chatSequence = 0;
       this.outgoingSequence = 0;
@@ -255,6 +259,7 @@
       this.pendingFloorTransition = null;
       this.pendingRunEnd = null;
       this.runEndedBroadcast = false;
+      this.persistenceRevision = 0;
       this.snapshotEntitySignatures = {};
       this.snapshotFloorSignature = '';
       this.snapshotBossSignature = '';
@@ -291,6 +296,7 @@
         pendingFloorTransition: this.pendingFloorTransition,
         pendingRunEnd: this.pendingRunEnd,
         runEndedBroadcast: this.runEndedBroadcast,
+        persistenceRevision: this.persistenceRevision,
         reconnectReservations: Array.from(this.reconnectReservations.entries()),
         seenReliableSequences: Array.from(this.seenReliableSequences.entries())
           .map(([peerId, sequences]) => [peerId, Array.from(sequences)]),
@@ -318,19 +324,62 @@
       this.pendingFloorTransition = cloneSerializable(runtime.pendingFloorTransition || null);
       this.pendingRunEnd = cloneSerializable(runtime.pendingRunEnd || null);
       this.runEndedBroadcast = runtime.runEndedBroadcast === true;
+      this.persistenceRevision = Math.max(0, Math.trunc(Number(runtime.persistenceRevision) || 0));
       this.reconnectReservations = new Map(Array.isArray(runtime.reconnectReservations) ? runtime.reconnectReservations : []);
       this.seenReliableSequences = new Map((Array.isArray(runtime.seenReliableSequences) ? runtime.seenReliableSequences : [])
         .map(([peerId, sequences]) => [peerId, new Set(Array.isArray(sequences) ? sequences : [])]));
       this.lastReplaceableSequence = new Map(Array.isArray(runtime.lastReplaceableSequence) ? runtime.lastReplaceableSequence : []);
       this.invalidMessageCount = new Map(Array.isArray(runtime.invalidMessageCount) ? runtime.invalidMessageCount : []);
-      this.snapshotEntitySignatures = {};
-      this.snapshotFloorSignature = '';
-      this.snapshotBossSignature = '';
+      // Connected clients keep their authoritative state while the room
+      // hibernates. Prime the delta baseline so a wake does not immediately
+      // resend the full floor and every entity.
+      this._primeSnapshotSignatures();
       return true;
+    }
+
+    _markPersistenceDirty() {
+      this.persistenceRevision += 1;
+      return this.persistenceRevision;
+    }
+
+    _primeSnapshotSignatures() {
+      this.snapshotEntitySignatures = Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [
+        collection,
+        Object.fromEntries(Object.entries(this.simulation.state[collection] || {})
+          .map(([entityId, entity]) => [entityId, JSON.stringify(entity)])),
+      ]));
+      this.snapshotFloorSignature = JSON.stringify(this.simulation.state.floorState || null);
+      this.snapshotBossSignature = JSON.stringify(this.simulation.state.bossState || null);
     }
 
     _createSimulation(matchSeed, matchId) {
       const floorSeed = `${matchSeed}|floor:1`;
+      const floorState = this.deferFloorGeneration
+        ? {
+          ...TEST_ROOM,
+          currentRoomId: '',
+          visitedRoomIds: [],
+          roomTransition: null,
+          transitionSequence: 0,
+          transitionsByPlayer: {},
+          layout: {
+            matchSeed,
+            floorSeed,
+            floorNumber: 1,
+            generationVersion: this.generationVersion,
+            contentVersion: this.contentVersion,
+            rooms: [],
+            startRoomId: '',
+            exitRoomId: '',
+          },
+        }
+        : createNetworkFloorState({
+          matchSeed,
+          floorSeed,
+          floorNumber: 1,
+          generationVersion: this.generationVersion,
+          contentVersion: this.contentVersion,
+        });
       const state = new GameState({
         matchId,
         matchSeed,
@@ -339,13 +388,7 @@
         contentVersion: this.contentVersion,
         status: 'waiting',
         matchRules: { mode: this.mode },
-        floorState: createNetworkFloorState({
-          matchSeed,
-          floorSeed,
-          floorNumber: 1,
-          generationVersion: this.generationVersion,
-          contentVersion: this.contentVersion,
-        }),
+        floorState,
       });
       return typeof createCampaignSimulation === 'function'
         ? createCampaignSimulation({
@@ -362,6 +405,25 @@
             : () => {},
           ],
         });
+    }
+
+    _ensureFloorGenerated() {
+      if (this.simulation.state.floorState?.layout?.rooms?.length) return false;
+      this.simulation.state.floorState = cloneSerializable(createNetworkFloorState({
+        matchSeed: this.simulation.state.matchSeed,
+        floorSeed: this.simulation.state.floorSeed,
+        floorNumber: this.simulation.state.floorNumber,
+        generationVersion: this.generationVersion,
+        contentVersion: this.contentVersion,
+      }));
+      Object.values(this.simulation.state.players || {}).forEach(player => {
+        player.roomId = this.simulation.state.floorState.currentRoomId;
+        player.x = 300 + Math.max(0, Number(player.slotIndex) || 0) * 300;
+        player.y = TEST_ROOM.height / 2;
+        player.vx = 0;
+        player.vy = 0;
+      });
+      return true;
     }
 
     _createPlayerState(playerId, peerId, slotIndex, profile = {}) {
@@ -462,6 +524,10 @@
         && payload.generationVersion === this.generationVersion
         && payload.contentHash === this.contentHash;
       if (!compatible) {
+        const rejected = this.peerRecords.get(peerId) || {};
+        rejected.rejected = true;
+        this.peerRecords.set(peerId, rejected);
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_REJECTED', {
           code: 'VERSION_MISMATCH',
           message: 'This lobby is using a different Neo Nyke build. Update the game and try again.',
@@ -470,7 +536,9 @@
       }
       const record = this.peerRecords.get(peerId) || {};
       record.helloAccepted = true;
+      record.rejected = false;
       this.peerRecords.set(peerId, record);
+      this._markPersistenceDirty();
       this._send(peerId, 'SERVER_HELLO', {
         buildVersion: this.buildVersion,
         generationVersion: this.generationVersion,
@@ -485,6 +553,8 @@
       const record = this.peerRecords.get(peerId);
       if (!record?.helloAccepted) return this._rejectInvalidMessage(peerId, ['CLIENT_HELLO is required before JOIN_MATCH']);
       if (payload.sessionId !== this.sessionId) {
+        record.rejected = true;
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_REJECTED', { code: 'INVALID_SESSION', message: 'The local multiplayer session does not exist.' });
         return;
       }
@@ -505,6 +575,7 @@
         this.pendingActions[player.id] = [];
         this.lastProcessedInput[player.id] = -1;
         this.lastProcessedAction[player.id] = -1;
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_ACCEPTED', {
           matchId: this.simulation.state.matchId,
           sessionId: this.sessionId,
@@ -526,11 +597,15 @@
       }
       if (payload.reconnectToken && reservation) this.reconnectReservations.delete(payload.reconnectToken);
       if (this.simulation.state.status !== 'waiting') {
+        record.rejected = true;
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_REJECTED', { code: 'MATCH_STARTED', message: 'The local multiplayer match has already started.' });
         return;
       }
       if (this.playerIdByPeer.has(peerId)) return;
       if (this.playerIdByPeer.size >= this.maxPlayers) {
+        record.rejected = true;
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_REJECTED', { code: 'ROOM_FULL', message: 'The local multiplayer room is full.' });
         return;
       }
@@ -541,6 +616,8 @@
       const slotIndex = Array.from({ length: this.maxPlayers }, (_unused, index) => index)
         .find(index => !occupiedSlots.has(index));
       if (slotIndex == null) {
+        record.rejected = true;
+        this._markPersistenceDirty();
         this._send(peerId, 'JOIN_REJECTED', { code: 'ROOM_FULL', message: 'The local multiplayer room is full.' });
         return;
       }
@@ -553,6 +630,7 @@
       this.pendingActions[playerId] = [];
       this.lastProcessedInput[playerId] = -1;
       this.lastProcessedAction[playerId] = -1;
+      this._markPersistenceDirty();
       this._send(peerId, 'JOIN_ACCEPTED', {
         matchId: this.simulation.state.matchId,
         sessionId: this.sessionId,
@@ -565,7 +643,9 @@
     _handleReady(peerId, payload) {
       const record = this.peerRecords.get(peerId);
       if (!record?.playerId || this.simulation.state.status !== 'waiting') return;
+      if (record.ready === payload.ready) return;
       record.ready = payload.ready;
+      this._markPersistenceDirty();
       this._broadcastLobbyState();
       const joined = Array.from(this.peerRecords.values()).filter(peer => peer.playerId);
       if (joined.length >= this.minPlayers && joined.every(peer => peer.ready)) this._startMatch();
@@ -581,6 +661,7 @@
       }
       applyNetworkHeroProfile(player, payload.characterKey, payload.kitChoices);
       record.ready = false;
+      this._markPersistenceDirty();
       this._broadcastLobbyState();
     }
 
@@ -695,7 +776,9 @@
       if (this.simulation.state.status !== 'ended') return;
       const record = this.peerRecords.get(peerId);
       if (!record?.playerId) return;
+      if (record.rematchReady === (payload.ready === true)) return;
       record.rematchReady = payload.ready === true;
+      this._markPersistenceDirty();
       this._broadcastLobbyState();
       this._maybeStartRematch();
     }
@@ -735,6 +818,7 @@
         record.ready = true;
         record.rematchReady = false;
       });
+      this._markPersistenceDirty();
       this._startMatch();
       return true;
     }
@@ -772,6 +856,7 @@
 
     _startMatch() {
       if (this.simulation.state.status !== 'waiting') return;
+      this._ensureFloorGenerated();
       this.simulation.state.status = 'starting';
       this._broadcast('MATCH_STARTING', {
         startTick: this.simulation.state.tick,
@@ -781,6 +866,7 @@
         contentVersion: this.contentVersion,
       });
       this.simulation.state.status = 'running';
+      this._markPersistenceDirty();
       ensureNetworkEncounter(this.simulation.state, this.simulation.random,
         (eventType, data) => this._queueGameplayEvent(eventType, data));
       this._broadcast('INITIAL_STATE', {
@@ -788,8 +874,23 @@
         state: this.simulation.state.snapshot(),
         lastProcessedInput: { ...this.lastProcessedInput },
       });
+      this._primeSnapshotSignatures();
       this._flushGameplayEvents();
       this._broadcastLobbyState();
+    }
+
+    endMatch(reason = 'authority-ended') {
+      if (this.simulation.state.status !== 'running') return false;
+      this.simulation.state.status = 'ended';
+      this.pendingRunEnd = {
+        result: 'defeat',
+        reason: String(reason || 'authority-ended').slice(0, 96),
+        floorNumber: Math.max(1, Math.trunc(Number(this.simulation.state.floorNumber) || 1)),
+      };
+      this._markPersistenceDirty();
+      this._publishSnapshot(true);
+      this._broadcastRunEnded();
+      return true;
     }
 
     _broadcastLobbyState() {
@@ -830,20 +931,33 @@
 
     _onPeerDisconnected(identity, reason) {
       const peerId = identity?.id;
+      if (!peerId) return;
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId) return;
       const record = this.peerRecords.get(peerId);
+      let cleaned = this.peerRecords.delete(peerId);
+      cleaned = this.seenReliableSequences.delete(peerId) || cleaned;
+      cleaned = this.invalidMessageCount.delete(peerId) || cleaned;
+      const replaceablePrefix = `${peerId}|`;
+      Array.from(this.lastReplaceableSequence.keys()).forEach(key => {
+        if (!key.startsWith(replaceablePrefix)) return;
+        this.lastReplaceableSequence.delete(key);
+        cleaned = true;
+      });
+      if (!playerId) {
+        if (cleaned) this._markPersistenceDirty();
+        return;
+      }
       this.playerIdByPeer.delete(peerId);
-      this.peerRecords.delete(peerId);
       delete this.pendingInputs[playerId];
       delete this.pendingActions[playerId];
       delete this.lastProcessedInput[playerId];
       delete this.lastProcessedAction[playerId];
+      this.lastChatAtByPlayer.delete(playerId);
       const player = this.simulation.state.players[playerId];
       const displayName = String(player?.displayName || record?.displayName || peerId).slice(0, 64);
       const slotIndex = Math.max(0, Math.trunc(Number(player?.slotIndex) || 0));
       const intentional = isIntentionalDisconnectReason(reason);
-      const canReconnect = this.simulation.state.status === 'running' && player && record?.reconnectToken;
+      const canReconnect = !intentional && this.simulation.state.status === 'running' && player && record?.reconnectToken;
       if (canReconnect) {
         const deadlineTick = this.simulation.state.tick + RECONNECT_RESERVATION_TICKS;
         const deadlineAt = Date.now() + (RECONNECT_RESERVATION_TICKS / SIMULATION_TICK_RATE) * 1000;
@@ -856,6 +970,7 @@
       } else {
         delete this.simulation.state.players[playerId];
       }
+      this._markPersistenceDirty();
       if (this.transport.sessionId) {
         this._broadcast('PLAYER_DISCONNECTED', {
           playerId,
@@ -916,6 +1031,8 @@
         if (reservation.deadlineTick > this.simulation.state.tick && reservation.deadlineAt > Date.now()) return;
         this.reconnectReservations.delete(token);
         delete this.simulation.state.players[reservation.playerId];
+        this.lastChatAtByPlayer.delete(reservation.playerId);
+        this._markPersistenceDirty();
         this._broadcast('PLAYER_DISCONNECTED', {
           playerId: reservation.playerId,
           displayName: String(reservation.displayName || reservation.playerId).slice(0, 64),
@@ -929,6 +1046,7 @@
     _broadcastRunEnded() {
       if (this.runEndedBroadcast) return;
       this.runEndedBroadcast = true;
+      this._markPersistenceDirty();
       const end = this.pendingRunEnd || { result: 'defeat', reason: 'run-ended', floorNumber: Number(this.simulation.state.floorNumber || 1) };
       const players = Object.values(this.simulation.state.players || {});
       this._broadcast('RUN_ENDED', {
@@ -963,7 +1081,9 @@
         Object.entries(current).forEach(([entityId, entity]) => {
           const signature = JSON.stringify(entity);
           next[entityId] = signature;
-          if (actualFull || previous[entityId] !== signature) changed[entityId] = cloneSerializable(entity);
+          // The signature is already a complete serialized copy. Parsing it is
+          // cheaper than stringifying the same entity again in cloneSerializable.
+          if (actualFull || previous[entityId] !== signature) changed[entityId] = JSON.parse(signature);
         });
         if (!actualFull) {
           Object.keys(previous).forEach(entityId => {
@@ -974,10 +1094,12 @@
         entities[collection] = changed;
       });
       const floorSignature = JSON.stringify(this.simulation.state.floorState || null);
-      const floorChanged = actualFull || floorSignature !== this.snapshotFloorSignature;
+      // Static layout is large and already arrives in INITIAL_STATE. Include floor
+      // state only when it actually changes, not on every full entity correction.
+      const floorChanged = floorSignature !== this.snapshotFloorSignature;
       this.snapshotFloorSignature = floorSignature;
       const bossSignature = JSON.stringify(this.simulation.state.bossState || null);
-      const bossStateChanged = actualFull || bossSignature !== this.snapshotBossSignature;
+      const bossStateChanged = bossSignature !== this.snapshotBossSignature;
       this.snapshotBossSignature = bossSignature;
       const payload = {
         snapshotSequence: this.snapshotSequence++,
@@ -986,8 +1108,8 @@
         lastProcessedInput: { ...this.lastProcessedInput },
         entities,
         removedEntityIds,
-        floorState: floorChanged ? cloneSerializable(this.simulation.state.floorState) : null,
-        bossState: bossStateChanged ? cloneSerializable(this.simulation.state.bossState || null) : null,
+        floorState: floorChanged ? JSON.parse(floorSignature) : null,
+        bossState: bossStateChanged ? JSON.parse(bossSignature) : null,
         bossStateChanged,
       };
       const delivery = actualFull

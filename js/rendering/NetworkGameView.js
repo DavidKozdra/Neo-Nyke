@@ -30,7 +30,7 @@
 
   const INPUT_INTERVAL_MS = 50;
   const INPUT_AIM_SEND_INTERVAL_MS = 100;
-  const INPUT_HEARTBEAT_MS = 250;
+  const INPUT_HEARTBEAT_MS = 1000;
   const INPUT_VECTOR_EPSILON = 0.01;
   const INPUT_AIM_EPSILON = 0.02;
   const INTERPOLATION_DELAY_MS = 100;
@@ -1363,7 +1363,13 @@
     }
 
     _sendInput() {
-      if (!this.active || this.session.snapshot().status !== 'running') return;
+      // Status is scalar session metadata; do not deep-clone the complete
+      // authoritative GameState on every 20 Hz input sampling pass.
+      const sessionStatus = this.session.status ?? this.session.snapshot().status;
+      // Background timers can still fire (typically throttled to 1 Hz). Sending
+      // from them would keep an abandoned room awake and defeat idle cleanup.
+      if (root.document?.hidden === true || root.document?.visibilityState === 'hidden') return;
+      if (!this.active || sessionStatus !== 'running') return;
       this._syncGamepadActions();
       this._syncTouchActions();
       const movement = this._isInputBlocked() || this.localPredictedPlayer?.downed

@@ -29,18 +29,27 @@ const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
 const MULTIPLAYER_ROOM_LIMIT = 4;
 const MULTIPLAYER_MIN_PLAYERS = 1;
+const MAX_ROOM_CREATE_BYTES = 2 * 1024;
 const ROOM_TICK_INTERVAL_MS = 50;
 const CHECKPOINT_INTERVAL_TICKS = 20 * 15;
+const SOCKET_HANDSHAKE_TIMEOUT_MS = 15_000;
+const MAX_SOCKET_MESSAGES_PER_SECOND = 60;
+const MAX_SOCKET_BYTES_PER_SECOND = 64 * 1024;
+const ACTIVE_PLAYER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_ACTIVE_MATCH_SECONDS = 4 * 60 * 60;
+const SOCKET_HEARTBEAT_REQUEST = '__neo_ping__';
+const SOCKET_HEARTBEAT_RESPONSE = '__neo_pong__';
 // Match the client reconnect reservation: if every browser is suspended at the
 // same time, keep the Durable Object room available long enough for one of the
 // tabs to wake and reclaim it.
 const EMPTY_ROOM_TTL_MS = 30 * 60 * 1000;
+const ABANDONED_LOBBY_TTL_MS = 5 * 60 * 1000;
 
 const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
 const protocolApi = globalThis.NeoNyke?.protocol || {};
 const { NetworkTransport } = multiplayerApi;
 const { MultiplayerRoomAuthority } = multiplayerApi;
-const { getDeliveryIntent } = protocolApi;
+const { getDeliveryIntent, MAX_CLIENT_MESSAGE_BYTES = 16 * 1024 } = protocolApi;
 const { GameState } = globalThis.NeoNyke?.simulation || {};
 
 function normalizeRoomCode(value) {
@@ -66,11 +75,17 @@ class DurableObjectRoomTransport extends NetworkTransport {
     super({ identity: { provider: 'account', id: 'cloudflare-authority', displayName: 'Neo Nyke Authority' } });
     this.roomCode = roomCode;
     this.peers = new Map();
+    this.messageBuckets = new Map();
+    this.lastActivityAt = new Map();
+    this.maxPeers = MULTIPLAYER_ROOM_LIMIT;
   }
 
   async createSession(options = {}) {
     if (!this.initialized) await this.initialize();
     this.sessionId = String(options.sessionId || this.roomCode);
+    // Local transports include the authority in maxPeers; production stores only
+    // browser sockets, so subtract that authority slot here.
+    this.maxPeers = Math.max(1, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPeers) || MULTIPLAYER_ROOM_LIMIT + 1) - 1));
     return { sessionId: this.sessionId, authorityPeerId: this.identity.id };
   }
 
@@ -79,19 +94,59 @@ class DurableObjectRoomTransport extends NetworkTransport {
   }
 
   attach(peerId, socket, identity, announce = true) {
+    if (!this.peers.has(peerId) && this.peers.size >= this.maxPeers) {
+      try { socket.close(1008, 'Room connection limit reached'); } catch { /* already closed */ }
+      return false;
+    }
     this.peers.set(peerId, { socket, identity });
+    if (!this.lastActivityAt.has(peerId)) this.lastActivityAt.set(peerId, Date.now());
     if (announce) this._emit('peerConnected', identity);
+    return true;
   }
 
   receive(peerId, data) {
+    if (typeof data === 'string' && data.length > MAX_CLIENT_MESSAGE_BYTES) {
+      throw new RangeError('Multiplayer message exceeds byte limit');
+    }
+    const rawBytes = typeof data === 'string'
+      ? new TextEncoder().encode(data).byteLength
+      : data instanceof ArrayBuffer
+        ? data.byteLength
+        : ArrayBuffer.isView(data)
+          ? data.byteLength
+          : MAX_CLIENT_MESSAGE_BYTES + 1;
+    if (rawBytes > MAX_CLIENT_MESSAGE_BYTES) throw new RangeError('Multiplayer message exceeds byte limit');
+    const now = Date.now();
+    const bucket = this.messageBuckets.get(peerId) || {
+      updatedAt: now,
+      messageTokens: MAX_SOCKET_MESSAGES_PER_SECOND * 2,
+      byteTokens: MAX_SOCKET_BYTES_PER_SECOND * 2,
+    };
+    const elapsedSeconds = Math.max(0, now - bucket.updatedAt) / 1000;
+    bucket.updatedAt = now;
+    bucket.messageTokens = Math.min(MAX_SOCKET_MESSAGES_PER_SECOND * 2,
+      bucket.messageTokens + elapsedSeconds * MAX_SOCKET_MESSAGES_PER_SECOND);
+    bucket.byteTokens = Math.min(MAX_SOCKET_BYTES_PER_SECOND * 2,
+      bucket.byteTokens + elapsedSeconds * MAX_SOCKET_BYTES_PER_SECOND);
+    if (bucket.messageTokens < 1 || bucket.byteTokens < rawBytes) {
+      this.messageBuckets.set(peerId, bucket);
+      throw new RangeError('Multiplayer message rate limit exceeded');
+    }
+    bucket.messageTokens -= 1;
+    bucket.byteTokens -= rawBytes;
+    this.messageBuckets.set(peerId, bucket);
     const message = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data));
+    this.lastActivityAt.set(peerId, now);
     this._emit('message', peerId, message, getDeliveryIntent(message.type));
+    return message;
   }
 
   detach(peerId, reason = 'disconnected') {
     const peer = this.peers.get(peerId);
     if (!peer) return false;
     this.peers.delete(peerId);
+    this.messageBuckets.delete(peerId);
+    this.lastActivityAt.delete(peerId);
     this._emit('peerDisconnected', peer.identity, reason);
     return true;
   }
@@ -135,33 +190,55 @@ export class MultiplayerRoom {
     this.env = env;
     this.roomCode = normalizeRoomCode(ctx.id?.name) || 'UNKNOWN';
     this.transport = new DurableObjectRoomTransport(this.roomCode);
-    this.authority = new MultiplayerRoomAuthority({
+    // A hibernated lobby may reconstruct this class for a heartbeat, close, or
+    // alarm. Delay floor generation and simulation wiring until a route actually
+    // needs authority state.
+    this.authority = null;
+    this.startPromise = null;
+    this.tickTimer = null;
+    this.checkpointWrite = null;
+    this.checkpointQueued = false;
+    this.lastCheckpointTick = -1;
+    this.lastCheckpointRevision = -1;
+    this.lastIdleSweepAt = 0;
+    if (typeof WebSocketRequestResponsePair === 'function') {
+      this.ctx.setWebSocketAutoResponse?.(
+        new WebSocketRequestResponsePair(SOCKET_HEARTBEAT_REQUEST, SOCKET_HEARTBEAT_RESPONSE),
+      );
+    }
+  }
+
+  createAuthority(room = {}) {
+    const mode = room.mode === 'rival' ? 'rival' : 'coop';
+    const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT,
+      Math.trunc(Number(room.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    const authority = new MultiplayerRoomAuthority({
       transport: this.transport,
       sessionId: this.roomCode,
       matchId: `cloudflare-${this.roomCode}`,
       matchSeed: `cloudflare-${this.roomCode}`,
-      // 1 so a solo player (dev testing, or a host who wants to start before
-      // friends arrive) can begin; up to MULTIPLAYER_ROOM_LIMIT can still join.
-      minPlayers: MULTIPLAYER_MIN_PLAYERS,
-      maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+      minPlayers: mode === 'rival' ? 2 : MULTIPLAYER_MIN_PLAYERS,
+      maxPlayers,
+      mode,
+      deferFloorGeneration: true,
     });
-    this.startPromise = null;
-    this.tickTimer = null;
-    this.checkpointLoaded = false;
-    this.checkpointWrite = null;
-    this.checkpointQueued = false;
-    this.lastCheckpointTick = -1;
-    this.initialization = this.ctx.blockConcurrencyWhile?.(async () => {
-      await this.ensureStarted();
-      this.restoreAcceptedSockets();
-      this.syncTicking();
-    }) || Promise.resolve();
+    authority.mode = mode;
+    authority.simulation.state.matchRules = {
+      mode,
+      friendlyFire: mode === 'rival',
+      reviveEnabled: mode === 'coop',
+      floorAdvance: mode === 'rival' ? 'first' : 'all-living',
+      sharedDiscovery: mode === 'coop',
+    };
+    return authority;
   }
 
-  async ensureStarted() {
-    if (!this.startPromise) this.startPromise = (async () => {
-      if (!this.checkpointLoaded) {
-        this.checkpointLoaded = true;
+  async ensureStarted(roomHint = null) {
+    if (!this.startPromise) {
+      this.startPromise = (async () => {
+        const room = roomHint || await this.ctx.storage.get('room');
+        if (!room) return false;
+        this.authority = this.createAuthority(room);
         const checkpoint = await this.ctx.storage.get('checkpoint');
         if (checkpoint?.serialized && GameState) {
           const restored = GameState.deserialize(checkpoint.serialized);
@@ -169,16 +246,31 @@ export class MultiplayerRoom {
           if (restored.randomState) this.authority.simulation.random.restore(restored.randomState);
           this.authority.restoreRuntimeCheckpoint?.(checkpoint.runtime);
           this.lastCheckpointTick = Math.max(-1, Math.trunc(Number(checkpoint.tick) || 0));
+          this.lastCheckpointRevision = Math.max(-1, Math.trunc(Number(
+            checkpoint.persistenceRevision ?? checkpoint.runtime?.persistenceRevision,
+          ) || 0));
         }
-      }
-      return this.authority.start();
-    })();
-    await this.startPromise;
+        await this.authority.start();
+        this.restoreAcceptedSockets();
+        this.syncTicking();
+        return true;
+      })().catch(error => {
+        this.startPromise = null;
+        this.authority = null;
+        throw error;
+      });
+    }
+    return this.startPromise;
   }
 
   persistCheckpoint(options = {}) {
+    if (!this.authority) return Promise.resolve(false);
     const force = options.force === true;
     const tick = Math.max(0, Math.trunc(Number(this.authority.simulation.state.tick) || 0));
+    const persistenceRevision = Math.max(0, Math.trunc(Number(this.authority.persistenceRevision) || 0));
+    if (force && tick <= this.lastCheckpointTick && persistenceRevision <= this.lastCheckpointRevision) {
+      return Promise.resolve(false);
+    }
     if (!force) {
       if (this.authority.simulation.state.status !== 'running') return Promise.resolve(false);
       if (tick <= this.lastCheckpointTick || tick - this.lastCheckpointTick < CHECKPOINT_INTERVAL_TICKS) {
@@ -196,10 +288,14 @@ export class MultiplayerRoom {
       serialized,
       runtime: this.authority.exportRuntimeCheckpoint?.() || null,
       tick,
+      persistenceRevision,
       saveRevision: this.authority.simulation.state.runServices?.saveRevision || 0,
+      status: this.authority.simulation.state.status,
+      connectedPlayers: this.authority.playerIdByPeer.size,
       updatedAt: Date.now(),
     }).then(() => {
       this.lastCheckpointTick = Math.max(this.lastCheckpointTick, tick);
+      this.lastCheckpointRevision = Math.max(this.lastCheckpointRevision, persistenceRevision);
       return true;
     }).finally(() => {
       this.checkpointWrite = null;
@@ -223,7 +319,13 @@ export class MultiplayerRoom {
         try { socket.close(1008, 'Missing room identity'); } catch { /* already closed */ }
         return;
       }
-      this.transport.attach(peerId, socket, identity, false);
+      if (!this.transport.attach(peerId, socket, identity, false)) return;
+      // CLIENT_HELLO is short-lived handshake state, not durable game state.
+      // Keep it with the hibernatable socket so JOIN_MATCH can follow a wake
+      // without forcing a storage write for the hello itself.
+      if (attachment.helloAccepted === true && !this.authority.peerRecords.has(peerId)) {
+        this.authority.peerRecords.set(peerId, { helloAccepted: true, rejected: false });
+      }
     });
   }
 
@@ -236,8 +338,39 @@ export class MultiplayerRoom {
     const attachment = this.socketAttachment(socket);
     const peerId = String(attachment?.peerId || '');
     if (!peerId || !attachment?.identity?.id) return null;
-    if (!this.transport.peers.has(peerId)) this.transport.attach(peerId, socket, attachment.identity, false);
+    if (!this.transport.peers.has(peerId)
+      && !this.transport.attach(peerId, socket, attachment.identity, false)) return null;
     return { peerId, identity: attachment.identity };
+  }
+
+  acceptedSockets() {
+    return this.ctx.getWebSockets?.() || [];
+  }
+
+  pendingSockets() {
+    return this.acceptedSockets().filter(socket => this.socketAttachment(socket)?.joined !== true);
+  }
+
+  async scheduleHandshakeAlarm(deadlineAt) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current == null || deadlineAt < current) await this.ctx.storage.setAlarm(deadlineAt);
+  }
+
+  async clearAlarmIfAllSocketsJoined() {
+    if (this.acceptedSockets().length === 0 || this.pendingSockets().length > 0) return;
+    if (await this.ctx.storage.getAlarm() != null) await this.ctx.storage.deleteAlarm();
+  }
+
+  emptyRoomTtl() {
+    return this.authority?.simulation.state.status === 'running'
+      ? EMPTY_ROOM_TTL_MS
+      : ABANDONED_LOBBY_TTL_MS;
+  }
+
+  async scheduleCleanupIfEmpty() {
+    if (this.acceptedSockets().length > 0) return false;
+    await this.ctx.storage.setAlarm(Date.now() + this.emptyRoomTtl());
+    return true;
   }
 
   async fetch(request) {
@@ -254,16 +387,6 @@ export class MultiplayerRoom {
     const options = await request.json().catch(() => ({}));
     const mode = options.mode === 'rival' ? 'rival' : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
-    this.authority.mode = mode;
-    this.authority.maxPlayers = maxPlayers;
-    this.authority.minPlayers = mode === 'rival' ? 2 : MULTIPLAYER_MIN_PLAYERS;
-    this.authority.simulation.state.matchRules = {
-      mode,
-      friendlyFire: mode === 'rival',
-      reviveEnabled: mode === 'coop',
-      floorAdvance: mode === 'rival' ? 'first' : 'all-living',
-      sharedDiscovery: mode === 'coop',
-    };
     const room = {
       roomCode: this.roomCode,
       createdAt: Date.now(),
@@ -272,20 +395,39 @@ export class MultiplayerRoom {
       status: 'waiting',
     };
     await this.ctx.storage.put('room', room);
-    await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
-    await this.ensureStarted();
+    await this.ctx.storage.setAlarm(Date.now() + ABANDONED_LOBBY_TTL_MS);
     return json(room, 201);
   }
 
   async roomInfo() {
     const room = await this.ctx.storage.get('room');
     if (!room) return json({ error: 'Room not found' }, 404);
+    let status;
+    let players;
+    if (this.authority) {
+      status = this.authority.simulation.state.status;
+      players = this.authority.playerIdByPeer.size;
+    } else {
+      // The compact fields live in the same checkpoint row as the game save.
+      // Reading them avoids constructing a generated floor merely to answer a
+      // lobby availability request.
+      const checkpoint = await this.ctx.storage.get('checkpoint');
+      status = checkpoint?.status;
+      players = Number(checkpoint?.connectedPlayers);
+      if (!status && checkpoint?.serialized) {
+        try { status = JSON.parse(checkpoint.serialized)?.status; } catch { /* legacy/corrupt checkpoint */ }
+      }
+      if (!Number.isFinite(players) && Array.isArray(checkpoint?.runtime?.playerIdByPeer)) {
+        players = checkpoint.runtime.playerIdByPeer.length;
+      }
+    }
+    status = ['waiting', 'starting', 'running', 'ended'].includes(status) ? status : room.status;
+    players = Math.max(0, Math.trunc(Number(players) || 0));
     return json({
       ...room,
-      status: this.authority.simulation.state.status,
-      players: this.authority.playerIdByPeer.size,
-      joinable: this.authority.simulation.state.status === 'waiting'
-        && this.authority.playerIdByPeer.size < room.maxPlayers,
+      status,
+      players,
+      joinable: status === 'waiting' && players < room.maxPlayers,
     });
   }
 
@@ -295,26 +437,49 @@ export class MultiplayerRoom {
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
       return json({ error: 'Expected WebSocket upgrade' }, 426);
     }
-    if (this.authority.playerIdByPeer.size >= room.maxPlayers) {
+    const sockets = this.acceptedSockets();
+    if (sockets.length >= room.maxPlayers) {
       return json({ error: 'Room is full' }, 409);
     }
-    await this.ensureStarted();
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const peerId = `guest-${crypto.randomUUID()}`;
-    const identity = { provider: 'guest', id: peerId, displayName: `Player ${this.transport.peers.size + 1}` };
+    const identity = { provider: 'guest', id: peerId, displayName: `Player ${sockets.length + 1}` };
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ peerId, identity });
-    this.transport.attach(peerId, server, identity);
-    await this.ctx.storage.deleteAlarm();
+    const connectedAt = Date.now();
+    server.serializeAttachment({
+      peerId,
+      identity,
+      helloAccepted: false,
+      joined: false,
+      connectedAt,
+    });
+    if (!this.transport.attach(peerId, server, identity)) {
+      return json({ error: 'Room connection limit reached' }, 409);
+    }
+    await this.scheduleHandshakeAlarm(connectedAt + SOCKET_HANDSHAKE_TIMEOUT_MS);
     this.syncTicking();
     return new Response(null, { status: 101, webSocket: client });
   }
 
   ensureTicking() {
-    if (this.tickTimer !== null || this.authority.simulation.state.status !== 'running' || this.transport.peers.size === 0) return;
+    if (this.tickTimer !== null || !this.authority
+      || this.authority.simulation.state.status !== 'running'
+      || this.authority.playerIdByPeer.size === 0) return;
     this.tickTimer = setInterval(() => {
-      if (this.transport.peers.size === 0 || this.authority.simulation.state.status !== 'running') {
+      if (this.authority.playerIdByPeer.size === 0 || this.authority.simulation.state.status !== 'running') {
+        this.stopTicking();
+        return;
+      }
+      const idleDisconnects = this.disconnectIdlePlayers();
+      if (this.authority.playerIdByPeer.size === 0) {
+        if (idleDisconnects > 0) this.persistCheckpoint({ force: true });
+        this.stopTicking();
+        return;
+      }
+      if (this.authority.simulation.state.elapsedSeconds >= MAX_ACTIVE_MATCH_SECONDS) {
+        this.authority.endMatch?.('match-time-limit');
+        this.persistCheckpoint({ force: true });
         this.stopTicking();
         return;
       }
@@ -324,9 +489,21 @@ export class MultiplayerRoom {
       const crossedBoundary = Number(this.authority.simulation.state.floorNumber || 1) !== previousFloor
         || Number(this.authority.simulation.state.runServices?.saveRevision || 0) !== previousRevision
         || this.authority.simulation.state.status !== 'running';
-      this.persistCheckpoint({ force: crossedBoundary });
+      this.persistCheckpoint({ force: crossedBoundary || idleDisconnects > 0 });
       if (this.authority.simulation.state.status !== 'running') this.stopTicking();
     }, ROOM_TICK_INTERVAL_MS);
+  }
+
+  disconnectIdlePlayers(now = Date.now()) {
+    if (!this.authority || now - this.lastIdleSweepAt < 1000) return 0;
+    this.lastIdleSweepAt = now;
+    let disconnected = 0;
+    Array.from(this.authority.playerIdByPeer.keys()).forEach(peerId => {
+      const lastActivity = this.transport.lastActivityAt.get(peerId) || now;
+      if (now - lastActivity < ACTIVE_PLAYER_IDLE_TIMEOUT_MS) return;
+      if (this.transport.disconnectPeer(peerId, 'idle-timeout')) disconnected += 1;
+    });
+    return disconnected;
   }
 
   stopTicking() {
@@ -336,56 +513,136 @@ export class MultiplayerRoom {
   }
 
   syncTicking() {
-    if (this.authority.simulation.state.status === 'running' && this.transport.peers.size > 0) this.ensureTicking();
+    if (this.authority?.simulation.state.status === 'running' && this.authority.playerIdByPeer.size > 0) this.ensureTicking();
     else this.stopTicking();
   }
 
   async webSocketMessage(socket, message) {
-    await this.ensureStarted();
+    if (!await this.ensureStarted()) {
+      try { socket.close(1008, 'Room no longer exists'); } catch { /* already closed */ }
+      return;
+    }
     const attached = this.ensureSocketAttached(socket);
     if (!attached) {
       try { socket.close(1008, 'Missing room identity'); } catch { /* already closed */ }
       return;
     }
     const previousStatus = this.authority.simulation.state.status;
+    const previousPersistenceRevision = this.authority.persistenceRevision;
+    const wasJoined = this.authority.playerIdByPeer.has(attached.peerId);
     try {
       this.transport.receive(attached.peerId, message);
     } catch {
       this.transport.disconnectPeer(attached.peerId, 'invalid-message');
+      this.syncTicking();
+      if (wasJoined) await this.persistCheckpoint({ force: true });
       return;
     }
     const currentStatus = this.authority.simulation.state.status;
+    const peerRecord = this.authority.peerRecords.get(attached.peerId);
+    if (peerRecord?.rejected) {
+      this.transport.disconnectPeer(attached.peerId, 'join-rejected');
+      this.syncTicking();
+      return;
+    }
+    const attachment = this.socketAttachment(socket);
+    if (peerRecord?.helloAccepted && attachment?.helloAccepted !== true) {
+      socket.serializeAttachment({ ...attachment, helloAccepted: true });
+    }
+    if (this.authority.playerIdByPeer.has(attached.peerId)) {
+      const joinedAttachment = this.socketAttachment(socket);
+      if (joinedAttachment?.joined !== true) {
+        socket.serializeAttachment({ ...joinedAttachment, joined: true });
+        await this.clearAlarmIfAllSocketsJoined();
+      }
+    }
     this.syncTicking();
-    if (currentStatus !== 'running' || currentStatus !== previousStatus) {
+    if (currentStatus !== previousStatus
+      || (this.authority.playerIdByPeer.has(attached.peerId)
+        && this.authority.persistenceRevision !== previousPersistenceRevision)) {
       await this.persistCheckpoint({ force: true });
     }
   }
 
   async webSocketClose(socket, code, reason) {
-    await this.ensureStarted();
-    const attached = this.ensureSocketAttached(socket);
-    if (attached) this.transport.detach(attached.peerId, reason || `socket-${code}`);
+    const initialAttachment = this.socketAttachment(socket);
+    if (initialAttachment?.joined !== true && !this.authority) {
+      // An unauthenticated socket can expire while the room is hibernated.
+      // Nothing about it is durable, so do not rebuild a floor just to forget it.
+      this.transport.messageBuckets.delete(String(initialAttachment?.peerId || ''));
+      await this.scheduleCleanupIfEmpty();
+      try { socket.close(code, reason); } catch { /* runtime may already have closed it */ }
+      return;
+    }
+    if (!await this.ensureStarted()) return;
+    const attachment = this.socketAttachment(socket);
+    const peerId = String(attachment?.peerId || '');
+    const wasJoined = this.authority.playerIdByPeer.has(peerId);
+    if (peerId && !this.transport.peers.has(peerId) && wasJoined) {
+      this.transport.attach(peerId, socket, attachment.identity, false);
+    }
+    if (peerId && this.transport.peers.has(peerId)) {
+      this.transport.detach(peerId, reason || `socket-${code}`);
+    }
     this.syncTicking();
-    await this.persistCheckpoint({ force: true });
-    if (this.transport.peers.size === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+    if (wasJoined) await this.persistCheckpoint({ force: true });
+    await this.scheduleCleanupIfEmpty();
     try { socket.close(code, reason); } catch { /* runtime may already have closed it */ }
   }
 
   async webSocketError(socket) {
-    await this.ensureStarted();
-    const attached = this.ensureSocketAttached(socket);
-    if (attached) this.transport.detach(attached.peerId, 'socket-error');
+    const initialAttachment = this.socketAttachment(socket);
+    if (initialAttachment?.joined !== true && !this.authority) {
+      this.transport.messageBuckets.delete(String(initialAttachment?.peerId || ''));
+      await this.scheduleCleanupIfEmpty();
+      return;
+    }
+    if (!await this.ensureStarted()) return;
+    const attachment = this.socketAttachment(socket);
+    const peerId = String(attachment?.peerId || '');
+    const wasJoined = this.authority.playerIdByPeer.has(peerId);
+    if (peerId && !this.transport.peers.has(peerId) && wasJoined) {
+      this.transport.attach(peerId, socket, attachment.identity, false);
+    }
+    if (peerId && this.transport.peers.has(peerId)) this.transport.detach(peerId, 'socket-error');
     this.syncTicking();
-    await this.persistCheckpoint({ force: true });
-    if (this.transport.peers.size === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+    if (wasJoined) await this.persistCheckpoint({ force: true });
+    await this.scheduleCleanupIfEmpty();
   }
 
   async alarm() {
-    await this.ensureStarted();
-    this.restoreAcceptedSockets();
-    if (this.transport.peers.size > 0 || (this.ctx.getWebSockets?.() || []).length > 0) return;
+    const sockets = this.acceptedSockets();
+    const now = Date.now();
+    const pending = sockets.map(socket => ({ socket, attachment: this.socketAttachment(socket) }))
+      .filter(entry => entry.attachment?.joined !== true);
+    if (pending.length > 0) {
+      let nextDeadline = Infinity;
+      pending.forEach(({ socket, attachment }) => {
+        const deadline = Math.max(0, Number(attachment?.connectedAt) || 0) + SOCKET_HANDSHAKE_TIMEOUT_MS;
+        if (deadline > now) {
+          nextDeadline = Math.min(nextDeadline, deadline);
+          return;
+        }
+        try { socket.close(1008, 'Multiplayer handshake timed out'); } catch { /* already closed */ }
+      });
+      if (Number.isFinite(nextDeadline)) await this.ctx.storage.setAlarm(nextDeadline);
+      else if (sockets.length === pending.length) {
+        await this.ctx.storage.setAlarm(now + ABANDONED_LOBBY_TTL_MS);
+      }
+      return;
+    }
+    if (sockets.length > 0) return;
     this.stopTicking();
     await this.ctx.storage.deleteAll();
+    try { this.authority?.dispose?.(); } catch { /* best-effort in-memory cleanup */ }
+    this.transport = new DurableObjectRoomTransport(this.roomCode);
+    this.authority = null;
+    this.startPromise = null;
+    this.checkpointWrite = null;
+    this.checkpointQueued = false;
+    this.lastCheckpointTick = -1;
+    this.lastCheckpointRevision = -1;
+    this.lastIdleSweepAt = 0;
   }
 }
 
@@ -447,6 +704,31 @@ function json(data, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS_HEADERS },
   });
+}
+
+async function readBoundedJson(request, maxBytes = MAX_ROOM_CREATE_BYTES) {
+  const declaredBytes = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    const error = new RangeError('Request body is too large');
+    error.status = 413;
+    throw error;
+  }
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > maxBytes) {
+    const error = new RangeError('Request body is too large');
+    error.status = 413;
+    throw error;
+  }
+  if (!text.trim()) return {};
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError();
+    return parsed;
+  } catch {
+    const error = new SyntaxError('Invalid JSON request body');
+    error.status = 400;
+    throw error;
+  }
 }
 
 /**
@@ -523,6 +805,7 @@ async function putLeaderboard(env, leaderboard) {
 // Simple in-memory rate limiter per CF isolate (resets on cold start).
 // For production-grade limiting, use Cloudflare Rate Limiting rules in the dashboard.
 const hits = new Map();
+let rateLimitOperations = 0;
 
 /**
  * In-isolate request limiter keyed by route and client identifier.
@@ -534,11 +817,32 @@ const hits = new Map();
  */
 function rateLimit(key, max, windowMs) {
   const now = Date.now();
+  rateLimitOperations += 1;
+  // Isolates are long-lived and client identifiers are unbounded. Periodically
+  // remove expired buckets so ordinary traffic cannot become a Worker memory leak.
+  if (rateLimitOperations % 256 === 0 || hits.size > 10_000) {
+    hits.forEach((value, bucketKey) => {
+      if (now > value.reset) hits.delete(bucketKey);
+    });
+    while (hits.size > 10_000) hits.delete(hits.keys().next().value);
+  }
   const entry = hits.get(key) || { count: 0, reset: now + windowMs };
   if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
   entry.count++;
   hits.set(key, entry);
   return entry.count <= max;
+}
+
+async function distributedRateLimit(binding, key) {
+  if (typeof binding?.limit !== 'function') return true;
+  try {
+    const result = await binding.limit({ key: String(key || 'anonymous') });
+    return result?.success === true;
+  } catch {
+    // A configured limiter failing must not turn into an unbounded paid path.
+    // Local development has no binding and returns above before this branch.
+    return false;
+  }
 }
 
 /**
@@ -567,8 +871,16 @@ async function handleRequest(request, env) {
 
   if (path === '/multiplayer/rooms' && request.method === 'POST') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
-    if (!rateLimit(`room-create:${ip}`, 10, 60_000)) return json({ error: 'Too many room creation requests' }, 429);
-    const options = await request.json().catch(() => ({}));
+    if (!rateLimit(`room-create:${ip}`, 10, 60_000)
+      || !await distributedRateLimit(env.MULTIPLAYER_CREATE_LIMITER, ip)) {
+      return json({ error: 'Too many room creation requests' }, 429);
+    }
+    let options;
+    try {
+      options = await readBoundedJson(request);
+    } catch (error) {
+      return json({ error: error?.message || 'Invalid room creation request' }, Number(error?.status) || 400);
+    }
     const mode = options.mode === 'rival' ? 'rival' : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
 
@@ -621,6 +933,17 @@ async function handleRequest(request, env) {
   const roomRoute = path.match(/^\/multiplayer\/rooms\/([A-Za-z0-9]+)(\/socket)?$/);
   if (roomRoute && request.method === 'GET') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
+    if (roomRoute[2] && request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+      // Reject invalid upgrade traffic before invoking a billable Durable Object.
+      return json({ error: 'Expected WebSocket upgrade' }, 426);
+    }
+    const rateKey = roomRoute[2] ? 'room-socket' : 'room-info';
+    const rateMax = roomRoute[2] ? 30 : 120;
+    const distributedAllowed = !roomRoute[2]
+      || await distributedRateLimit(env.MULTIPLAYER_SOCKET_LIMITER, ip);
+    if (!distributedAllowed || !rateLimit(`${rateKey}:${ip}`, rateMax, 60_000)) {
+      return json({ error: 'Too many multiplayer room requests' }, 429);
+    }
     const roomCode = normalizeRoomCode(roomRoute[1]);
     if (!roomCode) return json({ error: 'Invalid room code' }, 400);
     const stub = getRoomStub(env, roomCode);
