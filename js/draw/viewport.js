@@ -69,7 +69,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
       if (Array.isArray(presentationSlots)) {
         presentationSlots.forEach(drawSlot => {
           if (drawSlot.getDead?.()) {
-            if (drawSlot.getEntity?.()?.networkDowned) Neo.drawPlayerSlot(drawSlot);
+            Neo.drawPlayerSlot(drawSlot);
             return;
           }
           // The local hero uses the same full-fidelity renderer as a local
@@ -79,7 +79,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
         });
       } else if (Neo.isMultiplayerMode()) {
         Neo.getActivePlayerSlots().forEach(drawSlot => {
-          if (drawSlot.getDead()) return;
+          if (drawSlot.getDead()) {
+            Neo.drawPlayerSlot(drawSlot);
+            return;
+          }
           if (drawSlot.id === 1) Neo.drawPlayer();
           else Neo.drawPlayerSlot(drawSlot);
         });

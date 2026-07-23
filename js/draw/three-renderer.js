@@ -97,6 +97,7 @@ const tileTextureCache = new Map();   // envTileKey -> THREE.Texture
 const shopOfferTextureCache = new Map();
 const statusBadgeTextureCache = new Map();
 const decorTextureCache = new Map();  // `${kind}|${r}` -> THREE.Texture
+let pixelSquareTexture = null;
 
 // Decor kinds that are vertical objects in the fiction. The flat floor overlay
 // is right for rubble/cracks/moss (they ARE on the ground), but a candle or a
@@ -304,6 +305,24 @@ function getGlowTexture(color = '#ffffff') {
   const texture = makeCanvasTexture(canvasEl);
   glowTextureCache.set(color, texture);
   return texture;
+}
+
+function getPixelSquareTexture() {
+  if (pixelSquareTexture) return pixelSquareTexture;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 16;
+  canvasEl.height = 16;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#ffffff';
+  g.fillRect(2, 2, 12, 12);
+  g.fillStyle = 'rgba(255,255,255,0.68)';
+  g.fillRect(0, 5, 16, 6);
+  g.fillRect(5, 0, 6, 16);
+  pixelSquareTexture = makeCanvasTexture(canvasEl);
+  pixelSquareTexture.magFilter = THREE.NearestFilter;
+  pixelSquareTexture.minFilter = THREE.NearestFilter;
+  return pixelSquareTexture;
 }
 
 function getTextTexture(text, color = '#ffffff') {
@@ -1737,7 +1756,7 @@ function syncPlayer() {
     playerShadow = playerSprite.getObjectByName('shadow');
     scene.add(playerSprite);
   }
-  const networkDowned = !!p.networkDowned;
+  const networkDowned = !!p.networkDowned || (Neo.gameMode === 'coop' && p === Neo.player && !!Neo.p1DeadInCoop);
   const anim = dying ? Neo.playerDeathAnim : null;
   // First person normally hides the body, but the death fall must remain
   // visible in every camera mode just like the 2D corpse animation.
@@ -1831,7 +1850,7 @@ function syncOtherPlayers() {
     : (Neo.getActivePlayerSlots?.() || []);
   const remoteSlots = slots.filter(slot => {
     const actor = slot?.getEntity?.();
-    return actor && actor !== Neo.player && (!slot.getDead?.() || actor.networkDowned);
+    return actor && actor !== Neo.player;
   });
   const slotByActor = new Map(remoteSlots.map(slot => [slot.getEntity(), slot]));
   syncPool(
@@ -1840,6 +1859,8 @@ function syncOtherPlayers() {
     actor => makeActorGroup(actorPlayerSpriteKey(actor), actor.r || 14),
     (actor, group) => {
       const baseKey = actorPlayerSpriteKey(actor);
+      const slot = slotByActor.get(actor);
+      const downed = !!actor.networkDowned || !!slot?.getDead?.();
       const aim = Number.isFinite(Number(actor.swingA))
         ? Number(actor.swingA)
         : Number(actor.aimDirection || 0);
@@ -1853,13 +1874,13 @@ function syncOtherPlayers() {
         attackProgress: Math.max(0, 1 - Number(actor.swing || 0) / swingTotal),
         seedKey: `player:${actor.id || actor.displayName || 'remote'}`,
       }) || baseKey;
-      let bob = actor.networkDowned
+      let bob = downed
         ? { hop: 0, squashX: 1, squashY: 0.72 }
         : walkBob(actor, Number(actor.x || 0));
       if (Number(actor.dashTime || 0) > 0) {
         bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
       }
-      const tint = actor.networkDowned
+      const tint = downed
         ? 0x641b2a
         : isActorDamageFlashActive(actor) ? 0xff9999 : 0xffffff;
       group.visible = true;
@@ -1875,24 +1896,23 @@ function syncOtherPlayers() {
       });
       const body = group.getObjectByName('body');
       if (body) {
-        body.material.rotation = actor.networkDowned ? (flip ? -1 : 1) * Math.PI / 2 : 0;
-        body.center.set(0.5, actor.networkDowned ? 0.5 : 0);
+        body.material.rotation = downed ? (flip ? -1 : 1) * Math.PI / 2 : 0;
+        body.center.set(0.5, downed ? 0.5 : 0);
       }
       syncPlayerArm(group, baseKey, actor, aim, flip, {
-        hidden: !!actor.networkDowned,
+        hidden: downed,
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
       });
-      if (!actor.networkDowned) {
+      if (!downed) {
         syncActorStatus(group, actor, actor.r || 14, true);
         syncActorFeedback(group, actor, actor.r || 14);
       }
       syncPlayerDashTrail(actor, frameKey, flip);
       syncRemoteMeleeIndicator(actor);
       let label = group.getObjectByName('player-label');
-      const slot = slotByActor.get(actor);
-      const labelText = actor.networkDowned ? `${slot?.label || 'PLAYER'} — DOWN` : String(slot?.label || '');
+      const labelText = downed ? `${slot?.label || 'PLAYER'} — DOWN` : String(slot?.label || '');
       if (!label && labelText) {
         label = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
         label.name = 'player-label';
@@ -1902,7 +1922,7 @@ function syncOtherPlayers() {
       if (label) {
         label.visible = !!labelText;
         if (labelText) {
-          const entry = getTextTexture(labelText, actor.networkDowned ? '#ff8090' : (slot?.color || '#dff7ff'));
+          const entry = getTextTexture(labelText, downed ? '#ff8090' : (slot?.color || '#dff7ff'));
           if (label.material.map !== entry.texture) {
             label.material.map = entry.texture;
             label.material.needsUpdate = true;
@@ -3330,6 +3350,32 @@ function syncParticles() {
         sprite.material.opacity = (1 - progress) * 0.65;
         sprite.scale.set(size, size, 1);
         sprite.position.set(particle.x, 1.2, particle.y);
+      } else if (particle.explosionCore) {
+        const texture = getGlowTexture(particle.c || '#ff8a24');
+        if (sprite.material.map !== texture) {
+          sprite.material.map = texture;
+          sprite.material.needsUpdate = true;
+        }
+        const progress = Math.max(0, Math.min(1, 1 - life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
+        const radius = Number(particle.radius || 60) * (0.32 + Math.sin(progress * Math.PI * 0.72) * 0.84);
+        sprite.material.color.set(0xffffff);
+        sprite.material.opacity = (1 - progress) * (particle.reducedFlash ? 0.62 : 1);
+        sprite.scale.set(radius * 2, radius * 2, 1);
+        sprite.position.set(particle.x, Math.max(12, radius * 0.22), particle.y);
+      } else if (particle.square) {
+        const texture = getPixelSquareTexture();
+        if (sprite.material.map !== texture) {
+          sprite.material.map = texture;
+          sprite.material.needsUpdate = true;
+        }
+        const progress = Math.max(0, Math.min(1, 1 - life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
+        const remaining = 1 - progress;
+        const size = Number(particle.size || 4) * (0.55 + remaining * 0.65) * 2.1;
+        sprite.material.color.set(particle.c || '#ff9a35');
+        sprite.material.opacity = Math.min(1, remaining * 1.45);
+        sprite.material.rotation = Number(particle.rotation || 0);
+        sprite.scale.set(size, size, 1);
+        sprite.position.set(particle.x, 12 + size * 0.18, particle.y);
       } else {
         const texture = getGlowTexture(particle.c || '#ffffff');
         if (sprite.material.map !== texture) {

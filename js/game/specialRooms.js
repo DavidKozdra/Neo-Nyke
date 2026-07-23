@@ -626,13 +626,13 @@ export function getSpecialRoomChoiceView(choiceId, room = Neo.currentRoom) {
   };
 }
 
-export function getNearestSpecialRoomChoice(maxDistance = 118) {
-  if (!isSpecialRoom() || Neo.currentRoom?.serviceUsed || !Neo.player) return null;
+export function getNearestSpecialRoomChoice(maxDistance = 118, actor = Neo.player) {
+  if (!isSpecialRoom() || Neo.currentRoom?.serviceUsed || !actor) return null;
   let nearest = null;
   let nearestDistance = Math.max(0, Number(maxDistance || 0));
   for (const pickup of Neo.pickups || []) {
     if (pickup?.type !== 'specialChoice') continue;
-    const distance = Neo.dist(Neo.player.x, Neo.player.y, pickup.x, pickup.y);
+    const distance = Neo.dist(actor.x, actor.y, pickup.x, pickup.y);
     if (distance > nearestDistance) continue;
     const choice = getSpecialRoomChoiceView(pickup.choiceId);
     if (!choice) continue;
@@ -650,8 +650,8 @@ export function getSpecialRoomChoiceInteractLabel() {
     : `${nearest.choice.title} unavailable`;
 }
 
-export function trySpecialRoomChoiceInteract() {
-  const nearest = getNearestSpecialRoomChoice(92);
+export function trySpecialRoomChoiceInteract(actor = Neo.player) {
+  const nearest = getNearestSpecialRoomChoice(92, actor);
   if (!nearest || Neo.currentRoom?.serviceUsed) return false;
   const choice = getChoices(Neo.currentRoom).find(entry => entry.id === nearest.choice.id);
   if (!choice) return false;
@@ -978,10 +978,11 @@ export function handleBountyTargetLethal(enemy) {
 }
 
 export function tryBountyTargetInteract() {
+  const actor = arguments[0] || Neo.player;
   const bounty = Neo.player?.activeBounty;
-  if (!bounty || !Neo.player) return false;
+  if (!bounty || !actor) return false;
   const enemy = (Neo.enemies || []).find(candidate => candidate?.bountyTargetId === bounty.targetId && !candidate.dead);
-  if (!enemy || Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > 82) return false;
+  if (!enemy || Neo.dist(actor.x, actor.y, enemy.x, enemy.y) > 82) return false;
   if (bounty.contractType === 'capture' && enemy.bountyCaptureReady) {
     removeLivingBountyTarget(enemy);
     completeBounty(bounty, 'TARGET CAPTURED');

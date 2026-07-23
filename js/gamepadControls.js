@@ -402,7 +402,7 @@
     }
     if (slotIndex > 0 && (action === 'interact' || action === 'ascend') && state === 'play') {
       if (networkView?.active) networkView.interact?.();
-      else game?.triggerInteract?.();
+      else game?.triggerInteract?.(slotIndex + 1);
       return true;
     }
     return false;

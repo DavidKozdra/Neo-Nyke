@@ -920,9 +920,10 @@ export function getBeamEnd(x, y, angle, range) {
   return { x: x + Math.cos(angle) * range, y: y + Math.sin(angle) * range };
 }
 
-function triggerInteract() {
+function triggerInteract(slotId = 1) {
   if (Neo.gameState !== 'play') return;
-  if (Neo.tryBountyTargetInteract?.()) {
+  const actor = Neo.getActivePlayerSlots?.().find(slot => slot.id === Number(slotId))?.getEntity?.() || Neo.player;
+  if (Neo.tryBountyTargetInteract?.(actor)) {
     Neo.specialRoomKeyLatch = true;
     setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
     return;
@@ -931,7 +932,7 @@ function triggerInteract() {
   const inShopRoom = Neo.currentRoom?.type === 'shop';
   const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
   if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
-    Neo.trySpecialRoomChoiceInteract?.();
+    Neo.trySpecialRoomChoiceInteract?.(actor);
     Neo.specialRoomKeyLatch = true;
     setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
   }
@@ -947,7 +948,7 @@ function triggerInteract() {
     Neo.anvilKeyLatch = true;
     setTimeout(() => { Neo.anvilKeyLatch = false; }, 200);
   }
-  if (Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+  if (Neo.isAtLadder?.(actor) && !Neo.ladderUseKeyLatch) {
     Neo.ladderUseKeyLatch = true;
     Neo.useLadder?.();
     setTimeout(() => { Neo.ladderUseKeyLatch = false; }, 200);

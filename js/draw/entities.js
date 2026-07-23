@@ -1796,7 +1796,7 @@
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
     const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
-    if (pn.networkDowned) {
+    if (pn.networkDowned || slot.getDead?.()) {
       drawSpriteFrame(spriteKey, pn.x, pn.y + slotSize * 0.14, slotSize, {
         alpha: 0.64,
         flipX: facing < 0,
@@ -1811,6 +1811,18 @@
       Neo.ctx.font = 'bold 11px monospace';
       Neo.ctx.textAlign = 'center';
       Neo.ctx.fillText(`${label} — DOWN`, pn.x, pn.y - pn.r - 7);
+      const reviveProgress = Neo.clamp(Number(pn.coopReviveProgress || pn.reviveProgress || 0), 0, 1);
+      if (reviveProgress > 0) {
+        Neo.ctx.lineWidth = 4;
+        Neo.ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(pn.x, pn.y, pn.r + 13, -Math.PI / 2, Math.PI * 1.5);
+        Neo.ctx.stroke();
+        Neo.ctx.strokeStyle = '#9af7d8';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(pn.x, pn.y, pn.r + 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * reviveProgress);
+        Neo.ctx.stroke();
+      }
       Neo.ctx.restore();
       return;
     }
