@@ -11,6 +11,7 @@ If you are new to the engine, read these first:
 1. [new-user-guide.md](docs/new-user-guide.md)
 2. [module-catalog.md](docs/module-catalog.md)
 3. the module source under each folder for real usage examples
+4. [integration.md](integration.md) for host composition and per-folder integration guides
 
 ## What This Folder Is Trying To Guarantee
 

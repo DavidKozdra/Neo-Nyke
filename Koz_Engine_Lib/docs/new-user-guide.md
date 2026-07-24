@@ -101,7 +101,10 @@ these modules in the browser is shown in [`Core/koz-engine.global.js`](../Core/k
 ## Read The Docs In This Order
 
 1. [`README.md`](../README.md) for project status and boundaries
-2. [`docs/module-catalog.md`](module-catalog.md) for per-module guidance
+2. [`integration.md`](../integration.md) for composition and extension contracts
+3. the relevant folder's `integration.md`
+4. [`docs/module-catalog.md`](module-catalog.md) for per-module guidance
+5. [`neonyke-extraction-map.md`](neonyke-extraction-map.md) for migration opportunities proven by NeoNyke
 
 ## Current Caveats
 

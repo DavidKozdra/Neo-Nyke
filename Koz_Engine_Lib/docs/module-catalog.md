@@ -26,7 +26,18 @@ How to use:
 - Use `findCollisions(objects, { tagPairs, invokeCallbacks })` to scan many objects.
 
 Current caveat:
-- Broad-phase optimization is not included yet; `findCollisions` currently does an O(n^2) scan.
+- Small collections use a direct pair scan; larger collections use the module's spatial-hash broad phase.
+
+### `Core/extensionHost.js`
+
+When to use:
+- You need to compose a game from engine services, systems, adapters, content, and UI components without reverse dependencies.
+
+How to use:
+- Create a root host with `createExtensionHost()`.
+- Register typed extension points with `registerService`, `registerSystem`, `registerAdapter`, `registerContent`, or `registerComponent`.
+- Use `scope()` for scene, match, test, or game-mode overrides.
+- Package integrations as functions or objects with `install(host, options)`.
 
 ### `Core/gameStateManager.js`
 
@@ -362,7 +373,15 @@ When to use:
 How to use:
 - Call `steerHomingProjectile()`, `advanceProjectile()`, and `bounceProjectile()` on a host-owned projectile record.
 
+### `Combat/collisionLayers.js`
+
+Use collision bitmasks to decide which host entities interact, and `sweepCircleRect()` or `findFirstSweepHit()` for continuous projectile collision against obstacle rectangles.
+
 ## AI
+
+### `AI/navigationAgent.js`
+
+Use `NavigationAgent` to cache a host-provided path, consume waypoints, and limit repaths when the target has not moved enough. The host supplies pathfinding and applies the returned movement direction.
 
 ### `AI/agentDispatcher.js`
 
