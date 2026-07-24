@@ -99,6 +99,7 @@ The active folder structure should be explicit:
 - `Minigames/`: minigame orchestration and runtimes
 - `Multiplayer/`: transport, protocol mapping, resume/tab recovery, snapshots, authority persistence, and platform adapters
 - `PWA/`: content-versioned offline builds, service-worker runtime, and update registration
+- `Rendering3D/`: coordinate/projection mapping, camera rigs, viewport layouts, room geometry plans, and elevation policy
 - `SaveLoad/`: save/load APIs, drivers, and schemas
 - `Time/`: clocks, timers, and day-cycle helpers
 - `UI/`: renderer-agnostic UI primitives

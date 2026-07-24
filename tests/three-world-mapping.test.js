@@ -1,6 +1,8 @@
 const mapping = require('../Koz_Engine_Lib/Rendering3D/worldMapping');
 const cameraRig = require('../Koz_Engine_Lib/Rendering3D/cameraRig');
 const roomGeometry = require('../Koz_Engine_Lib/Rendering3D/roomGeometry');
+const fs = require('node:fs');
+const path = require('node:path');
 
 describe('Koz Engine 3D world mapping', () => {
   test('maps top-down coordinates, canvas coordinates, and floor rays', () => {
@@ -115,5 +117,17 @@ describe('Koz Engine 3D world mapping', () => {
       wallThickness: 40,
       doorSize: 120,
     })).toContain('"e":true');
+  });
+  test('NeoNyke consumes the engine camera, viewport, room, elevation, and movement contracts', () => {
+    const renderer = fs.readFileSync(path.join(__dirname, '../js/draw/three-renderer.js'), 'utf8');
+    const movement = fs.readFileSync(path.join(__dirname, '../js/simulation/CampaignMovementRules.js'), 'utf8');
+    expect(renderer).toContain('cameraRig3d.updateSmoothedFocus');
+    expect(renderer).toContain('cameraRig3d.computeFirstPersonPose');
+    expect(renderer).toContain('cameraRig3d.computeThirdPersonPose');
+    expect(renderer).toContain('worldMapping3d.createViewportLayout');
+    expect(renderer).toContain('roomGeometry3d.createRoomBoundaryPlan');
+    expect(renderer).toContain('roomGeometry3d.roomBuildSignature');
+    expect(renderer).toContain('roomGeometry3d.resolveElevation');
+    expect(movement).toContain('cameraRig.mapLocalMovementToWorld');
   });
 });
