@@ -353,10 +353,14 @@
         random: secretRandom,
         xpCost: Neo.getSecretXpOfferCost(),
         xpValue: Neo.getSecretXpOfferAmount(),
+        rollItem: nextRandom => Neo.rollItemDrop({ random: nextRandom }),
         rollEliteItem: nextRandom => Neo.rollItemDrop({ elite: true, random: nextRandom }),
         previousRewardKey: Neo.player?.lastSecretVendorRewardKey,
       });
-      if (plan.ok) room.pickups.push(...plan.pickups);
+      if (plan.ok) {
+        room.secretKind = plan.secretKind || room.secretKind;
+        room.pickups.push(...plan.pickups);
+      }
       return;
     }
 
@@ -1429,6 +1433,72 @@
       Neo.player.y = safeSpawn.y;
     }
     Neo.reconcileCooldownsOnRoomEnter();
+
+    if (room.secret) {
+      if (!room.secretRuneDecorated) {
+        room.secretRuneDecorated = true;
+        room.decorations = Array.isArray(room.decorations) ? room.decorations : [];
+        room.decorations.push(
+          { kind: 'secret_floor_rune', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, r: 42 },
+          { kind: 'secret_wall_rune', x: Neo.ROOM_W / 2, y: Neo.WALL + 24, r: 20 },
+          { kind: 'secret_wall_rune', x: Neo.ROOM_W / 2, y: Neo.ROOM_H - Neo.WALL - 24, r: 20 },
+          { kind: 'secret_wall_rune', x: Neo.WALL + 24, y: Neo.ROOM_H / 2, r: 20 },
+          { kind: 'secret_wall_rune', x: Neo.ROOM_W - Neo.WALL - 24, y: Neo.ROOM_H / 2, r: 20 },
+        );
+        Neo.decorations = room.decorations;
+      }
+      // Secret-room arrivals need their own transition language. Rings are
+      // ground-anchored (and therefore visible in 2D and 3D), while the short
+      // rune burst makes the hidden route feel discovered rather than ordinary.
+      const cx = Neo.player.x;
+      const cy = Neo.player.y;
+      Neo.ringBurst?.(cx, cy, 30, '#b58cff', 0.55);
+      Neo.ringBurst?.(cx, cy, 58, '#75dfff', 0.7);
+      // A thin, low mist keeps the room mysterious without obscuring combat.
+      // Question motes rise out of it as a readable "what is this?" cue.
+      for (let mote = 0; mote < 8; mote += 1) {
+        const angle = (mote / 8) * Math.PI * 2 + 0.35;
+        const radius = 26 + (mote % 3) * 13;
+        Neo.spawnParticle?.({
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius * 0.62,
+          vx: Math.cos(angle) * 7,
+          vy: Math.sin(angle) * 5,
+          life: 0.7 + (mote % 3) * 0.12,
+          smoke: true,
+          size: 13 + (mote % 2) * 5,
+          c: 'rgba(143, 104, 210, 0.42)',
+          drag: 1.8,
+        });
+      }
+      for (let mote = 0; mote < 4; mote += 1) {
+        const angle = (mote / 4) * Math.PI * 2 + 0.7;
+        Neo.spawnParticle?.({
+          x: cx + Math.cos(angle) * 48,
+          y: cy + Math.sin(angle) * 32 - 12,
+          vx: Math.cos(angle) * 10,
+          vy: -18 - mote * 3,
+          life: 0.85 + mote * 0.08,
+          text: '?',
+          size: 18,
+          c: '#d9c7ff',
+        });
+      }
+      ['א', 'ב', 'ג', 'ד', 'ה', 'ו'].forEach((rune, index) => {
+        const angle = (index / 6) * Math.PI * 2 + 0.2;
+        Neo.spawnParticle?.({
+          x: cx + Math.cos(angle) * 34,
+          y: cy + Math.sin(angle) * 24 - 18,
+          vx: Math.cos(angle) * 18,
+          vy: Math.sin(angle) * 18 - 18,
+          life: 0.78 + (index % 2) * 0.12,
+          text: rune,
+          size: 18,
+          c: index % 2 ? '#c9a8ff' : '#8ddfff',
+        });
+      });
+      Neo.spawnParticle?.({ x: cx, y: cy - 46, life: 0.9, text: 'SECRET FOUND', c: '#d7c7ff' });
+    }
 
     if (room.type === 'start' && !room.cleared && Neo.enemies.length === 0 && Number(room.startRoomEliteCount || 0) > 0) {
       Neo.spawnWave(Number(room.startRoomEliteCount), 'combat', { forceElite: true, suppressMiniBoss: true });

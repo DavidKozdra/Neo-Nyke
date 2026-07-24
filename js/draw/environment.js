@@ -1114,6 +1114,46 @@
         Neo.ctx.fill();
         Neo.ctx.fillStyle = 'rgba(149,208,109,0.22)';
         Neo.ctx.fillRect(-decor.r * 0.4, -1, decor.r * 0.45, 2);
+      } else if (decor.kind === 'secret_floor_rune') {
+        const pulse = 0.82 + Math.sin(Date.now() / 520 + decor.x * 0.03) * 0.12;
+        Neo.ctx.globalAlpha = 0.78;
+        Neo.ctx.strokeStyle = '#b58cff';
+        Neo.ctx.shadowColor = '#8d6cff';
+        Neo.ctx.shadowBlur = 12;
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, decor.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.beginPath();
+        for (let point = 0; point < 6; point += 1) {
+          const angle = -Math.PI / 2 + point * Math.PI / 3;
+          const px = Math.cos(angle) * decor.r * 0.62 * pulse;
+          const py = Math.sin(angle) * decor.r * 0.62 * pulse;
+          if (point === 0) Neo.ctx.moveTo(px, py); else Neo.ctx.lineTo(px, py);
+        }
+        Neo.ctx.closePath();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#e8ddff';
+        Neo.ctx.font = `bold ${Math.round(decor.r * 1.1)}px serif`;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.fillText('א', 0, 1);
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#e8ddff';
+        Neo.ctx.font = 'bold 8px system-ui';
+        Neo.ctx.fillText('מבורך על ידי אלוהים', 0, decor.r + 11);
+      } else if (decor.kind === 'secret_wall_rune') {
+        Neo.ctx.globalAlpha = 0.92;
+        Neo.ctx.fillStyle = '#d9c7ff';
+        Neo.ctx.shadowColor = '#9d76ff';
+        Neo.ctx.shadowBlur = 14;
+        Neo.ctx.font = `bold ${Math.round(decor.r * 1.35)}px serif`;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.fillText('ש', 0, 0);
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.font = 'bold 6px system-ui';
+        Neo.ctx.fillText('מבורך על ידי אלוהים', 0, decor.r * 0.78);
       }
       Neo.ctx.restore();
     });

@@ -103,7 +103,7 @@ let pixelSquareTexture = null;
 // is right for rubble/cracks/moss (they ARE on the ground), but a candle or a
 // tree painted into it reads as a decal the camera looks down at. These get
 // baked individually and stood up as billboards instead.
-const UPRIGHT_DECOR_KINDS = new Set(['torch', 'brazier', 'tree', 'fruit_tree']);
+const UPRIGHT_DECOR_KINDS = new Set(['torch', 'brazier', 'tree', 'fruit_tree', 'secret_wall_rune']);
 
 // Bake one decoration by running the 2D decor draw for that single item into an
 // offscreen canvas. Decor draws in local space around (0,0) with the object's
@@ -2351,6 +2351,7 @@ const BAKED_PICKUP_FLOOR_LIFT = {
   // 3D floor instead of burying the lower half of the ring.
   secretWarp: 24,
   secretVendor: 28,
+  secretLady: 30,
 };
 // The five post-boss relic choices are upright billboards, not floor decals.
 // Lift them enough to clear the arena floor while leaving dwell-choice circles
@@ -2381,6 +2382,7 @@ const BAKED_PICKUP_WORLD_SIZE = {
   rewardChoice: 90,
   challengeItemChoice: 90,
   secretVendor: 90,
+  secretLady: 120,
   secret_boss_chest: 90,
   coin: 60,
   potion: 60,

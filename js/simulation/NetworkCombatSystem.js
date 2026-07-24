@@ -619,10 +619,12 @@
       random: () => stream.next(),
       xpCost: 30,
       xpValue: 40 + Number(state.floorNumber || 1) * 5,
+      rollItem: nextRandom => rollCampaignItem(nextRandom),
       rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
     });
     if (!plan.ok) return;
     room.secretLifecycleInitialized = true;
+    room.secretKind = plan.secretKind || room.secretKind;
     plan.pickups.forEach(descriptor => {
       const pickupId = state.allocateEntityId('pickup');
       state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId: room.id, radius: 22, spawnTick: state.tick };
@@ -3756,6 +3758,20 @@
         else player.coins = Number(player.coins || 0) + purchase.coins;
         delete state.pickups[pickupId];
         emitEvent('SECRET_VENDOR_PURCHASED', { playerId: player.id, roomId: pickup.roomId, ...purchase });
+        return;
+      }
+      if (pickup.type === 'secretLady') {
+        const rewardKey = String(pickup.rewardKey || '');
+        if (!rewardKey) return;
+        const loot = random.stream('loot');
+        const acquisition = collectCampaignPickup(state, player, rewardKey, {
+          duplicateChance: player.itemStats?.itemDuplicateChance,
+          random: () => loot.next(),
+          rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+        });
+        if (!acquisition.ok) return;
+        delete state.pickups[pickupId];
+        emitEvent('SECRET_LADY_GIFTED', { playerId: player.id, roomId: pickup.roomId, itemKey: rewardKey });
         return;
       }
       let amount = Math.max(0, Number(pickup.amount || 0));

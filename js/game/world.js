@@ -3571,6 +3571,16 @@
         Neo.persistMetaSoon();
       }
 
+      if (pickup.type === 'secretLady') {
+        if (!pickup.rewardKey) pickup.rewardKey = Neo.rollItemDrop({ random: Neo.createEntityRandom(pickup, 'secret-lady:fallback') });
+        if (pickup.rewardKey) Neo.collectItem(pickup.rewardKey);
+        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 36, life: 1.15, text: 'A GIFT', c: '#e8ccff' });
+        Neo.ringBurst?.(pickup.x, pickup.y, 42, '#c9a8ff', 0.55);
+        removePickupAt(index);
+        Neo.persistMetaSoon();
+        return;
+      }
+
       if (pickup.type === 'secret_boss_chest') {
         const rewardKey = pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') });
         const result = globalThis.NeoNyke.simulation.lootCampaignSecretBossChest(

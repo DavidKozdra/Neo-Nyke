@@ -128,6 +128,7 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;');
     expect(math).toContain('const perspectiveAim = Neo.projectCanvasMouseToWorld?.(clampedCanvasX, canvasY);');
     expect(update).toContain('Neo.updatePointerAimWorld();');
+    expect(update).toContain('if (!Neo.render3D) Neo.updatePointerAimWorld?.();');
   });
 
   test('keeps interaction and actor-state feedback visible in 3D', () => {

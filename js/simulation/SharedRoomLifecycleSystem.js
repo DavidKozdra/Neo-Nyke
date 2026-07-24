@@ -172,6 +172,21 @@
       }
       return result;
     };
+    // A rare, free mystery blessing: the lady's question-mark box contains one
+    // normally rolled item. Roll it during room construction so re-entering or
+    // reconnecting cannot reroll the reward.
+    if (Number(random()) < 0.05) {
+      const rewardKey = String(options.rollItem?.(random) || options.rollEliteItem?.(random) || '');
+      // Do not create an interaction that multiplayer cannot resolve if item
+      // content is temporarily unavailable. Fall through to the normal room.
+      if (rewardKey) {
+        return {
+          ok: true,
+          secretKind: 'mystery_lady',
+          pickups: [{ x: width / 2, y: height / 2, type: 'secretLady', rewardKey }],
+        };
+      }
+    }
     if (room.secretKind === 'warp') {
       const deltas = floor <= 2 ? [1, 2] : floor >= maxFloor - 1 ? [-2, -1] : [-2, -1, 1, 2];
       const delta = deltas[Math.floor(Number(random()) * deltas.length)] || 1;

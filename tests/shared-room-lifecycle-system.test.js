@@ -62,7 +62,12 @@ describe('SharedRoomLifecycleSystem', () => {
     });
     expect(vendor.pickups).toHaveLength(3);
     expect(vendor.pickups.map(pickup => pickup.offerKind)).toContain('xp');
-    const warp = createCampaignSecretRoomPlan({ type: 'secret', secretKind: 'warp' }, { floorNumber: 1, random: () => 0, maxFloor: 10 });
+    const warp = createCampaignSecretRoomPlan({ type: 'secret', secretKind: 'warp' }, { floorNumber: 1, random: () => 0.25, maxFloor: 10 });
     expect(warp).toMatchObject({ ok: true, pickups: [{ type: 'secretWarp', targetFloor: 2 }] });
+    const lady = createCampaignSecretRoomPlan({ type: 'secret', secretKind: 'vendor' }, { floorNumber: 1, random: () => 0, rollItem: () => 'neo_knife' });
+    expect(lady).toMatchObject({ ok: true, secretKind: 'mystery_lady', pickups: [{ type: 'secretLady', rewardKey: 'neo_knife' }] });
+    const noReward = createCampaignSecretRoomPlan({ type: 'secret', secretKind: 'vendor' }, { floorNumber: 1, random: () => 0, rollItem: () => '' });
+    expect(noReward).toMatchObject({ ok: true, secretKind: 'vendor' });
+    expect(noReward.pickups).toHaveLength(3);
   });
 });
