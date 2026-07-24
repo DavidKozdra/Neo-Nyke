@@ -49,6 +49,15 @@ How to use:
 - Insert/update entities by world position.
 - Query nearby cells instead of scanning full arrays.
 
+### `Core/geometry2d.js` and `Core/targetQuery.js`
+
+When to use:
+- You need common 2D intersections, angle steering, or nearest-target selection.
+
+How to use:
+- Use `geometry2d` for segment and shape tests.
+- Pass a host's spatially-filtered candidate visitor to `targetQuery.findNearestFromVisit(...)`.
+
 ### `Core/uiScreenController.js`
 
 When to use:
@@ -72,6 +81,15 @@ Avoid when:
 - You can import modules directly. This is host glue, not engine logic.
 
 ## Time
+
+### `Time/stepTimer.js`
+
+When to use:
+- A fixed-step simulation needs countdowns or a bounded repeating interval.
+
+How to use:
+- `advanceCountdown(remaining, delta)` never returns a negative value.
+- `advanceInterval(remaining, delta, interval)` emits at most one tick each update.
 
 ### `Time/countdownTimer.js`
 
@@ -324,6 +342,25 @@ Good fit:
 - Dungeon floorplans
 - Maze prototypes
 - Roguelike room graphs
+
+## Combat
+
+### `Combat/statusBook.js`
+
+When to use:
+- Entities need a normalized map of named, stackable statuses.
+
+How to use:
+- Use `ensureStatusMap()` to repair host data and `applyStackedStatus()` for capped stack/duration merges.
+- Keep game-specific status names, damage, immunities, and visuals in the host.
+
+### `Combat/projectileMotion.js`
+
+When to use:
+- A projectile needs renderer-independent homing, movement, or reflection.
+
+How to use:
+- Call `steerHomingProjectile()`, `advanceProjectile()`, and `bounceProjectile()` on a host-owned projectile record.
 
 ## AI
 

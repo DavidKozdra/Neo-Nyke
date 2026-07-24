@@ -1360,6 +1360,15 @@
 
   function findNearestEnemy(x, y, radius, exclude = new Set()) {
     const searchRadius = Math.max(0, Number(radius || 0));
+    const targetQuery = globalThis.KozEngine?.Core?.targetQuery;
+    if (typeof targetQuery?.findNearestFromVisit === 'function') {
+      return targetQuery.findNearestFromVisit({
+        x,
+        y,
+        radius: searchRadius,
+        visitCandidates: visit => forEachEnemyNearCircle(x, y, searchRadius, visit, { exclude }),
+      });
+    }
     let best = null;
     let bestDistSq = searchRadius * searchRadius;
     forEachEnemyNearCircle(x, y, searchRadius, enemy => {
