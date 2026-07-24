@@ -327,6 +327,28 @@ Good fit:
 
 ## AI
 
+### `AI/agentDispatcher.js`
+
+When to use:
+- Your game has type-specific agent handlers but needs one consistent update pipeline.
+
+How to use:
+- Create a dispatcher with `createTypedAgentDispatcher({ updateMethodByType, fallbackUpdateMethod, beforeUpdate? })`.
+- Pass the host's agent, delta, and handler context to `dispatcher.update(...)`.
+
+This module deliberately has no game entity types or combat rules. The host owns those as content.
+
+### `AI/actorStateMachine.js`
+
+When to use:
+- Your game needs explicit enter/update/exit states for actors, enemies, NPCs, or scripted objects.
+
+How to use:
+- Build a `StateMachine` with named state definitions, then place it on an `AgentActor`.
+- State callbacks receive the machine, current state, elapsed time, caller context, and transition payload.
+
+The module manages lifecycle only. The host still decides state names, transitions, movement, abilities, and rendering.
+
 ### `AI/astar.js`
 
 When to use:

@@ -59,7 +59,7 @@ These modules still carry significant host, DOM, p5, or game-specific coupling:
 - `VisualFX/flightPath.js`
 - `Core/GameObject.js`
 
-`AI/astar.js` sits in the middle: it is reusable in concept, but its current implementation still assumes game-specific grid cells and global terrain cost data.
+`AI/agentDispatcher.js` and `AI/actorStateMachine.js` are clean reusable AI starting points for dispatch, actor lifecycle, and explicit states. `AI/astar.js` sits in the middle: it is reusable in concept, but its current implementation still assumes game-specific grid cells and global terrain cost data.
 
 ## How To Load Modules
 

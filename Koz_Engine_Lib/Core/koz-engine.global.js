@@ -110,6 +110,14 @@
       },
     },
     {
+      path: "Koz_Engine_Lib/AI/agentDispatcher.js",
+      register: ["AI", "agentDispatcher"],
+    },
+    {
+      path: "Koz_Engine_Lib/AI/actorStateMachine.js",
+      register: ["AI", "actorStateMachine"],
+    },
+    {
       path: "Koz_Engine_Lib/Assets/atlasHelper.js",
       register: ["Assets", "atlasHelper"],
       globals: {
