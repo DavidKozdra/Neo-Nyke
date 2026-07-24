@@ -22,7 +22,7 @@ describe('shared Neo Nyke combat content', () => {
       mode: 'smite', stabDamage: 20, bladeDamage: 18, chainCount: 5,
     }));
     expect(getHeroPrimaryAttack('sarge')).toEqual(expect.objectContaining({
-      weaponKey: 'sarges_hammer', damage: 64, cooldownTicks: 14, arc: Math.PI * 0.9,
+      weaponKey: 'sarges_hammer', damage: 64, cooldownTicks: 14, mode: 'projectile', returning: true, lightning: true,
     }));
   });
 

@@ -34,6 +34,7 @@
     burst_round: Object.freeze({ kind: 'magenta_p90', color: '#ff9dd7', speed: 1200, r: 4, life: 0.8, recoil: 55 }),
     void_lance: Object.freeze({ kind: 'void_piercer', color: '#ffd2c0', speed: 760, r: 6, life: 1.2, pierceCount: 4, hitOptions: Object.freeze({ ignoreBarrier: true, critBonus: 0.2 }) }),
     royal_bolt: Object.freeze({ kind: 'princess_wand', color: '#ff9de8', speed: 680, r: 5, life: 1, pierceCount: 1, muzzleRing: 10, recoil: 160 }),
+    sarges_hammer: Object.freeze({ kind: 'sarges_hammer', color: '#7da3ff', speed: 720, r: 11, life: 0.75, pierceCount: 0 }),
   });
 
   const WEAPON_PROJECTILE_ATTACKS = Object.freeze({
@@ -76,7 +77,8 @@
     gelleh_lightning_spear: Object.freeze({ mode: 'smite', stabDamage: 20, stabRange: 90, stabArc: 0.45, bladeDamage: 18, bladeSpeed: 820, bladeRadius: 7, bladeLife: 0.5, bladePierce: 99, chainRange: 280, chainJumpRange: 170, chainCount: 5, chainBaseDamage: 18, chainStepDamage: 4, color: '#bfe4ff' }),
     claw_gauntlets: Object.freeze({ mode: 'double_sweep', arc: Math.PI * 0.7, secondDelay: 0.12, angleOffsets: Object.freeze([-0.18, 0.18]), color: '#ff7a9a', bleedChance: 0.22, bleedStacks: 1, bleedDuration: 5 }),
     extending_staff: Object.freeze({ mode: 'sweep', arc: 1.45, color: '#ff3333' }),
-    sarges_hammer: Object.freeze({ mode: 'sweep', arc: Math.PI * 0.9, color: '#7da3ff', shockRing: 44 }),
+    // The hammer lodges its first target in lightning, then recalls to Sarge.
+    sarges_hammer: Object.freeze({ mode: 'projectile', projectileType: 'sarges_hammer', returning: true, lightning: true }),
   });
 
   function getCharacterDefaultWeapon(characterKey) {

@@ -53,6 +53,16 @@ describe('gameplay polish regressions', () => {
     expect(renderer3d).toContain(': BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;');
   });
 
+  test('3D secret warp rooms are raised above the floor', () => {
+    expect(renderer3d).toContain('secretWarp: 24');
+  });
+
+  test('3D secret passages rebuild as open exits and vendor choices clear the floor', () => {
+    expect(renderer3d).toContain('room.secretPassages?.[direction]?.open');
+    expect(renderer3d).toContain('secretVendor: 28');
+    expect(renderer3d).toContain('const openSecrets = Object.entries(room.secretPassages || {})');
+  });
+
   test('3D post-boss reward choices are raised above the arena floor', () => {
     expect(renderer3d).toContain('const BOSS_REWARD_CHOICE_FLOOR_LIFT = 24;');
     expect(renderer3d).toContain("String(pickup.groupId || '').startsWith('boss:')");

@@ -1916,6 +1916,22 @@
     }
     Neo.ctx.lineTo(projectile.x, projectile.y);
     Neo.ctx.stroke();
+    if (projectile.lightning && !denseProjectileTrails) {
+      Neo.ctx.globalAlpha = 0.78;
+      Neo.ctx.strokeStyle = '#e1f2ff';
+      Neo.ctx.shadowColor = '#8fc8ff';
+      Neo.ctx.shadowBlur = 10;
+      Neo.ctx.lineWidth = 1.6;
+      Neo.ctx.beginPath();
+      for (let index = trail.length - 1; index >= 0; index -= 1) {
+        const point = trail[index];
+        const jitter = (index % 2 ? 1 : -1) * 3;
+        if (index === trail.length - 1) Neo.ctx.moveTo(point.x, point.y);
+        else Neo.ctx.lineTo(point.x + jitter, point.y - jitter);
+      }
+      Neo.ctx.lineTo(projectile.x, projectile.y);
+      Neo.ctx.stroke();
+    }
     if (visual.shape === 'fireball') {
       const tail = trail[Math.min(trail.length - 1, 2)];
       Neo.ctx.globalAlpha = 0.24;
