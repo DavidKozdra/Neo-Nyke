@@ -17,6 +17,11 @@ const ROOT = path.resolve(__dirname, "..");
 const SW_PATH = path.join(ROOT, "sw.js");
 const INDEX_PATH = path.join(ROOT, "index.html");
 const PWA_RUNTIME_URL = "/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js";
+// 3D is loaded with import() only after a player selects it, so it is not
+// reachable from main.js's static graph. Keep it precached for offline players.
+const DYNAMIC_MODULE_ENTRIES = [
+  path.join(ROOT, "js", "draw", "three-renderer.js"),
+];
 
 const SHIPPABLE_ASSET_EXT = new Set([
   ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
@@ -91,6 +96,9 @@ function buildPrecacheList() {
 
   for (const fileAbs of collectModuleGraph(path.join(ROOT, "js", "main.js"))) {
     urls.add(toAbsUrlPath(fileAbs));
+  }
+  for (const entryAbs of DYNAMIC_MODULE_ENTRIES) {
+    for (const fileAbs of collectModuleGraph(entryAbs)) urls.add(toAbsUrlPath(fileAbs));
   }
   for (const ref of collectIndexReferences()) urls.add(ref);
   for (const fileAbs of collectAssets()) urls.add(toAbsUrlPath(fileAbs));

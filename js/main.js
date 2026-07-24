@@ -99,7 +99,7 @@ import './draw/atlas.js';
 import './draw/character-sheets.js';
 import './draw/entities.js';
 import './draw/hud.js';
-import './draw/three-renderer.js';
+import './draw/three-loader.js';
 import './core/canvas-recovery.js';
 import './ui/sprite-editor.js';
 import './ui/move-preview.js';

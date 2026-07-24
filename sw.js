@@ -93,6 +93,7 @@ const KOZ_PWA_CONFIG = {
     "/js/draw/lighting.js",
     "/js/draw/pillar-renderer.js",
     "/js/draw/props.js",
+    "/js/draw/three-loader.js",
     "/js/draw/three-renderer.js",
     "/js/draw/viewport.js",
     "/js/game/combat.js",
@@ -312,14 +313,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 299,
-    "bytes": 72016626,
-    "criticalEntries": 244,
-    "criticalBytes": 8956529,
+    "entries": 300,
+    "bytes": 72020114,
+    "criticalEntries": 245,
+    "criticalBytes": 8960017,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "b90834d431df3723"
+  "version": "df8ba060c5b3b073"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");
