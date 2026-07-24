@@ -118,6 +118,26 @@
       register: ["AI", "actorStateMachine"],
     },
     {
+      path: "Koz_Engine_Lib/Core/geometry2d.js",
+      register: ["Core", "geometry2d"],
+    },
+    {
+      path: "Koz_Engine_Lib/Core/targetQuery.js",
+      register: ["Core", "targetQuery"],
+    },
+    {
+      path: "Koz_Engine_Lib/Time/stepTimer.js",
+      register: ["Time", "stepTimer"],
+    },
+    {
+      path: "Koz_Engine_Lib/Combat/statusBook.js",
+      register: ["Combat", "statusBook"],
+    },
+    {
+      path: "Koz_Engine_Lib/Combat/projectileMotion.js",
+      register: ["Combat", "projectileMotion"],
+    },
+    {
       path: "Koz_Engine_Lib/Assets/atlasHelper.js",
       register: ["Assets", "atlasHelper"],
       globals: {

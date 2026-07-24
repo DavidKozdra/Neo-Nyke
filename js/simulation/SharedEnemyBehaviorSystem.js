@@ -1,10 +1,11 @@
 (function initializeSharedEnemyBehaviorSystem(root, factory) {
-  const api = factory();
+  const geometryApi = typeof require === 'function' ? require('../../Koz_Engine_Lib/Core/geometry2d.js') : root.KozEngine?.Core?.geometry2d;
+  const api = factory(geometryApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi) {
   'use strict';
 
   // The authored campaign enemy behaviors from js/game/enemies.js, ported onto
@@ -33,56 +34,7 @@
   const MOOGGY_CLAW_REACH_PAD = 34;
   const MOOGGY_CLAW_ARC = 1.0;
 
-  function clamp(value, low, high) {
-    return Math.max(low, Math.min(high, value));
-  }
-
-  function turnAngleToward(current, target, maxStep) {
-    let delta = target - current;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
-    return current + clamp(delta, -maxStep, maxStep);
-  }
-
-  function lineIntersectsRect(x1, y1, x2, y2, rect, padding = 0) {
-    const minX = rect.x - padding;
-    const minY = rect.y - padding;
-    const maxX = rect.x + rect.w + padding;
-    const maxY = rect.y + rect.h + padding;
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    let t0 = 0;
-    let t1 = 1;
-    const checks = [[-dx, x1 - minX], [dx, maxX - x1], [-dy, y1 - minY], [dy, maxY - y1]];
-    for (const [p, q] of checks) {
-      if (p === 0) {
-        if (q < 0) return false;
-        continue;
-      }
-      const ratio = q / p;
-      if (p < 0) {
-        if (ratio > t1) return false;
-        if (ratio > t0) t0 = ratio;
-      } else {
-        if (ratio < t0) return false;
-        if (ratio < t1) t1 = ratio;
-      }
-    }
-    return true;
-  }
-
-  function segmentHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lengthSq = dx * dx + dy * dy;
-    const t = lengthSq > 0 ? clamp(((cx - x1) * dx + (cy - y1) * dy) / lengthSq, 0, 1) : 0;
-    const px = x1 + dx * t;
-    const py = y1 + dy * t;
-    const hitDx = cx - px;
-    const hitDy = cy - py;
-    if (hitDx * hitDx + hitDy * hitDy > radius * radius) return null;
-    return { x: px, y: py, angle: Math.atan2(dy, dx) };
-  }
+  const { clamp, turnAngleToward, lineIntersectsRect, segmentHitsCircle } = geometryApi;
 
   function createCampaignEnemyBehaviors(ctx) {
     const tuningOf = () => ctx.getTuning?.() || { reaction: 1, rangedCadence: 1, supportPower: 1 };

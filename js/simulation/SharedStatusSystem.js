@@ -1,11 +1,13 @@
 (function initializeSharedStatusSystem(root, factory) {
   const hitResolution = typeof require === 'function' ? require('./SharedHitResolutionSystem.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(hitResolution);
+  const statusBook = typeof require === 'function' ? require('../../Koz_Engine_Lib/Combat/statusBook.js') : root.KozEngine?.Combat?.statusBook;
+  const timerApi = typeof require === 'function' ? require('../../Koz_Engine_Lib/Time/stepTimer.js') : root.KozEngine?.Time?.stepTimer;
+  const api = factory(hitResolution, statusBook || {}, timerApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedStatusApi(hitResolution) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedStatusApi(hitResolution, statusBook, timerApi) {
   'use strict';
 
   // The campaign's canonical status-effect rules, extracted DOM-free so the
@@ -19,6 +21,8 @@
   const MAX_STATUS_STACKS = 6;
   const COLD_SECONDS_PER_STACK = 15;
   const FIRE_FREEZE_DURATION_MULTIPLIER = 0.5;
+  const { createStatusMap, ensureStatusMap, clearStatusState, applyStackedStatus } = statusBook;
+  const { advanceCountdown, advanceInterval } = timerApi;
 
   // Mirrors BLEED_RESIST_SCALING / STATUS_RESIST_SCALING in game-core.js. The
   // browser re-exports these same objects, so there is one set of numbers.
@@ -50,20 +54,11 @@
   });
 
   function createCampaignStatusMap() {
-    return Object.fromEntries(STATUS_EFFECT_KEYS.map(key => [key, { stacks: 0, duration: 0, tick: 0 }]));
+    return createStatusMap(STATUS_EFFECT_KEYS);
   }
 
   function ensureCampaignStatuses(entity) {
-    if (!entity || typeof entity !== 'object') return createCampaignStatusMap();
-    if (!entity.statuses || typeof entity.statuses !== 'object') entity.statuses = createCampaignStatusMap();
-    STATUS_EFFECT_KEYS.forEach(key => {
-      const state = entity.statuses[key];
-      if (!state || typeof state !== 'object') entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
-      entity.statuses[key].stacks = Math.max(0, Number(entity.statuses[key].stacks || 0));
-      entity.statuses[key].duration = Math.max(0, Number(entity.statuses[key].duration || 0));
-      entity.statuses[key].tick = Number(entity.statuses[key].tick || 0);
-    });
-    return entity.statuses;
+    return ensureStatusMap(entity, STATUS_EFFECT_KEYS);
   }
 
   function getCampaignStatusStacks(entity, key) {
@@ -73,9 +68,7 @@
   function clearCampaignStatus(entity, key) {
     const state = ensureCampaignStatuses(entity)[key];
     if (!state) return;
-    state.stacks = 0;
-    state.duration = 0;
-    state.tick = 0;
+    clearStatusState(state);
     state.damageMultiplier = 1;
     state.ownerId = null;
   }
@@ -108,8 +101,7 @@
       );
       state.stacks = getColdStacksFromDuration(state.duration);
     } else {
-      state.stacks = Math.min(MAX_STATUS_STACKS, Math.max(Number(state.stacks || 0), 0) + addedStacks);
-      state.duration = Math.max(Number(state.duration || 0), adjustedDuration);
+      applyStackedStatus(state, { stacks: addedStacks, duration: adjustedDuration, maxStacks: MAX_STATUS_STACKS });
     }
     // Fire thaws an existing freeze/frostbite effect by cutting its remaining
     // duration in half. Player cold uses duration as a stack-time budget, so
@@ -203,10 +195,10 @@
       const durationDecay = typeof hooks.getDurationDecay === 'function'
         ? Math.max(0, Number(hooks.getDurationDecay(key, state) || 0))
         : 1;
-      state.duration -= dt * durationDecay;
-      state.tick -= dt;
-      if (state.tick <= 0) {
-        state.tick = CAMPAIGN_STATUS_TICKS[key].interval;
+      state.duration = advanceCountdown(state.duration, dt * durationDecay);
+      const tickResult = advanceInterval(state.tick, dt, CAMPAIGN_STATUS_TICKS[key].interval);
+      state.tick = tickResult.remaining;
+      if (tickResult.triggered) {
         const raw = getCampaignStatusTickDamage(key, state.stacks, hooks.maxHp ?? entity.maxHp ?? entity.maxHealth ?? entity.max, {
           targetKind: hooks.targetKind,
           fireResistance: hooks.fireResistance,
@@ -222,10 +214,10 @@
     const slow = statuses.slow;
     if (requestedKeys && !requestedKeys.has('slow')) return results;
     if (Number(slow.stacks || 0) > 0) {
-      slow.duration -= dt;
-      slow.tick -= dt;
-      if (slow.tick <= 0) {
-        slow.tick = CAMPAIGN_STATUS_TICKS.slow.interval;
+      slow.duration = advanceCountdown(slow.duration, dt);
+      const tickResult = advanceInterval(slow.tick, dt, CAMPAIGN_STATUS_TICKS.slow.interval);
+      slow.tick = tickResult.remaining;
+      if (tickResult.triggered) {
         if (typeof hooks.onTick === 'function') hooks.onTick('slow', slow);
       }
       if (slow.duration <= 0) clearCampaignStatus(entity, 'slow');

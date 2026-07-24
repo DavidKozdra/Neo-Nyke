@@ -87,6 +87,7 @@ Modules in `Koz_Engine_Lib` should eventually follow these rules:
 The active folder structure should be explicit:
 
 - `AI/`: pathfinding and agent-support logic
+- `Combat/`: renderer-neutral status, projectile, and combat-runtime primitives
 - `Assets/`: asset lookup and atlas registry helpers
 - `Audio/`: reusable audio services
 - `Core/`: generic runtime primitives and bootstrap entrypoints
