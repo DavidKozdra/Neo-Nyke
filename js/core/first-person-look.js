@@ -1,14 +1,20 @@
 (function initializeFirstPersonLook(root, factory) {
-  const api = factory();
+  const reusableApi = typeof require === 'function'
+    ? require('../../Koz_Engine_Lib/Rendering3D/cameraRig.js')
+    : root.KozEngine?.Rendering3D?.cameraRig;
+  const api = factory(reusableApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.input = namespace.input || {};
   Object.assign(namespace.input, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createFirstPersonLookApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createFirstPersonLookApi(reusableApi) {
   'use strict';
 
   function applyFirstPersonLookDelta(yaw = 0, pitch = 0, deltaX = 0, deltaY = 0, options = {}) {
+    if (typeof reusableApi?.applyLookDelta === 'function') {
+      return reusableApi.applyLookDelta(yaw, pitch, deltaX, deltaY, options);
+    }
     const yawSensitivity = Math.max(0, Number(options.yawSensitivity ?? 0.0055) || 0);
     const pitchSensitivity = Math.max(0, Number(options.pitchSensitivity ?? 0.0045) || 0);
     const minimumPitch = Number.isFinite(Number(options.minimumPitch)) ? Number(options.minimumPitch) : -0.55;

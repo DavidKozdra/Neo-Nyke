@@ -1,12 +1,15 @@
 (function initializeCampaignMovementRules(root, factory) {
   const status = typeof require === 'function' ? require('./SharedStatusSystem.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(status);
+  const cameraRig = typeof require === 'function'
+    ? require('../../Koz_Engine_Lib/Rendering3D/cameraRig.js')
+    : root.KozEngine?.Rendering3D?.cameraRig;
+  const api = factory(status, cameraRig);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status, cameraRig) {
   'use strict';
 
   // Extracted verbatim from the campaign's former local-only movement path.
@@ -35,6 +38,10 @@
       y /= magnitude;
     }
     if (cameraYaw == null || (!x && !y)) return { moveX: x, moveY: y };
+    if (typeof cameraRig?.mapLocalMovementToWorld === 'function') {
+      const mapped = cameraRig.mapLocalMovementToWorld({ x, y }, cameraYaw);
+      return { moveX: mapped.x, moveY: mapped.y };
+    }
     const yaw = Number(cameraYaw) || 0;
     const cosine = Math.cos(yaw);
     const sine = Math.sin(yaw);

@@ -13,6 +13,8 @@ import '../core/first-person-look.js';
 
 const { applyFirstPersonLookDelta } = globalThis.NeoNyke.input;
 const worldMapping3d = globalThis.KozEngine?.Rendering3D?.worldMapping || {};
+const cameraRig3d = globalThis.KozEngine?.Rendering3D?.cameraRig || {};
+const roomGeometry3d = globalThis.KozEngine?.Rendering3D?.roomGeometry || {};
 
 const RENDER3D_STORE_KEY = 'neonyke:render3d';
 const CAMERA_MODE_STORE_KEY = 'neonyke:camera3d';
@@ -710,40 +712,55 @@ function buildRoom() {
     color: themeWallColor(theme),
   };
   // Revealed secret passages are physical 3D exits, not just map state.
-  const doors = Object.fromEntries(['n', 's', 'e', 'w'].map(direction => [
+  const doors = roomGeometry3d.resolveRoomExits?.(room) || Object.fromEntries(['n', 's', 'e', 'w'].map(direction => [
     direction,
     !!room.doors?.[direction] || !!room.secretPassages?.[direction]?.open,
   ]));
   const midX = W / 2;
   const midZ = H / 2;
   const half = DOOR / 2;
-  // North wall (z: 0..WALL)
-  if (doors.n) {
-    addWallSegment(roomGroup, wallSkin, 0, midX - half, 0, WALL, wallHeight);
-    addWallSegment(roomGroup, wallSkin, midX + half, W, 0, WALL, wallHeight);
+  const boundaryPlan = roomGeometry3d.createRoomBoundaryPlan?.({
+    room,
+    width: W,
+    height: H,
+    wallThickness: WALL,
+    doorSize: DOOR,
+    corridorDepth: CORRIDOR_DEPTH,
+    exits: doors,
+  });
+  if (boundaryPlan) {
+    boundaryPlan.walls.forEach(wall => {
+      addWallSegment(roomGroup, wallSkin, wall.x1, wall.x2, wall.z1, wall.z2, wallHeight);
+    });
   } else {
-    addWallSegment(roomGroup, wallSkin, 0, W, 0, WALL, wallHeight);
-  }
-  // South wall
-  if (doors.s) {
-    addWallSegment(roomGroup, wallSkin, 0, midX - half, H - WALL, H, wallHeight);
-    addWallSegment(roomGroup, wallSkin, midX + half, W, H - WALL, H, wallHeight);
-  } else {
-    addWallSegment(roomGroup, wallSkin, 0, W, H - WALL, H, wallHeight);
-  }
-  // West wall
-  if (doors.w) {
-    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, midZ - half, wallHeight);
-    addWallSegment(roomGroup, wallSkin, 0, WALL, midZ + half, H, wallHeight);
-  } else {
-    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, H, wallHeight);
-  }
-  // East wall
-  if (doors.e) {
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, midZ - half, wallHeight);
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, midZ + half, H, wallHeight);
-  } else {
-    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, H, wallHeight);
+    // North wall (z: 0..WALL)
+    if (doors.n) {
+      addWallSegment(roomGroup, wallSkin, 0, midX - half, 0, WALL, wallHeight);
+      addWallSegment(roomGroup, wallSkin, midX + half, W, 0, WALL, wallHeight);
+    } else {
+      addWallSegment(roomGroup, wallSkin, 0, W, 0, WALL, wallHeight);
+    }
+    // South wall
+    if (doors.s) {
+      addWallSegment(roomGroup, wallSkin, 0, midX - half, H - WALL, H, wallHeight);
+      addWallSegment(roomGroup, wallSkin, midX + half, W, H - WALL, H, wallHeight);
+    } else {
+      addWallSegment(roomGroup, wallSkin, 0, W, H - WALL, H, wallHeight);
+    }
+    // West wall
+    if (doors.w) {
+      addWallSegment(roomGroup, wallSkin, 0, WALL, 0, midZ - half, wallHeight);
+      addWallSegment(roomGroup, wallSkin, 0, WALL, midZ + half, H, wallHeight);
+    } else {
+      addWallSegment(roomGroup, wallSkin, 0, WALL, 0, H, wallHeight);
+    }
+    // East wall
+    if (doors.e) {
+      addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, midZ - half, wallHeight);
+      addWallSegment(roomGroup, wallSkin, W - WALL, W, midZ + half, H, wallHeight);
+    } else {
+      addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, H, wallHeight);
+    }
   }
 
   // Ceiling: a single down-facing plane at wall height. Single-sided, so the
@@ -967,7 +984,14 @@ function getRoomBuildKey() {
     .map(([direction]) => direction)
     .sort()
     .join('');
-  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|h${getRoomCeilingHeight(room)}|${openSecrets}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}`;
+  const geometrySignature = roomGeometry3d.roomBuildSignature?.(room, {
+    width: Neo.ROOM_W,
+    height: Neo.ROOM_H,
+    wallThickness: Neo.WALL,
+    doorSize: Neo.DOOR,
+    wallHeight: getRoomCeilingHeight(room),
+  }) || '';
+  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|h${getRoomCeilingHeight(room)}|${openSecrets}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}|${geometrySignature}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -2487,9 +2511,13 @@ function syncPickups() {
         const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
         const isBossRewardChoice = pickup.type === 'rewardChoice'
           && String(pickup.groupId || '').startsWith('boss:');
+        const mappedFloorLift = roomGeometry3d.resolveElevation?.(
+          { kind: pickup.type },
+          { kindOffsets: BAKED_PICKUP_FLOOR_LIFT },
+        );
         const floorLift = isBossRewardChoice
           ? BOSS_REWARD_CHOICE_FLOOR_LIFT
-          : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
+          : Number(mappedFloorLift) > 0 ? mappedFloorLift : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
         obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : floorLift;
         return;
       }
@@ -3979,6 +4007,9 @@ const SHAKE_EPSILON = 0.05;
 // render frame, producing high-frequency buzzing and refresh-rate-dependent
 // motion in both first-person and overhead 3D views.
 function getCameraShakeAxes(nowMs) {
+  if (typeof cameraRig3d.sampleCameraShake === 'function') {
+    return cameraRig3d.sampleCameraShake(nowMs);
+  }
   const phase = Number(nowMs || 0) * 0.018;
   return {
     x: Math.sin(phase) * 0.72 + Math.sin(phase * 1.73 + 0.8) * 0.28,
@@ -4027,7 +4058,12 @@ function projectCanvasMouseToWorld(canvasX, canvasY) {
   const height = Math.max(1, Number(Neo.canvas.height || 1) / (split && slotCount >= 3 ? 2 : 1));
   const aimCamera = split ? splitCameras[0] : camera;
   if (!aimCamera) return null;
-  const ndc = worldMapping3d.canvasToNdc?.(canvasX, canvasY, width, height) || { x: (Number(canvasX || 0) / width) * 2 - 1, y: 1 - (Number(canvasY || 0) / height) * 2 };
+  const ndc = worldMapping3d.canvasToViewportNdc?.(
+    canvasX,
+    canvasY,
+    { x: 0, y: 0, width, height },
+  ) || worldMapping3d.canvasToNdc?.(canvasX, canvasY, width, height)
+    || { x: (Number(canvasX || 0) / width) * 2 - 1, y: 1 - (Number(canvasY || 0) / height) * 2 };
   mouseAimNdc.set(ndc.x, ndc.y);
   mouseAimRay.setFromCamera(mouseAimNdc, aimCamera);
   const hit = typeof worldMapping3d.intersectRayWithGround === 'function'
@@ -4174,7 +4210,13 @@ function syncCamera() {
   const p = Neo.presentationViewpointPlayer || Neo.player;
   const storyCamera = Neo.storyCamera?.active ? Neo.storyCamera : null;
   // FPS-appropriate field of view in first person; classic follow cam otherwise.
-  const targetFov = storyCamera ? 50 / Math.max(0.75, Number(storyCamera.zoom || 1)) : isFirstPersonActive() ? 68 : 50;
+  const targetFov = cameraRig3d.resolveCameraFov?.({
+    storyActive: !!storyCamera,
+    storyZoom: storyCamera?.zoom,
+    firstPerson: isFirstPersonActive(),
+    baseFov: 50,
+    firstPersonFov: 68,
+  }) ?? (storyCamera ? 50 / Math.max(0.75, Number(storyCamera.zoom || 1)) : isFirstPersonActive() ? 68 : 50);
   if (camera.fov !== targetFov) {
     camera.fov = targetFov;
     camera.updateProjectionMatrix();
@@ -4190,15 +4232,21 @@ function syncCamera() {
   lastCameraSyncAt = now;
   // Snap on the first frame and on hard cuts (room change/respawn) rather than
   // sliding the camera across the level.
-  if (!camFocus.valid || Math.hypot(rawFocusX - camFocus.x, rawFocusZ - camFocus.z) > 400) {
+  // First person sits at eye level with no follow lerp behind it, so it needs
+  // to track tighter than the third-person cam or aiming feels laggy.
+  const focusHz = isFirstPersonActive() ? CAMERA_FOCUS_SMOOTH_HZ * 2.2 : CAMERA_FOCUS_SMOOTH_HZ;
+  if (typeof cameraRig3d.updateSmoothedFocus === 'function') {
+    cameraRig3d.updateSmoothedFocus(camFocus, { x: rawFocusX, z: rawFocusZ }, {
+      deltaSeconds: frameDt,
+      frequencyHz: focusHz,
+      snapDistance: 400,
+    });
+  } else if (!camFocus.valid || Math.hypot(rawFocusX - camFocus.x, rawFocusZ - camFocus.z) > 400) {
     camFocus.x = rawFocusX;
     camFocus.z = rawFocusZ;
     camFocus.valid = true;
   } else if (frameDt > 0) {
-    // First person sits at eye level with no follow lerp behind it, so it needs
-    // to track tighter than the third-person cam or aiming feels laggy.
-    const hz = isFirstPersonActive() ? CAMERA_FOCUS_SMOOTH_HZ * 2.2 : CAMERA_FOCUS_SMOOTH_HZ;
-    const k = 1 - Math.exp(-hz * frameDt);
+    const k = 1 - Math.exp(-focusHz * frameDt);
     camFocus.x += (rawFocusX - camFocus.x) * k;
     camFocus.z += (rawFocusZ - camFocus.z) * k;
   }
@@ -4231,7 +4279,19 @@ function syncCamera() {
     const jz = shakeAxes.y * jitter * 0.7;
     const eyeX = camFocus.x;
     const eyeZ = camFocus.z;
-    camera.position.set(eyeX + jx, FP_EYE_HEIGHT + jy, eyeZ + jz);
+    const firstPersonPose = cameraRig3d.computeFirstPersonPose?.({
+      focus: { x: eyeX, z: eyeZ },
+      eyeHeight: FP_EYE_HEIGHT,
+      yaw: fpYaw,
+      pitch: fpPitch,
+      shake: { x: jx, y: jy, z: jz },
+      lookDistance: 100,
+    });
+    camera.position.set(
+      firstPersonPose?.position.x ?? eyeX + jx,
+      firstPersonPose?.position.y ?? FP_EYE_HEIGHT + jy,
+      firstPersonPose?.position.z ?? eyeZ + jz,
+    );
     const cosPitch = Math.cos(fpPitch);
     camera.lookAt(
       eyeX + jx + Math.cos(fpYaw) * cosPitch * 100,
@@ -4261,16 +4321,29 @@ function syncCamera() {
   const kickZ = shakeOn ? (Neo.shakeKickY || 0) : 0;
   const shakeX = sx * jitter * 0.85 + kickX;
   const shakeZ = sy * jitter * 0.85 + kickZ;
+  const thirdPersonPose = cameraRig3d.computeThirdPersonPose?.({
+    focus: { x: focusX, z: focusZ },
+    room: { width: Neo.ROOM_W, height: Neo.ROOM_H },
+    centerBias: 0.28,
+    height: CAMERA_HEIGHT,
+    back: CAMERA_BACK,
+    lookHeight: 12,
+    shake: { x: shakeX, z: shakeZ },
+  });
   camTarget.set(
-    lookX + shakeX,
-    CAMERA_HEIGHT,
-    lookZ + CAMERA_BACK + shakeZ,
+    thirdPersonPose?.position.x ?? lookX + shakeX,
+    thirdPersonPose?.position.y ?? CAMERA_HEIGHT,
+    thirdPersonPose?.position.z ?? lookZ + CAMERA_BACK + shakeZ,
   );
   // Framerate-independent follow. The old fixed 0.14 per-frame lerp chased the
   // target more than twice as fast at 144Hz as at 60Hz, so the camera's trail
   // (and any residual wobble) changed with the player's refresh rate.
   if (camera.position.lengthSq() === 0 || frameDt <= 0) camera.position.copy(camTarget);
-  else camera.position.lerp(camTarget, 1 - Math.exp(-CAMERA_FOLLOW_SMOOTH_HZ * frameDt));
+  else camera.position.lerp(
+    camTarget,
+    cameraRig3d.exponentialSmoothingAlpha?.(CAMERA_FOLLOW_SMOOTH_HZ, frameDt)
+      ?? 1 - Math.exp(-CAMERA_FOLLOW_SMOOTH_HZ * frameDt),
+  );
   // Translate the eye and focus together. Rotating the camera toward a fixed
   // focus while its position jittered was the source of the odd aim wobble.
   camera.lookAt(lookX + shakeX, 12, lookZ + shakeZ);
@@ -4314,8 +4387,14 @@ function renderSceneViews() {
   const rect = Neo.canvas.getBoundingClientRect();
   const fullW = Math.max(2, rect.width);
   const fullH = Math.max(2, rect.height);
-  const viewW = fullW / 2;
-  const viewH = count >= 3 ? fullH / 2 : fullH;
+  const viewportLayout = worldMapping3d.createViewportLayout?.(
+    fullW,
+    fullH,
+    count,
+    { coordinateSpace: 'webgl' },
+  );
+  const viewW = viewportLayout?.[0]?.width || fullW / 2;
+  const viewH = viewportLayout?.[0]?.height || (count >= 3 ? fullH / 2 : fullH);
   renderer.setScissorTest(true);
   const playerWasVisible = playerSprite?.visible;
   slots.forEach((slot, index) => {
@@ -4328,8 +4407,16 @@ function renderSceneViews() {
     const actor = slot.getEntity();
     const focusX = Number(actor.x || Neo.ROOM_W / 2);
     const focusZ = Number(actor.y || Neo.ROOM_H / 2);
-    const lookX = focusX * 0.72 + (Neo.ROOM_W / 2) * 0.28;
-    const lookZ = focusZ * 0.72 + (Neo.ROOM_H / 2) * 0.28;
+    const thirdPersonPose = cameraRig3d.computeThirdPersonPose?.({
+      focus: { x: focusX, z: focusZ },
+      room: { width: Neo.ROOM_W, height: Neo.ROOM_H },
+      centerBias: 0.28,
+      height: CAMERA_HEIGHT,
+      back: CAMERA_BACK,
+      lookHeight: 12,
+    });
+    const lookX = thirdPersonPose?.target.x ?? focusX * 0.72 + (Neo.ROOM_W / 2) * 0.28;
+    const lookZ = thirdPersonPose?.target.z ?? focusZ * 0.72 + (Neo.ROOM_H / 2) * 0.28;
     viewCamera.aspect = viewW / viewH;
     if (firstPersonView && index > 0) {
       const gamepad = window.NeoGamepad?.[index];
@@ -4339,14 +4426,19 @@ function renderSceneViews() {
       viewCamera.position.set(focusX, FP_EYE_HEIGHT, focusZ);
       viewCamera.lookAt(focusX + Math.cos(yaw) * 100, FP_EYE_HEIGHT, focusZ + Math.sin(yaw) * 100);
     } else if (!firstPersonView) {
-      viewCamera.position.set(lookX, CAMERA_HEIGHT, lookZ + CAMERA_BACK);
+      viewCamera.position.set(
+        thirdPersonPose?.position.x ?? lookX,
+        thirdPersonPose?.position.y ?? CAMERA_HEIGHT,
+        thirdPersonPose?.position.z ?? lookZ + CAMERA_BACK,
+      );
       viewCamera.lookAt(lookX, 12, lookZ);
     }
     viewCamera.updateProjectionMatrix();
+    const viewport = viewportLayout?.[index];
     const col = index % 2;
     const rowFromTop = count >= 3 ? Math.floor(index / 2) : 0;
-    const x = col * viewW;
-    const y = fullH - (rowFromTop + 1) * viewH;
+    const x = viewport?.x ?? col * viewW;
+    const y = viewport?.y ?? fullH - (rowFromTop + 1) * viewH;
     renderer.setViewport(x, y, viewW, viewH);
     renderer.setScissor(x, y, viewW, viewH);
     if (playerSprite) playerSprite.visible = firstPersonView && index === 0 ? false : !!playerWasVisible || isFirstPersonActive();
@@ -4735,7 +4827,9 @@ function getViewMode() {
 
 function setViewMode(mode) {
   const requested = mode === 'third' || mode === 'fp' ? mode : '2d';
-  const normalized = requested === 'fp' && Neo.isSplitScreen?.() ? 'third' : requested;
+  const normalized = cameraRig3d.normalizeViewMode?.(requested, {
+    splitScreen: !!Neo.isSplitScreen?.(),
+  }) ?? (requested === 'fp' && Neo.isSplitScreen?.() ? 'third' : requested);
   if (normalized === '2d') {
     setRender3D(false);
   } else {
