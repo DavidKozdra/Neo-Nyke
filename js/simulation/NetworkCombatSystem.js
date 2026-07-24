@@ -1148,6 +1148,8 @@
       homingAccel: Number(definition.homingAccel || 0),
       homingTurnRate: Number(definition.homingTurnRate || 0),
       homingRadius: Number(definition.homingRadius || 0),
+      returning: !!definition.returning,
+      returnPhase: definition.returning ? 'out' : '',
       bouncesRemaining: Math.max(0, Math.floor(Number(definition.bouncesRemaining || 0))),
       subSpawn: definition.subSpawn ? {
         ...definition.subSpawn,
@@ -1504,6 +1506,7 @@
         color: preset.color,
         pierce: preset.pierceCount,
         lifeTicks: Math.ceil(Number(preset.life || 1) * 20),
+        returning: !!definition.returning,
       }, angle).id);
     } else if (definition.mode === 'volley') {
       const count = Math.max(1, Number(definition.count || 3));
@@ -3530,8 +3533,13 @@
   function updateProjectiles(state, fixedDelta, emitEvent, random) {
     Object.entries(state.projectiles || {}).forEach(([projectileId, projectile]) => {
       if (state.tick >= Number(projectile.expiresTick || 0)) {
-        delete state.projectiles[projectileId];
-        return;
+        if (projectile.returning && projectile.returnPhase === 'out') {
+          projectile.returnPhase = 'back';
+          projectile.expiresTick = state.tick + 80;
+        } else {
+          delete state.projectiles[projectileId];
+          return;
+        }
       }
       if (projectile.homing) {
         const target = projectile.hostile
@@ -3541,7 +3549,28 @@
             .sort((a, b) => Math.hypot(a.x - projectile.x, a.y - projectile.y) - Math.hypot(b.x - projectile.x, b.y - projectile.y))[0];
         steerCampaignHomingProjectile(projectile, target || null, fixedDelta);
       }
+      if (projectile.returning && projectile.returnPhase === 'back') {
+        const owner = state.players?.[projectile.ownerId];
+        if (!owner || owner.downed || owner.roomId !== projectile.roomId) {
+          delete state.projectiles[projectileId];
+          return;
+        }
+        const dx = owner.x - projectile.x;
+        const dy = owner.y - projectile.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const speed = Math.max(720, Math.hypot(projectile.vx, projectile.vy));
+        projectile.vx = dx / distance * speed;
+        projectile.vy = dy / distance * speed;
+      }
       const previous = advanceCampaignProjectile(projectile, fixedDelta);
+      if (projectile.returning && projectile.returnPhase === 'back') {
+        const owner = state.players?.[projectile.ownerId];
+        if (owner && Math.hypot(owner.x - projectile.x, owner.y - projectile.y) <= Number(owner.radius || 18) + Number(projectile.radius || 8) + 6) {
+          delete state.projectiles[projectileId];
+          emitEvent('SARGES_HAMMER_RETURNED', { projectileId, playerId: owner.id });
+          return;
+        }
+      }
       emitProjectileSubSpawn(state, projectile, random);
       const wall = Number(state.floorState?.wallThickness || 28);
       if (projectile.x < wall || projectile.x > Number(state.floorState?.width || 900) - wall
@@ -3658,7 +3687,13 @@
         projectile.remainingPierces -= 1;
         projectile.hitEnemyIds = [...hitIds, enemy.id];
       } else {
-        delete state.projectiles[projectileId];
+        if (projectile.returning && projectile.returnPhase === 'out') {
+          projectile.returnPhase = 'back';
+          projectile.expiresTick = state.tick + 80;
+          emitEvent('SARGES_HAMMER_BOUNCED', { projectileId, playerId: projectile.ownerId, enemyId: enemy.id, lightning: true });
+        } else {
+          delete state.projectiles[projectileId];
+        }
       }
     });
   }

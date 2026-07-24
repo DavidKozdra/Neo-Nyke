@@ -136,7 +136,7 @@ describe('authoritative network combat system', () => {
       gelleh: ['smite', 'gelleh_lightning_spear'],
       mooggy: ['double_sweep', 'claw_gauntlets'],
       turtle_boy: ['sweep', 'extending_staff'],
-      sarge: ['sweep', 'sarges_hammer'],
+      sarge: ['projectile', 'sarges_hammer'],
     };
     Object.entries(expected).forEach(([characterKey, [mode, kind]]) => {
       expect(getHeroPrimaryAttack(characterKey)).toEqual(expect.objectContaining({ mode, kind }));
@@ -425,7 +425,7 @@ describe('authoritative network combat system', () => {
     ['gelleh', 0, 1, 'gelleh_lightning_spear'],
     ['mooggy', 8, 0, 'claw_gauntlets'],
     ['turtle_boy', 0, 0, 'extending_staff'],
-    ['sarge', 0, 0, 'sarges_hammer'],
+    ['sarge', 0, 1, 'sarges_hammer'],
   ])('%s resolves its own attack shape on the authority', (characterKey, healthAfterImmediate, projectileCount, attackKind) => {
     const { state, simulation, events } = combatHarness(characterKey);
     simulation.updateGame({}, 0.05);

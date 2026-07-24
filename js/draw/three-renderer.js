@@ -708,7 +708,11 @@ function buildRoom() {
     texture: theme.wallTile ? getEnvTileTexture(theme.wallTile) : null,
     color: themeWallColor(theme),
   };
-  const doors = room.doors || {};
+  // Revealed secret passages are physical 3D exits, not just map state.
+  const doors = Object.fromEntries(['n', 's', 'e', 'w'].map(direction => [
+    direction,
+    !!room.doors?.[direction] || !!room.secretPassages?.[direction]?.open,
+  ]));
   const midX = W / 2;
   const midZ = H / 2;
   const half = DOOR / 2;
@@ -957,7 +961,12 @@ function syncWorldFxOverlay() {
 function getRoomBuildKey() {
   const room = Neo.currentRoom;
   if (!room) return '';
-  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|h${getRoomCeilingHeight(room)}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}`;
+  const openSecrets = Object.entries(room.secretPassages || {})
+    .filter(([, passage]) => passage?.open)
+    .map(([direction]) => direction)
+    .sort()
+    .join('');
+  return `${room.gx},${room.gy}|${Neo.floor}|${room.type}|h${getRoomCeilingHeight(room)}|${openSecrets}|${(Neo.structures || []).length}|${Neo.environmentBackgroundCache?.key || ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -2337,6 +2346,11 @@ const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion']);
 const BAKED_PICKUP_FLOOR_LIFT = {
   challengeRune: 16,
   challengeBomb: 24,
+  // Secret warp rooms use an upright portal glyph and destination label. Its
+  // authored art is centered on the simulation point, so lift it clear of the
+  // 3D floor instead of burying the lower half of the ring.
+  secretWarp: 24,
+  secretVendor: 28,
 };
 // The five post-boss relic choices are upright billboards, not floor decals.
 // Lift them enough to clear the arena floor while leaving dwell-choice circles

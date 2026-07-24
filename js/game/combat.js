@@ -726,9 +726,9 @@
       return true;
     }
     if (weaponKey === 'sarges_hammer') {
-      // Heavy hammer: a wide crushing arc with big knockback and a shock ring.
-      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI * 0.9, wKnk(weaponKey), '#7da3ff');
-      Neo.ringBurst(Neo.player.x, Neo.player.y, 44, '#9bb8ff', 0.4);
+      // Throw the hammer; its first impact crackles with lightning before it
+      // bounces back to Sarge (the return is handled by world.js).
+      throwSargesHammer(Neo.angleToMouse(), wDmg(weaponKey), wKnk(weaponKey));
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
@@ -2881,6 +2881,19 @@
   // Sarge's Hammer Throw (laser slot): hurl a spinning hammer toward the cursor.
   // It uses the same boomerang flight as the double-kill hammer — flies out, hits,
   // then arcs back to Sarge — but is a manually aimed skill, not a passive proc.
+  function throwSargesHammer(angle, damage, knockback = 320) {
+    if (!Neo.player) return;
+    Neo.spawnProjectile({
+      x: Neo.player.x, y: Neo.player.y,
+      vx: Math.cos(angle) * 720, vy: Math.sin(angle) * 720,
+      r: 11, life: 0.75, enemy: false, kind: 'sarges_hammer', damage, knockback,
+      color: '#7da3ff', pierceCount: 0, boomerang: true, boomerangPhase: 'out',
+      lightning: true,
+    });
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 28, '#9bb8ff', 0.35);
+    Neo.playSfx?.('sword_swing');
+  }
+
   function castHammerThrow(move) {
     if (!Neo.player) return;
     const itemStats = Neo.getItemStats();
@@ -2902,9 +2915,10 @@
       color: '#7da3ff',
       // Outbound arm flies straight; on first enemy hit OR when life runs out it
       // arcs home to the player (boomerang handling lives in world.js).
-      pierceCount: 1,
+      pierceCount: 0,
       boomerang: true,
       boomerangPhase: 'out',
+      lightning: true,
       homing: true,
       homingTarget: 'enemy',
       homingRadius: 700,

@@ -1945,6 +1945,12 @@
     projectile.homing = true;
     projectile.homingTarget = 'player';
     projectile.life = 4;
+    if (projectile.lightning) {
+      Neo.ringBurst?.(projectile.x, projectile.y, 38, '#a9d8ff', 0.35);
+      for (let bolt = 0; bolt < 7; bolt += 1) {
+        Neo.spawnParticle?.({ x: projectile.x + Neo.rand(-18, 18), y: projectile.y + Neo.rand(-18, 18), life: 0.24, c: '#c8e8ff', size: 3 });
+      }
+    }
     if (Neo.player) {
       const angle = Math.atan2(Neo.player.y - projectile.y, Neo.player.x - projectile.x);
       const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || 700;
