@@ -150,6 +150,14 @@
       register: ["Rendering3D", "worldMapping"],
     },
     {
+      path: "Koz_Engine_Lib/Rendering3D/cameraRig.js",
+      register: ["Rendering3D", "cameraRig"],
+    },
+    {
+      path: "Koz_Engine_Lib/Rendering3D/roomGeometry.js",
+      register: ["Rendering3D", "roomGeometry"],
+    },
+    {
       path: "Koz_Engine_Lib/Assets/atlasHelper.js",
       register: ["Assets", "atlasHelper"],
       globals: {

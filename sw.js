@@ -214,6 +214,8 @@ const KOZ_PWA_CONFIG = {
     "/Koz_Engine_Lib/PWA/cacheManifest.js",
     "/Koz_Engine_Lib/PWA/clientRegistration.js",
     "/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js",
+    "/Koz_Engine_Lib/Rendering3D/cameraRig.js",
+    "/Koz_Engine_Lib/Rendering3D/roomGeometry.js",
     "/Koz_Engine_Lib/Rendering3D/worldMapping.js",
     "/Koz_Engine_Lib/Runtime/gameRuntime.js",
     "/Koz_Engine_Lib/SaveLoad/saveApi.js",
@@ -310,14 +312,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 297,
-    "bytes": 71991183,
-    "criticalEntries": 242,
-    "criticalBytes": 8931086,
+    "entries": 299,
+    "bytes": 72013338,
+    "criticalEntries": 244,
+    "criticalBytes": 8953241,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "ca14a4dfb5df2063"
+  "version": "4b624fc9a785e920"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");
