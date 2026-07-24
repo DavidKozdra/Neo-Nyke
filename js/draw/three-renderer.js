@@ -12,6 +12,7 @@ import * as THREE from '../vendor/three.module.js';
 import '../core/first-person-look.js';
 
 const { applyFirstPersonLookDelta } = globalThis.NeoNyke.input;
+const worldMapping3d = globalThis.KozEngine?.Rendering3D?.worldMapping || {};
 
 const RENDER3D_STORE_KEY = 'neonyke:render3d';
 const CAMERA_MODE_STORE_KEY = 'neonyke:camera3d';
@@ -4026,16 +4027,21 @@ function projectCanvasMouseToWorld(canvasX, canvasY) {
   const height = Math.max(1, Number(Neo.canvas.height || 1) / (split && slotCount >= 3 ? 2 : 1));
   const aimCamera = split ? splitCameras[0] : camera;
   if (!aimCamera) return null;
-  mouseAimNdc.set((Number(canvasX || 0) / width) * 2 - 1, 1 - (Number(canvasY || 0) / height) * 2);
+  const ndc = worldMapping3d.canvasToNdc?.(canvasX, canvasY, width, height) || { x: (Number(canvasX || 0) / width) * 2 - 1, y: 1 - (Number(canvasY || 0) / height) * 2 };
+  mouseAimNdc.set(ndc.x, ndc.y);
   mouseAimRay.setFromCamera(mouseAimNdc, aimCamera);
-  const directionY = mouseAimRay.ray.direction.y;
-  if (Math.abs(directionY) < 1e-5) return null;
-  const distance = -mouseAimRay.ray.origin.y / directionY;
-  if (!(distance > 0) || !Number.isFinite(distance)) return null;
-  return {
-    x: mouseAimRay.ray.origin.x + mouseAimRay.ray.direction.x * distance,
-    y: mouseAimRay.ray.origin.z + mouseAimRay.ray.direction.z * distance,
-  };
+  const hit = typeof worldMapping3d.intersectRayWithGround === 'function'
+    ? worldMapping3d.intersectRayWithGround(mouseAimRay.ray.origin, mouseAimRay.ray.direction, 0)
+    : (() => {
+      const directionY = mouseAimRay.ray.direction.y;
+      if (Math.abs(directionY) < 1e-5) return null;
+      const distance = -mouseAimRay.ray.origin.y / directionY;
+      return distance > 0 && Number.isFinite(distance)
+        ? { x: mouseAimRay.ray.origin.x + mouseAimRay.ray.direction.x * distance, y: 0, z: mouseAimRay.ray.origin.z + mouseAimRay.ray.direction.z * distance }
+        : null;
+    })();
+  if (!hit) return null;
+  return worldMapping3d.threeToWorld?.(hit) || { x: hit.x, y: hit.z };
 }
 
 function setCameraMode(mode) {
@@ -4273,12 +4279,14 @@ function syncCamera() {
 // Project a world (game) position to #c canvas pixel coordinates.
 const projectVector = new THREE.Vector3();
 function projectToCanvas(x, y, height = 0, viewCamera = camera, viewport = null) {
-  projectVector.set(x, height, y);
+  const mapped = worldMapping3d.worldToThree?.({ x, y }, { height }) || { x, y: height, z: y };
+  projectVector.set(mapped.x, mapped.y, mapped.z);
   projectVector.project(viewCamera);
   const bounds = viewport || { x: 0, y: 0, width: Neo.canvas.width, height: Neo.canvas.height };
+  const canvasPoint = worldMapping3d.ndcToCanvas?.(projectVector.x, projectVector.y, bounds) || { x: bounds.x + (projectVector.x * 0.5 + 0.5) * bounds.width, y: bounds.y + (-projectVector.y * 0.5 + 0.5) * bounds.height };
   return {
-    x: bounds.x + (projectVector.x * 0.5 + 0.5) * bounds.width,
-    y: bounds.y + (-projectVector.y * 0.5 + 0.5) * bounds.height,
+    x: canvasPoint.x,
+    y: canvasPoint.y,
     behind: projectVector.z > 1,
   };
 }

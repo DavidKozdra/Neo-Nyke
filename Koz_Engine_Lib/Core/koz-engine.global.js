@@ -118,6 +118,10 @@
       register: ["AI", "actorStateMachine"],
     },
     {
+      path: "Koz_Engine_Lib/AI/navigationAgent.js",
+      register: ["AI", "navigationAgent"],
+    },
+    {
       path: "Koz_Engine_Lib/Core/geometry2d.js",
       register: ["Core", "geometry2d"],
     },
@@ -136,6 +140,14 @@
     {
       path: "Koz_Engine_Lib/Combat/projectileMotion.js",
       register: ["Combat", "projectileMotion"],
+    },
+    {
+      path: "Koz_Engine_Lib/Combat/collisionLayers.js",
+      register: ["Combat", "collisionLayers"],
+    },
+    {
+      path: "Koz_Engine_Lib/Rendering3D/worldMapping.js",
+      register: ["Rendering3D", "worldMapping"],
     },
     {
       path: "Koz_Engine_Lib/Assets/atlasHelper.js",
@@ -180,6 +192,10 @@
       globals: {
         GameStateManager: (api) => api.GameStateManager,
       },
+    },
+    {
+      path: "Koz_Engine_Lib/Core/extensionHost.js",
+      register: ["Core", "extensionHost"],
     },
     {
       path: "Koz_Engine_Lib/Core/spatialGrid.js",
@@ -241,6 +257,19 @@
       path: "Koz_Engine_Lib/UI/mobileInput.js",
       register: ["UI", "mobileInput"],
     },
+    {
+      path: "Koz_Engine_Lib/UI/tabController.js",
+      register: ["UI", "tabController"],
+    },
+    {
+      path: "Koz_Engine_Lib/UI/controlBindings.js",
+      register: ["UI", "controlBindings"],
+    },
+    { path: "Koz_Engine_Lib/UI/components/menuShell.js", register: ["UI", "components", "menuShell"] },
+    { path: "Koz_Engine_Lib/UI/components/controlEditor.js", register: ["UI", "components", "controlEditor"] },
+    { path: "Koz_Engine_Lib/UI/components/audioSettings.js", register: ["UI", "components", "audioSettings"] },
+    { path: "Koz_Engine_Lib/UI/components/hudLayout.js", register: ["UI", "components", "hudLayout"] },
+    { path: "Koz_Engine_Lib/UI/components/hudPreviewEditor.js", register: ["UI", "components", "hudPreviewEditor"] },
     {
       path: "Koz_Engine_Lib/Economy/stagedAcquisition.js",
       register: ["Economy", "stagedAcquisition"],

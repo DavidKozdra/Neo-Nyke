@@ -105,8 +105,12 @@
   const HUD_OVERLAP_GAP = 10;
   const HUD_OVERLAP_SOLVE_MAX_PASSES = 6;
   const HUD_OVERLAP_SCALE_MAX_ATTEMPTS = 30;
+  const hudLayoutRegistry = window.KozEngine?.UI?.components?.hudLayout?.HudLayoutRegistry
+    ? new window.KozEngine.UI.components.hudLayout.HudLayoutRegistry(HUD_ELEMENTS, { minScale: HUD_SCALE_MIN, maxScale: HUD_SCALE_MAX })
+    : null;
 
   function defaultHudElements() {
+    if (hudLayoutRegistry) return hudLayoutRegistry.createState();
     const out = {};
     HUD_ELEMENTS.forEach(el => { out[el.key] = { scale: null, visible: true, x: 0, y: 0 }; });
     return out;
@@ -527,6 +531,7 @@
     getActivateAllKey: () => String(bindings.activateAll || ' '),
     // Display label for a bound action (e.g. 'smash' -> 'R'), honoring rebinds.
     getBindingLabel: action => keyLabel(bindings[action]),
+    getHudLayoutRegistry: () => hudLayoutRegistry,
     getAccess: () => access,
     getGameplay: () => gameplay,
     shouldPauseInventory: () => gameplay.pauseInventory !== false,
@@ -644,31 +649,27 @@
   modal.addEventListener('click', e => { if (e.target === modal) closeSettings(); });
   window.addEventListener('keydown', e => { if (e.key === 'Escape' && settingsOpen) closeSettings(); });
 
-  modal.querySelectorAll('.stab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      modal.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-      modal.querySelectorAll('.stab-panel').forEach(p => p.classList.add('hidden'));
-      btn.classList.add('active');
-      document.getElementById('stab-' + btn.dataset.tab).classList.remove('hidden');
-      if (btn.dataset.tab === 'theme') refreshThemeUI();
-      if (btn.dataset.tab === 'controls') applyControlsSectionVisibility();
-    });
+  const uiTabs = window.KozEngine?.UI?.tabController;
+  const settingsTabs = uiTabs?.createTabController?.(modal, {
+    tabSelector: '.stab',
+    panelSelector: '.stab-panel',
+    panelForTab: tab => document.getElementById('stab-' + tab),
+    onChange: tab => {
+      if (tab === 'theme') refreshThemeUI();
+      if (tab === 'controls') applyControlsSectionVisibility();
+    },
   });
+  settingsTabs?.bind();
 
   let listeningBtn = null;
+  const uiComponents = window.KozEngine?.UI?.components || {};
+  const keyboardControlEditor = uiComponents.controlEditor?.ControlEditor
+    ? new uiComponents.controlEditor.ControlEditor({ bindings, defaults: DEFAULT_BINDINGS, onChange: () => save() })
+    : null;
 
   function keyLabel(v) {
-    v = String(v ?? '');
-    if (v === 'lmb') return 'LMB';
-    if (v === 'rmb') return 'RMB';
-    if (v === ' ') return 'SPACE';
-    if (v === 'shift')   return 'SHIFT';
-    if (v === 'control') return 'CTRL';
-    if (v === 'arrowup')    return '↑';
-    if (v === 'arrowdown')  return '↓';
-    if (v === 'arrowleft')  return '←';
-    if (v === 'arrowright') return '→';
-    return v.toUpperCase();
+    const labels = { lmb: 'LMB', rmb: 'RMB', ' ': 'SPACE', shift: 'SHIFT', control: 'CTRL', arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' };
+    return window.KozEngine?.UI?.controlBindings?.formatBinding?.(v, labels) || String(v ?? '').toUpperCase();
   }
 
   function label(action) {
@@ -764,9 +765,7 @@
       if (!key) return;
       const previousAction = touchBindings[key] || DEFAULT_TOUCH_BINDINGS[key] || 'slash';
       const nextAction = String(select.value || previousAction);
-      const occupiedKey = Object.keys(touchBindings).find(bindingKey => bindingKey !== key && touchBindings[bindingKey] === nextAction);
-      if (occupiedKey) touchBindings[occupiedKey] = previousAction;
-      touchBindings[key] = nextAction;
+      window.KozEngine?.UI?.controlBindings?.assignExclusiveBinding?.(touchBindings, key, nextAction, DEFAULT_TOUCH_BINDINGS);
       refreshTouchBindControls();
       save();
     });
@@ -855,6 +854,7 @@
       if (listeningBtn === btn) { stopListening(); return; }
       stopListening();
       listeningBtn = btn;
+      keyboardControlEditor?.begin(btn.dataset.action);
       btn.classList.add('listening');
       btn.textContent = '...';
     });
@@ -865,7 +865,8 @@
     if (e.key === 'Escape') { stopListening(); return; }
     e.preventDefault();
     e.stopImmediatePropagation();
-    bindings[listeningBtn.dataset.action] = e.key.toLowerCase();
+    if (keyboardControlEditor) keyboardControlEditor.captureKeyboard(e);
+    else bindings[listeningBtn.dataset.action] = e.key.toLowerCase();
     stopListening();
     save();
   }, true);
@@ -875,19 +876,31 @@
     const action = listeningBtn.dataset.action;
     if (action !== 'slash' && action !== 'laser') return;
     e.preventDefault();
-    bindings[action] = e.button === 2 ? 'rmb' : 'lmb';
+    if (keyboardControlEditor) keyboardControlEditor.assign(action, e.button === 2 ? 'rmb' : 'lmb');
+    else bindings[action] = e.button === 2 ? 'rmb' : 'lmb';
     stopListening();
     save();
   }, true);
 
   document.getElementById('resetBindings').addEventListener('click', () => {
     bindings = { ...DEFAULT_BINDINGS };
+    if (keyboardControlEditor) keyboardControlEditor.bindings = bindings;
     stopListening();
     save();
   });
 
+  const audioSettings = uiComponents.audioSettings?.AudioSettings
+    ? new uiComponents.audioSettings.AudioSettings({ state: volume, onChange: key => {
+      save();
+      if (key === 'sfx') refreshSoundLevelDefaults();
+    } })
+    : null;
   [['volMaster','volMasterVal','master'],['volSfx','volSfxVal','sfx'],['volMusic','volMusicVal','music']].forEach(([id, valId, key]) => {
     const el = document.getElementById(id), val = document.getElementById(valId);
+    if (audioSettings) {
+      audioSettings.bindRange(el, val, key);
+      return;
+    }
     el.value = volume[key];
     val.textContent = volume[key];
     el.addEventListener('input', () => {
