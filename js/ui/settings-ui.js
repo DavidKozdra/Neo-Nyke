@@ -45,10 +45,20 @@
   const HUD_SCALE_MIN = 0.5;
   const HUD_SCALE_MAX = 2.0;
   const HUD_SCALE_STEP = 0.1;
+  const MINIMAP_ICON_SCALE_MIN = 0.4;
+  const MINIMAP_ICON_SCALE_MAX = 1.0;
+  const MINIMAP_ICON_SCALE_STEP = 0.05;
   function normalizeHudScale(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return DEFAULT_ACCESS.hudScale;
     return Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, Math.round(n / HUD_SCALE_STEP) * HUD_SCALE_STEP));
+  }
+
+  function normalizeMinimapIconScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0.72;
+    return Math.max(MINIMAP_ICON_SCALE_MIN, Math.min(MINIMAP_ICON_SCALE_MAX,
+      Math.round(n / MINIMAP_ICON_SCALE_STEP) * MINIMAP_ICON_SCALE_STEP));
   }
 
   const FONT_SCALE_MIN = 0.8;
@@ -87,7 +97,7 @@
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, defaultScale: 1.25 },
     // The boss health bar is also canvas-drawn. drawBossHealthBars() reads its
     // scale/visibility/offsets from getHudElements().
-    { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, renderScale: 2, top: 72, compactTop: 64 },
+    { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, renderScale: 2, top: 92, compactTop: 84 },
   ];
 
   // Per-element movement range, in screen pixels. Large enough to place any
@@ -126,6 +136,9 @@
       visible: entry?.visible !== false,
       x: normalizeHudOffset(entry?.x),
       y: normalizeHudOffset(entry?.y),
+      iconScale: entry?.iconScale === null || entry?.iconScale === undefined
+        ? null
+        : normalizeMinimapIconScale(entry.iconScale),
     };
   }
 
@@ -1279,7 +1292,7 @@
         box.style.height = `${Math.max(8, (bounds.bottom - bounds.top) * ratio.y * scaleRatio)}px`;
         box.dataset.previewSizedFromBounds = 'canvas';
       } else {
-        box.style.top = `${(getHudAnchor('bossbar', 'top') ?? 72) * ratio.y}px`;
+        box.style.top = `${(getHudAnchor('bossbar', 'top') ?? 92) * ratio.y}px`;
         box.style.left = '50%';
       }
     } else if (key === 'minimap') {
@@ -1582,6 +1595,14 @@
       refs.ySlider.value = normalizeHudOffset(entry.y);
       refs.yVal.textContent = formatHudOffset(entry.y);
     }
+    if (refs.iconSlider) {
+      refs.iconSlider.value = entry.iconScale === null || entry.iconScale === undefined
+        ? normalizeMinimapIconScale(undefined)
+        : normalizeMinimapIconScale(entry.iconScale);
+      refs.iconVal.textContent = entry.iconScale === null || entry.iconScale === undefined
+        ? `Auto (${Math.round(normalizeMinimapIconScale(undefined) * 100)}%)`
+        : `${Math.round(normalizeMinimapIconScale(entry.iconScale) * 100)}%`;
+    }
     refs.vis.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     refs.vis.textContent = hidden ? 'Hidden' : 'Shown';
   }
@@ -1636,6 +1657,26 @@
       const xOff = makeOffset('X');
       const yOff = makeOffset('Y');
 
+      let iconSlider = null;
+      let iconVal = null;
+      if (el.key === 'minimap') {
+        const iconRow = document.createElement('label');
+        iconRow.className = 'hud-element-offset hud-element-offset--icons';
+        const iconLabel = document.createElement('span');
+        iconLabel.className = 'hud-element-offset__axis';
+        iconLabel.textContent = 'Icons';
+        iconSlider = document.createElement('input');
+        iconSlider.type = 'range';
+        iconSlider.className = 'hud-element-offset__slider';
+        iconSlider.min = String(MINIMAP_ICON_SCALE_MIN);
+        iconSlider.max = String(MINIMAP_ICON_SCALE_MAX);
+        iconSlider.step = String(MINIMAP_ICON_SCALE_STEP);
+        iconVal = document.createElement('span');
+        iconVal.className = 'hud-element-offset__val';
+        iconRow.append(iconLabel, iconSlider, iconVal);
+        offsetRow.appendChild(iconRow);
+      }
+
       const rowChildren = [name, scaleCap, slider, val, vis];
       rowChildren.push(offsetRow);
       row.append(...rowChildren);
@@ -1644,6 +1685,7 @@
         row, slider, val, vis,
         xSlider: xOff?.sl || null, xVal: xOff?.rv || null,
         ySlider: yOff?.sl || null, yVal: yOff?.rv || null,
+        iconSlider, iconVal,
       };
 
       slider.addEventListener('input', () => {
@@ -1663,6 +1705,12 @@
       };
       xOff?.sl.addEventListener('input', onOffset('x', xOff.sl));
       yOff?.sl.addEventListener('input', onOffset('y', yOff.sl));
+      iconSlider?.addEventListener('input', () => {
+        hudElements[el.key].iconScale = normalizeMinimapIconScale(iconSlider.value);
+        refreshHudElementRow(el.key);
+        refreshHudPreviewBoxes();
+        save();
+      });
       vis.addEventListener('click', () => {
         hudElements[el.key].visible = hudElements[el.key].visible === false;
         applyHudElements();
