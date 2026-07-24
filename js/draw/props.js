@@ -1518,6 +1518,31 @@
         drawSecretVendorCurrencyIcon(payX + costTextW + 4, payY, currencyIconSize, usesCoins, costColor);
         Neo.ctx.shadowBlur = 0;
         Neo.ctx.textAlign = 'center';
+      } else if (pickup.type === 'secretLady') {
+        const t = Date.now() * 0.003;
+        // A quiet mysterious benefactor, holding a clearly readable unknown box.
+        Neo.ctx.fillStyle = 'rgba(30,12,52,0.72)';
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 24, 34, 11, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#e5d6ff';
+        Neo.ctx.shadowColor = '#ae7dff';
+        Neo.ctx.shadowBlur = 12;
+        Neo.ctx.beginPath(); Neo.ctx.arc(-13, -28, 11, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#5e3c91';
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(-27, 20); Neo.ctx.lineTo(-18, -18); Neo.ctx.lineTo(-5, -18); Neo.ctx.lineTo(2, 20); Neo.ctx.closePath(); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#24123f';
+        Neo.ctx.beginPath(); Neo.ctx.arc(-15, -30, 14, Math.PI, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#201431';
+        Neo.ctx.strokeStyle = '#e8ccff';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.fillRect(5, -11, 28, 28); Neo.ctx.strokeRect(5, -11, 28, 28);
+        Neo.ctx.fillStyle = '#f4e8ff';
+        Neo.ctx.font = 'bold 24px serif'; Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('?', 19, 11 + Math.sin(t) * 2);
+        Neo.ctx.fillStyle = '#decaff'; Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.fillText('MYSTERY GIFT', 0, 39);
       } else if (pickup.type === 'secret_boss_chest') {
         const t = Date.now() * 0.003;
         const glow = '#c9aaff';

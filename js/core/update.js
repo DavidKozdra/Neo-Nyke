@@ -244,6 +244,10 @@ export function loop(timestamp) {
         trackCamera(slot.getCamera(), slot.getEntity(), slotW, slotH);
       });
     }
+    // Re-evaluate top-down pointer aim after the render-rate camera move. This
+    // keeps the arm under the physical cursor while WASD camera follow eases,
+    // without sacrificing the cursor's true world-space targeting position.
+    if (!Neo.render3D) Neo.updatePointerAimWorld?.();
   }
   Neo.trackCameras = trackCameras;
 

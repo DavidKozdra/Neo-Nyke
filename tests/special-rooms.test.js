@@ -35,6 +35,18 @@ describe('special service rooms', () => {
     expect(specialSource).toContain('trySpecialRoomChoiceInteract');
   });
 
+  test('secret-room arrival transitions use rune rings and particle glyphs', () => {
+    expect(roomsSource).toContain('if (room.secret)');
+    expect(roomsSource).toContain("kind: 'secret_floor_rune'");
+    expect(roomsSource).toContain("kind: 'secret_wall_rune'");
+    expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain("'מבורך על ידי אלוהים'");
+    expect(roomsSource).toContain("Neo.ringBurst?.(cx, cy, 30, '#b58cff', 0.55)");
+    expect(roomsSource).toContain('smoke: true');
+    expect(roomsSource).toContain("text: '?'");
+    expect(roomsSource).toContain("['א', 'ב', 'ג', 'ד', 'ה', 'ו']");
+    expect(roomsSource).toContain("text: 'SECRET FOUND'");
+  });
+
   test('shared choice panel is present and exposes only decision-relevant resources', () => {
     expect(htmlSource).toContain('id="specialRoomPanel"');
     expect(htmlSource).toContain('id="specialRoomChoices"');
