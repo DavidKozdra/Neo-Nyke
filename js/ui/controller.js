@@ -990,17 +990,28 @@ export function createUIController(view) {
 
     function joinBrowserMultiplayerInviteFromLocation() {
       const readInviteRoomCode = globalThis.NeoNyke?.multiplayer?.readMultiplayerInviteRoomCode;
-      if (typeof readInviteRoomCode !== 'function') return;
+      if (typeof readInviteRoomCode !== 'function') return false;
       const roomCode = readInviteRoomCode(window.location.href);
-      if (!roomCode) return;
+      if (!roomCode) return false;
 
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = roomCode;
       setMultiplayerPanelOpen(true);
       if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'This invite cannot be joined because multiplayer is disabled in this build.';
-        return;
+        return true;
       }
       void runBrowserMultiplayerAction(session => session.joinRoom(roomCode));
+      return true;
+    }
+
+    function resumeBrowserMultiplayerFromStorage() {
+      const Session = globalThis.NeoNyke?.multiplayer?.BrowserMultiplayerSession;
+      const descriptor = Session?.peekResumeDescriptor?.();
+      if (!descriptor) return false;
+      if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = descriptor.roomId;
+      setMultiplayerPanelOpen(true);
+      void runBrowserMultiplayerAction(session => session.resumeLastSession());
+      return true;
     }
 
     async function joinBrowserMultiplayerFromClipboard() {
@@ -3944,7 +3955,8 @@ export function createUIController(view) {
           if (key) Neo.collectItem(key);
         });
         if (view.practiceEnemyGrid) Neo.buildPracticeEnemyGrid();
-        joinBrowserMultiplayerInviteFromLocation();
+        const joinedMultiplayerInvite = joinBrowserMultiplayerInviteFromLocation();
+        if (!joinedMultiplayerInvite) resumeBrowserMultiplayerFromStorage();
         menuBound = true;
       },
       bindRestartActions(actions) {

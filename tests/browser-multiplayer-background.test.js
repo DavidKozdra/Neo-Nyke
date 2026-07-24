@@ -5,6 +5,7 @@ const {
   BrowserMultiplayerSession,
 } = require('../js/multiplayer/BrowserMultiplayerSession');
 const { RECONNECT_RESERVATION_TICKS } = require('../js/multiplayer/LocalMultiplayerSession');
+const { createMemoryStorage } = require('../Koz_Engine_Lib/Multiplayer/resumeStore');
 
 class FakeCloudflareTransport extends NetworkTransport {
   constructor() {
@@ -127,5 +128,48 @@ describe('browser multiplayer background connection recovery', () => {
     expect(transport.joinCount).toBe(2);
     expect(session.reconnectAttempts).toBe(0);
     session.dispose();
+  });
+
+  test('survives a document handoff with a persisted and rotated resume credential', async () => {
+    const storage = createMemoryStorage();
+    const firstTransport = new FakeCloudflareTransport();
+    const first = new BrowserMultiplayerSession({
+      transport: firstTransport,
+      storage,
+      tabCoordinator: false,
+    });
+    await first.joinRoom('ABC234');
+    firstTransport.emitAuthority('JOIN_ACCEPTED', 1, {
+      matchId: 'match-1',
+      sessionId: 'ABC234',
+      playerId: 'player-1',
+      reconnectToken: 'first-token',
+    });
+    await Promise.resolve();
+    expect(BrowserMultiplayerSession.peekResumeDescriptor({ storage })).toEqual(expect.objectContaining({
+      roomId: 'ABC234',
+      resumeToken: 'first-token',
+    }));
+    first.dispose('tab-handoff');
+
+    const nextTransport = new FakeCloudflareTransport();
+    const next = new BrowserMultiplayerSession({
+      transport: nextTransport,
+      storage,
+      tabCoordinator: false,
+    });
+    await next.resumeLastSession();
+    const join = nextTransport.sent.find(entry => entry.message.type === 'JOIN_MATCH');
+    expect(join.message.payload.reconnectToken).toBe('first-token');
+    nextTransport.emitAuthority('JOIN_ACCEPTED', 2, {
+      matchId: 'match-1',
+      sessionId: 'ABC234',
+      playerId: 'player-1',
+      reconnectToken: 'rotated-token',
+    });
+    await Promise.resolve();
+    expect(BrowserMultiplayerSession.peekResumeDescriptor({ storage }).resumeToken).toBe('rotated-token');
+    next.dispose('left');
+    expect(BrowserMultiplayerSession.peekResumeDescriptor({ storage })).toBeNull();
   });
 });

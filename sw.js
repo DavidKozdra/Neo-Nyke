@@ -198,6 +198,17 @@ const KOZ_PWA_CONFIG = {
     "/Koz_Engine_Lib/Items/itemFactory.js",
     "/Koz_Engine_Lib/Minigames/manager.js",
     "/Koz_Engine_Lib/Minigames/minigamesRuntime.js",
+    "/Koz_Engine_Lib/Multiplayer/authorityCheckpoint.js",
+    "/Koz_Engine_Lib/Multiplayer/entityDelta.js",
+    "/Koz_Engine_Lib/Multiplayer/networkTransport.js",
+    "/Koz_Engine_Lib/Multiplayer/Platforms/Cloudflare/durableObjectAdapter.js",
+    "/Koz_Engine_Lib/Multiplayer/protocolMap.js",
+    "/Koz_Engine_Lib/Multiplayer/rateLimiter.js",
+    "/Koz_Engine_Lib/Multiplayer/resilientSession.js",
+    "/Koz_Engine_Lib/Multiplayer/resumeStore.js",
+    "/Koz_Engine_Lib/Multiplayer/sequenceWindow.js",
+    "/Koz_Engine_Lib/Multiplayer/sessionDescriptor.js",
+    "/Koz_Engine_Lib/Multiplayer/tabCoordinator.js",
     "/Koz_Engine_Lib/Project/projectAdapters.js",
     "/Koz_Engine_Lib/Project/projectSchema.js",
     "/Koz_Engine_Lib/PWA/cacheManifest.js",
@@ -299,14 +310,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 286,
-    "bytes": 71948320,
-    "criticalEntries": 231,
-    "criticalBytes": 8888223,
+    "entries": 297,
+    "bytes": 71991183,
+    "criticalEntries": 242,
+    "criticalBytes": 8931086,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "02df30d6ec3853d1"
+  "version": "ca14a4dfb5df2063"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");

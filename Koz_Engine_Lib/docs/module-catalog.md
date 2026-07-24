@@ -123,6 +123,26 @@ How to use:
 
 See [`../PWA/integration.md`](../PWA/integration.md) for the mobile/offline checklist.
 
+## Multiplayer
+
+### Transport and protocol
+
+Use `Multiplayer/networkTransport.js` to define a provider-neutral socket/peer adapter. Use `protocolMap.js` to register the host game's wire names, validation, codecs, directions, and delivery intent without moving game schemas into the engine.
+
+### Resume and tab ownership
+
+Use `sessionDescriptor.js` and `resumeStore.js` for expiring bearer credentials. Use `tabCoordinator.js` to ensure one browser tab owns a player session, preferring Web Locks with a storage-lease fallback. `resilientSession.js` composes these services around host callbacks.
+
+### Authority primitives
+
+Use `sequenceWindow.js` for deduplication/order, `entityDelta.js` for generic entity collection snapshots, `rateLimiter.js` for message/byte budgets, and `authorityCheckpoint.js` for versioned state/runtime persistence.
+
+### Platform adapters
+
+`Platforms/Cloudflare/durableObjectAdapter.js` wraps hibernatable socket attachments, Durable Object Storage checkpoints, and alarms. The host still owns its Worker routes and authority simulation.
+
+See [`../Multiplayer/integration.md`](../Multiplayer/integration.md) for the full client/authority handoff and [`../Multiplayer/Platforms/Cloudflare/integration.md`](../Multiplayer/Platforms/Cloudflare/integration.md) for deployment guidance.
+
 ## Time
 
 ### `Time/stepTimer.js`

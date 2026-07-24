@@ -14,6 +14,41 @@
   const { MultiplayerRoomClient, LocalMultiplayerClient } = clientApi;
   const Client = MultiplayerRoomClient || LocalMultiplayerClient;
   const HEARTBEAT_INTERVAL_MS = 20_000;
+  const INTENTIONAL_DISPOSE_REASONS = new Set(['left', 'leave', 'disposed', 'quit', 'menu', 'changed-session']);
+  const resumeApi = typeof require === 'function'
+    ? require('../../Koz_Engine_Lib/Multiplayer/resumeStore.js')
+    : root.KozEngine?.Multiplayer?.resumeStore;
+  const coordinatorApi = typeof require === 'function'
+    ? require('../../Koz_Engine_Lib/Multiplayer/tabCoordinator.js')
+    : root.KozEngine?.Multiplayer?.tabCoordinator;
+
+  function safeStorage(explicitStorage) {
+    if (explicitStorage) return explicitStorage;
+    try {
+      return root.localStorage || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function createDefaultCoordinator(storage, options = {}) {
+    if (!coordinatorApi?.createTabCoordinator) return null;
+    return coordinatorApi.createTabCoordinator({
+      storage,
+      locks: options.locks || root.navigator?.locks,
+      setInterval: root.setInterval?.bind(root),
+      clearInterval: root.clearInterval?.bind(root),
+      createChannel: options.createChannel || (typeof root.BroadcastChannel === 'function'
+        ? name => new root.BroadcastChannel(name)
+        : null),
+    });
+  }
+
+  function isIntentionalReason(reason) {
+    const normalized = String(reason || '').trim().toLowerCase();
+    return Array.from(INTENTIONAL_DISPOSE_REASONS)
+      .some(value => normalized === value || normalized.startsWith(`${value}-`));
+  }
 
   class BrowserMultiplayerSession {
     constructor(options = {}) {
@@ -21,6 +56,13 @@
       this.authority = 'remote';
       this.transport = options.transport || new CloudflareWebSocketTransport(options.transportOptions);
       this.client = new Client({ transport: this.transport, ...options.clientOptions });
+      this.storage = safeStorage(options.storage);
+      this.resumeStore = options.resumeStore || (this.storage && resumeApi?.createResumeStore
+        ? resumeApi.createResumeStore({ storage: this.storage, key: options.resumeStorageKey })
+        : null);
+      this.tabCoordinator = options.tabCoordinator === false
+        ? null
+        : options.tabCoordinator || createDefaultCoordinator(this.storage, options.coordinatorOptions);
       this.roomCode = null;
       this.listeners = new Set();
       this.disposed = false;
@@ -31,6 +73,11 @@
       this.heartbeatTimer = null;
       this.notifyQueued = false;
       this.unsubscribeMessage = this.transport.onMessage((_peerId, message) => {
+        if (message?.type === 'JOIN_ACCEPTED') this._persistResumeDescriptor(message.payload);
+        if (message?.type === 'JOIN_REJECTED'
+          && ['INVALID_SESSION', 'VERSION_MISMATCH'].includes(message.payload?.code)) {
+          this.resumeStore?.clear();
+        }
         if (message?.type !== 'PONG') this._scheduleNotify();
       });
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected(() => {
@@ -44,6 +91,12 @@
         this._scheduleReconnect();
       });
       this.boundConnectionWake = () => this._handleConnectionWake();
+      this.unsubscribeTabCoordinator = this.tabCoordinator?.subscribe?.(message => {
+        if (message?.type === 'takeover-requested' && message.resource === this.roomCode
+          && message.tabId !== this.tabCoordinator.tabId) {
+          this.dispose('tab-handoff');
+        }
+      });
       root.document?.addEventListener?.('visibilitychange', this.boundConnectionWake);
       root.addEventListener?.('focus', this.boundConnectionWake);
     }
@@ -54,12 +107,57 @@
       return this.snapshot();
     }
 
-    async joinRoom(roomCode) {
+    async joinRoom(roomCode, options = {}) {
       this.roomCode = normalizeRoomCode(roomCode);
+      const descriptor = this.resumeStore?.load({
+        roomId: this.roomCode,
+        buildVersion: this.client.buildVersion,
+        generationVersion: this.client.generationVersion,
+        contentHash: this.client.contentHash,
+      });
+      if (descriptor?.resumeToken) this.client.reconnectToken = descriptor.resumeToken;
+      if (this.tabCoordinator) {
+        let acquired = await this.tabCoordinator.acquire(this.roomCode);
+        if (!acquired && options.takeover === true) {
+          this.tabCoordinator.requestTakeover(this.roomCode);
+          await new Promise(resolve => (root.setTimeout || setTimeout)(resolve, 80));
+          acquired = await this.tabCoordinator.acquire(this.roomCode);
+        }
+        if (!acquired) {
+          const error = new Error('This multiplayer room is active in another tab.');
+          error.code = 'SESSION_ACTIVE_IN_ANOTHER_TAB';
+          throw error;
+        }
+      }
       await this.client.connect(this.roomCode);
       this._startHeartbeat();
       this._notify();
       return this.snapshot();
+    }
+
+    async resumeLastSession() {
+      const descriptor = this.resumeStore?.load({
+        buildVersion: this.client.buildVersion,
+        generationVersion: this.client.generationVersion,
+        contentHash: this.client.contentHash,
+      });
+      if (!descriptor) return null;
+      this.client.reconnectToken = descriptor.resumeToken;
+      return this.joinRoom(descriptor.roomId, { takeover: true });
+    }
+
+    _persistResumeDescriptor(payload = {}) {
+      if (!this.resumeStore || !this.roomCode || !payload.reconnectToken) return null;
+      return this.resumeStore.save({
+        provider: 'cloudflare-durable-object',
+        roomId: this.roomCode,
+        playerId: payload.playerId || this.client.playerId,
+        resumeToken: payload.reconnectToken,
+        protocolVersion: 1,
+        buildVersion: this.client.buildVersion,
+        generationVersion: this.client.generationVersion,
+        contentHash: this.client.contentHash,
+      });
     }
 
     setReady(ready = true) {
@@ -225,12 +323,21 @@
       root.removeEventListener?.('focus', this.boundConnectionWake);
       this.unsubscribeMessage?.();
       this.unsubscribeDisconnect?.();
+      this.unsubscribeTabCoordinator?.();
+      if (isIntentionalReason(reason)) this.resumeStore?.clear();
+      this.tabCoordinator?.dispose?.();
       const leaveResult = this.client.leave?.(reason);
       if (leaveResult && typeof leaveResult.finally === 'function') leaveResult.finally(() => this.client.dispose());
       else this.client.dispose();
       this.listeners.clear();
     }
   }
+
+  BrowserMultiplayerSession.peekResumeDescriptor = function peekResumeDescriptor(options = {}) {
+    const storage = safeStorage(options.storage);
+    if (!storage || !resumeApi?.createResumeStore) return null;
+    return resumeApi.createResumeStore({ storage, key: options.resumeStorageKey }).load(options.requirements);
+  };
 
   return { HEARTBEAT_INTERVAL_MS, BrowserMultiplayerSession };
 });

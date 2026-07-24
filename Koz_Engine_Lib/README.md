@@ -97,6 +97,7 @@ The active folder structure should be explicit:
 - `Events/`: generic event rules, notification helpers, and tutorial/tip tracking
 - `Items/`: generic item math and registries
 - `Minigames/`: minigame orchestration and runtimes
+- `Multiplayer/`: transport, protocol mapping, resume/tab recovery, snapshots, authority persistence, and platform adapters
 - `PWA/`: content-versioned offline builds, service-worker runtime, and update registration
 - `SaveLoad/`: save/load APIs, drivers, and schemas
 - `Time/`: clocks, timers, and day-cycle helpers
