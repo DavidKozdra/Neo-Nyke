@@ -573,12 +573,17 @@
   // Keep music in sync with state transitions without requiring explicit hooks.
   window.setInterval(syncMusicState, 400);
 
-  // Start fetching and decoding early so the complete intro and loop are ready
-  // before the first user gesture unlocks playback.
-  const titlePreload = loadTitleBuffers();
-  if (titlePreload) void titlePreload.catch(() => {
-    ensureFallbackTitleTracks();
-  });
+  // This preload is deliberately exposed instead of being run at module load.
+  // The title WAVs are ~23 MB together; starting them alongside the module graph
+  // makes a fresh production boot noticeably slower. perf.js schedules it after
+  // the menu is usable, while a first interaction still loads it immediately.
+  Neo.preloadTitleMusic = () => {
+    const titlePreload = loadTitleBuffers();
+    if (titlePreload) void titlePreload.catch(() => {
+      ensureFallbackTitleTracks();
+    });
+    return titlePreload;
+  };
 
   Neo.playTitleMusic = () => {
     unlockedByGesture = true;

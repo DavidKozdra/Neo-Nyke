@@ -273,6 +273,13 @@ export async function boot() {
   Neo.refreshMenuState();
   Neo.draw();
   hideBootLoading();
+  // Keep the large menu music files out of the critical boot path. The preload
+  // still runs shortly after the playable menu appears, and a user interaction
+  // can demand it earlier through Neo.playTitleMusic().
+  const scheduleTitlePreload = window.setTimeout || globalThis.setTimeout;
+  scheduleTitlePreload?.(() => {
+    Neo.preloadTitleMusic?.();
+  }, 1500);
 }
 
 function hideBootLoading() {
