@@ -32,8 +32,10 @@ These are the clearest entry points for new users:
 - `Time/countdownTimer.js`
 - `Time/dayNightCore.js`
 - `Events/eventEngine.js`
+- `Events/eventBus.js`
 - `Events/notificationCenter.js`
 - `Events/tipTracker.js`
+- `Achievements/achievementSystem.js`
 - `UI/mobileInput.js`
 - `World/seededRng.js`
 - `World/worldSpace.js`
@@ -45,6 +47,9 @@ These are the clearest entry points for new users:
 - `Audio/musicSystem.js`
 - `Audio/soundRegistry.js`
 - `VisualFX/particleSystemCore.js`
+- `PWA/cacheManifest.js`
+- `PWA/serviceWorkerRuntime.js`
+- `PWA/clientRegistration.js`
 
 ## Avoid Starting With These
 

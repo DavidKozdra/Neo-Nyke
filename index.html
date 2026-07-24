@@ -2636,28 +2636,22 @@
 <script src="js/ui/menu-background.js" defer></script>
 <script src="js/ui/credits.js" defer></script>
 <script>
-  if ('serviceWorker' in navigator) {
-    const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
-    const CACHE_REFRESH_KEY = 'neonyke:lastAutoCacheRefresh';
-    const refreshAppCache = reg => {
-      if (!reg) return;
-      const now = Date.now();
-      const last = Number(localStorage.getItem(CACHE_REFRESH_KEY) || 0);
-      if (now - last < CACHE_REFRESH_INTERVAL_MS) return;
-      localStorage.setItem(CACHE_REFRESH_KEY, String(now));
-      reg.update().catch(() => {});
-      const worker = reg.active || reg.waiting || reg.installing;
-      worker?.postMessage?.({ type: 'NEONYKE_REFRESH_CACHE' });
-    };
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-        .then(reg => {
-          refreshAppCache(reg);
-          window.setInterval(() => refreshAppCache(reg), CACHE_REFRESH_INTERVAL_MS);
-        })
-        .catch(() => {});
+  window.addEventListener('load', () => {
+    const pwaApi = window.KozEngine?.PWA?.clientRegistration;
+    if (!pwaApi?.createPwaClient) return;
+    const pwa = pwaApi.createPwaClient({
+      scriptUrl: '/sw.js',
+      updateIntervalMs: 60 * 60 * 1000,
+      onUpdateAvailable: detail => {
+        window.dispatchEvent(new CustomEvent('neonyke:pwa-update-ready', { detail }));
+      },
+      onStateChange: detail => {
+        window.dispatchEvent(new CustomEvent('neonyke:pwa-state', { detail }));
+      },
     });
-  }
+    window.neoNykePwa = pwa;
+    pwa.register().catch(() => {});
+  });
 </script>
 </body>
 </html>
