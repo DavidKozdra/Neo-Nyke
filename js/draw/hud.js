@@ -259,6 +259,9 @@
   }
 
   const MINIMAP_CACHE_REFRESH_MS = [80, 120, 160];
+  // Keep room artwork comfortably inside each map tile without changing the
+  // map's footprint or the tile spacing.
+  const MINIMAP_ICON_SCALE = 0.72;
   const minimapRenderCache = {
     canvas: null,
     ctx: null,
@@ -295,6 +298,7 @@
     return [
       Neo.canvas.width, Neo.canvas.height, window.innerWidth, window.innerHeight,
       minimapEntry.scale ?? '', minimapEntry.x ?? 0, minimapEntry.y ?? 0,
+      minimapEntry.iconScale ?? '',
       Neo.currentRoom?.gx ?? '', Neo.currentRoom?.gy ?? '',
       Neo.floorRivalCurses?.obscureMap ? 1 : 0, Neo.hideLadderOnMinimap ? 1 : 0,
       Neo.getItemStats?.()?.hasPrincesGlasses ? 1 : 0,
@@ -331,6 +335,10 @@
     // is handled by the caller (skips drawMinimap entirely when hidden).
     const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap;
     const ownScale = minimapEntry?.scale == null ? NaN : Number(minimapEntry.scale);
+    const ownIconScale = minimapEntry?.iconScale == null ? NaN : Number(minimapEntry.iconScale);
+    const iconScale = Number.isFinite(ownIconScale)
+      ? Neo.clamp(ownIconScale, 0.4, 1)
+      : MINIMAP_ICON_SCALE;
     // Auto defaults to 125%, matching the HUD editor's Minimap definition. An
     // explicit per-widget scale still provides the full 50–200% resize range.
     const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.25;
@@ -480,7 +488,7 @@
       }
       if (icon === 'combat') {
         Neo.ctx.globalAlpha = roomExplored ? 1 : 0.68;
-        Neo.ctx.font = `900 ${Math.max(10, Math.round(size * 0.82))}px system-ui`;
+        Neo.ctx.font = `900 ${Math.max(8, Math.round(size * 0.82 * iconScale))}px system-ui`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.lineJoin = 'round';
@@ -493,8 +501,8 @@
         return;
       }
       if (image) {
-        const assetInset = Math.max(1, Math.round(size * 0.06));
-        const assetSize = size - assetInset * 2;
+        const assetSize = Math.max(4, Math.round(size * iconScale));
+        const assetInset = Math.round((size - assetSize) / 2);
         Neo.ctx.fillStyle = 'rgba(4,8,12,.58)';
         Neo.ctx.fillRect(x + assetInset, y + assetInset, assetSize, assetSize);
         Neo.ctx.shadowColor = 'rgba(0,0,0,1)';
@@ -510,7 +518,7 @@
 
       const u = size / 18;
       Neo.ctx.translate(cx, cy);
-      Neo.ctx.scale(u, u);
+      Neo.ctx.scale(u * iconScale, u * iconScale);
       Neo.ctx.strokeStyle = '#ffffff';
       Neo.ctx.fillStyle = '#ffffff';
       Neo.ctx.lineWidth = 1.8;
@@ -976,7 +984,7 @@
     // explicit HUD Layout offset. Keep it tight beneath the Timer/Floor plate so
     // the boss bar reads as part of the top HUD instead of floating in the arena.
     // Stacks downward for multi-boss encounters.
-    const topInset = (Number(window.NeoSettings?.getHudAnchor?.('bossbar', 'top')) || 72) / scaleY;
+    const topInset = (Number(window.NeoSettings?.getHudAnchor?.('bossbar', 'top')) || 92) / scaleY;
     const startX = Math.round(Neo.clamp(
       visibleLeft + (visibleWidth - width) / 2 + barOffsetX / scaleX,
       visibleLeft + edgeInset,
@@ -1127,9 +1135,10 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
-        ctx.shadowColor = 'rgba(0,0,0,0.95)';
-        ctx.shadowBlur = 3;
-        ctx.lineWidth = 2;
+        // Keep the small pixel-font readout crisp. A blurred glow spreads across
+        // the already-scaled canvas and makes the digits look out of focus.
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.strokeText(hpText, labelX, y + height / 2 + 0.5);
         ctx.fillStyle = '#fff';
@@ -1181,8 +1190,7 @@
           ctx.font = `${shieldFont}px ${CANVAS_PIXEL_FONT}`;
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(0,0,0,0.95)';
-          ctx.shadowBlur = 2;
+          ctx.shadowBlur = 0;
           ctx.fillStyle = '#dff6ff';
           ctx.fillText(shieldText, startX + width - 3, shieldY + shieldH / 2 + 0.5);
           ctx.shadowBlur = 0;
@@ -1193,8 +1201,7 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
         if (ctx.letterSpacing !== undefined) ctx.letterSpacing = count > 1 ? '1px' : '2px';
-        ctx.shadowColor = 'rgba(0,0,0,0.85)';
-        ctx.shadowBlur = 4;
+        ctx.shadowBlur = 0;
         ctx.fillStyle = '#fff';
         // Lift the label clear of the shield overlay when one is showing.
         const labelY = barrier > 0 ? y - Math.max(3, Math.round(height * 0.42)) - 5 : y - 5;

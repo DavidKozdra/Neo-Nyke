@@ -15041,7 +15041,7 @@ body.network-multiplayer-active #c {
 /* Boss bar is canvas-drawn; the preview shows a labeled schematic bar that uses
    the same saved visibility, scale, and X/Y offsets as drawBossHealthBars(). */
 .hud-preview-box--bossbar {
-  top: 4%; left: 50%;
+  top: 7%; left: 50%;
   /* Base size is halved because settings-ui applies a 2× preview factor (bossbar),
      mirroring drawBossHealthBars()'s 2× base scale — final render ≈ 44% wide. */
   width: 22%; height: 2.5%; min-height: 8px;
