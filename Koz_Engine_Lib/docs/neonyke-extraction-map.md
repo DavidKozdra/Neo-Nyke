@@ -9,7 +9,7 @@ This review maps proven NeoNyke systems to reusable Koz Engine seams.
 | `js/simulation/SharedStatusSystem.js` | `Combat/statusBook.js`, `Time/stepTimer.js` | Bookkeeping integrated | Named effects, immunity and damage formulas |
 | `js/game/world.js`, `js/game/combat.js` | `Core/spatialGrid.js`, `targetQuery.js`, collision layers | Query and sweep primitives available | Room-specific collision policy |
 | `js/ui/settings-ui.js` | `UI/components/` | Tabs, controls, audio and HUD registry integrated | NeoNyke DOM, themes, widget definitions |
-| `js/draw/three-renderer.js` | `Rendering3D/worldMapping.js` | Coordinate and pointer mapping integrated | Three.js meshes, materials and art |
+| `js/draw/three-renderer.js`, `js/core/first-person-look.js`, `CampaignMovementRules.js` | `Rendering3D/worldMapping.js`, `cameraRig.js`, `roomGeometry.js` | Coordinates/directions, projection and ray planes, camera rigs/smoothing/shake, camera-relative movement, split viewports, room walls/corridors/secret exits, cache signatures, and elevation policy integrated | Three.js objects, assets/materials, authored dimensions, pointer-lock DOM, WebGL lifecycle |
 | `js/simulation/SharedForgeSystem.js` | `Economy/` | Candidate | Upgrade schemas and progression balance |
 | `js/simulation/SharedInventorySystem.js` | `Items/`, `Economy/` | Candidate | Item catalogue and character restrictions |
 | `js/simulation/SharedRoomLifecycleSystem.js` | `World/`, `Events/` | Candidate | Authored room types and story triggers |

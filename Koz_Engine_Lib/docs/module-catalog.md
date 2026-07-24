@@ -433,6 +433,22 @@ Good fit:
 - Maze prototypes
 - Roguelike room graphs
 
+## Rendering3D
+
+### `Rendering3D/worldMapping.js`
+
+Use for configurable 2D-to-3D coordinate and direction mapping, yaw conversion, viewport-aware canvas/NDC conversion, ray-plane intersections, projection callbacks, and canvas/WebGL split-screen layouts.
+
+### `Rendering3D/cameraRig.js`
+
+Use for renderer-neutral first-/third-person camera poses, FOV selection, yaw/pitch input, camera-relative movement, coherent shake, hard-cut focus snapping, and framerate-independent smoothing.
+
+### `Rendering3D/roomGeometry.js`
+
+Use to turn room dimensions and open exits into serializable wall, door-gap, corridor, floor, and ceiling plans. It also provides elevation policy and stable static-geometry signatures.
+
+See [`../Rendering3D/integration.md`](../Rendering3D/integration.md) for the complete backend adapter contract.
+
 ## Combat
 
 ### `Combat/statusBook.js`
