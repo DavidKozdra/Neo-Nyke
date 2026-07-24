@@ -25,9 +25,10 @@ Create a scoped host for tests, scenes, or game modes. Scoped registrations over
 ## Recommended Load Order
 
 1. Core, Time, Events, and deterministic random services.
-2. Project/content schemas and adapters.
+2. Achievements, Project/content schemas, and adapters.
 3. Combat, AI, World, Items, and Economy systems.
 4. Audio, VisualFX, Rendering3D, and UI presentation.
-5. Host content and host bootstrap.
+5. PWA build/runtime integration and platform bootstrap.
+6. Host content and host bootstrap.
 
 See each folder's `integration.md` and [`docs/neonyke-extraction-map.md`](docs/neonyke-extraction-map.md).

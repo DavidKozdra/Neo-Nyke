@@ -243,6 +243,10 @@
       register: ["Events", "eventEngine"],
     },
     {
+      path: "Koz_Engine_Lib/Events/eventBus.js",
+      register: ["Events", "eventBus"],
+    },
+    {
       path: "Koz_Engine_Lib/Events/eventSystem.js",
       register: ["Events", "eventSystem"],
       globals: {
@@ -252,6 +256,10 @@
     {
       path: "Koz_Engine_Lib/Events/tipTracker.js",
       register: ["Events", "tipTracker"],
+    },
+    {
+      path: "Koz_Engine_Lib/Achievements/achievementSystem.js",
+      register: ["Achievements", "achievementSystem"],
     },
     {
       path: "Koz_Engine_Lib/UI/mobileInput.js",
@@ -264,6 +272,10 @@
     {
       path: "Koz_Engine_Lib/UI/controlBindings.js",
       register: ["UI", "controlBindings"],
+    },
+    {
+      path: "Koz_Engine_Lib/PWA/clientRegistration.js",
+      register: ["PWA", "clientRegistration"],
     },
     { path: "Koz_Engine_Lib/UI/components/menuShell.js", register: ["UI", "components", "menuShell"] },
     { path: "Koz_Engine_Lib/UI/components/controlEditor.js", register: ["UI", "components", "controlEditor"] },

@@ -1,12 +1,38 @@
 const achievementEvents = (() => {
-  const listeners = {};
+  const shouldPublish = () => (
+    window.Neo?.gameMode !== 'practice' && !window.Neo?.isMovePreview
+  );
+  const eventBusApi = window.KozEngine?.Events?.eventBus;
+  if (eventBusApi?.createEventBus) {
+    return eventBusApi.createEventBus({
+      shouldPublish,
+      onError(error, context) {
+        console.error(`[Achievements] ${context.topic} listener failed`, error);
+      },
+    });
+  }
+
+  // Standalone fallback for tests and hosts that have not loaded the Koz
+  // browser bridge. Production NeoNyke uses Koz Engine's Events.eventBus.
+  const listeners = new Map();
   return {
     on(event, fn) {
-      (listeners[event] = listeners[event] || []).push(fn);
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event).add(fn);
+      return () => listeners.get(event)?.delete(fn) || false;
     },
     emit(event, payload) {
-      if (window.Neo?.gameMode === 'practice' || window.Neo?.isMovePreview) return;
-      (listeners[event] || []).forEach(fn => fn(payload));
+      if (!shouldPublish()) return;
+      [...(listeners.get(event) || [])].forEach(fn => {
+        try {
+          const result = fn(payload);
+          if (result && typeof result.catch === 'function') {
+            result.catch(error => console.error(`[Achievements] ${event} listener failed`, error));
+          }
+        } catch (error) {
+          console.error(`[Achievements] ${event} listener failed`, error);
+        }
+      });
     },
   };
 })();

@@ -88,6 +88,7 @@ Modules in `Koz_Engine_Lib` should eventually follow these rules:
 The active folder structure should be explicit:
 
 - `AI/`: pathfinding and agent-support logic
+- `Achievements/`: event-driven achievement rules, progress, unlocks, and persistence contracts
 - `Combat/`: renderer-neutral status, projectile, and combat-runtime primitives
 - `Assets/`: asset lookup and atlas registry helpers
 - `Audio/`: reusable audio services
@@ -96,6 +97,7 @@ The active folder structure should be explicit:
 - `Events/`: generic event rules, notification helpers, and tutorial/tip tracking
 - `Items/`: generic item math and registries
 - `Minigames/`: minigame orchestration and runtimes
+- `PWA/`: content-versioned offline builds, service-worker runtime, and update registration
 - `SaveLoad/`: save/load APIs, drivers, and schemas
 - `Time/`: clocks, timers, and day-cycle helpers
 - `UI/`: renderer-agnostic UI primitives

@@ -1,47 +1,35 @@
 #!/usr/bin/env node
-'use strict';
+"use strict";
 
-// Regenerates the PRECACHE list (and bumps CACHE_VERSION) in sw.js so the PWA is
-// truly offline-complete. The list is DERIVED, never hand-maintained — the old
-// hand-typed array had drifted badly (4 of 50 sounds, 2 of 22 sprite PNGs, and
-// the entire three.js vendor bundle were missing), which is exactly why the app
-// wasn't offline. Run this whenever assets or the module graph change:
-//
-//   node scripts/generate-precache.js          # rewrite sw.js
-//   node scripts/generate-precache.js --check   # CI: fail if sw.js is stale
-//
-// Sources of truth:
-//   1. the ES module import graph rooted at js/main.js (follows relative imports)
-//   2. same-origin <script>/<link>/src/href references in index.html
-//   3. every shippable file under assets/ (sprite/editor sources excluded)
-//   4. a few fixed roots (/, index.html, manifest.json, the sprite .js bundles)
+// NeoNyke host adapter for Koz Engine's reusable PWA manifest/runtime modules.
+// The generated service worker is content-versioned: editing any listed file
+// changes the version even when the URL set stays identical.
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("node:fs");
+const path = require("node:path");
+const {
+  collectFiles,
+  createCacheManifest,
+  createVersionToken,
+} = require("../Koz_Engine_Lib/PWA/cacheManifest");
 
-const ROOT = path.resolve(__dirname, '..');
-const SW_PATH = path.join(ROOT, 'sw.js');
-const INDEX_PATH = path.join(ROOT, 'index.html');
+const ROOT = path.resolve(__dirname, "..");
+const SW_PATH = path.join(ROOT, "sw.js");
+const INDEX_PATH = path.join(ROOT, "index.html");
+const PWA_RUNTIME_URL = "/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js";
 
-// Asset extensions that ship to the client. Editor sources (.ase/.aseprite/.psd)
-// and docs are deliberately excluded — they are never fetched at runtime.
 const SHIPPABLE_ASSET_EXT = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg',
-  '.wav', '.mp3', '.ogg', '.m4a',
-  '.woff2', '.woff', '.ttf', '.otf',
-  '.json',
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
+  ".wav", ".mp3", ".ogg", ".m4a",
+  ".woff2", ".woff", ".ttf", ".otf",
+  ".json",
 ]);
-const EXCLUDED_ASSET_EXT = new Set(['.ase', '.aseprite', '.psd', '.md', '.txt']);
+const EXCLUDED_ASSET_EXT = new Set([".ase", ".aseprite", ".psd", ".md", ".txt"]);
+const IMPORT_RE = /(?:import|export)\s+(?:[^'";]*?\sfrom\s*)?['"](\.[^'"]+)['"]/g;
 
 function toAbsUrlPath(fileAbs) {
-  return '/' + path.relative(ROOT, fileAbs).split(path.sep).join('/');
+  return `/${path.relative(ROOT, fileAbs).split(path.sep).join("/")}`;
 }
-
-// --- 1. ES module graph from js/main.js ------------------------------------
-// Matches static `import ... from '...'`, side-effect `import '...'`, and
-// `export ... from '...'` with relative specifiers. Bare/absolute/remote
-// specifiers are ignored (there are none in this project, but be safe).
-const IMPORT_RE = /(?:import|export)\s+(?:[^'";]*?\sfrom\s*)?['"](\.[^'"]+)['"]/g;
 
 function collectModuleGraph(entryAbs) {
   const seen = new Set();
@@ -52,153 +40,188 @@ function collectModuleGraph(entryAbs) {
     seen.add(fileAbs);
     let source;
     try {
-      source = fs.readFileSync(fileAbs, 'utf8');
+      source = fs.readFileSync(fileAbs, "utf8");
     } catch {
       throw new Error(`Precache module graph references a missing file: ${toAbsUrlPath(fileAbs)}`);
     }
     let match;
     IMPORT_RE.lastIndex = 0;
     while ((match = IMPORT_RE.exec(source))) {
-      const resolved = path.resolve(path.dirname(fileAbs), match[1]);
-      queue.push(resolved);
+      queue.push(path.resolve(path.dirname(fileAbs), match[1]));
     }
   }
   return seen;
 }
 
-// --- 2. index.html same-origin references ----------------------------------
 function collectIndexReferences() {
-  const html = fs.readFileSync(INDEX_PATH, 'utf8');
+  const html = fs.readFileSync(INDEX_PATH, "utf8");
   const refs = new Set();
   const attrRe = /(?:src|href)\s*=\s*"([^"]+)"/g;
   let match;
   while ((match = attrRe.exec(html))) {
     const ref = match[1].trim();
-    if (!ref || /^(?:https?:)?\/\//.test(ref) || ref.startsWith('data:')
-      || ref.startsWith('#') || ref.startsWith('mailto:')) continue;
-    const clean = ref.replace(/^\.?\//, '');
-    const abs = path.join(ROOT, clean);
-    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
-      refs.add('/' + clean);
-    }
+    if (!ref || /^(?:https?:)?\/\//.test(ref) || ref.startsWith("data:")
+      || ref.startsWith("#") || ref.startsWith("mailto:")) continue;
+    const clean = ref.replace(/^\.?\//, "");
+    const absolute = path.join(ROOT, clean);
+    if (fs.existsSync(absolute) && fs.statSync(absolute).isFile()) refs.add(`/${clean}`);
   }
   return refs;
 }
 
-// --- 3. shippable files under assets/ --------------------------------------
-function collectAssets(dirAbs, out) {
-  for (const entry of fs.readdirSync(dirAbs, { withFileTypes: true })) {
-    const abs = path.join(dirAbs, entry.name);
-    if (entry.isDirectory()) {
-      collectAssets(abs, out);
-      continue;
-    }
-    const ext = path.extname(entry.name).toLowerCase();
-    if (EXCLUDED_ASSET_EXT.has(ext)) continue;
-    if (!SHIPPABLE_ASSET_EXT.has(ext)) continue;
-    out.add(toAbsUrlPath(abs));
-  }
-  return out;
+function collectAssets() {
+  return collectFiles(path.join(ROOT, "assets"), {
+    include: function includeAsset(fileAbs) {
+      const extension = path.extname(fileAbs).toLowerCase();
+      return SHIPPABLE_ASSET_EXT.has(extension) && !EXCLUDED_ASSET_EXT.has(extension);
+    },
+  });
+}
+
+function collectEngineRuntime() {
+  return collectFiles(path.join(ROOT, "Koz_Engine_Lib"), {
+    include: function includeJavaScript(fileAbs) {
+      return path.extname(fileAbs).toLowerCase() === ".js";
+    },
+  });
 }
 
 function buildPrecacheList() {
-  const urls = new Set();
+  const urls = new Set(["/", "/index.html", "/game.html", "/manifest.json"]);
 
-  // Fixed roots. '/' and index.html are the navigation fallback; the sprite .js
-  // bundles and koz-engine are loaded via plain <script> (already caught by the
-  // index scan, but listed explicitly so a markup change can't silently drop
-  // them). sw.js is intentionally NOT self-cached.
-  urls.add('/');
-  urls.add('/index.html');
-  urls.add('/game.html');
-  urls.add('/manifest.json');
-
-  for (const fileAbs of collectModuleGraph(path.join(ROOT, 'js', 'main.js'))) {
+  for (const fileAbs of collectModuleGraph(path.join(ROOT, "js", "main.js"))) {
     urls.add(toAbsUrlPath(fileAbs));
   }
   for (const ref of collectIndexReferences()) urls.add(ref);
-  collectAssets(path.join(ROOT, 'assets'), urls);
+  for (const fileAbs of collectAssets()) urls.add(toAbsUrlPath(fileAbs));
 
-  // Koz engine + sprite bundles live outside assets/ and js/main.js's graph
-  // (classic scripts), so pin them explicitly if present.
+  // The browser bridge loads CommonJS modules dynamically, so static ESM graph
+  // traversal cannot discover them. Include every engine runtime file to keep a
+  // newly installed game genuinely offline as the bridge evolves.
+  for (const fileAbs of collectEngineRuntime()) urls.add(toAbsUrlPath(fileAbs));
+
   for (const extra of [
-    '/Koz_Engine_Lib/Core/koz-engine.global.js',
-    '/assets/sprites/combatants.js',
-    '/assets/sprites/environment.js',
-    '/assets/sprites/icons.js',
+    "/assets/sprites/combatants.js",
+    "/assets/sprites/environment.js",
+    "/assets/sprites/icons.js",
   ]) {
     if (fs.existsSync(path.join(ROOT, extra.slice(1)))) urls.add(extra);
   }
 
-  return [...urls].sort((a, b) => a.localeCompare(b));
+  return [...urls].sort(function byUrl(a, b) {
+    return a.localeCompare(b);
+  });
 }
 
-function renderPrecacheBlock(list) {
-  const body = list.map(url => `  ${JSON.stringify(url)},`).join('\n');
-  return `const PRECACHE = [\n${body}\n];`;
+function isOptionalUrl(url) {
+  // Large audio and credits media improve the offline experience but must not
+  // make a mobile install fail when browser quota is constrained.
+  return url.startsWith("/assets/sounds/") || url.startsWith("/assets/credits-images/");
 }
 
-// Bump the vN in `neonyke-vNN` so clients pick up the new list on next load.
-function bumpCacheVersion(swSource) {
-  return swSource.replace(
-    /const CACHE_VERSION = 'neonyke-v(\d+)';/,
-    (_, n) => `const CACHE_VERSION = 'neonyke-v${Number(n) + 1}';`,
-  );
+function createGeneratedConfig() {
+  const urls = buildPrecacheList();
+  const optionalUrls = urls.filter(isOptionalUrl);
+  const manifest = createCacheManifest({
+    rootDir: ROOT,
+    urls,
+    optionalUrls,
+    aliases: { "/": "index.html" },
+  });
+
+  const config = {
+    cachePrefix: "neonyke",
+    critical: manifest.critical.map(function toUrl(entry) { return entry.url; }),
+    optional: manifest.optional.map(function toUrl(entry) { return entry.url; }),
+    navigationFallback: "/index.html",
+    networkOnly: ["/api/"],
+    concurrency: 4,
+    optionalConcurrency: 2,
+    warmOptionalOnInstall: true,
+    manifestSummary: manifest.totals,
+  };
+  config.version = createVersionToken({
+    contentVersion: manifest.version,
+    cachePrefix: config.cachePrefix,
+    critical: config.critical,
+    optional: config.optional,
+    navigationFallback: config.navigationFallback,
+    networkOnly: config.networkOnly,
+    concurrency: config.concurrency,
+    optionalConcurrency: config.optionalConcurrency,
+    warmOptionalOnInstall: config.warmOptionalOnInstall,
+  });
+  return config;
 }
 
-function rewriteServiceWorker({ check }) {
-  const original = fs.readFileSync(SW_PATH, 'utf8');
-  const list = buildPrecacheList();
-  const block = renderPrecacheBlock(list);
+function renderServiceWorker(config) {
+  return [
+    "// Generated by scripts/generate-precache.js. Do not hand-edit.",
+    `const KOZ_PWA_CONFIG = ${JSON.stringify(config, null, 2)};`,
+    "",
+    `importScripts(${JSON.stringify(PWA_RUNTIME_URL)});`,
+    "self.KozPwaServiceWorker.install(self, KOZ_PWA_CONFIG);",
+    "",
+  ].join("\n");
+}
 
-  const precacheRe = /const PRECACHE = \[[\s\S]*?\n\];/;
-  if (!precacheRe.test(original)) {
-    throw new Error('Could not locate the PRECACHE array in sw.js');
+function readCurrentConfig() {
+  if (!fs.existsSync(SW_PATH)) return null;
+  const source = fs.readFileSync(SW_PATH, "utf8");
+  const marker = "const KOZ_PWA_CONFIG = ";
+  const start = source.indexOf(marker);
+  const end = source.indexOf(";\n\nimportScripts", start);
+  if (start === -1 || end === -1) return null;
+  try {
+    return JSON.parse(source.slice(start + marker.length, end));
+  } catch {
+    return null;
   }
-
-  const currentBlock = original.match(precacheRe)[0];
-  const listUnchanged = currentBlock === block;
-
-  if (check) {
-    if (!listUnchanged) {
-      console.error('sw.js PRECACHE is stale. Run: node scripts/generate-precache.js');
-      const current = new Set(currentBlock.match(/"[^"]+"/g)?.map(s => JSON.parse(s)) || []);
-      const next = new Set(list);
-      const added = list.filter(u => !current.has(u));
-      const removed = [...current].filter(u => !next.has(u));
-      if (added.length) console.error(`  + ${added.length} missing: ${added.slice(0, 8).join(', ')}${added.length > 8 ? ' …' : ''}`);
-      if (removed.length) console.error(`  - ${removed.length} stale: ${removed.slice(0, 8).join(', ')}${removed.length > 8 ? ' …' : ''}`);
-      process.exit(1);
-    }
-    console.log(`sw.js PRECACHE is up to date (${list.length} entries).`);
-    return;
-  }
-
-  let next = original.replace(precacheRe, block);
-  // Only bump the version when the cached set actually changed, so a no-op run
-  // doesn't churn the version (and force every client to re-download).
-  if (!listUnchanged) next = bumpCacheVersion(next);
-
-  if (next === original) {
-    console.log(`sw.js already up to date (${list.length} entries).`);
-    return;
-  }
-  fs.writeFileSync(SW_PATH, next);
-  const version = next.match(/const CACHE_VERSION = '([^']+)';/)?.[1];
-  console.log(`sw.js PRECACHE regenerated: ${list.length} entries, version ${version}.`);
 }
 
-// Read the PRECACHE list currently written in sw.js.
 function readCurrentPrecache() {
-  const source = fs.readFileSync(SW_PATH, 'utf8');
-  const block = source.match(/const PRECACHE = \[[\s\S]*?\n\];/)?.[0] || '';
-  return (block.match(/"[^"]+"/g) || []).map(s => JSON.parse(s));
+  const config = readCurrentConfig();
+  return [...(config?.critical || []), ...(config?.optional || [])]
+    .sort(function byUrl(a, b) { return a.localeCompare(b); });
 }
 
-// Only run the rewrite when invoked as a CLI, so tests can require the builders
-// without side effects.
+function rewriteServiceWorker(options) {
+  const opts = options || {};
+  const config = createGeneratedConfig();
+  const rendered = renderServiceWorker(config);
+  const current = fs.existsSync(SW_PATH) ? fs.readFileSync(SW_PATH, "utf8") : "";
+  const summary = config.manifestSummary;
+  const message = `${summary.entries} entries, ${(summary.bytes / 1048576).toFixed(2)} MiB, version ${config.version}`;
+
+  if (opts.check) {
+    if (current !== rendered) {
+      console.error("sw.js is stale. Run: node scripts/generate-precache.js");
+      process.exitCode = 1;
+      return false;
+    }
+    console.log(`sw.js content manifest is up to date (${message}).`);
+    return true;
+  }
+
+  if (current === rendered) {
+    console.log(`sw.js already up to date (${message}).`);
+    return false;
+  }
+  fs.writeFileSync(SW_PATH, rendered);
+  console.log(`sw.js regenerated (${message}).`);
+  return true;
+}
+
 if (require.main === module) {
-  rewriteServiceWorker({ check: process.argv.includes('--check') });
+  rewriteServiceWorker({ check: process.argv.includes("--check") });
 }
 
-module.exports = { buildPrecacheList, readCurrentPrecache };
+module.exports = {
+  buildPrecacheList,
+  createGeneratedConfig,
+  isOptionalUrl,
+  readCurrentConfig,
+  readCurrentPrecache,
+  renderServiceWorker,
+  rewriteServiceWorker,
+};

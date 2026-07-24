@@ -47,6 +47,23 @@ describe('service worker precache completeness', () => {
     expect(missing).toEqual([]);
   });
 
+  test('every Koz Engine runtime module is cached', () => {
+    const engineRoot = path.join(ROOT, 'Koz_Engine_Lib');
+    const queue = [engineRoot];
+    const modules = [];
+    while (queue.length) {
+      const directory = queue.shift();
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const absolute = path.join(directory, entry.name);
+        if (entry.isDirectory()) queue.push(absolute);
+        else if (entry.isFile() && entry.name.endsWith('.js')) {
+          modules.push('/' + path.relative(ROOT, absolute).split(path.sep).join('/'));
+        }
+      }
+    }
+    expect(modules.filter(modulePath => !cached.has(modulePath))).toEqual([]);
+  });
+
   test('editor sources are NOT shipped into the cache', () => {
     const leaked = [...cached].filter(url => /\.(ase|aseprite|psd)$/i.test(url));
     expect(leaked).toEqual([]);

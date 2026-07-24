@@ -91,6 +91,38 @@ How to use:
 Avoid when:
 - You can import modules directly. This is host glue, not engine logic.
 
+## PWA
+
+### `PWA/cacheManifest.js`
+
+When to use:
+- A build needs a content-derived cache version and critical/optional asset tiers.
+
+How to use:
+- Call `createCacheManifest()` with a project root, same-origin URLs, optional URLs, and aliases such as `/` to `index.html`.
+- Generate the service worker during every production build and verify it in CI.
+
+### `PWA/serviceWorkerRuntime.js`
+
+When to use:
+- A browser game needs an atomic offline shell, bounded optional-media warming, coherent version caches, and explicit update activation.
+
+How to use:
+- Import it from a generated classic service worker.
+- Call `KozPwaServiceWorker.install(self, hostConfig)`.
+- Keep API and multiplayer route prefixes in `networkOnly`.
+
+### `PWA/clientRegistration.js`
+
+When to use:
+- The host page needs registration, update notifications, controlled activation, optional cache warming, or storage quota information.
+
+How to use:
+- Create a client with `createPwaClient()`, then call `register()`.
+- Connect `onUpdateAvailable` to a safe update/reload action in the host UI.
+
+See [`../PWA/integration.md`](../PWA/integration.md) for the mobile/offline checklist.
+
 ## Time
 
 ### `Time/stepTimer.js`
@@ -162,6 +194,17 @@ How to use:
 
 ## Events
 
+### `Events/eventBus.js`
+
+When to use:
+- Systems need reusable publish/subscribe delivery without depending on DOM events or host globals.
+
+How to use:
+- Create a bus with `createEventBus()`.
+- Subscribe with `subscribe()`, `on()`, or `once()` and retain the returned unsubscribe function.
+- Publish with `emit()` or await `emitAsync()` when persistence must finish.
+- Use namespace wildcards sparingly for diagnostics and tooling.
+
 ### `Events/eventEngine.js`
 
 When to use:
@@ -220,6 +263,22 @@ How to use:
 
 Why it lives in `Events/`:
 - It tracks whether a host-triggered event or help prompt has already fired. It is closer to notification/event delivery than to a standalone gameplay domain.
+
+## Achievements
+
+### `Achievements/achievementSystem.js`
+
+When to use:
+- A game needs event-driven achievement progress, unlock deduplication, run/lifetime scopes, and injected persistence.
+
+How to use:
+- Inject an `Events/eventBus.js` instance, definitions, a store, and presentation callbacks.
+- Use declarative count/sum/max/latest/unique rules for simple achievements.
+- Use `system.subscribe()` for authored campaign rules involving several facts.
+- Call `resetRunProgress()` at run start and `dispose()` when the owning scope ends.
+
+Current caveat:
+- NeoNyke still owns its existing IndexedDB achievement schema and authored handlers. Its publishers use the engine event bus; storage/lifecycle migration can happen independently.
 
 ## UI
 
