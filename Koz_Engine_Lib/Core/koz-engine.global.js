@@ -277,6 +277,50 @@
       path: "Koz_Engine_Lib/PWA/clientRegistration.js",
       register: ["PWA", "clientRegistration"],
     },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/networkTransport.js",
+      register: ["Multiplayer", "networkTransport"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/protocolMap.js",
+      register: ["Multiplayer", "protocolMap"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/sessionDescriptor.js",
+      register: ["Multiplayer", "sessionDescriptor"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/resumeStore.js",
+      register: ["Multiplayer", "resumeStore"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/tabCoordinator.js",
+      register: ["Multiplayer", "tabCoordinator"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/resilientSession.js",
+      register: ["Multiplayer", "resilientSession"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/sequenceWindow.js",
+      register: ["Multiplayer", "sequenceWindow"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/entityDelta.js",
+      register: ["Multiplayer", "entityDelta"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/rateLimiter.js",
+      register: ["Multiplayer", "rateLimiter"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/authorityCheckpoint.js",
+      register: ["Multiplayer", "authorityCheckpoint"],
+    },
+    {
+      path: "Koz_Engine_Lib/Multiplayer/Platforms/Cloudflare/durableObjectAdapter.js",
+      register: ["Multiplayer", "Platforms", "Cloudflare", "durableObjectAdapter"],
+    },
     { path: "Koz_Engine_Lib/UI/components/menuShell.js", register: ["UI", "components", "menuShell"] },
     { path: "Koz_Engine_Lib/UI/components/controlEditor.js", register: ["UI", "components", "controlEditor"] },
     { path: "Koz_Engine_Lib/UI/components/audioSettings.js", register: ["UI", "components", "audioSettings"] },

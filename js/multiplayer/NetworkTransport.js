@@ -1,12 +1,17 @@
 (function initializeNetworkTransport(root, factory) {
-  const api = factory();
+  const reusableApi = typeof require === 'function'
+    ? require('../../Koz_Engine_Lib/Multiplayer/networkTransport.js')
+    : root.KozEngine?.Multiplayer?.networkTransport;
+  const api = factory(reusableApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.multiplayer = namespace.multiplayer || {};
   Object.assign(namespace.multiplayer, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkTransportApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkTransportApi(reusableApi) {
   'use strict';
+
+  if (reusableApi?.NetworkTransport) return reusableApi;
 
   const RELIABILITY = Object.freeze({ RELIABLE: 'reliable', UNRELIABLE: 'unreliable' });
   const DEFAULT_CHANNEL = 'control';

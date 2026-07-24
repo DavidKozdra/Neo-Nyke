@@ -558,15 +558,61 @@
         this._send(peerId, 'JOIN_REJECTED', { code: 'INVALID_SESSION', message: 'The local multiplayer session does not exist.' });
         return;
       }
+      const activeReconnect = payload.reconnectToken && Array.from(this.peerRecords.entries())
+        .find(([activePeerId, activeRecord]) => activePeerId !== peerId
+          && activeRecord?.reconnectToken === payload.reconnectToken
+          && activeRecord.playerId
+          && this.simulation.state.players[activeRecord.playerId]);
+      if (activeReconnect) {
+        const [activePeerId, activeRecord] = activeReconnect;
+        const player = this.simulation.state.players[activeRecord.playerId];
+        const rotatedToken = createReconnectToken();
+        this.peerRecords.delete(activePeerId);
+        this.playerIdByPeer.delete(activePeerId);
+        this.seenReliableSequences.delete(activePeerId);
+        this.invalidMessageCount.delete(activePeerId);
+        const replaceablePrefix = `${activePeerId}|`;
+        Array.from(this.lastReplaceableSequence.keys()).forEach(key => {
+          if (key.startsWith(replaceablePrefix)) this.lastReplaceableSequence.delete(key);
+        });
+        this.playerIdByPeer.set(peerId, player.id);
+        record.playerId = player.id;
+        record.ready = activeRecord.ready === true;
+        record.reconnectToken = rotatedToken;
+        player.peerId = peerId;
+        player.disconnected = false;
+        player.reconnectDeadlineTick = null;
+        player.reconnectDeadlineAt = null;
+        this._markPersistenceDirty();
+        // Remove the old authority mapping before closing its socket. The
+        // disconnect callback then cannot reserve or delete the transferred player.
+        this.transport.disconnectPeer?.(activePeerId, 'session-takeover');
+        this._send(peerId, 'JOIN_ACCEPTED', {
+          matchId: this.simulation.state.matchId,
+          sessionId: this.sessionId,
+          playerId: player.id,
+          reconnectToken: rotatedToken,
+        });
+        if (this.simulation.state.status === 'running') {
+          this._send(peerId, 'INITIAL_STATE', {
+            serverTick: this.simulation.state.tick,
+            state: this.simulation.state.snapshot(),
+            lastProcessedInput: { ...this.lastProcessedInput },
+          });
+        }
+        this._broadcastLobbyState();
+        return;
+      }
       const reservation = payload.reconnectToken && this.reconnectReservations.get(payload.reconnectToken);
       if (reservation && reservation.deadlineTick >= this.simulation.state.tick
         && reservation.deadlineAt >= Date.now() && this.simulation.state.players[reservation.playerId]) {
         const player = this.simulation.state.players[reservation.playerId];
         this.reconnectReservations.delete(payload.reconnectToken);
+        const rotatedToken = createReconnectToken();
         this.playerIdByPeer.set(peerId, player.id);
         record.playerId = player.id;
         record.ready = true;
-        record.reconnectToken = payload.reconnectToken;
+        record.reconnectToken = rotatedToken;
         player.peerId = peerId;
         player.disconnected = false;
         player.reconnectDeadlineTick = null;
@@ -580,7 +626,7 @@
           matchId: this.simulation.state.matchId,
           sessionId: this.sessionId,
           playerId: player.id,
-          reconnectToken: payload.reconnectToken,
+          reconnectToken: rotatedToken,
         });
         this._send(peerId, 'INITIAL_STATE', {
           serverTick: this.simulation.state.tick,
@@ -1141,7 +1187,7 @@
       this.inputSequence = 0;
       this.actionSequence = 0;
       this.interactionSequence = 0;
-      this.reconnectToken = null;
+      this.reconnectToken = options.reconnectToken ? String(options.reconnectToken) : null;
       this.authorityPeerId = null;
       this.sessionId = null;
       this.playerId = null;

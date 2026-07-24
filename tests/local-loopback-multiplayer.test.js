@@ -568,6 +568,34 @@ describe('protocol-driven local multiplayer session', () => {
     expect(reconnected.playerId).toBe(originalPlayerId);
     expect(authority.simulation.state.players[originalPlayerId]).toEqual(expect.objectContaining({ disconnected: false }));
     expect(reconnected.state.players[originalPlayerId].id).toBe(originalPlayerId);
+    expect(reconnected.reconnectToken).not.toBe(reconnectToken);
+  });
+
+  test('atomically transfers an active player to a replacement tab and rotates its credential', async () => {
+    const { clock, network, authority, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const playerId = clientB.playerId;
+    const oldToken = clientB.reconnectToken;
+    const replacement = new LocalMultiplayerClient({
+      transport: transport(network, 'client-b-new-tab', 'Client B'),
+      reconnectToken: oldToken,
+    });
+
+    await replacement.connect('GOFAST');
+    clock.runAll();
+
+    expect(replacement.status).toBe('running');
+    expect(replacement.playerId).toBe(playerId);
+    expect(replacement.reconnectToken).not.toBe(oldToken);
+    expect(authority.playerIdByPeer.get('client-b-new-tab')).toBe(playerId);
+    expect(authority.playerIdByPeer.has('client-b')).toBe(false);
+    expect(authority.simulation.state.players[playerId]).toEqual(expect.objectContaining({
+      peerId: 'client-b-new-tab',
+      disconnected: false,
+    }));
   });
 
   test('removes an intentional leaver immediately instead of reserving a player slot', async () => {
