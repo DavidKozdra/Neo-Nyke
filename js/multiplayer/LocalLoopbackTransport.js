@@ -93,6 +93,10 @@
       this.jitterMs = Math.max(0, Number(options.jitterMs) || 0);
       this.unreliablePacketLoss = Math.max(0, Math.min(1, Number(options.unreliablePacketLoss) || 0));
       this.duplicateMessageRate = Math.max(0, Math.min(1, Number(options.duplicateMessageRate) || 0));
+      // Optional directional link capacity for congestion benchmarks. The
+      // default remains unlimited so existing deterministic transport tests and
+      // normal local play retain their previous timing.
+      this.bytesPerSecond = Math.max(0, Number(options.bytesPerSecond) || 0);
       this.clock = options.clock || new RealNetworkClock();
       const randomService = new RandomService({ matchSeed: options.seed ?? 'local-loopback' });
       this.random = typeof options.random === 'function'
@@ -101,6 +105,7 @@
       this.transports = new Map();
       this.sessions = new Map();
       this.lastReliableDeliveryAt = new Map();
+      this.linkAvailableAt = new Map();
       this.metrics = { sent: 0, delivered: 0, dropped: 0, duplicated: 0, bytes: 0 };
     }
 
@@ -186,17 +191,18 @@
       const serialized = JSON.stringify(message);
       const cloned = JSON.parse(serialized);
       this.metrics.sent += 1;
-      this.metrics.bytes += typeof Buffer !== 'undefined'
+      const byteLength = typeof Buffer !== 'undefined'
         ? Buffer.byteLength(serialized, 'utf8')
         : new TextEncoder().encode(serialized).byteLength;
+      this.metrics.bytes += byteLength;
       if (delivery.reliability === 'unreliable' && this.random() < this.unreliablePacketLoss) {
         this.metrics.dropped += 1;
         return { queued: false, dropped: true };
       }
-      this._scheduleDelivery(sender.identity.id, target, cloned, delivery, 0);
+      this._scheduleDelivery(sender.identity.id, target, cloned, delivery, 0, byteLength);
       if (this.random() < this.duplicateMessageRate) {
         this.metrics.duplicated += 1;
-        this._scheduleDelivery(sender.identity.id, target, cloned, delivery, 1);
+        this._scheduleDelivery(sender.identity.id, target, cloned, delivery, 1, byteLength);
       }
       return { queued: true, dropped: false };
     }
@@ -211,15 +217,21 @@
       return results;
     }
 
-    _scheduleDelivery(senderPeerId, target, message, delivery, duplicateOffsetMs) {
+    _scheduleDelivery(senderPeerId, target, message, delivery, duplicateOffsetMs, byteLength = 0) {
       const jitter = this.jitterMs > 0 ? (this.random() * 2 - 1) * this.jitterMs : 0;
-      let deliveryAt = this.clock.now() + Math.max(0, this.latencyMs + jitter + duplicateOffsetMs);
+      const now = this.clock.now();
+      const linkKey = `${senderPeerId}|${target.identity.id}`;
+      const transmissionMs = this.bytesPerSecond > 0 ? Number(byteLength || 0) / this.bytesPerSecond * 1000 : 0;
+      const transmissionStart = Math.max(now, this.linkAvailableAt.get(linkKey) || now);
+      const transmissionDone = transmissionStart + transmissionMs;
+      this.linkAvailableAt.set(linkKey, transmissionDone);
+      let deliveryAt = transmissionDone + Math.max(0, this.latencyMs + jitter + duplicateOffsetMs);
       if (delivery.reliability === 'reliable') {
         const orderingKey = `${senderPeerId}|${target.identity.id}|${delivery.channel}`;
         deliveryAt = Math.max(deliveryAt, (this.lastReliableDeliveryAt.get(orderingKey) || 0) + 0.001);
         this.lastReliableDeliveryAt.set(orderingKey, deliveryAt);
       }
-      const delay = Math.max(0, deliveryAt - this.clock.now());
+      const delay = Math.max(0, deliveryAt - now);
       this.clock.schedule(() => {
         if (!target.sessionId) return;
         this.metrics.delivered += 1;

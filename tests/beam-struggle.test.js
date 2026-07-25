@@ -65,6 +65,12 @@ describe('beam struggles', () => {
     expect(combatSource).toContain("text: devastatingLoss ? 'BEAM BREAK!' : 'OVERPOWERED!'");
     expect(networkSource).toContain('winner?.beamDamage || 0) + Number(loser.beamDamage || 0)');
     expect(networkSource).toContain('knockback: 560, ignoreInv: true, ignoreDamageCaps: true');
+    // PvP keeps the item-scaled beamDamage (a duel loss should be decisive),
+    // but losing to an *enemy* uses the authored base laser damage. That hit
+    // bypasses the per-hit cap, so scaling it by the victim's own upgrades let
+    // a small beam enemy one-shot a fully-upgraded player.
+    expect(networkSource).toContain('playerBaseBeamDamage(player)');
+    expect(networkSource).toContain('function playerBaseBeamDamage(player)');
   });
 
   test('draws a beam-colored shared HUD and a mixed clash sphere in 2D and 3D', () => {

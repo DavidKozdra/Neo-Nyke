@@ -1838,6 +1838,15 @@
     });
   }
 
+  // Authored base damage of a player's equipped laser, with no item multipliers
+  // applied. Beam-struggle backlash is balanced against this fixed number in the
+  // campaign; using the scaled player.beamDamage would make the hit grow with
+  // the victim's own upgrades.
+  function playerBaseBeamDamage(player) {
+    const moveKey = player?.equippedMoves?.laser || 'blood_beam';
+    return Math.max(1, Number(MOVE_BASE_STATS[moveKey]?.damage || 10));
+  }
+
   function clearNetworkBeamStruggle(state, struggle) {
     if (!struggle) return;
     const enemy = state.enemies?.[struggle.enemyId];
@@ -1860,6 +1869,8 @@
       const winner = playerWon ? player : opponent;
       const loser = playerWon ? opponent : player;
       if (loser && !loser.downed) {
+        // PvP keeps the item-scaled beam damage on purpose: a duel lost at the
+        // beam is meant to be decisive, and both duellists opted in.
         const damage = Math.max(1, Math.round(Number(winner?.beamDamage || 0) + Number(loser.beamDamage || 0)));
         loser.stunnedUntilTick = Math.max(Number(loser.stunnedUntilTick || 0), state.tick + 24);
         damagePlayer(state, loser, damage, winner?.id, emitEvent, 'beam_struggle', {
@@ -1874,7 +1885,15 @@
       damageEnemy(state, enemy, 30, player?.id, emitEvent, { attackKind: 'beam_struggle', knockback: 360 });
     } else if (player && !player.downed) {
       player.stunnedUntilTick = Math.max(Number(player.stunnedUntilTick || 0), state.tick + 30);
-      const damage = Math.max(1, Math.round(Number(enemy?.dmg || enemy?.contactDamage || 0) + Number(player.beamDamage || 0)));
+      // Campaign parity (js/game/combat.js): the backlash is the enemy's beam
+      // power plus the *authored base* damage of the player's laser — NOT
+      // player.beamDamage, which has already been multiplied by the player's
+      // beamDamageMultiplier items. Because this hit deliberately bypasses the
+      // per-hit cap and one-shot guard, feeding a scaled number in let an
+      // upgraded laser one-shot its own owner off a small beam enemy.
+      const damage = Math.max(1, Math.round(
+        Number(enemy?.dmg || enemy?.contactDamage || 0) + playerBaseBeamDamage(player),
+      ));
       damagePlayer(state, player, damage, enemy?.id, emitEvent, 'beam_struggle', {
         angle: Number(enemy?.beamAngle || 0), knockback: 560, ignoreInv: true, ignoreDamageCaps: true,
       });

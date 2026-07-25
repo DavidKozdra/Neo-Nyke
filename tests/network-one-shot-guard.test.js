@@ -105,4 +105,65 @@ describe('multiplayer per-hit damage cap and one-shot guard', () => {
     hitPlayerWith(state, simulation, 100000, { attackKind: 'bleed' });
     expect(state.players.p1.hp).toBeGreaterThan(0);
   });
+
+  // Losing a beam struggle is deliberately devastating and bypasses both the
+  // per-hit cap and the one-shot guard, in the campaign and here alike. That
+  // makes its damage input the only thing standing between a small beam enemy
+  // and an instant kill — so it has to be the authored base laser damage, not
+  // the item-scaled player.beamDamage.
+  describe('beam-struggle backlash does not scale with the victim\'s own upgrades', () => {
+    const { MOVE_BASE_STATS } = require('../js/simulation/SharedMoveContent');
+
+    function struggleLoss(beamDamage) {
+      const { state } = harness({ hp: 100, maxHp: 100 });
+      const player = state.players.p1;
+      player.equippedMoves = { ...(player.equippedMoves || {}), laser: 'blood_beam' };
+      // An upgraded laser: beamDamage is base * beamDamageMultiplier.
+      player.beamDamage = beamDamage;
+
+      const enemyId = state.allocateEntityId('enemy');
+      const enemy = {
+        id: enemyId, type: 'laser', behavior: 'beam', roomId: player.roomId,
+        x: player.x + 200, y: player.y, radius: 15, health: 52, maxHealth: 52,
+        dmg: 12, contactDamage: 12, dead: false, beamTime: 3, beamAngle: Math.PI,
+      };
+      state.enemies[enemyId] = enemy;
+      state.beamStruggles = {};
+      const struggle = {
+        playerId: player.id, enemyId, startTick: state.tick,
+        endTick: state.tick, progress: 0, mashCount: 0, x: player.x, y: player.y,
+      };
+      state.beamStruggles[player.id] = struggle;
+      enemy.networkBeamStrugglePlayerId = player.id;
+      player.beamChannel = {
+        moveKey: 'blood_beam', angle: 0,
+        startTick: state.tick, untilTick: state.tick + 40, cooldownTicks: 20,
+      };
+      // Resolve the struggle as a loss (progress 0, no mashing).
+      simulationResolve(state);
+      return 100 - state.players.p1.hp;
+    }
+
+    // Drive one tick so the authority resolves the expired struggle.
+    function simulationResolve(state) {
+      const { GameSimulation: Sim } = require('../js/simulation/GameSimulation');
+      const { RandomService: Rng } = require('../js/simulation/RandomService');
+      const system = createNetworkCombatSystem({ emitEvent: () => {} });
+      const sim = new Sim({ state, randomService: new Rng({ matchSeed: state.matchSeed }), systems: [system] });
+      sim.updateGame({}, 0.05);
+    }
+
+    test('costs the campaign\'s enemy-power + base-laser damage', () => {
+      // Campaign: enemy.dmg (12) + MOVE_BASE_STATS.blood_beam.damage (14) = 26.
+      expect(MOVE_BASE_STATS.blood_beam.damage).toBe(14);
+      expect(struggleLoss(14)).toBe(26);
+    });
+
+    test('an upgraded laser cannot one-shot its own owner', () => {
+      // Before the fix this fed 12 + 90 = 102 through a capless hit and deleted
+      // a full-health player outright.
+      expect(struggleLoss(90)).toBe(26);
+      expect(struggleLoss(400)).toBe(26);
+    });
+  });
 });
