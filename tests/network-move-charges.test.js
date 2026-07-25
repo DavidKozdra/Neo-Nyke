@@ -31,6 +31,33 @@ function idle(simulation) {
 }
 
 describe('authority move charges', () => {
+  test('Turtle Boy holds Death Ball on the authority and scales it on release', () => {
+    const { simulation, player } = run('turtle_boy');
+    const hold = {
+      buttons: 2,
+      aimDirection: 0,
+      actions: [{ action: 'ABILITY', abilityId: 'death_ball', aimDirection: 0 }],
+    };
+    simulation.updateGame({ p1: hold }, FIXED_DELTA_SECONDS);
+    expect(player.smashCharge).toEqual(expect.objectContaining({ moveKey: 'death_ball' }));
+    expect(Object.values(simulation.state.projectiles)).toHaveLength(0);
+
+    // Keep holding for half the five-second charge, then release. The cast must
+    // be delayed and materially stronger/larger than an old immediate 40-damage
+    // ball.
+    for (let tick = 0; tick < 50; tick += 1) {
+      simulation.updateGame({ p1: { buttons: 2, aimDirection: 0 } }, FIXED_DELTA_SECONDS);
+    }
+    expect(Object.values(simulation.state.projectiles)).toHaveLength(0);
+    simulation.updateGame({ p1: { buttons: 0, aimDirection: 0 } }, FIXED_DELTA_SECONDS);
+
+    const ball = Object.values(simulation.state.projectiles).find(projectile => projectile.kind === 'death_ball');
+    expect(ball).toEqual(expect.objectContaining({ radius: expect.any(Number), damage: expect.any(Number) }));
+    expect(ball.radius).toBeGreaterThan(16);
+    expect(ball.damage).toBeGreaterThan(40);
+    expect(player.smashCharge).toBeNull();
+  });
+
   test('Thorn can spend two dash charges back to back', () => {
     const { simulation, player } = run('thorn_knight');
 

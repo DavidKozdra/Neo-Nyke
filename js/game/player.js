@@ -1669,7 +1669,7 @@ export function confirmWizardPawSelection() {
 
   function openVoucherRedeem(voucherKey = '') {
     if (!Neo.player) return false;
-    if (Neo.currentRoom?.type !== 'shop') return false;
+    if (!(Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop'))) return false;
     if (Neo.isChallengeActive?.('no_items')) {
       Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
       return false;
@@ -1739,7 +1739,7 @@ export function confirmWizardPawSelection() {
       cancelVoucherRedeem();
       return true;
     }
-    const result = globalThis.NeoNyke?.simulation?.redeemCampaignVoucher?.(Neo.player, voucher.key, itemKey, { inShop: Neo.currentRoom?.type === 'shop' });
+    const result = globalThis.NeoNyke?.simulation?.redeemCampaignVoucher?.(Neo.player, voucher.key, itemKey, { inShop: Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop') });
     if (!result?.ok) return false;
     const grantedName = Neo.itemRegistry?.get?.(itemKey)?.name || Neo.ITEM_DEFS?.[itemKey]?.name || itemKey;
     Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: voucher.color });
@@ -1769,7 +1769,7 @@ export function confirmWizardPawSelection() {
   function refreshShopVoucherBanner(preferredVoucherKey = '') {
     const banner = Neo.ui?.shopVoucherBanner;
     if (!banner) return;
-    const show = Neo.currentRoom?.type === 'shop'
+    const show = (Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop'))
       && getVoucherCount() > 0
       && !Neo.isChallengeActive?.('no_items');
     banner.classList.toggle('hidden', !show);

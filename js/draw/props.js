@@ -1328,6 +1328,36 @@
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText('EXIT', 0, 43);
+      } else if (pickup.type === 'endlessNextWave') {
+        // Endless intermission exit. Deliberately reads as a "go" gate rather
+        // than loot — teal plinth with a forward chevron, so it never gets
+        // mistaken for one of the paid chests sharing the room.
+        const pulse = 0.5 + Math.sin(Date.now() / 320) * 0.5;
+        Neo.ctx.translate(0, -bob);
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.fillStyle = 'rgba(0,0,0,.42)';
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 25, 34, 12, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.fillStyle = 'rgba(8,58,48,.9)';
+        Neo.ctx.strokeStyle = '#8dffcf';
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.shadowColor = '#8dffcf';
+        Neo.ctx.shadowBlur = 12 + pulse * 10;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(-27, -26, 54, 54, 6);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.strokeStyle = '#dcfff2';
+        Neo.ctx.lineWidth = 4;
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(-11, -14); Neo.ctx.lineTo(7, 0); Neo.ctx.lineTo(-11, 14);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#c6ffe9';
+        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('NEXT WAVE', 0, 43);
       } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         const adapter = pickup.type === 'adapterPortal';
         // Per-type palette: jester is pink/chaos, adapter is violet/tech.

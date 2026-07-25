@@ -129,6 +129,17 @@
   // that has seen the bit ends as soon as it clears (release-to-stop, like the
   // campaign); a channel that never sees it simply runs its full duration.
   const BUTTON_LASER_HELD = 1;
+  // The compact input bitfield carries hold state separately from the one-shot
+  // action messages.  A smash action starts a charge; this bit decides when it
+  // is released.  Keeping that timing on the authority prevents a client from
+  // authoring a damage multiplier.
+  const BUTTON_SMASH_HELD = 2;
+  const HOLD_TO_CHARGE_SMASH_MOVES = Object.freeze({
+    death_ball: Object.freeze({ maxChargeTicks: 100 }), // 5 seconds
+    // Turtle Power-Up charges four times as quickly in the campaign.
+    turtle_powerup: Object.freeze({ maxChargeTicks: 25 }),
+  });
+  const PLAYER_HIT_INVULNERABILITY_TICKS = 15; // campaign parity: 0.75 seconds
   const TURTLE_WAVE_HP_PER_SECOND = 2;
   const HEAVY_HIT_HEALTH_RATIO = 0.5;
   const HEAVY_KNOCKBACK_THRESHOLD = 6600;
@@ -1758,6 +1769,63 @@
     player.beamChannel = null;
   }
 
+  function beginHeldSmashCharge(state, player, moveKey, angle, cooldownTicks, emitEvent) {
+    const profile = HOLD_TO_CHARGE_SMASH_MOVES[moveKey];
+    if (!profile || player.smashCharge) return null;
+    const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
+    // Spend now, then rewrite the recharge deadline when the held move ends.
+    // This matches the campaign's deferred held-skill recharge without allowing
+    // a player to begin several charges on the same available pip.
+    if (!spendMoveCharge(player, moveKey, state.tick + profile.maxChargeTicks + scaledCooldownTicks)) return null;
+    player.smashCharge = {
+      moveKey,
+      angle,
+      startTick: state.tick,
+      maxChargeTicks: profile.maxChargeTicks,
+      cooldownTicks: scaledCooldownTicks,
+      heldSeen: false,
+      // An action and its replaceable input can arrive in either order. Give
+      // the first held input a short window before treating it as a tap.
+      releaseGraceUntilTick: state.tick + 3,
+    };
+    setPlayerAction(state, player, 'smash', moveKey, angle);
+    emitEvent('PLAYER_ABILITY_CHARGING', {
+      playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+      slot: 'smash', abilityId: moveKey, aimDirection: angle,
+      maxChargeTicks: profile.maxChargeTicks,
+    });
+    return { moveKey, slot: 'smash', mode: 'charging' };
+  }
+
+  function updatePlayerSmashCharges(state, inputs, emitEvent, random) {
+    Object.values(state.players || {}).forEach(player => {
+      const charge = player?.smashCharge;
+      if (!charge) return;
+      if (player.downed || player.disconnected) {
+        player.smashCharge = null;
+        return;
+      }
+      const input = inputs?.[player.id] || {};
+      const buttons = Math.trunc(Number(input.buttons) || 0);
+      if (buttons & BUTTON_SMASH_HELD) {
+        charge.heldSeen = true;
+        if (Number.isFinite(Number(input.aimDirection))) charge.angle = Number(input.aimDirection);
+      }
+      const startTick = Number.isFinite(Number(charge.startTick)) ? Number(charge.startTick) : state.tick;
+      const elapsedTicks = Math.max(0, state.tick - startTick);
+      const released = charge.heldSeen && !(buttons & BUTTON_SMASH_HELD);
+      const tapWithoutInput = !charge.heldSeen && state.tick >= Number(charge.releaseGraceUntilTick || state.tick);
+      const fullyCharged = elapsedTicks >= Math.max(1, Number(charge.maxChargeTicks || 1));
+      if (!released && !tapWithoutInput && !fullyCharged) return;
+      const ratio = Math.max(0, Math.min(1, elapsedTicks / Math.max(1, Number(charge.maxChargeTicks || 1))));
+      player.smashCharge = null;
+      resolvePlayerAbility(state, player, {
+        action: 'ABILITY', abilityId: charge.moveKey, aimDirection: charge.angle,
+      }, emitEvent, random, { releaseHeldCharge: true, chargeRatio: ratio });
+      rescheduleLatestMoveCharge(player, charge.moveKey, state.tick + Math.max(1, Number(charge.cooldownTicks || 1)));
+    });
+  }
+
   function clearNetworkBeamStruggle(state, struggle) {
     if (!struggle) return;
     const enemy = state.enemies?.[struggle.enemyId];
@@ -2012,7 +2080,7 @@
     }
   }
 
-  function resolvePlayerAbility(state, player, action, emitEvent, random) {
+  function resolvePlayerAbility(state, player, action, emitEvent, random, execution = {}) {
     if (player.downed) return null;
     const moveKey = String(action.abilityId || '');
     const slot = MOVE_SLOT_BY_KEY[moveKey];
@@ -2021,7 +2089,7 @@
     if (action.action !== expectedAction) return null;
     const stats = applyForgeStats(player, 'move', moveKey, MOVE_BASE_STATS[moveKey] || {});
     const presentation = MOVE_PRESENTATION_DEFS[moveKey] || { kind: slot, style: 'normal' };
-    if (!hasMoveCharge(player, moveKey)) return null;
+    if (!execution.releaseHeldCharge && !hasMoveCharge(player, moveKey)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
     // God mode slashes ability cooldowns (laser 2.8s, smash 2s, dash 0.7x).
@@ -2029,6 +2097,10 @@
       ? (slot === 'laser' ? 2.8 / Math.max(0.5, Number(stats.cooldown || 3.2)) : slot === 'smash' ? 2 / Math.max(0.5, Number(stats.cooldown || 4.2)) : 0.7)
       : 1;
     const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20 * godCooldownMult));
+    if (slot === 'smash' && HOLD_TO_CHARGE_SMASH_MOVES[moveKey] && !execution.releaseHeldCharge) {
+      return beginHeldSmashCharge(state, player, moveKey, angle, cooldownTicks, emitEvent);
+    }
+    const chargeRatio = Math.max(0, Math.min(1, Number(execution.chargeRatio || 0)));
     const projectileIds = [];
     const spawnedProjectiles = [];
     const abilityEntityIds = [];
@@ -2190,15 +2262,17 @@
         }
         mode = 'support';
       } else if (moveKey === 'death_ball') {
+        const radius = 16 + chargeRatio * 34;
+        const damage = Math.max(1, Math.round(Number(stats.damage || 40) * (0.6 + chargeRatio * 2)));
         projectileIds.push(createPlayerProjectile(state, player, {
           kind: moveKey,
           attackKind: moveKey,
-          damage: Number(stats.damage || 40),
-          speed: 350,
-          radius: 16,
-          lifeTicks: 30,
-          splash: Number(stats.range || 140),
-          splashDamage: Number(stats.damage || 40),
+          damage,
+          speed: 520 - chargeRatio * 200,
+          radius,
+          lifeTicks: Math.round((1.6 + chargeRatio * 0.8) * 20),
+          pierce: 4 + Math.round(chargeRatio * 8),
+          spawnDistance: Number(player.radius || 18) + radius * 0.4,
         }, angle).id);
         mode = 'projectile';
       } else if (moveKey === 'holy_turrets') {
@@ -2253,7 +2327,10 @@
     }
 
     const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
-    if (player.beamChannel?.moveKey === moveKey && player.beamChannel.startTick === state.tick) {
+    if (execution.releaseHeldCharge) {
+      // The charge was spent at hold start. Its timer is rescheduled by
+      // updatePlayerSmashCharges at the actual release tick.
+    } else if (player.beamChannel?.moveKey === moveKey && player.beamChannel.startTick === state.tick) {
       // Held beams recharge from the moment the channel ends, like the
       // campaign's queueHeldSkillRecharge. Assume the full duration here;
       // endBeamChannel rewrites this if the beam is released early.
@@ -2510,12 +2587,37 @@
     const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
     player.barrier = Math.max(0, Number(player.barrier || 0) - absorbed);
     const uncappedDealt = incoming - absorbed;
-    const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
-      ? Math.max(0, Math.min(1, Number(options.maxHitRatio)))
-      : null;
-    const dealt = maxHitRatio == null
-      ? uncappedDealt
-      : Math.min(uncappedDealt, Math.max(1, Number(player.maxHp || 120)) * maxHitRatio);
+    // Per-hit cap and one-shot guard, matching the campaign's damagePlayer (see
+    // js/game/world.js). These used to be opt-in here via options.maxHitRatio,
+    // which nothing ever passed — so multiplayer had no ceiling on a single hit
+    // and a burst could delete a full-health player outright. They are now the
+    // default, exactly as in the campaign, and callers opt OUT explicitly.
+    const healthBeforeHit = Number(player.hp || 0);
+    const maximumHealth = Math.max(1, Number(player.maxHp || 120));
+    let dealt = uncappedDealt;
+    if (!options.ignoreDamageCaps && !options.ignoreOneShotGuard) {
+      const sourceKey = String(options.sourceKey || attackKind || '').toLowerCase();
+      const attacker = sourceId ? state.enemies?.[sourceId] : null;
+      const bossLike = !!attacker?.boss
+        || !!getEnemyDefinition(attacker?.type)?.boss
+        || room?.type === 'boss'
+        || room?.type === 'god'
+        || sourceKey.includes('boss')
+        || sourceKey.includes('god')
+        || sourceKey.includes('queen')
+        || sourceKey.includes('artificer')
+        || sourceKey.includes('golem');
+      const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
+        ? Math.max(0, Math.min(1, Number(options.maxHitRatio)))
+        : bossLike ? 0.62 : 0.48;
+      dealt = Math.min(dealt, Math.max(18, maximumHealth * maxHitRatio));
+      // Above 35% health, a single hit can wound but never kill.
+      if (healthBeforeHit > maximumHealth * 0.35 && healthBeforeHit - dealt <= 0) {
+        dealt = Math.max(0, healthBeforeHit - 1);
+      }
+    } else if (Number.isFinite(Number(options.maxHitRatio))) {
+      dealt = Math.min(dealt, maximumHealth * Math.max(0, Math.min(1, Number(options.maxHitRatio))));
+    }
     player.hp = Math.max(0, Number(player.hp || 0) - dealt);
     player.hitTick = state.tick;
     const impulse = dealt > 0 && Number(options.knockback || 0) > 0
@@ -2544,6 +2646,16 @@
       }
     }
     const newlyDowned = player.hp <= 0;
+    // Normal hits grant the same short damage i-frames as the campaign. Without
+    // this, a packed room can apply several independent contact/projectile hits
+    // in consecutive 20 Hz ticks and make a healthy player appear to die in a
+    // single network update. Status ticks deliberately opt out below.
+    if (dealt > 0 && !options.noInvFrames) {
+      player.invulnerableUntilTick = Math.max(
+        Number(player.invulnerableUntilTick || 0),
+        state.tick + PLAYER_HIT_INVULNERABILITY_TICKS,
+      );
+    }
     if (newlyDowned) {
       player.downed = true;
       player.downedAtTick = state.tick;
@@ -2875,7 +2987,10 @@
           const resistance = key === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
           const severity = Number(stats.negativeStatusMultiplier || 1);
           const damage = Math.max(0.25, rawDamage * Math.max(0.2, 1 - resistance) * severity);
-          damagePlayer(state, player, damage, status.ownerId || key, emitEvent, key, { ignoreInv: true });
+          damagePlayer(state, player, damage, status.ownerId || key, emitEvent, key, {
+            ignoreInv: true,
+            noInvFrames: true,
+          });
           return damage;
         },
       });
@@ -3211,7 +3326,14 @@
             + (Number(falloff.edgeMultiplier || 1) - Number(falloff.centerMultiplier || 1))
             * Math.max(0, Math.min(1, playerDistance / Math.max(1, radius))))
           : damage;
-        damagePlayer(state, player, Math.round(scaled), enemy.id, behaviorRuntime.emitEvent, `${enemy.type}_blast`, { angle, knockback });
+        damagePlayer(state, player, Math.round(scaled), enemy.id, behaviorRuntime.emitEvent, `${enemy.type}_blast`, {
+          angle,
+          knockback,
+          // The Cult Queen's explicitly telegraphed death-finisher is the one
+          // authored exception: it must not be nullified by an unrelated hit
+          // that happened just before the detonation.
+          ignoreInv: !!options.playerDamageFalloff,
+        });
       });
       behaviorRuntime.emitEvent('ENEMY_ATTACKED', {
         enemyId: enemy.id, attackKind: `${enemy.type}_blast`, originX: x, originY: y, effectRadius: radius,
@@ -4209,6 +4331,7 @@
       // is spendable on this tick, rather than a tick late.
       tickMoveCharges(state);
       updatePlayerActions(state, inputs, emitEvent, random);
+      updatePlayerSmashCharges(state, inputs, emitEvent, random);
       updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
       updateAbilityEntities(state, emitEvent, random);

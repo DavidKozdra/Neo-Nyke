@@ -2421,6 +2421,9 @@ const BAKED_PICKUP_WORLD_SIZE = {
   secretWarp: 80,
   challengeBomb: 70,
   challengeRune: 70,
+  // Endless intermission exit: a 54-unit plinth (-26..+28) plus the 'NEXT WAVE'
+  // label at y=43, with headroom for its pulsing glow.
+  endlessNextWave: 110,
 };
 // Fallback for a type with no measured entry -- deliberately roomy, since
 // clipping authored art is worse than a slightly soft bake.

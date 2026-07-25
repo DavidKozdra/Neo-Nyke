@@ -136,8 +136,13 @@ export function bindInput() {
           Neo.trySpecialRoomChoiceInteract?.();
           Neo.specialRoomKeyLatch = true;
         }
-        const inShopRoom = Neo.currentRoom?.type === 'shop';
-        if (!bountyTargetHandled && inShopRoom && !Neo.shopKeyLatch) {
+        // A sealed intermission chest under the cursor takes priority over the
+        // shop panel: the player walked to the chest to buy it.
+        const chestPurchased = !bountyTargetHandled && !Neo.shopKeyLatch
+          && (Neo.tryEndlessChestPurchase?.() || false);
+        if (chestPurchased) Neo.shopKeyLatch = true;
+        const inShopRoom = Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop');
+        if (!bountyTargetHandled && !chestPurchased && inShopRoom && !Neo.shopKeyLatch) {
           toggleShopPanel();
           Neo.shopKeyLatch = true;
         }
@@ -1091,7 +1096,7 @@ export function updateInvPlayerTabVisibility() {
   }
 
 export function toggleShopPanel() {
-    if (Neo.currentRoom?.type !== 'shop') return;
+    if (!(Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop'))) return;
     const next = !isPanelOpen(Neo.ui.shopPanel);
     if (next) setInventoryPanelOpen(false, { animateClose: false });
     setShopPanelOpen(next);
@@ -1739,15 +1744,15 @@ export function isGodSweepUnlocked() {
   }
 
 export function getShopMoveOffers() {
-    if (!Neo.currentRoom || Neo.currentRoom.type !== 'shop') return [];
-    Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
+    if (!Neo.isShopRoomActive?.()) return [];
+    if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     return Array.isArray(Neo.currentRoom.shopMoveOffers) ? Neo.currentRoom.shopMoveOffers : [];
   }
 
 export function getShopWeaponOffers() {
-    if (!Neo.currentRoom || Neo.currentRoom.type !== 'shop') return [];
-    Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
+    if (!Neo.isShopRoomActive?.()) return [];
+    if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     return Array.isArray(Neo.currentRoom.shopWeaponOffers) ? Neo.currentRoom.shopWeaponOffers : [];
   }
@@ -3029,6 +3034,13 @@ export function spendCoins(cost) {
     if (typeof purchase !== 'function' || !Neo.currentRoom || !Neo.player) {
       return { ok: false, reason: 'SHOP_OPERATION_UNAVAILABLE' };
     }
+    // purchaseCampaignShop guards on room.type === 'shop'. An endless
+    // intermission sells from a 'combat' room, so hand the shared operation a
+    // shop-typed view. It mutates offer objects (bought/cost) and those are
+    // shared by reference with the real room, so the stock still updates.
+    const shopRoom = Neo.currentRoom.type === 'shop'
+      ? Neo.currentRoom
+      : { ...Neo.currentRoom, type: 'shop' };
     return purchase({
       floorNumber: Neo.getShopProgressionDepth?.() ?? Neo.floor,
       elapsedSeconds: Neo.runTime || 0,
@@ -3036,7 +3048,7 @@ export function spendCoins(cost) {
         shopPriceMultiplier: Neo.getShopDifficultyMultiplier?.() || 1,
         cursedShops: Neo.isChallengeActive?.('cursed_shops') || false,
       },
-    }, Neo.currentRoom, Neo.player, command, options);
+    }, shopRoom, Neo.player, command, options);
   }
 
 export function handleShopBuyClick(event) {

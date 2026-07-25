@@ -90,6 +90,12 @@
           state: unopened > 0 ? 'warn' : 'done',
         });
       }
+      if (Neo.endlessIntermission) {
+        const sealed = (Neo.chests || []).filter(chest => chest?.endlessShopChest && chest.locked && !chest.open).length;
+        entries.push({ text: 'Shop and buy chests', state: 'warn' });
+        if (sealed > 0) entries.push({ text: `Sealed chests: ${sealed}`, state: 'warn' });
+        entries.push({ text: 'Take NEXT WAVE when ready', state: 'warn' });
+      }
       if (Neo.currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (Neo.currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
       if (Neo.isSpecialRoom?.()) entries.push({ text: Neo.currentRoom.serviceUsed ? 'Choice sealed - move on' : 'Choose one room service', state: Neo.currentRoom.serviceUsed ? 'done' : 'warn' });
@@ -196,7 +202,12 @@
     }
     if (Neo.gameMode === 'endless') {
       const displayWave = Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0);
-      if (!Neo.endlessWaveActive) {
+      if (Neo.endlessIntermission) {
+        const sealed = (Neo.chests || []).filter(chest => chest?.endlessShopChest && chest.locked && !chest.open).length;
+        setObjective(sealed > 0
+          ? `Wave ${Neo.endlessWave} cleared. Shop, buy chests (${sealed} sealed), then take NEXT WAVE.`
+          : `Wave ${Neo.endlessWave} cleared. Shop, then take NEXT WAVE.`);
+      } else if (!Neo.endlessWaveActive) {
         setObjective(Neo.endlessWave === 0 ? 'Survive the first wave.' : `Wave ${Neo.endlessWave} cleared. Survive the next wave.`);
       } else {
         setObjective(`Survive wave ${displayWave}.`);
@@ -784,14 +795,20 @@
       const inputMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
       const shopHint = Neo.getActiveControlHint?.('interact', 'e') || Neo.getControlHint('interact', 'e');
       const promptHint = inputMode === 'touch' ? 'TAP' : `[${shopHint}]`;
-      const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
+      const isShop = (Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop')) && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
       const isSpecial = Neo.isSpecialRoom?.() && !Neo.currentRoom?.serviceUsed && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
       const specialChoiceAction = isSpecial ? (Neo.getSpecialRoomChoiceInteractLabel?.() || '') : '';
       const bountyAction = Neo.getBountyTargetInteractLabel?.() || '';
-      const isLadder = !bountyAction && !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
+      const chestAction = Neo.getEndlessChestInteractLabel?.() || '';
+      const isLadder = !bountyAction && !chestAction && !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
       if (bountyAction) {
         Neo.ui.interactPrompt.textContent = `${promptHint}  ${bountyAction}`;
+        Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
+      } else if (chestAction) {
+        // Standing at a paid chest, buying it is the action — matches the input
+        // handlers, which prefer the chest over toggling the shop panel.
+        Neo.ui.interactPrompt.textContent = `${promptHint}  ${chestAction}`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isShop) {
         Neo.ui.interactPrompt.textContent = `${promptHint}  Open Shop`;
@@ -1173,6 +1190,7 @@
       endlessWave: Neo.endlessWave,
       endlessWaveActive: Neo.endlessWaveActive,
       endlessRespawnTimer: Neo.endlessRespawnTimer,
+      endlessIntermission: Neo.endlessIntermission,
       gameElapsedTime: Neo.gameElapsedTime,
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,

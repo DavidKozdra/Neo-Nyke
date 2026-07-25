@@ -36,6 +36,26 @@ function combatHarness(characterKey = 'princess') {
 }
 
 describe('authoritative network combat system', () => {
+  test('gives players campaign damage i-frames so stacked hits cannot instantly delete them', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    const spawnHostile = id => {
+      state.projectiles[id] = {
+        id, hostile: true, ownerId: `enemy-${id}`, roomId: player.roomId,
+        x: player.x, y: player.y, vx: 0, vy: 0, radius: 8, damage: 30,
+        attackKind: 'test_volley', expiresTick: state.tick + 10,
+      };
+    };
+    spawnHostile('test-hit-a');
+    spawnHostile('test-hit-b');
+
+    simulation.updateGame({}, 0.05);
+
+    expect(player.hp).toBe(70);
+    expect(events.filter(event => event.eventType === 'PLAYER_HIT')).toHaveLength(1);
+    expect(player.invulnerableUntilTick).toBeGreaterThan(state.tick);
+  });
+
   test('uses authoritative room obstacles for enemy and projectile collision', () => {
     const { state, simulation, events } = combatHarness();
     const room = state.floorState.layout.rooms.find(candidate => candidate.id === state.players.p1.roomId);
@@ -399,10 +419,12 @@ describe('authoritative network combat system', () => {
     player.equippedMoves = { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash', [slot]: moveKey };
     player.moveCooldownUntilTick = {};
     player.statusUntilTick = {};
+    const isHeldSmash = slot === 'smash' && ['death_ball', 'turtle_powerup'].includes(moveKey);
     simulation.updateGame({}, 0.05);
     simulation.updateGame({ p1: { actions: [{
       action: slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: moveKey, aimDirection: 0.35,
-    }] } }, 0.05);
+    }], ...(isHeldSmash ? { buttons: 2 } : {}) } }, 0.05);
+    if (isHeldSmash) simulation.updateGame({ p1: { buttons: 0, aimDirection: 0.35 } }, 0.05);
 
     const event = events.find(candidate => candidate.eventType === 'PLAYER_ABILITY_USED');
     expect(event?.data).toEqual(expect.objectContaining({

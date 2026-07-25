@@ -2046,6 +2046,9 @@ export function resumeGame() {
   }
 
   function refreshRoomShopCosts(room, difficultyKey = Neo.selectedDifficulty, floorValue = getShopProgressionDepth()) {
+    // Endless intermission stock is priced off the wave counter when it is
+    // stocked (see openEndlessIntermission). Floor-depth repricing would flatten
+    // every intermission back to floor-1 prices, so it is not applied there.
     if (!room || room.type !== 'shop') return;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
     let itemIndex = 0;
@@ -3121,6 +3124,7 @@ export function resumeGame() {
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
     Neo.endlessRespawnTimer = 0;
+    Neo.endlessIntermission = false;
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -3965,6 +3969,7 @@ export function resumeGame() {
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
     Neo.endlessRespawnTimer = 0;
+    Neo.endlessIntermission = false;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
     Neo.rivalRumbleOrder = [];
@@ -4187,6 +4192,7 @@ export function resumeGame() {
     Neo.endlessWave = Math.max(0, Number(snapshot.endlessWave || 0));
     Neo.endlessWaveActive = !!snapshot.endlessWaveActive;
     Neo.endlessRespawnTimer = Math.max(0, Number(snapshot.endlessRespawnTimer || 0));
+    Neo.endlessIntermission = !!snapshot.endlessIntermission;
     Neo.camera = snapshot.camera || { x: 0, y: 0 };
     Neo.shake = 0;
     Neo.shakeT = 0;
