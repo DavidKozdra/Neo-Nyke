@@ -16,16 +16,19 @@
   const runServiceApi = typeof require === 'function' ? require('../simulation/SharedRunServiceSystem.js') : browserSimulationApi;
   const worldContentApi = typeof require === 'function' ? require('../simulation/SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
-  const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
+  const { FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
   const {
     createCampaignSimulation,
     createCampaignFloorState,
     createCampaignMovementSystem,
+    getCampaignRoom,
+    getAdjacentCampaignRoom,
+    transitionCampaignRoom,
+    ROOM_DIRECTIONS,
     CAMPAIGN_CONTENT_VERSION,
   } = campaignApi;
-  const { generateFloorLayout } = floorApi;
-  const { applyNetworkHeroProfile, sanitizeKitChoices, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
+  const { applyCampaignHeroProfile, sanitizeKitChoices, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const { applyAuthorityRunEvent = () => ({ ok: false }) } = runServiceApi;
   const {
     CLIENT_TO_AUTHORITY,
@@ -138,153 +141,25 @@
   }
 
   function createNetworkFloorState(options = {}) {
-    if (typeof createCampaignFloorState === 'function') return createCampaignFloorState(options);
-    const layout = typeof generateFloorLayout === 'function'
-      ? generateFloorLayout({
-        matchSeed: options.matchSeed,
-        floorSeed: options.floorSeed,
-        floorNumber: options.floorNumber || 1,
-        generationVersion: options.generationVersion || LOCAL_GENERATION_VERSION,
-        contentVersion: options.contentVersion || LOCAL_CONTENT_VERSION,
-      })
-      : { startRoomId: TEST_ROOM.id, rooms: [] };
-    return {
-      ...TEST_ROOM,
-      currentRoomId: layout.startRoomId,
-      visitedRoomIds: [layout.startRoomId],
-      roomTransition: null,
-      transitionSequence: 0,
-      transitionsByPlayer: {},
-      layout,
-    };
+    if (typeof createCampaignFloorState !== 'function') throw new Error('Campaign floor authority is unavailable');
+    return createCampaignFloorState(options);
   }
 
-  const ROOM_DIRECTIONS = Object.freeze({
-    n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
-    s: Object.freeze({ dx: 0, dy: 1, opposite: 'n' }),
-    e: Object.freeze({ dx: 1, dy: 0, opposite: 'w' }),
-    w: Object.freeze({ dx: -1, dy: 0, opposite: 'e' }),
-  });
-
   function getCurrentNetworkRoom(floorState = {}, roomId = floorState.currentRoomId) {
-    return floorState.layout?.rooms?.find(room => room.id === roomId) || null;
+    return getCampaignRoom?.(floorState, roomId) || null;
   }
 
   function getAdjacentNetworkRoom(floorState, room, directionKey) {
-    const direction = ROOM_DIRECTIONS[directionKey];
-    if (!direction || !room?.doors?.[directionKey]) return null;
-    return floorState.layout?.rooms?.find(candidate => (
-      candidate.gx === room.gx + direction.dx && candidate.gy === room.gy + direction.dy
-    )) || null;
-  }
-
-  function placePlayerAtRoomEntrance(state, player, directionKey, roomId) {
-    const floorState = state.floorState;
-    const width = Number(floorState.width) || TEST_ROOM.width;
-    const height = Number(floorState.height) || TEST_ROOM.height;
-    const wall = Number(floorState.wallThickness) || TEST_ROOM.wallThickness;
-      const radius = Math.max(1, Number(player.radius) || 18);
-      const inset = wall + radius + 18;
-      if (directionKey === 'e') {
-        player.x = inset;
-        player.y = height / 2;
-      } else if (directionKey === 'w') {
-        player.x = width - inset;
-        player.y = height / 2;
-      } else if (directionKey === 'n') {
-        player.x = width / 2;
-        player.y = height - inset;
-      } else {
-        player.x = width / 2;
-        player.y = inset;
-      }
-      player.vx = 0;
-      player.vy = 0;
-      player.roomId = roomId;
+    return getAdjacentCampaignRoom?.(floorState, room, directionKey) || null;
   }
 
   function transitionNetworkRoom(state, player, directionKey) {
-      const floorState = state.floorState;
-    const currentRoom = getCurrentNetworkRoom(floorState, player?.roomId);
-    const nextRoom = getAdjacentNetworkRoom(floorState, currentRoom, directionKey);
-    const lastTransition = floorState.transitionsByPlayer?.[player?.id];
-    if (!player || !nextRoom || lastTransition?.tick === state.tick || isNetworkRoomLocked?.(state, currentRoom?.id)) return false;
-    const fromRoomId = currentRoom.id;
-    floorState.transitionSequence = Math.max(0, Number(floorState.transitionSequence) || 0) + 1;
-    const transition = {
-      sequence: floorState.transitionSequence,
-      tick: state.tick,
-      playerId: player.id,
-      fromRoomId,
-      toRoomId: nextRoom.id,
-      direction: directionKey,
-    };
-    floorState.roomTransition = transition;
-    floorState.transitionsByPlayer = floorState.transitionsByPlayer || {};
-    floorState.transitionsByPlayer[player.id] = transition;
-    const visited = new Set(Array.isArray(floorState.visitedRoomIds) ? floorState.visitedRoomIds : []);
-    visited.add(nextRoom.id);
-    floorState.visitedRoomIds = Array.from(visited);
-    placePlayerAtRoomEntrance(state, player, directionKey, nextRoom.id);
-    return true;
+    return transitionCampaignRoom?.(state, player, directionKey, isNetworkRoomLocked) || false;
   }
 
-  function createPlayerMovementSystem(room = TEST_ROOM) {
-    // Compatibility export for local harnesses/tests. Live authorities use the
-    // same implementation through createCampaignSimulation above.
-    if (typeof createCampaignMovementSystem === 'function') {
-      return createCampaignMovementSystem({ isRoomLocked: isNetworkRoomLocked });
-    }
-    return ({ state, inputs, fixedDelta }) => {
-      const players = Object.values(state.players);
-      for (const player of players) {
-        if (!player || player.disconnected || player.downed) {
-          if (player) { player.vx = 0; player.vy = 0; }
-          continue;
-        }
-        const input = inputs[player.id] || {};
-        let moveX = Number(input.moveX) || 0;
-        let moveY = Number(input.moveY) || 0;
-        const magnitude = Math.hypot(moveX, moveY);
-        if (magnitude > 1) {
-          moveX /= magnitude;
-          moveY /= magnitude;
-        }
-        const statusUntil = player.statusUntilTick || {};
-        const statusSpeedMultiplier = state.tick < Number(statusUntil.mooggy_zoomies || 0)
-          ? 5
-          : state.tick < Number(statusUntil.turtle_powerup || 0)
-            ? 1.3
-            : 1;
-        const speed = Math.max(0, Number(player.moveSpeed) || 180) * statusSpeedMultiplier;
-        const radius = Math.max(1, Number(player.radius) || 18);
-        const wallInset = Math.max(0, Number(room.wallThickness) || 0);
-        const minimum = wallInset + radius;
-        const maximumX = room.width - minimum;
-        const maximumY = room.height - minimum;
-        const desiredX = player.x + moveX * speed * fixedDelta;
-        const desiredY = player.y + moveY * speed * fixedDelta;
-        // The transition zone must cover the full VISIBLE door gap (rendered at
-        // ±doorWidth/2 from room centre). Using doorWidth/2 - radius left an
-        // ~18px dead band on each side where the player was inside the drawn
-        // opening but no transition fired — i.e. "I reach the door, nothing
-        // happens." Match the rendered gap (plus the radius so the edges count).
-        const halfDoor = Math.max(radius * 1.5, (Number(room.doorWidth) || 140) / 2 + radius);
-        const insideHorizontalDoor = Math.abs(desiredX - room.width / 2) <= halfDoor;
-        const insideVerticalDoor = Math.abs(desiredY - room.height / 2) <= halfDoor;
-        let transitionDirection = null;
-        if (desiredY < minimum && insideHorizontalDoor) transitionDirection = 'n';
-        else if (desiredY > maximumY && insideHorizontalDoor) transitionDirection = 's';
-        else if (desiredX > maximumX && insideVerticalDoor) transitionDirection = 'e';
-        else if (desiredX < minimum && insideVerticalDoor) transitionDirection = 'w';
-        if (transitionDirection && transitionNetworkRoom(state, player, transitionDirection)) continue;
-        player.x = Math.max(minimum, Math.min(maximumX, desiredX));
-        player.y = Math.max(minimum, Math.min(maximumY, desiredY));
-        player.vx = moveX * speed;
-        player.vy = moveY * speed;
-        player.aimDirection = Number(input.aimDirection) || 0;
-      }
-    };
+  function createPlayerMovementSystem() {
+    if (typeof createCampaignMovementSystem !== 'function') throw new Error('Campaign movement authority is unavailable');
+    return createCampaignMovementSystem({ isRoomLocked: isNetworkRoomLocked });
   }
 
   function messageDeliveryMatches(type, delivery) {
@@ -475,21 +350,11 @@
         matchRules: { mode: this.mode },
         floorState,
       });
-      return typeof createCampaignSimulation === 'function'
-        ? createCampaignSimulation({
-          state,
-          emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data),
-        })
-        : new GameSimulation({
-          state,
-          systems: [
-            createPlayerMovementSystem(TEST_ROOM),
-            createNetworkCombatSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) }),
-            typeof createFloorProgressionSystem === 'function'
-              ? createFloorProgressionSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) })
-            : () => {},
-          ],
-        });
+      if (typeof createCampaignSimulation !== 'function') throw new Error('Campaign authority is unavailable');
+      return createCampaignSimulation({
+        state,
+        emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data),
+      });
     }
 
     _ensureFloorGenerated() {
@@ -541,7 +406,7 @@
         slotIndex,
         roomId: this.simulation.state.floorState.currentRoomId,
       };
-      applyNetworkHeroProfile(player, player.characterKey, profile.kitChoices);
+      applyCampaignHeroProfile(player, player.characterKey, profile.kitChoices);
       return player;
     }
 
@@ -792,7 +657,7 @@
       if (sanitizeKitChoices(payload.characterKey, payload.kitChoices) === null) {
         return this._rejectInvalidMessage(peerId, ['kit choice is unavailable']);
       }
-      applyNetworkHeroProfile(player, payload.characterKey, payload.kitChoices);
+      applyCampaignHeroProfile(player, payload.characterKey, payload.kitChoices);
       record.ready = false;
       this._markPersistenceDirty();
       this._broadcastLobbyState();

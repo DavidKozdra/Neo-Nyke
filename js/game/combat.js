@@ -1534,13 +1534,15 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'FULL HP', c: '#a0ffa0' });
       return;
     }
-    Neo.player.storedPotions = stored - 1;
     const itemStats = Neo.getItemStats?.() || {};
-    const doubled = Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1) > 0 && Neo.rng() < Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1);
-    const heal = Neo.getPotionHealAmount() * Math.max(1, Number(itemStats.storedPotionHealingMultiplier || 1)) * (doubled ? 2 : 1);
-    const gained = Neo.applyPlayerHealing(heal);
-    if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
-    if (doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
+    const result = globalThis.NeoNyke?.simulation?.resolveCampaignStoredPotion(Neo.player, {
+      itemStats,
+      baseHeal: Neo.getPotionHealAmount(),
+      random: () => Neo.rng(),
+    });
+    if (!result?.ok) return;
+    if (result.healedAmount > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, result.healedAmount);
+    if (result.doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
     Neo.updateHud();
   }
 

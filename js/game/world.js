@@ -593,27 +593,46 @@
         }
       }
     }
-    let finalAmount = critAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
-    if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
-    finalAmount = Math.max(0, finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
-    if (ironLungApplies && !options.ignoreDamageCaps) {
-      finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
-    }
-    finalAmount = Math.max(0, finalAmount);
-    const barrierBeforeHit = Math.max(0, Number(Neo.player.overhealBarrier || 0));
-    if (barrierBeforeHit > 0 && finalAmount > 0) {
+    const sourceKey = String(options.sourceKey || source || '').toLowerCase();
+    const bossLike = Neo.isBossFightActive?.()
+      || Neo.BOSS_TYPES?.has(sourceKey)
+      || sourceKey.includes('boss')
+      || sourceKey.includes('god')
+      || sourceKey.includes('queen')
+      || sourceKey.includes('artificer')
+      || sourceKey.includes('golem');
+    const resolvedDamage = globalThis.NeoNyke?.simulation?.resolveCampaignPlayerDamage({
+      health: hpBeforeHit,
+      maxHp: Neo.player.maxHp,
+      damage: critAmount,
+      damageMultiplier: (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1)
+        * (sandbox ? Number(sandbox.enemyDamageMultiplier || 1) : 1),
+      damageReduction: effectiveDamageReduction,
+      flatDamageReduction: itemStats.flatDamageReduction,
+      barrier: Neo.player.overhealBarrier,
+      ironLungApplies,
+      bossLike,
+      applyDamageCaps: applyHitstop,
+      ...options,
+    });
+    // SharedPlayerDamageSystem is a required platform-neutral foundation. Keep
+    // the explicit guard so an incomplete custom embed fails loudly instead of
+    // silently running a different damage algorithm.
+    if (!resolvedDamage) throw new Error('Shared player-damage policy is unavailable');
+    let finalAmount = resolvedDamage.dealt;
+    const absorbed = resolvedDamage.absorbed;
+    Neo.player.overhealBarrier = resolvedDamage.barrier;
+    const barrierBeforeHit = Math.max(0, Number(Neo.player.overhealBarrier || 0) + absorbed);
+    if (barrierBeforeHit > 0 && absorbed > 0) {
       const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
-      const absorbed = Math.min(barrierBeforeHit, finalAmount);
-      Neo.player.overhealBarrier = Math.max(0, barrierBeforeHit - absorbed);
       if (Neo.player.overhealBarrier <= 0) {
         Neo.player.overhealBarrierMax = 0;
         Neo.player.overhealBarrierColor = '';
       }
-      finalAmount = Math.max(0, finalAmount - absorbed);
       if (absorbed >= 1 && showPopup) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.4, text: `BLOCK ${Math.ceil(absorbed)}`, c: barrierColor });
       }
-      if (finalAmount <= 0) {
+      if (resolvedDamage.fullyAbsorbed) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.34, text: 'BARRIER', c: barrierColor });
         if (applyHitstop) {
           Neo.player.inv = Math.max(Neo.player.inv, 0.18);
@@ -623,24 +642,6 @@
         return;
       }
     }
-    if (applyHitstop && !options.ignoreDamageCaps && !options.ignoreOneShotGuard && Neo.player.maxHp > 0) {
-      const sourceKey = String(options.sourceKey || source || '').toLowerCase();
-      const bossLike = Neo.isBossFightActive?.()
-        || Neo.BOSS_TYPES?.has(sourceKey)
-        || sourceKey.includes('boss')
-        || sourceKey.includes('god')
-        || sourceKey.includes('queen')
-        || sourceKey.includes('artificer')
-        || sourceKey.includes('golem');
-      const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
-        ? Neo.clamp(Number(options.maxHitRatio), 0, 1)
-        : bossLike ? 0.62 : 0.48;
-      const maxSingleHit = Math.max(18, Neo.player.maxHp * maxHitRatio);
-      finalAmount = Math.min(finalAmount, maxSingleHit);
-      if (hpBeforeHit > Neo.player.maxHp * 0.35 && hpBeforeHit - finalAmount <= 0) {
-        finalAmount = Math.max(0, hpBeforeHit - 1);
-      }
-    }
     if (finalAmount <= 0) {
       if (Neo.player.hp <= 0) Neo.die();
       return;
@@ -648,7 +649,7 @@
     Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source);
     Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
 
-    Neo.player.hp -= finalAmount;
+    Neo.player.hp = resolvedDamage.health;
     const duringGodFight = Neo.currentRoom?.type === 'god'
       || Neo.enemies.some(enemy => enemy && !enemy.dead && enemy.type === 'god' && Number(enemy.hp || 0) > 0);
     window.achievementEvents?.emit('damage:taken', { amount: finalAmount, duringGodFight });
@@ -1116,7 +1117,7 @@
     Neo.spawnParticle({ x, y, life: 0.5, ring: radius, c: color });
     if (damage > 0) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
       const actor = slot.getEntity();
-      if (Neo.dist(x, y, actor.x, actor.y) > radius + actor.r) return;
+      if (!globalThis.NeoNyke.simulation.campaignCircleHazardHitsEntity({ x, y }, actor, radius)) return;
       damagePlayerSlot(slot, damage, Math.atan2(actor.y - y, actor.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe');
       if (blast.statusKey) {
         Neo.applyStatus?.(actor, blast.statusKey, Number(blast.statusStacks || 1), Number(blast.statusDuration || 3), projectile.source || 'enemy_aoe');
@@ -1657,32 +1658,29 @@
           owner: projectile?.owner && !projectile.owner.dead ? projectile.owner : null,
         }
       : sourceKey;
-    projectile.statusEffects.forEach(effect => {
-      if (!effect?.key) return;
-      const rawChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
-        ?? Number(effect.chance ?? 1);
-      const rolled = Neo.applyProcRollback?.(rawChance, 1) || { procChance: rawChance, effectMultiplier: 1 };
-      const procChance = Neo.clamp(Number(rolled.procChance || 0), 0, 0.999);
-      const effectMultiplier = Math.max(1, Number(rolled.effectMultiplier || 1));
-      if (Neo.nextRandom('encounter') <= procChance) {
-        Neo.applyStatus(target, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3) * effectMultiplier, source);
-        const state = Neo.getStatusState?.(target, effect.key);
-        if (state && effectMultiplier > 1) state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), effectMultiplier);
-      }
+    globalThis.NeoNyke.simulation.resolveCampaignProjectileStatusApplications(projectile, {
+      random: () => Neo.nextRandom('encounter'),
+      resolveProc: effect => {
+        const rawChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
+          ?? Number(effect.chance ?? 1);
+        const rolled = Neo.applyProcRollback?.(rawChance, 1) || { procChance: rawChance, effectMultiplier: 1 };
+        return { chance: Neo.clamp(Number(rolled.procChance || 0), 0, 0.999), effectMultiplier: Math.max(1, Number(rolled.effectMultiplier || 1)) };
+      },
+    }).forEach(effect => {
+      Neo.applyStatus(target, effect.key, effect.stacks, effect.duration, source);
+      const state = Neo.getStatusState?.(target, effect.key);
+      if (state && effect.damageMultiplier > 1) state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), effect.damageMultiplier);
     });
   }
 
   // Drain: heal the projectile's owner when it lands on the player (mirrors the
   // player's Tooth of Thorn lifesteal). The owner must still be alive in the room.
   function applyProjectileDrainToOwner(projectile) {
-    const heal = Number(projectile?.drainHeal || 0);
     const owner = projectile?.owner;
-    if (heal <= 0 || !owner || owner.dead) return;
-    const maxHp = Number(owner.max || owner.maxHp || owner.hp || 0);
-    if (maxHp <= 0 || owner.hp >= maxHp) return;
-    const before = Number(owner.hp || 0);
-    owner.hp = Math.min(maxHp, before + heal);
-    const gained = Math.round(owner.hp - before);
+    const result = globalThis.NeoNyke.simulation.resolveCampaignProjectileDrain(projectile, owner);
+    if (!owner || result.healedAmount <= 0) return;
+    owner.hp = result.health;
+    const gained = Math.round(result.healedAmount);
     if (gained > 0) {
       Neo.spawnHealPopup?.(owner.x + Neo.rand(-6, 6), owner.y - owner.r - 10, gained, { color: '#c98dff', size: 12 });
       Neo.ringBurst(owner.x, owner.y, owner.r + 8, '#c98dff', 0.4);
