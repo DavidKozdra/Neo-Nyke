@@ -56,6 +56,29 @@ describe('authoritative network combat system', () => {
     expect(player.invulnerableUntilTick).toBeGreaterThan(state.tick);
   });
 
+  test('uses a stored potion automatically at campaign emergency-health threshold', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    const player = state.players.p1;
+    player.hp = 20;
+    player.maxHp = 120;
+    player.storedPotions = 1;
+    state.projectiles.enemyShot = {
+      id: 'enemyShot', hostile: true, ownerId: 'enemy-test', roomId: player.roomId,
+      x: player.x, y: player.y, vx: 0, vy: 0, radius: 8, damage: 10,
+      attackKind: 'test_volley', expiresTick: state.tick + 10,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    // The hit leaves the hero below 10% (10 HP), then the campaign's stored
+    // potion is consumed in that same authoritative damage frame.
+    expect(player.storedPotions).toBe(0);
+    expect(player.hp).toBe(50);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'POTION_USED', data: expect.objectContaining({ playerId: 'p1', healedAmount: 40 }),
+    }));
+  });
+
   test('uses authoritative room obstacles for enemy and projectile collision', () => {
     const { state, simulation, events } = combatHarness();
     const room = state.floorState.layout.rooms.find(candidate => candidate.id === state.players.p1.roomId);

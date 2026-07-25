@@ -28,7 +28,7 @@
     isCampaignPlayerDashing,
     applyCampaignDashVelocity,
   } = movementRulesApi;
-  const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
+  const { createCampaignCombatSystem, createCampaignProgressionSystem, applyCampaignHeroProfile } = combatApi;
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
 
@@ -213,8 +213,8 @@
       aimDirection: 0, characterKey: options.characterKey || 'thorn_knight', slotIndex,
       roomId: String(options.roomId || ''),
     };
-    return typeof applyNetworkHeroProfile === 'function'
-      ? applyNetworkHeroProfile(player, player.characterKey, options.kitChoices)
+    return typeof applyCampaignHeroProfile === 'function'
+      ? applyCampaignHeroProfile(player, player.characterKey, options.kitChoices)
       : player;
   }
 
@@ -240,8 +240,8 @@
       systems: [
         ({ state: simulationState }) => syncCampaignItemStats?.(simulationState),
         createCampaignMovementSystem({ isRoomLocked }),
-        createNetworkCombatSystem({ emitEvent }),
-        createFloorProgressionSystem({ emitEvent }),
+        createCampaignCombatSystem({ emitEvent }),
+        createCampaignProgressionSystem({ emitEvent }),
         ...(Array.isArray(options.systems) ? options.systems : []),
       ],
     });

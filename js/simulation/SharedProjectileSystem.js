@@ -85,6 +85,43 @@
     });
   }
 
+  // Projectile impact payloads are gameplay data, not presentation. Both
+  // runtimes resolve the same ordered list here; callers only provide their
+  // status-resistance/rollback policy and the mutation callback.
+  function resolveCampaignProjectileStatusApplications(projectile, options = {}) {
+    if (!Array.isArray(projectile?.statusEffects)) return [];
+    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const resolveProc = typeof options.resolveProc === 'function'
+      ? options.resolveProc
+      : effect => ({ chance: Number(effect?.chance ?? 1), effectMultiplier: 1 });
+    return projectile.statusEffects.flatMap(effect => {
+      if (!effect?.key) return [];
+      const resolved = resolveProc(effect) || {};
+      const chance = Math.max(0, Math.min(1, Number(resolved.chance ?? resolved.procChance ?? 0)));
+      // Existing authorities treat guaranteed payloads as data, not RNG rolls;
+      // retain that deterministic stream contract while the browser can still
+      // opt into its authored rollback roll for every payload.
+      if (!(options.skipGuaranteedRoll && chance >= 1) && random() >= chance) return [];
+      return [{
+        key: effect.key,
+        stacks: Math.max(0, Number(effect.stacks || 1)),
+        duration: Math.max(0, Number(effect.duration || 3)) * Math.max(1, Number(resolved.effectMultiplier || 1)),
+        damageMultiplier: Math.max(1, Number(resolved.effectMultiplier || 1)),
+      }];
+    });
+  }
+
+  function resolveCampaignProjectileDrain(projectile, owner) {
+    const requestedHeal = Math.max(0, Number(projectile?.drainHeal || 0));
+    const current = Math.max(0, Number(owner?.health ?? owner?.hp ?? 0));
+    const maximum = Math.max(0, Number(owner?.maxHealth ?? owner?.max ?? owner?.maxHp ?? current));
+    if (requestedHeal <= 0 || !owner || owner.dead || maximum <= 0 || current >= maximum) {
+      return { healedAmount: 0, health: current, maxHealth: maximum };
+    }
+    const health = Math.min(maximum, current + requestedHeal);
+    return { healedAmount: health - current, health, maxHealth: maximum };
+  }
+
   return {
     normalizeAngle,
     turnCampaignAngleToward,
@@ -95,5 +132,7 @@
     advanceCampaignProjectile,
     bounceCampaignProjectile,
     createCampaignSubSpawnDescriptors,
+    resolveCampaignProjectileStatusApplications,
+    resolveCampaignProjectileDrain,
   };
 });

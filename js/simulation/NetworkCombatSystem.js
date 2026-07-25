@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -95,6 +95,9 @@
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
     deriveCampaignItemStats = () => ({}),
+    resolveCampaignPlayerDamage = () => ({ health: 0, dealt: 0, absorbed: 0, barrier: 0 }),
+    resolveCampaignStoredPotion = () => ({ ok: false, reason: 'UNAVAILABLE' }),
+    campaignHazardHitsEntity = () => false,
     resolveCampaignOnHitStatusProcs = () => [],
     syncCampaignItemStats = state => state,
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
@@ -109,6 +112,8 @@
     },
     bounceCampaignProjectile = () => false,
     createCampaignSubSpawnDescriptors = () => [],
+    resolveCampaignProjectileStatusApplications = () => [],
+    resolveCampaignProjectileDrain = () => ({ healedAmount: 0, health: 0 }),
     applyCampaignDestructibleDamage = () => ({ ok: false, drops: [] }),
     applyCampaignLevelUp = () => null,
     finishCampaignChallenge = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
@@ -2632,7 +2637,7 @@
   // Drink a stored potion. At full HP, a potion is instead shared with a nearby
   // wounded rival — healing it and befriending it for the rest of the run,
   // exactly like tryUsePotion in the campaign.
-  function resolveUsePotion(state, player, emitEvent) {
+  function resolveUsePotion(state, player, emitEvent, random) {
     if (!player || player.downed) return;
     const stored = Number(player.storedPotions || 0);
     if (stored <= 0) {
@@ -2658,12 +2663,24 @@
       emitEvent('POTION_FULL_HP', { playerId: player.id });
       return;
     }
-    player.storedPotions = stored - 1;
     const itemStats = player.itemStats || {};
-    const heal = 40 * Math.max(1, Number(itemStats.storedPotionHealingMultiplier || 1)) * Math.max(1, Number(itemStats.healingMultiplier || 1));
-    const before = Number(player.hp || 0);
-    player.hp = Math.min(Number(player.maxHp || 100), before + heal);
-    emitEvent('POTION_USED', { playerId: player.id, healedAmount: Math.max(0, player.hp - before), storedPotions: player.storedPotions });
+    const result = resolveCampaignStoredPotion(player, {
+      itemStats,
+      // Campaign's default difficulty is 1, and `healingMultiplier` is
+      // already represented by the authoritative item stats used by this run.
+      baseHeal: 40 * Math.max(1, Number(itemStats.healingMultiplier || 1)),
+      random: () => random?.next?.('encounter') ?? 1,
+    });
+    if (!result.ok) {
+      emitEvent(result.reason === 'FULL_HP' ? 'POTION_FULL_HP' : 'POTION_EMPTY', { playerId: player.id });
+      return;
+    }
+    emitEvent('POTION_USED', {
+      playerId: player.id,
+      healedAmount: result.healedAmount,
+      storedPotions: result.storedPotions,
+      ...(result.doubled ? { doubled: true } : {}),
+    });
   }
 
   function resolvePlayerInteraction(state, player, action, emitEvent, random) {
@@ -2820,7 +2837,7 @@
       actions.filter(action => action?.action === 'INTERACT')
         .forEach(action => resolvePlayerInteraction(state, player, action, emitEvent, random));
       actions.filter(action => action?.action === 'USE_POTION')
-        .forEach(() => resolveUsePotion(state, player, emitEvent));
+        .forEach(() => resolveUsePotion(state, player, emitEvent, random));
       actions.filter(action => action?.action === 'UPGRADE')
         .forEach(action => resolveUpgradeSelection(state, player, action, emitEvent, random));
       actions.filter(action => action?.action === 'SHOP_PURCHASE')
@@ -2854,48 +2871,32 @@
     // and the per-hit cap below still apply on top.
     const packAttacker = sourceId ? state.enemies?.[sourceId] : null;
     const packDamageMultiplier = Math.max(1, Number(packAttacker?.minorPackDamageMultiplier || 1));
-    let incoming = Math.max(0, Number(damage || 0)) * packDamageMultiplier
-      * (1 - Math.max(0, Math.min(0.85, Number(itemStats.damageReduction || 0))));
-    incoming = Math.max(0, incoming - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
     const room = currentRoom(state, player.roomId);
-    if (!options.ignoreDamageCaps && itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god') {
-      incoming = Math.min(incoming, Math.max(1, Number(player.maxHp || 100)) * 0.2);
-    }
-    const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
-    player.barrier = Math.max(0, Number(player.barrier || 0) - absorbed);
-    const uncappedDealt = incoming - absorbed;
-    // Per-hit cap and one-shot guard, matching the campaign's damagePlayer (see
-    // js/game/world.js). These used to be opt-in here via options.maxHitRatio,
-    // which nothing ever passed — so multiplayer had no ceiling on a single hit
-    // and a burst could delete a full-health player outright. They are now the
-    // default, exactly as in the campaign, and callers opt OUT explicitly.
-    const healthBeforeHit = Number(player.hp || 0);
-    const maximumHealth = Math.max(1, Number(player.maxHp || 120));
-    let dealt = uncappedDealt;
-    if (!options.ignoreDamageCaps && !options.ignoreOneShotGuard) {
-      const sourceKey = String(options.sourceKey || attackKind || '').toLowerCase();
-      const attacker = sourceId ? state.enemies?.[sourceId] : null;
-      const bossLike = !!attacker?.boss
-        || !!getEnemyDefinition(attacker?.type)?.boss
-        || room?.type === 'boss'
-        || room?.type === 'god'
-        || sourceKey.includes('boss')
-        || sourceKey.includes('god')
-        || sourceKey.includes('queen')
-        || sourceKey.includes('artificer')
-        || sourceKey.includes('golem');
-      const maxHitRatio = Number.isFinite(Number(options.maxHitRatio))
-        ? Math.max(0, Math.min(1, Number(options.maxHitRatio)))
-        : bossLike ? 0.62 : 0.48;
-      dealt = Math.min(dealt, Math.max(18, maximumHealth * maxHitRatio));
-      // Above 35% health, a single hit can wound but never kill.
-      if (healthBeforeHit > maximumHealth * 0.35 && healthBeforeHit - dealt <= 0) {
-        dealt = Math.max(0, healthBeforeHit - 1);
-      }
-    } else if (Number.isFinite(Number(options.maxHitRatio))) {
-      dealt = Math.min(dealt, maximumHealth * Math.max(0, Math.min(1, Number(options.maxHitRatio))));
-    }
-    player.hp = Math.max(0, Number(player.hp || 0) - dealt);
+    const sourceKey = String(options.sourceKey || attackKind || '').toLowerCase();
+    const bossLike = !!packAttacker?.boss
+      || !!getEnemyDefinition(packAttacker?.type)?.boss
+      || room?.type === 'boss'
+      || room?.type === 'god'
+      || sourceKey.includes('boss')
+      || sourceKey.includes('god')
+      || sourceKey.includes('queen')
+      || sourceKey.includes('artificer')
+      || sourceKey.includes('golem');
+    const resolvedDamage = resolveCampaignPlayerDamage({
+      health: player.hp,
+      maxHp: player.maxHp,
+      damage,
+      damageMultiplier: packDamageMultiplier,
+      damageReduction: itemStats.damageReduction,
+      flatDamageReduction: itemStats.flatDamageReduction,
+      barrier: player.barrier,
+      ironLungApplies: itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god',
+      bossLike,
+      ...options,
+    });
+    const { dealt, absorbed } = resolvedDamage;
+    player.barrier = resolvedDamage.barrier;
+    player.hp = resolvedDamage.health;
     player.hitTick = state.tick;
     const impulse = dealt > 0 && Number(options.knockback || 0) > 0
       ? applyCampaignImpulse(player, Number(options.angle || 0), Number(options.knockback || 0), Number(itemStats.anchorKnockbackResist || 0))
@@ -2921,6 +2922,16 @@
           state.tick + Math.ceil(seconds * durationMultiplier * 20),
         );
       }
+    }
+    // Campaign parity: a stored potion is an emergency response, not just a
+    // HUD button. Resolve it before evaluating a down so a hit that leaves the
+    // hero under 10% can consume the same saved potion the browser campaign
+    // would use in this damage frame.
+    if (dealt > 0
+      && player.hp > 0
+      && player.hp < Number(player.maxHp || 100) * 0.10
+      && Number(player.storedPotions || 0) > 0) {
+      resolveUsePotion(state, player, emitEvent, combatRandomByState.get(state));
     }
     const newlyDowned = player.hp <= 0;
     // Normal hits grant the same short damage i-frames as the campaign. Without
@@ -2964,16 +2975,7 @@
   }
 
   function playerInsideRoomHazard(player, hazard) {
-    const radius = Math.max(1, Number(player.radius || 18));
-    if (hazard.shape === 'rect' || (Number(hazard.w) > 0 && Number(hazard.h) > 0)) {
-      const left = Number.isFinite(Number(hazard.left)) ? Number(hazard.left) : Number(hazard.x) - Number(hazard.w) / 2;
-      const top = Number.isFinite(Number(hazard.top)) ? Number(hazard.top) : Number(hazard.y) - Number(hazard.h) / 2;
-      const nearX = Math.max(left, Math.min(left + Number(hazard.w), Number(player.x)));
-      const nearY = Math.max(top, Math.min(top + Number(hazard.h), Number(player.y)));
-      return Math.hypot(Number(player.x) - nearX, Number(player.y) - nearY) < radius;
-    }
-    return Math.hypot(Number(player.x) - Number(hazard.x), Number(player.y) - Number(hazard.y))
-      <= radius + Number(hazard.triggerRadius || hazard.r || 16);
+    return campaignHazardHitsEntity(hazard, player, { radius: hazard.triggerRadius || hazard.r || 16 });
   }
 
   // Boss-authored transient hazards (Bowman lightning columns/strike lines,
@@ -3092,7 +3094,7 @@
         if (hazard.fuse > 0) return;
         hazard.exploded = true;
         players.forEach(player => {
-          if (Math.hypot(Number(player.x) - Number(hazard.x), Number(player.y) - Number(hazard.y)) > Number(hazard.blastRadius || 88) + Number(player.radius || 18)) return;
+          if (!campaignHazardHitsEntity(hazard, player, { radius: hazard.blastRadius || 88 })) return;
           damagePlayer(state, player, Number(hazard.baseDamage || 18), `room-hazard:${room.id}`, emitEvent, 'explosive_trap', {
             angle: Math.atan2(Number(player.y) - Number(hazard.y), Number(player.x) - Number(hazard.x)),
             knockback: Number(hazard.knockback || 220),
@@ -4076,16 +4078,23 @@
           angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
           knockback: Number(projectile.knockback || 120),
         });
-        // Authored enemy shots can carry status payloads (e.g. golem spit poison).
-        (Array.isArray(projectile.statusEffects) ? projectile.statusEffects : []).forEach(effect => {
-          const chance = Math.max(0, Math.min(1, Number(effect.chance ?? 1)));
-          if (chance < 1 && random.next('encounter') >= chance) return;
-          applyAuthorityStatus(state, player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), projectile.ownerId);
+        // Shared ordered payload resolution; only authority mutation remains
+        // local to this adapter.
+        resolveCampaignProjectileStatusApplications(projectile, {
+          random: () => random.next('encounter'),
+          skipGuaranteedRoll: true,
+          resolveProc: effect => ({ chance: effect.chance ?? 1, effectMultiplier: 1 }),
+        }).forEach(effect => {
+          applyAuthorityStatus(state, player, effect.key, effect.stacks, effect.duration, projectile.ownerId, {
+            damageMultiplier: effect.damageMultiplier,
+          });
         });
         // Drain shots (Queen's missiles) siphon HP back to their owner on hit.
-        const drainOwner = Number(projectile.drainHeal || 0) > 0 ? state.enemies?.[projectile.ownerId] : null;
-        if (drainOwner && !drainOwner.dead) {
-          drainOwner.health = Math.min(Number(drainOwner.maxHealth || 1), Number(drainOwner.health || 0) + Number(projectile.drainHeal));
+        const drainOwner = state.enemies?.[projectile.ownerId];
+        const drain = resolveCampaignProjectileDrain(projectile, drainOwner);
+        if (drainOwner && drain.healedAmount > 0) {
+          drainOwner.health = drain.health;
+          drainOwner.hp = drain.health;
         }
         return;
       }
@@ -4674,6 +4683,11 @@
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random);
       updateMovingWorldPickups(state, fixedDelta);
+      // Interactions may spawn a chest reward during this tick. A second
+      // collection pass lets a hero already standing on that reward receive it
+      // immediately, matching the campaign's walk-over pickup feel instead of
+      // forcing an arbitrary extra authority tick.
+      updatePickups(state, emitEvent, random);
       updatePickups(state, emitEvent, random);
     };
   }
@@ -4690,6 +4704,11 @@
     ENEMY_ARCHETYPES,
     HOLD_TO_CHARGE_MOVES,
     getHeroPrimaryAttack,
+    // Canonical names. The legacy aliases below remain for saved integrations,
+    // but this is the shared campaign authority used by offline and online play.
+    applyCampaignHeroProfile: applyNetworkHeroProfile,
+    createCampaignCombatSystem: createNetworkCombatSystem,
+    createCampaignProgressionSystem: createFloorProgressionSystem,
     applyNetworkHeroProfile,
     sanitizeKitChoices,
     ensureNetworkEncounter,

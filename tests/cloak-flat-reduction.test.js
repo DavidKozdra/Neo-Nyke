@@ -3,7 +3,7 @@ const path = require('node:path');
 
 describe('Cloak of the Naked King flat damage reduction', () => {
   const playerSource = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
-  const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
+  const sharedDamageSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedPlayerDamageSystem.js'), 'utf8');
   const inputSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedItemDefinitions.js'), 'utf8');
 
   test('publishes flat reduction separately from percentage reduction', () => {
@@ -13,8 +13,8 @@ describe('Cloak of the Naked King flat damage reduction', () => {
   });
 
   test('subtracts flat reduction after percentage mitigation', () => {
-    const percentageIndex = worldSource.indexOf("let finalAmount = critAmount * (Neo.isChallengeActive('glass_cannon')");
-    const flatIndex = worldSource.indexOf('finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0))');
+    const percentageIndex = sharedDamageSource.indexOf('rawDamage * multiplier * (1 - reduction)');
+    const flatIndex = sharedDamageSource.indexOf('- flatReduction');
 
     expect(percentageIndex).toBeGreaterThan(-1);
     expect(flatIndex).toBeGreaterThan(percentageIndex);
