@@ -224,6 +224,10 @@
         full: field('boolean', { required: true }),
         lastProcessedInput: field('object', { required: true }),
         entities: field('object', { required: true }),
+        // High-churn render transforms use a dictionary-backed array schema.
+        // It is optional during the rollout so an empty packed section remains
+        // valid for quiet snapshots and bootstrap/full state stays explicit.
+        packedDynamic: field('object'),
         removedEntityIds: field('array', { required: true, maxLength: 4096 }),
         floorState: field('nullableObject'),
         bossState: field('nullableObject'),

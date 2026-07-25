@@ -36,16 +36,12 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v31';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v32';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
-  // WebSocket delivery is reliable and ordered. A five-second correction still
-  // bounds recovery for the fault-injected loopback transport without resending
-  // the complete entity set (and static floor layout) every second in production.
-  const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE * 5;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
@@ -57,6 +53,76 @@
   const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
     'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',
   ]);
+  const PACKED_DYNAMIC_COLLECTIONS = Object.freeze(['enemies', 'projectiles', 'abilityEntities']);
+
+  function scopedSnapshotEntities(source = {}, roomId) {
+    return Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => {
+      const records = source[collection] || {};
+      if (collection === 'players') return [collection, { ...records }];
+      return [collection, Object.fromEntries(Object.entries(records)
+        .filter(([, entity]) => entity?.roomId === roomId))];
+    }));
+  }
+
+  // Array records eliminate repeated JSON keys and quantize transform values to
+  // 1/8th world units. Static entity data remains in the initial/full bootstrap;
+  // these records are only the high-frequency state a renderer corrects every
+  // snapshot. The same helpers run in the worker and browser client.
+  function packDynamicEntities(entities = {}) {
+    const dictionaries = { ids: [], rooms: [], kinds: [], actions: [] };
+    const indexOf = (list, value) => {
+      const normalized = String(value || '');
+      let index = list.indexOf(normalized);
+      if (index < 0) { index = list.length; list.push(normalized); }
+      return index;
+    };
+    const pack = entity => [
+      indexOf(dictionaries.ids, entity.id),
+      indexOf(dictionaries.rooms, entity.roomId),
+      indexOf(dictionaries.kinds, entity.kind || entity.type),
+      Math.round(Number(entity.x || 0) * 8), Math.round(Number(entity.y || 0) * 8),
+      Math.round(Number(entity.vx || 0) * 8), Math.round(Number(entity.vy || 0) * 8),
+      Math.round(Number(entity.radius || entity.r || 0) * 8),
+      Math.round(Number(entity.hp || 0)), Math.round(Number(entity.maxHp || entity.max || 0)),
+      Math.round(Number(entity.expiresTick || 0)), indexOf(dictionaries.actions, entity.action),
+      entity.hostile ? 1 : 0,
+    ];
+    const packed = {};
+    PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
+      const records = entities[collection] || {};
+      packed[collection] = Object.values(records).map(pack);
+    });
+    return { dictionaries, packed };
+  }
+
+  function unpackDynamicEntities(state, wire = {}) {
+    const dictionaries = wire.dictionaries || {};
+    const ids = dictionaries.ids || [];
+    const rooms = dictionaries.rooms || [];
+    const kinds = dictionaries.kinds || [];
+    const actions = dictionaries.actions || [];
+    PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
+      const target = state[collection] || (state[collection] = {});
+      (wire.packed?.[collection] || []).forEach(record => {
+        if (!Array.isArray(record)) return;
+        const [idIndex, roomIndex, kindIndex, x, y, vx, vy, radius, hp, maxHp, expiresTick, actionIndex, hostile] = record;
+        const id = ids[idIndex];
+        if (!id) return;
+        const kind = kinds[kindIndex] || '';
+        target[id] = {
+          ...(target[id] || {}),
+          id,
+          roomId: rooms[roomIndex] || '',
+          ...(collection === 'enemies' ? { type: kind } : { kind }),
+          x: Number(x || 0) / 8, y: Number(y || 0) / 8,
+          vx: Number(vx || 0) / 8, vy: Number(vy || 0) / 8,
+          radius: Number(radius || 0) / 8,
+          hp: Number(hp || 0), maxHp: Number(maxHp || 0), max: Number(maxHp || 0),
+          expiresTick: Number(expiresTick || 0), action: actions[actionIndex] || 'idle', hostile: hostile === 1,
+        };
+      });
+    });
+  }
 
   function isIntentionalDisconnectReason(reason) {
     const normalized = String(reason || '').trim().toLowerCase();
@@ -263,6 +329,7 @@
       this.snapshotEntitySignatures = {};
       this.snapshotFloorSignature = '';
       this.snapshotBossSignature = '';
+      this.lastSnapshotRoomByPlayer = {};
       this.metrics = {
         acceptedInputs: 0,
         duplicateInputs: 0,
@@ -350,6 +417,7 @@
       ]));
       this.snapshotFloorSignature = JSON.stringify(this.simulation.state.floorState || null);
       this.snapshotBossSignature = JSON.stringify(this.simulation.state.bossState || null);
+      this.lastSnapshotRoomByPlayer = {};
     }
 
     _createSimulation(matchSeed, matchId) {
@@ -1066,7 +1134,10 @@
           break;
         }
         if (this.simulation.state.tick % SNAPSHOT_TICK_INTERVAL === 0) {
-          this._publishSnapshot(this.simulation.state.tick % FULL_CORRECTION_TICK_INTERVAL === 0);
+          // Full state is reserved for join/reconnect, room transitions and an
+          // explicit recovery request. On an ordered WebSocket a periodic giant
+          // correction creates head-of-line stalls precisely when combat is busy.
+          this._publishSnapshot(false);
         }
       }
       return this.simulation.state;
@@ -1119,6 +1190,7 @@
       const actualFull = full || !SNAPSHOT_ENTITY_COLLECTIONS.every(collection => this.snapshotEntitySignatures[collection]);
       const entities = {};
       const removedEntityIds = [];
+      const newEntityIds = Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [collection, new Set()]));
       SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
         const current = this.simulation.state[collection] || {};
         const previous = this.snapshotEntitySignatures[collection] || {};
@@ -1129,7 +1201,10 @@
           next[entityId] = signature;
           // The signature is already a complete serialized copy. Parsing it is
           // cheaper than stringifying the same entity again in cloneSerializable.
-          if (actualFull || previous[entityId] !== signature) changed[entityId] = JSON.parse(signature);
+          if (actualFull || previous[entityId] !== signature) {
+            changed[entityId] = JSON.parse(signature);
+            if (!previous[entityId]) newEntityIds[collection].add(entityId);
+          }
         });
         if (!actualFull) {
           Object.keys(previous).forEach(entityId => {
@@ -1147,21 +1222,45 @@
       const bossSignature = JSON.stringify(this.simulation.state.bossState || null);
       const bossStateChanged = bossSignature !== this.snapshotBossSignature;
       this.snapshotBossSignature = bossSignature;
-      const payload = {
-        snapshotSequence: this.snapshotSequence++,
-        serverTick: this.simulation.state.tick,
-        full: actualFull,
-        lastProcessedInput: { ...this.lastProcessedInput },
-        entities,
-        removedEntityIds,
-        floorState: floorChanged ? JSON.parse(floorSignature) : null,
-        bossState: bossStateChanged ? JSON.parse(bossSignature) : null,
-        bossStateChanged,
-      };
-      const delivery = actualFull
-        ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }
-        : getDeliveryIntent('WORLD_SNAPSHOT');
-      this._broadcast('WORLD_SNAPSHOT', payload, delivery);
+      const snapshotSequence = this.snapshotSequence++;
+      // Snapshot recipients receive only their active room's world entities.
+      // Players remain global for party HUD/spectator state. A room transition
+      // sends a scoped full bootstrap, which safely discards entities from the
+      // previous room without tracking a second per-client world cache.
+      this.playerIdByPeer.forEach((playerId, peerId) => {
+        const player = this.simulation.state.players[playerId];
+        if (!player) return;
+        const roomChanged = this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
+        const clientFull = actualFull || roomChanged;
+        this.lastSnapshotRoomByPlayer[playerId] = player.roomId;
+        const source = clientFull ? this.simulation.state : { ...this.simulation.state, ...entities };
+        const scoped = scopedSnapshotEntities(source, player.roomId);
+        const packedDynamic = clientFull ? undefined : packDynamicEntities(scoped);
+        if (!clientFull) {
+          // New dynamic entities have no static bootstrap on this client yet;
+          // send their complete record once, then use packed transforms only.
+          PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
+            scoped[collection] = Object.fromEntries(Object.entries(scoped[collection] || {})
+              .filter(([entityId]) => newEntityIds[collection].has(entityId)));
+          });
+        }
+        const payload = {
+          snapshotSequence,
+          serverTick: this.simulation.state.tick,
+          full: clientFull,
+          lastProcessedInput: { [playerId]: this.lastProcessedInput[playerId] ?? -1 },
+          entities: scoped,
+          ...(packedDynamic ? { packedDynamic } : {}),
+          removedEntityIds,
+          floorState: floorChanged ? JSON.parse(floorSignature) : null,
+          bossState: bossStateChanged ? JSON.parse(bossSignature) : null,
+          bossStateChanged,
+        };
+        const delivery = clientFull
+          ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }
+          : getDeliveryIntent('WORLD_SNAPSHOT');
+        this._send(peerId, 'WORLD_SNAPSHOT', payload, delivery);
+      });
       this.metrics.snapshots += 1;
     }
 
@@ -1447,6 +1546,7 @@
         if (snapshot.full) this.state[collection] = changed;
         else Object.assign(this.state[collection] || (this.state[collection] = {}), changed);
       });
+      if (snapshot.packedDynamic) unpackDynamicEntities(this.state, snapshot.packedDynamic);
       (snapshot.removedEntityIds || []).forEach(entityId => {
         SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => { delete this.state[collection]?.[entityId]; });
       });
