@@ -125,6 +125,29 @@ describe('authoritative network combat system', () => {
       equippedMoves: expect.objectContaining({ laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
       items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 },
     }));
+    expect(player.itemStats).toEqual(expect.objectContaining({
+      bleedResistance: 0.1,
+      damageReduction: 0.005,
+    }));
+  });
+
+  test('applies starter defensive item stats to authoritative multiplayer damage', () => {
+    const { state, simulation } = combatHarness('princess');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'princess');
+    state.projectiles.enemyShot = {
+      id: 'enemyShot', hostile: true, ownerId: 'enemy-test', roomId: player.roomId,
+      x: player.x, y: player.y, vx: 0, vy: 0, radius: 8, damage: 30,
+      attackKind: 'test_volley', expiresTick: state.tick + 10,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    // Prince's Glasses starts Princess with 10% defense. This assertion guards
+    // the old failure where multiplayer carried the item but never derived its
+    // authoritative itemStats, so the same hit dealt the full 30 damage.
+    expect(player.itemStats.damageReduction).toBeCloseTo(0.1);
+    expect(player.hp).toBe(111);
   });
 
   test('applies validated alt-kit choices and rejects moves outside KIT_ALTERNATIVES', () => {

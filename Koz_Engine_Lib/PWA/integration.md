@@ -113,6 +113,24 @@ await pwa.register();
 
 Do not automatically call `skipWaiting()` during worker installation. Replacing a worker while an existing page is running can combine old in-memory code with newly cached lazy modules. Offer “Update and reload,” activate at a safe menu/save boundary, or allow the update to activate after every old client closes.
 
+### Update-prompt requirements
+
+Surface `onUpdateAvailable` in the host UI as a small, non-modal banner or
+dialog. It must state that an update is ready and offer both **Update now** and
+**Later**. A player may dismiss the prompt and continue their current run; do
+not reload or activate the waiting worker without an explicit player action.
+
+The **Update now** action should call `applyUpdate({ reload: true })`, disable
+itself while activation is in progress, and let the client reload only after
+`controllerchange`. This one reload ensures all in-memory code and cached lazy
+modules come from the same version. Make the prompt keyboard-accessible,
+announce it through an appropriate live region, and keep it clear of mobile
+safe-area insets and touch controls.
+
+If activation cannot begin because the worker is no longer waiting, restore the
+button and leave the current page running. A future update notification can
+show the prompt again.
+
 Call `requestPersistentStorage()` from a user gesture such as an “Install offline” button. Browsers may reject persistence requests made without user interaction. Use `getStorageEstimate()` to show whether a large optional download fits before starting it.
 
 If `warmOptionalOnInstall` is disabled, call `warmOptionalCache()` after the user accepts an offline-media download.
@@ -186,10 +204,11 @@ Test manually on at least one current iOS/iPadOS device and one current Android 
 1. Install online, close fully, enable airplane mode, then launch.
 2. Interrupt the first install and verify the previous version still launches.
 3. Fill storage or deny optional media and verify gameplay still boots.
-4. Deploy an update while a run is active and verify it waits for approval.
-5. Apply the update and verify one reload moves all code/assets to the new version.
-6. Background and resume during loading, saving, combat, and audio.
-7. Verify touch controls around notches, rounded corners, and browser chrome.
+4. Deploy an update while a run is active and verify a dismissible update prompt appears without interrupting it.
+5. Choose “Later,” continue playing, then choose “Update now” from a subsequent prompt.
+6. Apply the update and verify one reload moves all code/assets to the new version.
+7. Background and resume during loading, saving, combat, and audio.
+8. Verify touch controls around notches, rounded corners, and browser chrome.
 
 ## NeoNyke reference
 
@@ -198,4 +217,6 @@ NeoNyke’s host adapter is `scripts/generate-precache.js`. It treats code, loca
 - `neonyke:pwa-state`
 - `neonyke:pwa-update-ready`
 
-The second event’s `detail.applyUpdate({ reload: true })` function can be connected to a main-menu update button.
+The second event’s `detail.applyUpdate({ reload: true })` function drives the
+non-modal update banner in `js/ui/pwa-update-prompt.js`. The host keeps the
+banner implementation; the engine supplies the safe update lifecycle.

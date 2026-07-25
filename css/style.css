@@ -388,6 +388,107 @@ body.render3d #c {
   pointer-events: none;
 }
 
+/* A waiting service worker is activated only after the player accepts this
+   prompt. Keeping the choice visible but non-modal avoids interrupting a run. */
+.pwa-update-prompt {
+  position: fixed;
+  z-index: 350;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px 13px 16px;
+  color: #f2e8d7;
+  border: 1px solid #d99d3d;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #20243a, #10121f);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .55), 0 0 24px rgba(217, 157, 61, .16);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.pwa-update-prompt[hidden] {
+  display: none;
+}
+
+.pwa-update-prompt__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pwa-update-prompt__copy strong {
+  color: #ffd27d;
+  font-size: 14px;
+  letter-spacing: .04em;
+}
+
+.pwa-update-prompt__copy span {
+  color: #d5d9e8;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.pwa-update-prompt__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.pwa-update-prompt button {
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid #7d8ba8;
+  border-radius: 6px;
+  color: #eef3ff;
+  background: #292f45;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pwa-update-prompt__apply {
+  border-color: #f0b44e !important;
+  color: #19120a !important;
+  background: linear-gradient(#ffd27d, #e5a43c) !important;
+}
+
+.pwa-update-prompt button:hover:not(:disabled),
+.pwa-update-prompt button:focus-visible:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.pwa-update-prompt button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.pwa-update-prompt button:disabled {
+  cursor: wait;
+  opacity: .72;
+}
+
+@media (max-width: 540px) {
+  .pwa-update-prompt {
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: min(440px, calc(100vw - 20px));
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pwa-update-prompt__actions {
+    align-self: flex-end;
+  }
+}
+
 .item-toast {
   box-sizing: border-box;
   width: min(520px, calc(100vw - 32px));

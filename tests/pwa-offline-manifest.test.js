@@ -33,4 +33,13 @@ describe('offline PWA entry points', () => {
     expect(worker).not.toContain('skipWaiting');
     expect(runtime).toContain('KOZ_PWA_SKIP_WAITING');
   });
+
+  test('offers a player-controlled update prompt before activating a waiting worker', () => {
+    const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const prompt = fs.readFileSync(path.join(root, 'js/ui/pwa-update-prompt.js'), 'utf8');
+    expect(page).toContain('js/ui/pwa-update-prompt.js');
+    expect(prompt).toContain('neonyke:pwa-update-ready');
+    expect(prompt).toContain("applyUpdate({ reload: true })");
+    expect(prompt).toContain('Update now');
+  });
 });

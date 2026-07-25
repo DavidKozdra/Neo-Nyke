@@ -94,6 +94,7 @@
     getCampaignBleedResistance = () => 1,
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
+    deriveCampaignItemStats = () => ({}),
     resolveCampaignOnHitStatusProcs = () => [],
     syncCampaignItemStats = state => state,
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
@@ -244,6 +245,11 @@
     player.hp = Math.round(profile.maxHp * healthRatio);
     player.moveSpeed = profile.moveSpeed;
     player.damageMultiplier = profile.damageMultiplier;
+    // A network hero is immediately playable after character selection. Derive
+    // the starter-item effects here rather than waiting for a later pickup or
+    // tick, otherwise the authoritative damage path treats every hero as if
+    // they had no items (notably Princess loses her 10% Glasses defense).
+    player.itemStats = deriveCampaignItemStats(player);
     return player;
   }
 
@@ -947,7 +953,10 @@
       emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result.reason });
       return false;
     }
-    syncCampaignItemStats(player, { currentTick: state.tick, lowerCombatCurse: !!state.matchRules?.lowerCombatCurse });
+    // syncCampaignItemStats operates on a complete authority state. Passing a
+    // single player silently iterates no players, leaving newly acquired
+    // defensive items inert until the run ends.
+    syncCampaignItemStats(state, { currentTick: state.tick, lowerCombatCurse: !!state.matchRules?.lowerCombatCurse });
     emitEvent('ACQUISITION_APPLIED', { playerId: player.id, ...result });
     return true;
   }
@@ -4634,6 +4643,11 @@
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
       combatRandomByState.set(state, random);
+      // Item effects are authoritative combat inputs, not render metadata.
+      // Refresh before movement/actions so starter and newly acquired stats
+      // apply immediately; refresh again after equipment activation below so
+      // a defensive tool cannot leave a one-tick damage window.
+      syncCampaignItemStats(state);
       const occupiedRoomIds = new Set(Object.values(state.players || {})
         .filter(player => player && !player.disconnected)
         .map(player => player.roomId));
@@ -4653,6 +4667,7 @@
       updatePlayerHeldCharges(state, inputs, emitEvent, random);
       updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
+      syncCampaignItemStats(state);
       updateAbilityEntities(state, emitEvent, random);
       updateRoomHazards(state, fixedDelta, emitEvent);
       updateAuthorityStatuses(state, fixedDelta, emitEvent);
