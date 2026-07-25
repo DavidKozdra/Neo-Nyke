@@ -117,6 +117,11 @@
   const BUTTON_LASER_HELD = 1;
   const BUTTON_SMASH_HELD = 2;
   const BUTTON_DASH_HELD = 4;
+  // Combat is authority-owned, but waiting a full round trip before showing an
+  // accepted button press makes even a healthy connection feel broken. Keep a
+  // short client-only presentation record until its authoritative event arrives
+  // (or it naturally expires if the action was rejected).
+  const PREDICTED_COMBAT_CONFIRMATION_MS = 1200;
   const HELD_BUTTON_BY_ABILITY = Object.freeze({
     love_bomb_laser: BUTTON_LASER_HELD,
     ghost_ball: BUTTON_LASER_HELD,
@@ -319,6 +324,12 @@
       this.floorTransitionStartedAt = 0;
       this.seenGameplayEvents = new Set();
       this.combatEffects = [];
+      this.pendingCombatPredictions = [];
+      this.predictedProjectiles = [];
+      this.pendingHeldCharge = null;
+      this.pendingBeamPresentation = null;
+      this.localBeamReleaseRequested = false;
+      this.predictedCombatSequence = 0;
       this.presentationRooms = new Map();
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors = new Map();
@@ -549,6 +560,12 @@
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
       this.combatEffects = [];
+      this.pendingCombatPredictions = [];
+      this.predictedProjectiles = [];
+      this.pendingHeldCharge = null;
+      this.pendingBeamPresentation = null;
+      this.localBeamReleaseRequested = false;
+      this.predictedCombatSequence = 0;
       this.seenGameplayEvents.clear();
       this.previousSample = null;
       this.currentSample = null;
@@ -753,6 +770,9 @@
       }
       const authorityPlayer = state.players[snapshot.playerId];
       if (!authorityPlayer) return;
+      if (authorityPlayer.beamChannel?.moveKey === this.pendingBeamPresentation?.moveKey) {
+        this.pendingBeamPresentation = null;
+      }
       if (transitionChanged || receivedFloorNumber !== Number(this.localPredictedPlayer?.floorNumber || receivedFloorNumber)) {
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer, floorNumber: receivedFloorNumber };
@@ -910,7 +930,9 @@
 
     _attack() {
       if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
+      if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       try {
+        this._predictLocalAttack();
         this.session.sendAction('ATTACK', this.aimDirection);
       } catch {
         // Session state changes are surfaced by its normal disconnect handler.
@@ -926,15 +948,20 @@
       const player = this.localPredictedPlayer;
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
+      if (this._hasPendingCombatPrediction('PLAYER_ABILITY_USED', abilityId)
+        || this.pendingHeldCharge?.abilityId === abilityId) return;
       try {
         const heldButton = HELD_BUTTON_BY_ABILITY[abilityId];
         if (heldButton) {
+          this._startPredictedHeldCharge(abilityId, slot, heldButton);
           // The input stream is replaceable while the cast action is reliable.
           // Put an explicit held sample on the socket first, in the same send
           // order as the action, so the authority cannot start a charge from an
           // old button-up snapshot and immediately release a tiny version.
           const movement = this._readMovement();
           this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton });
+        } else {
+          this._predictLocalAbility(abilityId, slot);
         }
         if (slot === 'dash') this.session.sendDash(abilityId, this.aimDirection);
         else this.session.sendAbility(abilityId, this.aimDirection);
@@ -1096,16 +1123,22 @@
           this.neo.pushStatusToast?.({ text: name, label: 'REVIVED', accent: '#72e69c', holdMs: 2400 });
         }
         if (!this._isGameplayEventVisible(event)) return;
+        const predicted = this._acknowledgePredictedCombatEvent(event, now);
+        if (event.eventType === 'PLAYER_ABILITY_USED'
+          && event.data?.playerId === localPlayerId
+          && event.data?.abilityId === this.pendingHeldCharge?.abilityId) {
+          this.pendingHeldCharge = null;
+        }
         if (event.eventType === 'PLAYER_ATTACKED') {
           const weaponKey = event.data?.weaponKey || event.data?.attackKind;
           const sound = weaponKey === 'metao_fire_staff' ? 'fire_burn'
             : weaponKey === 'gelleh_lightning_spear' ? 'lightning_charge'
               : ['princess_wand'].includes(weaponKey) ? 'fire'
                 : 'sword_swing';
-          this.neo.playSfx?.(sound);
+          if (!predicted) this.neo.playSfx?.(sound);
         }
         if (event.eventType === 'PLAYER_ABILITY_USED') {
-          this.neo.playSfx?.(deriveAbilityPresentation(event.data).sound || 'lazer_blast');
+          if (!predicted) this.neo.playSfx?.(deriveAbilityPresentation(event.data).sound || 'lazer_blast');
         }
         if (event.eventType === 'PLAYER_HIT' && event.data?.playerId === localPlayerId
           && this.localPredictedPlayer && Number(event.data.knockbackMagnitude || 0) > 0) {
@@ -1149,15 +1182,208 @@
             this.neo.playSfx?.('break_furniture');
           }
         }
-        this._spawnGameplayEventEffect(event);
+        // The provisional effect already began on the local input frame. Keep
+        // its clock when the authority confirms it, rather than drawing/sounding
+        // the same action a second time one network round trip later. Server
+        // state still wins for movement, hits, projectiles and every outcome.
+        if (predicted) {
+          if (event.eventType === 'PLAYER_ABILITY_USED') this._applyAuthoritativeAbilityMovement(event.data);
+        } else {
+          this._spawnGameplayEventEffect(event);
+        }
         if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
-          this.combatEffects.push({ ...event, startedAt: now });
+          this.combatEffects.push({ ...event, startedAt: predicted?.startedAt || now });
         }
       });
       this.combatEffects = this.combatEffects.filter(effect => {
         const moveKey = effect.data?.abilityId;
         const authoredDuration = Number(MOVE_BASE_STATS[moveKey]?.duration || 0);
         return now - effect.startedAt < Math.max(700, authoredDuration * 1000 + 120);
+      });
+      this.pendingCombatPredictions = this.pendingCombatPredictions.filter(prediction => (
+        now - prediction.startedAt < PREDICTED_COMBAT_CONFIRMATION_MS
+      ));
+      this.predictedProjectiles = this.predictedProjectiles.filter(projectile => now < projectile.expiresAt);
+    }
+
+    _acknowledgePredictedCombatEvent(event, now) {
+      const localPlayerId = this.session.snapshot?.()?.playerId;
+      const data = event.data || {};
+      if (data.playerId !== localPlayerId) return null;
+      const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => (
+        prediction.event.eventType === event.eventType
+        && prediction.event.data?.playerId === data.playerId
+        && (event.eventType !== 'PLAYER_ABILITY_USED'
+          || prediction.event.data?.abilityId === data.abilityId)
+        && now - prediction.startedAt < PREDICTED_COMBAT_CONFIRMATION_MS
+      ));
+      if (predictionIndex < 0) return null;
+      const [prediction] = this.pendingCombatPredictions.splice(predictionIndex, 1);
+      this.combatEffects = this.combatEffects.filter(effect => effect.eventId !== prediction.event.eventId);
+      this.predictedProjectiles = this.predictedProjectiles.filter(projectile => projectile.predictionId !== prediction.event.eventId);
+      return prediction;
+    }
+
+    _predictCombatEvent(eventType, data) {
+      const now = root.performance?.now?.() || Date.now();
+      const event = {
+        eventId: `predicted:${++this.predictedCombatSequence}`,
+        eventType,
+        data,
+      };
+      const prediction = { event, startedAt: now };
+      this.pendingCombatPredictions.push(prediction);
+      if (eventType === 'PLAYER_ATTACKED') {
+        const weaponKey = data.weaponKey || data.attackKind;
+        const sound = weaponKey === 'metao_fire_staff' ? 'fire_burn'
+          : weaponKey === 'gelleh_lightning_spear' ? 'lightning_charge'
+            : weaponKey === 'princess_wand' ? 'fire' : 'sword_swing';
+        this.neo.playSfx?.(sound);
+      } else if (eventType === 'PLAYER_ABILITY_USED') {
+        this.neo.playSfx?.(deriveAbilityPresentation(data).sound || 'lazer_blast');
+      }
+      this._spawnGameplayEventEffect(event);
+      this.combatEffects.push({ ...event, startedAt: now });
+      return prediction;
+    }
+
+    _hasPendingCombatPrediction(eventType, abilityId = null) {
+      return this.pendingCombatPredictions.some(prediction => (
+        prediction.event.eventType === eventType
+        && (abilityId == null || prediction.event.data?.abilityId === abilityId)
+      ));
+    }
+
+    _predictLocalAttack() {
+      const player = this.localPredictedPlayer;
+      if (!player) return;
+      this._predictCombatEvent('PLAYER_ATTACKED', {
+        playerId: player.id,
+        roomId: player.roomId,
+        weaponKey: player.weaponKey || player.equippedWeapon || player.actionKind || 'melee',
+        attackKind: player.weaponKey || player.equippedWeapon || player.actionKind || 'melee',
+        aimDirection: this.aimDirection,
+        originX: Number(player.x || 0),
+        originY: Number(player.y || 0),
+      });
+    }
+
+    _predictLocalAbility(abilityId, slot, options = {}) {
+      const player = this.localPredictedPlayer;
+      if (!player) return;
+      const stats = MOVE_BASE_STATS[abilityId] || {};
+      const presentation = deriveAbilityPresentation({ abilityId, slot });
+      const chargeRatio = clamp(Number(options.chargeRatio || 0), 0, 1);
+      const radius = abilityId === 'death_ball' ? 16 + chargeRatio * 34
+        : abilityId === 'healing_zone' ? 62 * (1 + chargeRatio)
+          : abilityId === 'nimrod_stomp' ? 108 + chargeRatio * 54
+            : Number(stats.range || (slot === 'smash' ? 140 : 34));
+      const originX = Number(player.x || 0);
+      const originY = Number(player.y || 0);
+      const data = {
+        playerId: player.id,
+        roomId: player.roomId,
+        characterKey: player.characterKey,
+        slot,
+        abilityId,
+        mode: presentation.kind || slot,
+        aimDirection: this.aimDirection,
+        presentationKey: abilityId,
+        presentation: { key: abilityId, kind: presentation.kind, style: presentation.style },
+        originX,
+        originY,
+        destinationX: originX,
+        destinationY: originY,
+        effectRadius: radius,
+      };
+      const floor = this.currentSample?.state?.floorState || {};
+      const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
+      const clampDestination = distance => ({
+        x: clamp(originX + Math.cos(this.aimDirection) * distance, minimum, Number(floor.width || 900) - minimum),
+        y: clamp(originY + Math.sin(this.aimDirection) * distance, minimum, Number(floor.height || 700) - minimum),
+      });
+      if (abilityId === 'dash') {
+        const speed = 520 + Number(player.attackSpeed || 0) * 28;
+        data.dashVx = Math.cos(this.aimDirection) * speed;
+        data.dashVy = Math.sin(this.aimDirection) * speed;
+      } else if (abilityId === 'nimrod_stomp') {
+        const distance = 108 + (Math.max(Number(floor.width || 900), Number(floor.height || 700)) - 108) * chargeRatio;
+        const destination = clampDestination(distance);
+        data.destinationX = destination.x;
+        data.destinationY = destination.y;
+      } else if (['warp', 'zip_lightning', 'knight_slash_dash'].includes(abilityId)) {
+        const destination = clampDestination(abilityId === 'warp' ? 300 : abilityId === 'zip_lightning' ? 230 : 170);
+        data.destinationX = destination.x;
+        data.destinationY = destination.y;
+      }
+      const prediction = this._predictCombatEvent('PLAYER_ABILITY_USED', data);
+      if (presentation.kind === 'projectile') this._predictAbilityProjectile(prediction, data, chargeRatio);
+      if (CONTINUOUS_BEAM_MOVES.has(abilityId)) this._startPredictedBeamPresentation(abilityId);
+    }
+
+    _startPredictedHeldCharge(abilityId, slot, button) {
+      if (this.pendingHeldCharge?.abilityId === abilityId) return;
+      const profile = {
+        love_bomb_laser: 100, ghost_ball: 100, healing_zone: 25,
+        death_ball: 100, turtle_powerup: 25, nimrod_stomp: 25,
+      };
+      const player = this.localPredictedPlayer;
+      if (!player || !profile[abilityId]) return;
+      this.pendingHeldCharge = {
+        abilityId, moveKey: abilityId, slot, button, startAt: root.performance?.now?.() || Date.now(),
+        maxChargeTicks: profile[abilityId],
+      };
+    }
+
+    _releasePredictedHeldCharge() {
+      const charge = this.pendingHeldCharge;
+      if (!charge) return;
+      this.pendingHeldCharge = null;
+      const now = root.performance?.now?.() || Date.now();
+      const ratio = clamp((now - charge.startAt) / (charge.maxChargeTicks * INPUT_INTERVAL_MS), 0, 1);
+      this._predictLocalAbility(charge.abilityId, charge.slot, { chargeRatio: ratio });
+    }
+
+    _startPredictedBeamPresentation(moveKey) {
+      const now = root.performance?.now?.() || Date.now();
+      const durationMs = Math.max(100, Number(MOVE_BASE_STATS[moveKey]?.duration || 1.2) * 1000);
+      this.localBeamReleaseRequested = false;
+      this.pendingBeamPresentation = { moveKey, startAt: now, untilAt: now + durationMs, angle: this.aimDirection };
+    }
+
+    _predictAbilityProjectile(prediction, data, chargeRatio) {
+      const moveKey = data.abilityId;
+      const stats = MOVE_BASE_STATS[moveKey] || {};
+      const radius = moveKey === 'death_ball' ? 16 + chargeRatio * 34
+        : moveKey === 'love_bomb_laser' ? 10 + chargeRatio * 6
+          : moveKey === 'ghost_ball' ? 18 + chargeRatio * 22 : 7;
+      const speed = moveKey === 'death_ball' ? 520 - chargeRatio * 200
+        : moveKey === 'love_bomb_laser' ? 340 + chargeRatio * 120
+          : moveKey === 'ghost_ball' ? 300 : 520;
+      const now = root.performance?.now?.() || Date.now();
+      const lifetimeMs = Math.max(360, Number(stats.range || 320) / Math.max(1, speed) * 1000);
+      const angle = Number(data.aimDirection || 0);
+      this.predictedProjectiles.push({
+        id: `${prediction.event.eventId}:projectile`, predictionId: prediction.event.eventId,
+        kind: moveKey, ownerId: data.playerId, roomId: data.roomId,
+        x: Number(data.originX || 0) + Math.cos(angle) * (18 + radius * 0.4),
+        y: Number(data.originY || 0) + Math.sin(angle) * (18 + radius * 0.4),
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        r: radius, radius, enemy: false, createdAt: now, expiresAt: now + lifetimeMs,
+        life: lifetimeMs / 1000, maxLife: lifetimeMs / 1000, trail: [],
+      });
+    }
+
+    _projectPredictedProjectiles(now) {
+      this.predictedProjectiles = this.predictedProjectiles.filter(projectile => now < projectile.expiresAt);
+      return this.predictedProjectiles.map(projectile => {
+        const ageSeconds = Math.max(0, now - projectile.createdAt) / 1000;
+        return {
+          ...projectile,
+          x: projectile.x + projectile.vx * ageSeconds,
+          y: projectile.y + projectile.vy * ageSeconds,
+          life: Math.max(0, projectile.expiresAt - now) / 1000,
+        };
       });
     }
 
@@ -1173,6 +1399,32 @@
         || state.pickups?.[data.pickupId];
       const eventRoomId = data.roomId || eventEntity?.roomId;
       return !eventRoomId || eventRoomId === viewpointPlayer.roomId;
+    }
+
+    _applyAuthoritativeAbilityMovement(data = {}) {
+      const isLocalCaster = data.playerId === this.session.snapshot?.()?.playerId && this.localPredictedPlayer;
+      if (!isLocalCaster) return;
+      const destinationX = Number.isFinite(Number(data.destinationX))
+        ? Number(data.destinationX) : Number(this.localPredictedPlayer.x || 0);
+      const destinationY = Number.isFinite(Number(data.destinationY))
+        ? Number(data.destinationY) : Number(this.localPredictedPlayer.y || 0);
+      const presentation = deriveAbilityPresentation(data);
+      const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
+      // The plain glide dash isn't a teleport: it moves the hero over ~0.16s
+      // via dashUntilTick/dashVx/dashVy, which prediction already integrates.
+      // Snapping to destination here would freeze it at its start point, so we
+      // start the glide locally and let predictPosition carry it instead.
+      if (data.abilityId === 'dash') {
+        const serverTick = Number(this.currentSample?.state?.tick || 0);
+        this.localPredictedPlayer.dashUntilTick = serverTick + Math.round(0.16 * 20);
+        this.localPredictedPlayer.dashVx = Number(data.dashVx || 0);
+        this.localPredictedPlayer.dashVy = Number(data.dashVy || 0);
+      } else if (['dash', 'warp', 'dash_aoe'].includes(kind)) {
+        this.localPredictedPlayer.x = destinationX;
+        this.localPredictedPlayer.y = destinationY;
+        this.localPredictedPlayer.vx = 0;
+        this.localPredictedPlayer.vy = 0;
+      }
     }
 
     _spawnGameplayEventEffect(event) {
@@ -1228,22 +1480,7 @@
         const destinationY = Number.isFinite(Number(data.destinationY)) ? Number(data.destinationY) : Number(entity.y);
         const radius = Math.max(1, Number(data.effectRadius || (data.slot === 'smash' ? 140 : 34)));
         const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
-        const isLocalCaster = data.playerId === this.session.snapshot?.()?.playerId && this.localPredictedPlayer;
-        // The plain glide dash isn't a teleport: it moves the hero over ~0.16s
-        // via dashUntilTick/dashVx/dashVy, which prediction already integrates.
-        // Snapping to destination here would freeze it at its start point, so we
-        // start the glide locally and let predictPosition carry it instead.
-        if (isLocalCaster && data.abilityId === 'dash') {
-          const serverTick = Number(this.currentSample?.state?.tick || 0);
-          this.localPredictedPlayer.dashUntilTick = serverTick + Math.round(0.16 * 20);
-          this.localPredictedPlayer.dashVx = Number(data.dashVx || 0);
-          this.localPredictedPlayer.dashVy = Number(data.dashVy || 0);
-        } else if (isLocalCaster && ['dash', 'warp', 'dash_aoe'].includes(kind)) {
-          this.localPredictedPlayer.x = destinationX;
-          this.localPredictedPlayer.y = destinationY;
-          this.localPredictedPlayer.vx = 0;
-          this.localPredictedPlayer.vy = 0;
-        }
+        this._applyAuthoritativeAbilityMovement(data);
         if (['aoe', 'dash_aoe'].includes(kind) && typeof this.neo.spawnAoeShockwave === 'function') {
           const impactX = kind === 'dash_aoe' ? destinationX : originX;
           const impactY = kind === 'dash_aoe' ? destinationY : originY;
@@ -1441,6 +1678,10 @@
       const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
       const smashHeld = this.keyboardSmashHeld || this.gamepadSmashHeld || this.touchSmashHeld;
       const dashHeld = this.keyboardDashHeld || this.gamepadDashHeld || this.touchDashHeld;
+      if (!beamHeld) {
+        this.pendingBeamPresentation = null;
+        this.localBeamReleaseRequested = true;
+      }
       const input = {
         ...movement,
         aimDirection: this.aimDirection,
@@ -1448,6 +1689,9 @@
           | (smashHeld ? BUTTON_SMASH_HELD : 0)
           | (dashHeld ? BUTTON_DASH_HELD : 0),
       };
+      if (this.pendingHeldCharge && !(input.buttons & this.pendingHeldCharge.button)) {
+        this._releasePredictedHeldCharge();
+      }
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
           this.localPredictedPlayer,
@@ -1510,7 +1754,23 @@
       const alpha = clamp((targetTime - (this.previousSample?.receivedAt || targetTime)) / duration, 0, 1);
       const players = interpolatePlayers(previousPlayers, currentPlayers, alpha);
       const localPlayerId = this.session.snapshot().playerId;
-      if (localPlayerId && this.localPredictedPlayer) players[localPlayerId] = { ...this.localPredictedPlayer };
+      if (localPlayerId && this.localPredictedPlayer) {
+        const local = { ...this.localPredictedPlayer };
+        if (this.pendingBeamPresentation && now >= this.pendingBeamPresentation.untilAt) this.pendingBeamPresentation = null;
+        if (this.localBeamReleaseRequested) {
+          local.beamChannel = null;
+        } else if (!local.beamChannel && this.pendingBeamPresentation) {
+          const remainingTicks = Math.max(1, Math.ceil((this.pendingBeamPresentation.untilAt - now) / INPUT_INTERVAL_MS));
+          local.beamChannel = {
+            moveKey: this.pendingBeamPresentation.moveKey,
+            angle: this.pendingBeamPresentation.angle,
+            startTick: Number(this.currentSample?.state?.tick || 0),
+            untilTick: Number(this.currentSample?.state?.tick || 0) + remainingTicks,
+            sweepDirection: 1,
+          };
+        }
+        players[localPlayerId] = local;
+      }
       return players;
     }
 
@@ -1677,7 +1937,7 @@
         this._syncCampaignHudState(this.neo.player, state);
       }
       this.neo.activePlayerEffects = this._projectActivePlayerEffects(now);
-      this.neo.projectiles = this._stablePresentationEntities(
+      const authoritativeProjectiles = this._stablePresentationEntities(
         this.presentationProjectiles,
         Object.values(projectiles || {}),
         projectile => ({
@@ -1687,6 +1947,7 @@
           life: Math.max(0, Number(projectile.expiresTick || 0) - serverTick) / 20,
         }),
       );
+      this.neo.projectiles = [...authoritativeProjectiles, ...this._projectPredictedProjectiles(now)];
       this._syncSpecialMovePresentation(now);
     }
 
@@ -1710,7 +1971,8 @@
       neo.loveBombChargeTime = 0;
       neo.ghostBallChargeTime = 0;
 
-      const held = localPlayer?.heldCharge;
+      const authoritativeHeld = localPlayer?.heldCharge;
+      const held = authoritativeHeld || this.pendingHeldCharge;
       if (!held) return;
       const maxTicks = Math.max(1, Number(held.maxChargeTicks || 1));
       const snapshotTick = Number(state?.tick || 0);
@@ -1718,7 +1980,9 @@
       // them so it fills continuously without making the client authoritative.
       const receivedAt = Number(this.currentSample?.receivedAt || now);
       const estimatedTick = snapshotTick + Math.max(0, Number(now || 0) - receivedAt) / INPUT_INTERVAL_MS;
-      const ratio = clamp((estimatedTick - Number(held.startTick || snapshotTick)) / maxTicks, 0, 1);
+      const ratio = authoritativeHeld
+        ? clamp((estimatedTick - Number(held.startTick || snapshotTick)) / maxTicks, 0, 1)
+        : clamp((Number(now || 0) - Number(held.startAt || now)) / (maxTicks * INPUT_INTERVAL_MS), 0, 1);
       const setCharge = (chargingKey, timeKey, maxSeconds) => {
         neo[chargingKey] = true;
         neo[timeKey] = ratio * Math.max(0.001, Number(maxSeconds || 5));

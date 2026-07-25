@@ -1022,6 +1022,122 @@ describe('network multiplayer game view', () => {
     });
   });
 
+  test('starts local combat presentation immediately and replaces it with the authority event', () => {
+    const sent = [];
+    const sounds = [];
+    const session = {
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendAbility: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: { playSfx: sound => sounds.push(sound) } });
+    view.active = true;
+    view.localPredictedPlayer = {
+      id: 'p1', roomId: 'r1', x: 240, y: 310,
+      equippedMoves: { smash: 'crimson_smash' },
+    };
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'r1', x: 240, y: 310 } } } };
+
+    view._useSlot('smash');
+
+    expect(sent).toEqual([['crimson_smash', 0]]);
+    expect(sounds).toEqual(['aoe']);
+    expect(view.pendingCombatPredictions).toHaveLength(1);
+    expect(view.combatEffects).toHaveLength(1);
+    const predictedStart = view.combatEffects[0].startedAt;
+
+    view._consumeGameplayEvents([{
+      eventId: 'authority-smash', eventType: 'PLAYER_ABILITY_USED',
+      data: {
+        playerId: 'p1', roomId: 'r1', slot: 'smash', abilityId: 'crimson_smash',
+        presentation: { kind: 'aoe', style: 'heavy' }, originX: 240, originY: 310, effectRadius: 140,
+      },
+    }]);
+
+    expect(view.pendingCombatPredictions).toHaveLength(0);
+    expect(view.combatEffects).toEqual([expect.objectContaining({
+      eventId: 'authority-smash', startedAt: predictedStart,
+    })]);
+    expect(sounds).toEqual(['aoe']);
+  });
+
+  test('does not stack speculative casts while one local action awaits authority', () => {
+    const sent = [];
+    const session = {
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendAction: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.active = true;
+    view.localPredictedPlayer = { id: 'p1', roomId: 'r1', x: 100, y: 200 };
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 200 } } } };
+
+    view._attack();
+    view._attack();
+
+    expect(sent).toEqual([['ATTACK', 0]]);
+    expect(view.pendingCombatPredictions).toHaveLength(1);
+  });
+
+  test('shows a held charge before the authority has sent its first snapshot', () => {
+    const neo = { DEATH_BALL_MAX_CHARGE: 5 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.currentSample = { receivedAt: 1_000, state: { tick: 150 } };
+    view.pendingHeldCharge = {
+      abilityId: 'death_ball', moveKey: 'death_ball', slot: 'smash', button: 2, startAt: -1_500, maxChargeTicks: 100,
+    };
+
+    view._syncHeldChargePresentation({}, { tick: 150 }, 1_000);
+
+    expect(neo.deathBallCharging).toBe(true);
+    expect(neo.deathBallChargeTime).toBeCloseTo(2.5);
+  });
+
+  test('draws a provisional ability projectile until its authoritative projectile arrives', () => {
+    const view = new NetworkGameView({ session: {}, neo: {} });
+    view.localPredictedPlayer = { id: 'p1', roomId: 'r1', x: 100, y: 200 };
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 200 } } } };
+
+    view._predictLocalAbility('death_ball', 'smash', { chargeRatio: 0.5 });
+
+    expect(view.predictedProjectiles).toHaveLength(1);
+    const projectile = view._projectPredictedProjectiles(view.predictedProjectiles[0].createdAt + 100)[0];
+    expect(projectile.kind).toBe('death_ball');
+    expect(projectile.x).toBeGreaterThan(100);
+    expect(projectile.r).toBeCloseTo(33);
+  });
+
+  test('predicts a dash destination immediately, then leaves final reconciliation to authority', () => {
+    const session = { snapshot: () => ({ playerId: 'p1' }) };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.localPredictedPlayer = { id: 'p1', roomId: 'r1', x: 100, y: 200, radius: 18 };
+    view.currentSample = {
+      state: {
+        players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 200 } },
+        floorState: { width: 900, height: 700, wallThickness: 28 },
+      },
+    };
+
+    view._predictLocalAbility('warp', 'dash');
+
+    expect(view.localPredictedPlayer.x).toBeCloseTo(400);
+    expect(view.localPredictedPlayer.y).toBeCloseTo(200);
+  });
+
+  test('projects a local beam before its authoritative channel snapshot arrives', () => {
+    const session = { snapshot: () => ({ playerId: 'p1' }) };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.currentSample = {
+      receivedAt: 1_000,
+      state: { tick: 20, players: { p1: { id: 'p1', x: 100, y: 200 } } },
+    };
+    view.localPredictedPlayer = { id: 'p1', x: 100, y: 200 };
+    view.pendingBeamPresentation = { moveKey: 'blood_beam', angle: 0.75, startAt: 900, untilAt: 2_000 };
+
+    const rendered = view._renderedPlayers(1_100).p1;
+
+    expect(rendered.beamChannel).toEqual(expect.objectContaining({ moveKey: 'blood_beam', angle: 0.75 }));
+  });
+
   test('sends a Death Ball held sample before its cast action', () => {
     const sent = [];
     const session = {
