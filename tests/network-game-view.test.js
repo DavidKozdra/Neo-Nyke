@@ -1179,4 +1179,62 @@ describe('network multiplayer game view', () => {
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_renderLegacyFallback');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_drawPlayer(');
   });
+
+  describe('predicted combat presentation', () => {
+    const runningSession = () => ({
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendInput: () => {},
+      sendAbility: () => {},
+      sendDash: () => {},
+      sendAction: () => {},
+    });
+
+    test('takes hold-to-charge profiles from the authority instead of a client copy', () => {
+      const { HOLD_TO_CHARGE_MOVES } = require('../js/simulation/NetworkCombatSystem');
+      const view = new NetworkGameView({ session: runningSession(), neo: {} });
+      view.localPredictedPlayer = { id: 'p1', x: 0, y: 0 };
+
+      // death_ball charges over 100 ticks on the authority. A client-side copy
+      // that drifts (e.g. back to 25) would release at the wrong charge ratio.
+      view._startPredictedHeldCharge('death_ball', 'smash', 2);
+      expect(view.pendingHeldCharge.maxChargeTicks).toBe(HOLD_TO_CHARGE_MOVES.death_ball.maxChargeTicks);
+      expect(view.pendingHeldCharge.maxChargeTicks).toBe(100);
+
+      view.pendingHeldCharge = null;
+      view._startPredictedHeldCharge('healing_zone', 'smash', 2);
+      expect(view.pendingHeldCharge.maxChargeTicks).toBe(HOLD_TO_CHARGE_MOVES.healing_zone.maxChargeTicks);
+      expect(view.pendingHeldCharge.maxChargeTicks).toBe(25);
+    });
+
+    test('never blanks an authoritative beam channel after a local beam release', () => {
+      const view = new NetworkGameView({ session: runningSession(), neo: {} });
+      const now = 1000;
+      view.currentSample = { receivedAt: now, state: { tick: 10, players: { p1: { id: 'p1', x: 0, y: 0 } } } };
+      view.previousSample = view.currentSample;
+      view.localPredictedPlayer = { id: 'p1', x: 0, y: 0 };
+
+      // Releasing the beam button latches the "stop predicting" flag.
+      view.localBeamReleaseRequested = true;
+      // The authority then applies a beam the player did not cast — an enemy
+      // channel or a beam struggle. Presentation must show it.
+      view.localPredictedPlayer.beamChannel = { moveKey: 'blood_beam', angle: 0, startTick: 10, untilTick: 40 };
+
+      const players = view._renderedPlayers(now);
+      expect(players.p1.beamChannel).toEqual(expect.objectContaining({ moveKey: 'blood_beam' }));
+    });
+
+    test('still suppresses only the predicted beam once the button comes up', () => {
+      const view = new NetworkGameView({ session: runningSession(), neo: {} });
+      const now = 1000;
+      view.currentSample = { receivedAt: now, state: { tick: 10, players: { p1: { id: 'p1', x: 0, y: 0 } } } };
+      view.previousSample = view.currentSample;
+      view.localPredictedPlayer = { id: 'p1', x: 0, y: 0 };
+
+      view.pendingBeamPresentation = { moveKey: 'turtle_wave', startAt: now, untilAt: now + 1000, angle: 0 };
+      expect(view._renderedPlayers(now).p1.beamChannel).toEqual(expect.objectContaining({ moveKey: 'turtle_wave' }));
+
+      view.localBeamReleaseRequested = true;
+      expect(view._renderedPlayers(now).p1.beamChannel).toBeFalsy();
+    });
+  });
 });

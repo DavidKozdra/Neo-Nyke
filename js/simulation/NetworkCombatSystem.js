@@ -4404,6 +4404,7 @@
     HERO_PRIMARY_ATTACKS,
     HERO_BASE_STATS,
     ENEMY_ARCHETYPES,
+    HOLD_TO_CHARGE_MOVES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
     sanitizeKitChoices,
