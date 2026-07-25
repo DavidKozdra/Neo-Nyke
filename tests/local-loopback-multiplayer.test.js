@@ -379,6 +379,62 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
   });
 
+  test('packs steady-state local-room projectile transforms and restores them on the client', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    const projectile = {
+      id: 'packed-projectile', roomId: player.roomId, kind: 'death_ball',
+      x: player.x, y: player.y, vx: 240, vy: 0, radius: 24,
+      hp: 0, hostile: false, expiresTick: authority.simulation.state.tick + 40,
+    };
+    authority.simulation.state.projectiles[projectile.id] = projectile;
+    // New entities include one complete bootstrap record.
+    authority._publishSnapshot(false);
+    clock.runAll();
+    expect(clientA.state.projectiles[projectile.id]).toEqual(expect.objectContaining({ kind: 'death_ball', x: player.x }));
+
+    projectile.x += 12.5;
+    authority._publishSnapshot(false);
+    clock.runAll();
+    const delta = snapshots.at(-1);
+    expect(delta.entities.projectiles).toEqual({});
+    expect(delta.packedDynamic.packed.projectiles).toHaveLength(1);
+    expect(clientA.state.projectiles[projectile.id]).toEqual(expect.objectContaining({ x: 12.5 + player.x, kind: 'death_ball' }));
+  });
+
+  test('does not send another room\'s projectile corrections to this client', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    const otherRoom = authority.simulation.state.floorState.layout.rooms
+      .find(room => room.id !== player.roomId).id;
+    authority.simulation.state.projectiles.remote = {
+      id: 'remote', roomId: otherRoom, kind: 'fireball', x: 300, y: 300,
+      vx: 100, vy: 0, radius: 7, hostile: true, expiresTick: authority.simulation.state.tick + 40,
+    };
+    authority._publishSnapshot(false);
+    clock.runAll();
+    authority.simulation.state.projectiles.remote.x += 5;
+    authority._publishSnapshot(false);
+    clock.runAll();
+
+    const delta = snapshots.at(-1);
+    expect(delta.entities.projectiles).toEqual({});
+    expect(delta.packedDynamic.packed.projectiles).toEqual([]);
+    expect(clientA.state.projectiles.remote).toBeUndefined();
+  });
+
   test('cleans protocol bookkeeping when a handshake-only peer disconnects', async () => {
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });

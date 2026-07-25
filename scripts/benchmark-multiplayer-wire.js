@@ -132,6 +132,10 @@ function printRow(name, value, baseline) {
   process.stdout.write(`${name.padEnd(40)} ${String(value).padStart(8)} B  save ${String(saved).padStart(8)} B (${percent(saved, baseline)})\n`);
 }
 
+function emptyEntityCollections() {
+  return { players: {}, enemies: {}, projectiles: {}, abilityEntities: {}, pickups: {}, interactables: {} };
+}
+
 async function main() {
   const { authority, client, clientTransport, clock } = await createRunningHarness();
   const roomIds = authority.simulation.state.floorState.layout.rooms.slice(0, 3).map(room => room.id);
@@ -143,35 +147,39 @@ async function main() {
 
   authority._publishSnapshot(true);
   clock.runAll();
-  const full = snapshots.at(-1);
+  const scopedBootstrap = snapshots.at(-1);
   Object.values(authority.simulation.state.projectiles).forEach(projectile => { projectile.x += projectile.vx / 20; });
   authority._publishSnapshot(false);
   clock.runAll();
-  const projectileDelta = snapshots.at(-1);
+  const packedProjectileDelta = snapshots.at(-1);
 
   const playerRoomId = authority.simulation.state.players[client.playerId].roomId;
+  const allEntities = Object.fromEntries(['players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables']
+    .map(collection => [collection, authority.simulation.state[collection] || {}]));
+  const legacyFull = { ...scopedBootstrap, packedDynamic: undefined, entities: allEntities };
+  const legacyProjectileDelta = {
+    ...packedProjectileDelta,
+    packedDynamic: undefined,
+    entities: { ...emptyEntityCollections(), projectiles: authority.simulation.state.projectiles },
+  };
+  const scopedLegacyDelta = filterToRoom(legacyProjectileDelta, playerRoomId);
   const scenarios = [
-    ['Full snapshot, JSON', bytes(full)],
-    ['Full snapshot, gzip estimate', gzipBytes(full)],
-    ['Full, local-room interest estimate', bytes(filterToRoom(full, playerRoomId))],
-    ['Full, compact dynamic records estimate', bytes(compactDynamicRecords(full))],
-    ['Full, room interest + compact estimate', bytes(compactDynamicRecords(filterToRoom(full, playerRoomId)))],
-    ['Full, room interest + packed-array estimate', bytes(packedDynamicRecords(filterToRoom(full, playerRoomId)))],
-    ['Delta (180 moving projectiles), JSON', bytes(projectileDelta)],
-    ['Delta, gzip estimate', gzipBytes(projectileDelta)],
-    ['Delta, local-room interest estimate', bytes(filterToRoom(projectileDelta, playerRoomId))],
-    ['Delta, compact dynamic records estimate', bytes(compactDynamicRecords(projectileDelta))],
-    ['Delta, room interest + compact estimate', bytes(compactDynamicRecords(filterToRoom(projectileDelta, playerRoomId)))],
-    ['Delta, room interest + packed-array estimate', bytes(packedDynamicRecords(filterToRoom(projectileDelta, playerRoomId)))],
+    ['Legacy full snapshot, JSON', bytes(legacyFull)],
+    ['Scoped full bootstrap, JSON', bytes(scopedBootstrap)],
+    ['Legacy full, gzip estimate', gzipBytes(legacyFull)],
+    ['Legacy delta (180 moving projectiles)', bytes(legacyProjectileDelta)],
+    ['Legacy delta, local-room interest', bytes(scopedLegacyDelta)],
+    ['Implemented packed local-room delta', bytes(packedProjectileDelta)],
+    ['Legacy delta, gzip estimate', gzipBytes(legacyProjectileDelta)],
   ];
 
   process.stdout.write('Multiplayer wire benchmark (synthetic 3-room combat: 90 enemies, 180 projectiles)\n');
   process.stdout.write(`Player room: ${playerRoomId}; snapshot rate: 10 Hz\n\n`);
   const fullBaseline = scenarios[0][1];
-  scenarios.slice(0, 6).forEach(([name, value]) => printRow(name, value, fullBaseline));
+  scenarios.slice(0, 3).forEach(([name, value]) => printRow(name, value, fullBaseline));
   process.stdout.write('\n');
-  const deltaBaseline = scenarios[6][1];
-  scenarios.slice(6).forEach(([name, value]) => printRow(name, value, deltaBaseline));
+  const deltaBaseline = scenarios[3][1];
+  scenarios.slice(3).forEach(([name, value]) => printRow(name, value, deltaBaseline));
 }
 
 main().catch(error => {
