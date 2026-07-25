@@ -54,6 +54,7 @@
     constructor(options = {}) {
       this.mode = 'multiplayer';
       this.authority = 'remote';
+      this.combatPredictionCorrelation = true;
       this.transport = options.transport || new CloudflareWebSocketTransport(options.transportOptions);
       this.client = new Client({ transport: this.transport, ...options.clientOptions });
       this.storage = safeStorage(options.storage);
@@ -174,16 +175,16 @@
       return this.client.sendInput(input);
     }
 
-    sendAction(action, aimDirection) {
-      return this.client.sendAction(action, aimDirection);
+    sendAction(action, aimDirection, options) {
+      return this.client.sendAction(action, aimDirection, options);
     }
 
-    sendAbility(abilityId, aimDirection) {
-      return this.client.sendAbility(abilityId, aimDirection);
+    sendAbility(abilityId, aimDirection, options) {
+      return this.client.sendAbility(abilityId, aimDirection, options);
     }
 
-    sendDash(abilityId, aimDirection) {
-      return this.client.sendDash(abilityId, aimDirection);
+    sendDash(abilityId, aimDirection, options) {
+      return this.client.sendDash(abilityId, aimDirection, options);
     }
 
     sendInteract(targetEntityId) {
@@ -226,6 +227,7 @@
         roomCode: this.roomCode,
         status: this.client.status,
         playerId: this.client.playerId,
+        lastAcknowledgedInput: this.client.lastAcknowledgedInput,
         lobbyState: this.client.lobbyState,
         gameState: this.client.getStateSnapshot(),
         gameplayEvents: this.client.gameplayEvents.slice(),

@@ -106,7 +106,8 @@
       this.sessions = new Map();
       this.lastReliableDeliveryAt = new Map();
       this.linkAvailableAt = new Map();
-      this.metrics = { sent: 0, delivered: 0, dropped: 0, duplicated: 0, bytes: 0 };
+      this.pendingReplaceable = new Map();
+      this.metrics = { sent: 0, delivered: 0, dropped: 0, duplicated: 0, superseded: 0, bytes: 0 };
     }
 
     register(transport) {
@@ -221,6 +222,21 @@
       const jitter = this.jitterMs > 0 ? (this.random() * 2 - 1) * this.jitterMs : 0;
       const now = this.clock.now();
       const linkKey = `${senderPeerId}|${target.identity.id}`;
+      const replaceableKey = delivery.replaceable ? `${linkKey}|${delivery.channel}` : null;
+      if (replaceableKey) {
+        const pending = this.pendingReplaceable.get(replaceableKey);
+        if (pending) {
+          this.clock.cancel(pending.taskId);
+          // If this was the tail of the directional serializer, its bytes had
+          // not started transmitting yet. Reclaim that reservation so a stale
+          // replaceable snapshot cannot keep the newest state stuck behind it.
+          if (this.linkAvailableAt.get(linkKey) === pending.transmissionDone) {
+            this.linkAvailableAt.set(linkKey, pending.transmissionStart);
+          }
+          this.pendingReplaceable.delete(replaceableKey);
+          this.metrics.superseded += 1;
+        }
+      }
       const transmissionMs = this.bytesPerSecond > 0 ? Number(byteLength || 0) / this.bytesPerSecond * 1000 : 0;
       const transmissionStart = Math.max(now, this.linkAvailableAt.get(linkKey) || now);
       const transmissionDone = transmissionStart + transmissionMs;
@@ -232,11 +248,17 @@
         this.lastReliableDeliveryAt.set(orderingKey, deliveryAt);
       }
       const delay = Math.max(0, deliveryAt - now);
-      this.clock.schedule(() => {
+      const taskId = this.clock.schedule(() => {
+        if (replaceableKey && this.pendingReplaceable.get(replaceableKey)?.taskId === taskId) {
+          this.pendingReplaceable.delete(replaceableKey);
+        }
         if (!target.sessionId) return;
         this.metrics.delivered += 1;
         target._emit('message', senderPeerId, JSON.parse(JSON.stringify(message)), { ...delivery });
       }, delay);
+      if (replaceableKey) this.pendingReplaceable.set(replaceableKey, {
+        taskId, deliveryAt, transmissionStart, transmissionDone,
+      });
     }
 
     getMetrics() {

@@ -348,6 +348,11 @@
       this.paused = false;
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
+      // Every locally integrated movement sample is tagged with the most
+      // recent input sequence. Snapshot acknowledgement lets us rebuild the
+      // local hero from authority state instead of repeatedly blending drift.
+      this.pendingInputHistory = [];
+      this.lastPredictedInputSequence = -1;
       this.spectatorPlayerId = null;
       this.localWasDowned = false;
       this.spectatorRenderSignature = '';
@@ -791,17 +796,21 @@
         this.localPredictedPlayer = { ...authorityPlayer };
         return;
       }
-      const distance = Math.hypot(
-        Number(authorityPlayer.x || 0) - Number(this.localPredictedPlayer.x || 0),
-        Number(authorityPlayer.y || 0) - Number(this.localPredictedPlayer.y || 0),
-      );
-      const correction = distance > 90 ? 1 : 0.35;
-      this.localPredictedPlayer = {
-        ...this.localPredictedPlayer,
-        ...authorityPlayer,
-        x: this.localPredictedPlayer.x + (authorityPlayer.x - this.localPredictedPlayer.x) * correction,
-        y: this.localPredictedPlayer.y + (authorityPlayer.y - this.localPredictedPlayer.y) * correction,
-      };
+      const acknowledgedInput = Number(snapshot.lastAcknowledgedInput ?? -1);
+      this.pendingInputHistory = this.pendingInputHistory
+        // An acknowledged input may be held over several authority ticks, so
+        // sequence alone cannot say which locally integrated frames are
+        // already in this snapshot. The locally estimated server tick does.
+        .filter(entry => entry.estimatedServerTick > Number(state.tick || 0))
+        .slice(-64);
+      this.localPredictedPlayer = this.pendingInputHistory.reduce((predicted, entry, index) => predictPosition(
+        predicted,
+        entry.input,
+        INPUT_INTERVAL_MS / 1000,
+        state.floorState,
+        Number(state.tick || 0) + index + 1,
+      ), { ...authorityPlayer });
+      this.lastAcknowledgedInput = acknowledgedInput;
     }
 
     _onKey(event, pressed) {
@@ -933,8 +942,13 @@
       if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
       if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       try {
-        this._predictLocalAttack();
-        this.session.sendAction('ATTACK', this.aimDirection);
+        const prediction = this._predictLocalAttack();
+        const options = {
+          predictionId: prediction?.event?.eventId,
+          originServerTick: this.currentSample?.tick,
+        };
+        if (this.session.combatPredictionCorrelation) this.session.sendAction('ATTACK', this.aimDirection, options);
+        else this.session.sendAction('ATTACK', this.aimDirection);
       } catch {
         // Session state changes are surfaced by its normal disconnect handler.
       }
@@ -962,9 +976,22 @@
           const movement = this._readMovement();
           this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton });
         } else {
-          this._predictLocalAbility(abilityId, slot);
+          const prediction = this._predictLocalAbility(abilityId, slot);
+          const actionOptions = {
+            predictionId: prediction?.event?.eventId,
+            originServerTick: this.currentSample?.tick,
+          };
+          if (slot === 'dash') {
+            if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, actionOptions);
+            else this.session.sendDash(abilityId, this.aimDirection);
+          } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, actionOptions);
+          else this.session.sendAbility(abilityId, this.aimDirection);
+          return;
         }
-        if (slot === 'dash') this.session.sendDash(abilityId, this.aimDirection);
+        if (slot === 'dash') {
+          if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick });
+          else this.session.sendDash(abilityId, this.aimDirection);
+        } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick });
         else this.session.sendAbility(abilityId, this.aimDirection);
       } catch {
         return;
@@ -1124,6 +1151,10 @@
           this.neo.pushStatusToast?.({ text: name, label: 'REVIVED', accent: '#72e69c', holdMs: 2400 });
         }
         if (!this._isGameplayEventVisible(event)) return;
+        if (event.eventType === 'ACTION_REJECTED' && event.data?.playerId === localPlayerId) {
+          this._rejectPredictedCombatEvent(event.data?.predictionId);
+          return;
+        }
         const predicted = this._acknowledgePredictedCombatEvent(event, now);
         if (event.eventType === 'PLAYER_ABILITY_USED'
           && event.data?.playerId === localPlayerId
@@ -1212,7 +1243,10 @@
       const data = event.data || {};
       if (data.playerId !== localPlayerId) return null;
       const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => (
-        prediction.event.eventType === event.eventType
+        (data.predictionId
+          ? prediction.event.eventId === data.predictionId
+          : prediction.event.eventType === event.eventType)
+        && prediction.event.eventType === event.eventType
         && prediction.event.data?.playerId === data.playerId
         && (event.eventType !== 'PLAYER_ABILITY_USED'
           || prediction.event.data?.abilityId === data.abilityId)
@@ -1223,6 +1257,15 @@
       this.combatEffects = this.combatEffects.filter(effect => effect.eventId !== prediction.event.eventId);
       this.predictedProjectiles = this.predictedProjectiles.filter(projectile => projectile.predictionId !== prediction.event.eventId);
       return prediction;
+    }
+
+    _rejectPredictedCombatEvent(predictionId) {
+      if (!predictionId) return;
+      const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => prediction.event.eventId === predictionId);
+      if (predictionIndex < 0) return;
+      const [prediction] = this.pendingCombatPredictions.splice(predictionIndex, 1);
+      this.combatEffects = this.combatEffects.filter(effect => effect.eventId !== prediction.event.eventId);
+      this.predictedProjectiles = this.predictedProjectiles.filter(projectile => projectile.predictionId !== prediction.event.eventId);
     }
 
     _predictCombatEvent(eventType, data) {
@@ -1258,7 +1301,7 @@
     _predictLocalAttack() {
       const player = this.localPredictedPlayer;
       if (!player) return;
-      this._predictCombatEvent('PLAYER_ATTACKED', {
+      return this._predictCombatEvent('PLAYER_ATTACKED', {
         playerId: player.id,
         roomId: player.roomId,
         weaponKey: player.weaponKey || player.equippedWeapon || player.actionKind || 'melee',
@@ -1320,6 +1363,7 @@
       const prediction = this._predictCombatEvent('PLAYER_ABILITY_USED', data);
       if (presentation.kind === 'projectile') this._predictAbilityProjectile(prediction, data, chargeRatio);
       if (CONTINUOUS_BEAM_MOVES.has(abilityId)) this._startPredictedBeamPresentation(abilityId);
+      return prediction;
     }
 
     _startPredictedHeldCharge(abilityId, slot, button) {
@@ -1690,15 +1734,6 @@
       if (this.pendingHeldCharge && !(input.buttons & this.pendingHeldCharge.button)) {
         this._releasePredictedHeldCharge();
       }
-      if (this.localPredictedPlayer) {
-        this.localPredictedPlayer = predictPosition(
-          this.localPredictedPlayer,
-          input,
-          INPUT_INTERVAL_MS / 1000,
-          this.currentSample?.state?.floorState,
-          this.currentSample?.tick,
-        );
-      }
       const now = root.performance?.now?.() || Date.now();
       const previous = this.lastTransmittedInput;
       const movementOrButtonChanged = !previous
@@ -1710,13 +1745,31 @@
       const shouldTransmit = movementOrButtonChanged
         || (aimChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || sinceLastSend >= INPUT_HEARTBEAT_MS;
-      if (!shouldTransmit) return;
-      try {
-        this.session.sendInput(input);
-        this.lastTransmittedInput = { ...input };
-        this.lastInputSentAt = now;
-      } catch {
-        // Session state changes are surfaced by its normal disconnect handler.
+      if (shouldTransmit) {
+        try {
+          this.lastPredictedInputSequence = this.session.sendInput(input);
+          this.lastTransmittedInput = { ...input };
+          this.lastInputSentAt = now;
+        } catch {
+          // Session state changes are surfaced by its normal disconnect handler.
+        }
+      }
+      if (this.localPredictedPlayer) {
+        this.localPredictedPlayer = predictPosition(
+          this.localPredictedPlayer,
+          input,
+          INPUT_INTERVAL_MS / 1000,
+          this.currentSample?.state?.floorState,
+          this.currentSample?.tick,
+        );
+        const sampleAgeMs = Math.max(0, now - Number(this.currentSample?.receivedAt || now));
+        const estimatedServerTick = Number(this.currentSample?.tick || 0) + Math.max(1, Math.round(sampleAgeMs / INPUT_INTERVAL_MS));
+        this.pendingInputHistory.push({
+          sequence: this.lastPredictedInputSequence,
+          estimatedServerTick,
+          input: { ...input },
+        });
+        if (this.pendingInputHistory.length > 96) this.pendingInputHistory.splice(0, this.pendingInputHistory.length - 96);
       }
     }
 

@@ -36,7 +36,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v32';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v33';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
@@ -318,6 +318,7 @@
       this.lastProcessedInput = {};
       this.lastProcessedAction = {};
       this.pendingGameplayEvents = [];
+      this.recentStateByTick = new Map();
       this.seenReliableSequences = new Map();
       this.lastReplaceableSequence = new Map();
       this.invalidMessageCount = new Map();
@@ -818,6 +819,14 @@
         aimDirection: payload.aimDirection,
         abilityId: payload.abilityId,
         inputSequence: payload.inputSequence,
+        predictionId: payload.predictionId,
+        // This is deliberately only a bounded hint. Simulation state remains
+        // authoritative at the current tick; co-op hit validation may consult
+        // a short historical transform record, never arbitrary client state.
+        originServerTick: Math.max(
+          Math.max(0, this.simulation.state.tick - 6),
+          Math.min(this.simulation.state.tick, Number(payload.originServerTick ?? this.simulation.state.tick) || this.simulation.state.tick),
+        ),
       });
       this.metrics.acceptedActions += 1;
     }
@@ -960,11 +969,19 @@
     _flushGameplayEvents() {
       const events = this.pendingGameplayEvents.splice(0);
       events.forEach(event => {
-        this._broadcast('GAMEPLAY_EVENT', {
+        const payload = {
           eventId: this.simulation.state.allocateEntityId('event'),
           eventType: event.eventType,
           data: event.data,
-        });
+        };
+        if (event.eventType === 'ACTION_REJECTED' && event.data?.playerId) {
+          const recipient = Array.from(this.playerIdByPeer.entries())
+            .find(([, playerId]) => playerId === event.data.playerId)?.[0];
+          if (recipient) this._send(recipient, 'GAMEPLAY_EVENT', payload);
+          else this._broadcast('GAMEPLAY_EVENT', payload);
+        } else {
+          this._broadcast('GAMEPLAY_EVENT', payload);
+        }
         this.metrics.gameplayEvents += 1;
       });
     }
@@ -990,6 +1007,7 @@
         lastProcessedInput: { ...this.lastProcessedInput },
       });
       this._primeSnapshotSignatures();
+      this._rememberStateForValidation();
       this._flushGameplayEvents();
       this._broadcastLobbyState();
     }
@@ -1106,9 +1124,18 @@
         if (this.simulation.state.status !== 'running') break;
         const tickInputs = Object.fromEntries(Object.entries(this.pendingInputs).map(([playerId, input]) => [
           playerId,
-          { ...input, actions: (this.pendingActions[playerId] || []).splice(0) },
+          {
+            ...input,
+            actions: (this.pendingActions[playerId] || []).splice(0).map(action => ({
+              ...action,
+              // Co-op uses only an authority-recorded transform sample. Rival
+              // mode deliberately stays current-tick to keep contests strict.
+              validationState: this.mode === 'coop' ? this.recentStateByTick.get(action.originServerTick) || null : null,
+            })),
+          },
         ]));
         this.simulation.updateGame(tickInputs, FIXED_DELTA_SECONDS);
+        this._rememberStateForValidation();
         this._expireReconnectReservations();
         const floorTransition = this.pendingFloorTransition;
         this.pendingFloorTransition = null;
@@ -1142,6 +1169,22 @@
         }
       }
       return this.simulation.state;
+    }
+
+    _rememberStateForValidation() {
+      const state = this.simulation.state;
+      this.recentStateByTick.set(state.tick, {
+        players: Object.fromEntries(Object.entries(state.players || {}).map(([id, player]) => [id, {
+          x: player.x, y: player.y, radius: player.radius, roomId: player.roomId,
+        }])),
+        enemies: Object.fromEntries(Object.entries(state.enemies || {}).map(([id, enemy]) => [id, {
+          x: enemy.x, y: enemy.y, radius: enemy.radius, roomId: enemy.roomId, dead: !!enemy.dead,
+        }])),
+      });
+      const minimum = state.tick - 6;
+      this.recentStateByTick.forEach((_record, tick) => {
+        if (tick < minimum) this.recentStateByTick.delete(tick);
+      });
     }
 
     _expireReconnectReservations() {
@@ -1378,16 +1421,18 @@
         inputSequence,
         aimDirection: Number(aimDirection) || 0,
         ...(options.abilityId ? { abilityId: String(options.abilityId) } : {}),
+        ...(options.predictionId ? { predictionId: String(options.predictionId).slice(0, 96) } : {}),
+        originServerTick: Math.max(0, Math.trunc(Number(options.originServerTick ?? this.state?.tick) || 0)),
       });
       return inputSequence;
     }
 
-    sendAbility(abilityId, aimDirection = 0) {
-      return this.sendAction('ABILITY', aimDirection, { abilityId });
+    sendAbility(abilityId, aimDirection = 0, options = {}) {
+      return this.sendAction('ABILITY', aimDirection, { ...options, abilityId });
     }
 
-    sendDash(abilityId, aimDirection = 0) {
-      return this.sendAction('DASH', aimDirection, { abilityId });
+    sendDash(abilityId, aimDirection = 0, options = {}) {
+      return this.sendAction('DASH', aimDirection, { ...options, abilityId });
     }
 
     sendInteract(targetEntityId) {
