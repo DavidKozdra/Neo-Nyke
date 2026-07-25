@@ -63,7 +63,7 @@ The protocol's co-op match is entered from the separate `MULTIPLAYER` flow. Lega
 | `PLAYER_CHARACTER` | reliable/control | Select a supported character while waiting. Authority validates availability, updates the player entity, and clears that player's ready state. |
 | `PLAYER_READY` | reliable/control | Boolean lobby readiness for sender-owned player. Waiting state only. |
 | `PLAYER_INPUT` | unreliable, replaceable/simulation | Normalized movement vector, aim angle, held-button bitset, and input sequence. Authority clamps magnitude and orders/deduplicates. |
-| `PLAYER_ACTION` | reliable for discrete actions or unreliable for repeatable input/simulation | Attack/ability intent, input sequence, aim direction, equipped slot/item reference. Authority checks ownership, cooldown, status, range, and match state. |
+| `PLAYER_ACTION` | reliable/gameplay | Attack/ability intent, input sequence, aim direction, equipped slot/item reference, optional visual `predictionId`, and the last observed server tick. Authority checks ownership, cooldown, status, range, and match state; the correlation ID never grants a client-authored outcome. |
 | `INTERACT_REQUEST` | reliable/gameplay | Target entity ID and input sequence. Authority checks existence, distance, ownership/state, and one-winner races. |
 | `UPGRADE_SELECTION` | reliable/gameplay | Authority-issued selection event ID plus option ID. Authority checks eligibility and whether already resolved. |
 | `CHAT_SEND` | reliable/chat | Sender-owned party text, trimmed and bounded to 180 characters. Authority sanitizes and rate-limits before broadcast. |
@@ -85,7 +85,9 @@ Representative input:
     action: "ATTACK",
     inputSequence: 412,
     aimDirection: 1.82,
-    equippedItemId: "weapon-8"
+    equippedItemId: "weapon-8",
+    predictionId: "predicted:413",
+    originServerTick: 918
   }
 }
 ```

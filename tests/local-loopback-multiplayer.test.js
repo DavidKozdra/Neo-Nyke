@@ -109,6 +109,24 @@ describe('LocalLoopbackTransport', () => {
     expect(received[0].at).toBeGreaterThanOrEqual(1_000);
     expect(received[1].at).toBeGreaterThan(received[0].at);
   });
+
+  test('drops queued replaceable snapshots in favor of the newest state', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ bytesPerSecond: 1_000, clock });
+    const host = transport(network, 'host', 'Host');
+    const client = transport(network, 'client', 'Client');
+    await host.createSession({ sessionId: 'LATEST' });
+    await client.joinSession('LATEST');
+    const received = [];
+    host.onMessage((_peerId, message) => received.push(message.sequence));
+
+    client.send('host', { sequence: 1, payload: 'x'.repeat(900) }, { reliability: 'unreliable', channel: 'snapshot', replaceable: true });
+    client.send('host', { sequence: 2, payload: 'x'.repeat(900) }, { reliability: 'unreliable', channel: 'snapshot', replaceable: true });
+    clock.runAll();
+
+    expect(received).toEqual([2]);
+    expect(network.getMetrics()).toEqual(expect.objectContaining({ superseded: 1, delivered: 1 }));
+  });
 });
 
 describe('protocol-driven local multiplayer session', () => {
@@ -564,6 +582,45 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.gameplayEvents.filter(event => event.eventType === 'ENEMY_DEFEATED')).toHaveLength(1);
     expect(clientB.gameplayEvents.filter(event => event.eventType === 'PICKUP_SPAWNED')).toHaveLength(1);
     expect(authority.metrics.acceptedActions).toBe(2);
+  });
+
+  test('echoes a local prediction id through the authoritative attack result', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    clientA.sendAction('ATTACK', 0, { predictionId: 'predicted:attack-7', originServerTick: authority.simulation.state.tick });
+    clock.runAll();
+    authority.step(1);
+    clock.runAll();
+
+    expect(clientA.gameplayEvents.find(event => event.eventType === 'PLAYER_ATTACKED')).toEqual(expect.objectContaining({
+      data: expect.objectContaining({ predictionId: 'predicted:attack-7' }),
+    }));
+  });
+
+  test('uses only the bounded co-op authority transform history for a delayed sweep', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    const enemy = Object.values(authority.simulation.state.enemies)[0];
+    enemy.x = player.x + 100;
+    enemy.y = player.y;
+    enemy.moveSpeed = 0;
+    authority._rememberStateForValidation();
+    const originTick = authority.simulation.state.tick;
+    enemy.x = player.x + 500;
+    const before = enemy.health;
+
+    clientA.sendAction('ATTACK', 0, { predictionId: 'predicted:rewind', originServerTick: originTick });
+    clock.runAll();
+    authority.step(1);
+
+    expect(enemy.health).toBeLessThan(before);
   });
 
   test('broadcasts one validated AOE and converges server-owned rocks on both clients', async () => {

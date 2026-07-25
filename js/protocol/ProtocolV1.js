@@ -92,6 +92,12 @@
         aimDirection: field('number', { required: true, min: -Math.PI * 4, max: Math.PI * 4 }),
         equippedItemId: field('string', { maxLength: 96 }),
         abilityId: field('string', { maxLength: 96 }),
+        // Correlates immediate client-only presentation with the authoritative
+        // result. It is an opaque identifier, never an authority grant.
+        predictionId: field('string', { maxLength: 96 }),
+        // Most recently observed authority tick. The server clamps it to its
+        // bounded co-op validation history before using it.
+        originServerTick: field('integer', { min: 0, max: Number.MAX_SAFE_INTEGER }),
       },
     },
     INTERACT_REQUEST: {

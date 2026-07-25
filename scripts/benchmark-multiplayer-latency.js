@@ -113,7 +113,7 @@ async function createHarness(options) {
 
   const session = {
     get status() { return client.status; },
-    snapshot: () => ({ status: client.status, playerId: client.playerId }),
+    snapshot: () => ({ status: client.status, playerId: client.playerId, lastAcknowledgedInput: client.lastAcknowledgedInput }),
     sendInput: input => client.sendInput(input),
   };
   const view = new NetworkGameView({ session, neo: {} });
@@ -150,40 +150,48 @@ async function createHarness(options) {
 async function runScenario(options) {
   const harness = await createHarness(options);
   const { authority, client, clock, view, corrections, snapshotAgeMs, network, getObservedSnapshots, setMeasurementStart } = harness;
-  const state = authority.simulation.state;
-  const roomIds = state.floorState.layout.rooms.slice(0, 3).map(room => room.id);
-  addBusyRoomState(authority, roomIds);
+  const originalPerformance = globalThis.performance;
+  globalThis.performance = { now: () => clock.now() };
+  try {
+    const state = authority.simulation.state;
+    const roomIds = state.floorState.layout.rooms.slice(0, 3).map(room => room.id);
+    addBusyRoomState(authority, roomIds);
   // Establish static entity data before measurement. The subsequent snapshot
   // stream contains the high-frequency transforms that the packed format is
   // designed to shrink.
-  authority._publishSnapshot(true);
-  clock.runAll();
-  view._onSnapshot({ gameState: client.getStateSnapshot(), playerId: client.playerId });
+    authority._publishSnapshot(true);
+    clock.runAll();
+    view._onSnapshot({ gameState: client.getStateSnapshot(), playerId: client.playerId });
 
-  const input = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
-  const warmupTicks = 40;
-  for (let tick = 0; tick < warmupTicks; tick += 1) {
-    view.lastTransmittedInput = null;
-    view._sendInput();
-    advanceBusyState(authority, client.playerId, input);
-    if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
-    clock.advanceBy(50);
-  }
-  clock.runAll();
-  corrections.length = 0;
-  snapshotAgeMs.length = 0;
-  setMeasurementStart(state.tick);
+    const input = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
+    const warmupTicks = 40;
+    for (let tick = 0; tick < warmupTicks; tick += 1) {
+      view.lastTransmittedInput = null;
+      view._sendInput();
+      advanceBusyState(authority, client.playerId, input);
+      authority.lastProcessedInput[client.playerId] = Math.max(-1, client.inputSequence - 1);
+      if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
+      clock.advanceBy(50);
+    }
+    clock.runAll();
+    corrections.length = 0;
+    snapshotAgeMs.length = 0;
+    setMeasurementStart(state.tick);
 
-  const measuredTicks = 240;
-  for (let tick = 0; tick < measuredTicks; tick += 1) {
-    view.lastTransmittedInput = null;
-    view._sendInput();
-    advanceBusyState(authority, client.playerId, input);
-    if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
-    clock.advanceBy(50);
+    const measuredTicks = 240;
+    for (let tick = 0; tick < measuredTicks; tick += 1) {
+      view.lastTransmittedInput = null;
+      view._sendInput();
+      advanceBusyState(authority, client.playerId, input);
+      authority.lastProcessedInput[client.playerId] = Math.max(-1, client.inputSequence - 1);
+      if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
+      clock.advanceBy(50);
+    }
+    clock.runAll();
+    return { correction: summary(corrections), snapshotAge: summary(snapshotAgeMs), metrics: network.getMetrics(), observedSnapshots: getObservedSnapshots() };
+  } finally {
+    globalThis.performance = originalPerformance;
   }
-  clock.runAll();
-  return { correction: summary(corrections), snapshotAge: summary(snapshotAgeMs), metrics: network.getMetrics(), observedSnapshots: getObservedSnapshots() };
 }
 
 function printScenario(name, result) {

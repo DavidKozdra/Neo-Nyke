@@ -47,6 +47,14 @@ describe('gameplay protocol v1 runtime validation', () => {
     }, { direction: CLIENT_TO_AUTHORITY })).toEqual(expect.objectContaining({ ok: false }));
   });
 
+  test('accepts bounded client presentation correlation on an action intent', () => {
+    const action = createEnvelope('PLAYER_ACTION', 13, 30, {
+      action: 'ATTACK', inputSequence: 12, aimDirection: 1.2,
+      predictionId: 'predicted:attack-12', originServerTick: 28,
+    });
+    expect(validateEnvelope(action, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+  });
+
   test('validates authority-controlled multiplayer character choices', () => {
     const selection = createEnvelope('PLAYER_CHARACTER', 3, 0, { characterKey: 'sarge' });
     expect(validateEnvelope(selection, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });

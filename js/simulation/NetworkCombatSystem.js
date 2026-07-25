@@ -1448,23 +1448,43 @@
     });
   }
 
-  function resolveSweep(state, player, definition, angle, emitEvent, random, strike = 0) {
-    const targets = targetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
+  function resolveSweep(state, player, definition, angle, emitEvent, random, strike = 0, validationState = null) {
+    // Co-op action validation can use a short authority-recorded transform
+    // sample. Only eligibility reads this view; every damage/world mutation is
+    // still applied to current authoritative entities below.
+    const validationPlayer = validationState?.players?.[player.id]
+      ? { ...player, ...validationState.players[player.id] } : player;
+    const validationWorld = validationState ? {
+      ...state,
+      players: Object.fromEntries(Object.entries(state.players || {}).map(([id, entity]) => [id,
+        validationState.players?.[id] ? { ...entity, ...validationState.players[id] } : entity,
+      ])),
+      enemies: Object.fromEntries(Object.entries(state.enemies || {}).map(([id, entity]) => [id,
+        validationState.enemies?.[id] ? { ...entity, ...validationState.enemies[id] } : entity,
+      ])),
+    } : state;
+    const targets = targetsInArc(validationWorld, validationPlayer, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
     const sweepKnockback = Number(definition.knockback || 140);
     targets.forEach(candidate => {
-      damageEnemy(state, candidate.enemy, definition.damage, player.id, emitEvent, {
+      const enemy = state.enemies?.[candidate.enemy.id];
+      if (!enemy || enemy.dead || enemy.roomId !== player.roomId) return;
+      damageEnemy(state, enemy, definition.damage, player.id, emitEvent, {
         attackKind: definition.weaponKey,
         strike,
-        angle: Math.atan2(candidate.enemy.y - player.y, candidate.enemy.x - player.x),
+        angle: Math.atan2(candidate.enemy.y - validationPlayer.y, candidate.enemy.x - validationPlayer.x),
         knockback: sweepKnockback,
       });
-      if (!candidate.enemy.dead) applyAuthorityOnHitStatusProcs(state, candidate.enemy, player, {
+      if (!enemy.dead) applyAuthorityOnHitStatusProcs(state, enemy, player, {
         ...definition,
         itemBleedChance: Number(player.itemStats?.bleedChance || 0),
       }, random);
     });
-    const rivals = rivalTargetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
-    rivals.forEach(target => damagePlayer(state, target, playerDamage(state, player.id, definition.damage), player.id, emitEvent, definition.weaponKey));
+    // PvP never passes validationState; its target check remains current-tick.
+    const rivals = rivalTargetsInArc(validationWorld, validationPlayer, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
+    rivals.forEach(target => {
+      const actualTarget = state.players?.[target.id];
+      if (actualTarget) damagePlayer(state, actualTarget, playerDamage(state, player.id, definition.damage), player.id, emitEvent, definition.weaponKey);
+    });
     chipDestructiblesInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04), emitEvent, random);
     return [...targets.map(candidate => candidate.enemy.id), ...rivals.map(candidate => candidate.id)];
   }
@@ -1542,7 +1562,7 @@
         }, angle + offset).id);
       }
     } else if (definition.mode === 'sweep') {
-      targetIds = resolveSweep(state, player, definition, angle, emitEvent, random);
+      targetIds = resolveSweep(state, player, definition, angle, emitEvent, random, 0, action.validationState);
     } else if (definition.mode === 'double_sweep') {
       const offsets = definition.angleOffsets || [-0.18, 0.18];
       targetIds = resolveSweep(state, player, definition, angle + Number(offsets[0] || 0), emitEvent, random, 0);
@@ -1570,6 +1590,7 @@
     player.aimDirection = angle;
     emitEvent('PLAYER_ATTACKED', {
       playerId: player.id,
+      ...(action.predictionId ? { predictionId: action.predictionId } : {}),
       roomId: player.roomId,
       characterKey: player.characterKey,
       attackMode: definition.mode,
@@ -1584,6 +1605,9 @@
       projectileIds,
       targetIds,
       segments,
+    });
+    projectileIds.forEach(projectileId => {
+      if (action.predictionId && state.projectiles?.[projectileId]) state.projectiles[projectileId].predictionId = action.predictionId;
     });
     return { definition, projectileIds, targetIds };
   }
@@ -2413,6 +2437,7 @@
     setPlayerAction(state, player, slot, moveKey, angle);
     emitEvent('PLAYER_ABILITY_USED', {
       playerId: player.id,
+      ...(action.predictionId ? { predictionId: action.predictionId } : {}),
       roomId: player.roomId,
       characterKey: player.characterKey,
       slot,
@@ -2434,6 +2459,9 @@
       spawnedProjectiles,
       abilityEntityIds,
       targetIds,
+    });
+    projectileIds.forEach(projectileId => {
+      if (action.predictionId && state.projectiles?.[projectileId]) state.projectiles[projectileId].predictionId = action.predictionId;
     });
     return {
       moveKey, slot, mode, originX, originY, destinationX, destinationY,
@@ -2611,9 +2639,25 @@
         if (player.statusUntilTick) delete player.statusUntilTick.cowards_way;
       }
       const attack = actions.find(action => action?.action === 'ATTACK');
-      if (attack) resolvePlayerAttack(state, player, attack, emitEvent, random);
+      if (attack) {
+        const result = resolvePlayerAttack(state, player, attack, emitEvent, random);
+        if (!result && attack.predictionId) {
+          emitEvent('ACTION_REJECTED', {
+            playerId: player.id, predictionId: attack.predictionId,
+            reason: player.downed ? 'DOWNED' : 'COOLDOWN_OR_INVALID',
+          });
+        }
+      }
       actions.filter(action => action?.action === 'ABILITY' || action?.action === 'DASH')
-        .forEach(action => resolvePlayerAbility(state, player, action, emitEvent, random));
+        .forEach(action => {
+          const result = resolvePlayerAbility(state, player, action, emitEvent, random);
+          if (!result && action.predictionId) {
+            emitEvent('ACTION_REJECTED', {
+              playerId: player.id, predictionId: action.predictionId,
+              reason: player.downed ? 'DOWNED' : 'COOLDOWN_OR_INVALID',
+            });
+          }
+        });
       actions.filter(action => action?.action === 'INTERACT')
         .forEach(action => resolvePlayerInteraction(state, player, action, emitEvent, random));
       actions.filter(action => action?.action === 'USE_POTION')
