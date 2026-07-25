@@ -356,7 +356,8 @@ describe('authoritative network combat system', () => {
 
     simulation.updateGame({ p1: { actions: [
       { action: 'ABILITY', abilityId: 'healing_zone', aimDirection: 0 },
-    ] } }, 0.05);
+    ], buttons: 2 } }, 0.05);
+    simulation.updateGame({ p1: { buttons: 0, aimDirection: 0 } }, 0.05);
 
     expect(Object.values(state.abilityEntities)).toEqual([
       expect.objectContaining({ kind: 'healing_zone', ownerId: 'p1', roomId: player.roomId }),
@@ -365,7 +366,7 @@ describe('authoritative network combat system', () => {
     expect(enemy.health).toBeLessThan(enemy.maxHealth);
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'ABILITY_ENTITY_PULSED' }));
 
-    for (let tick = 0; tick < 70; tick += 1) simulation.updateGame({}, 0.05);
+    for (let tick = 0; tick < 210; tick += 1) simulation.updateGame({}, 0.05);
     expect(state.abilityEntities).toEqual({});
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'ABILITY_ENTITY_REMOVED' }));
   });
@@ -419,12 +420,17 @@ describe('authoritative network combat system', () => {
     player.equippedMoves = { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash', [slot]: moveKey };
     player.moveCooldownUntilTick = {};
     player.statusUntilTick = {};
-    const isHeldSmash = slot === 'smash' && ['death_ball', 'turtle_powerup'].includes(moveKey);
+    const heldButtonByMove = {
+      love_bomb_laser: 1, ghost_ball: 1,
+      healing_zone: 2, death_ball: 2, turtle_powerup: 2,
+      nimrod_stomp: 4,
+    };
+    const heldButton = heldButtonByMove[moveKey] || 0;
     simulation.updateGame({}, 0.05);
     simulation.updateGame({ p1: { actions: [{
       action: slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: moveKey, aimDirection: 0.35,
-    }], ...(isHeldSmash ? { buttons: 2 } : {}) } }, 0.05);
-    if (isHeldSmash) simulation.updateGame({ p1: { buttons: 0, aimDirection: 0.35 } }, 0.05);
+    }], ...(heldButton ? { buttons: heldButton } : {}) } }, 0.05);
+    if (heldButton) simulation.updateGame({ p1: { buttons: 0, aimDirection: 0.35 } }, 0.05);
 
     const event = events.find(candidate => candidate.eventType === 'PLAYER_ABILITY_USED');
     expect(event?.data).toEqual(expect.objectContaining({

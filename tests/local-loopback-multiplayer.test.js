@@ -500,9 +500,13 @@ describe('protocol-driven local multiplayer session', () => {
     const player = authority.simulation.state.players[clientA.playerId];
     player.equippedMoves.smash = 'healing_zone';
 
+    clientA.sendInput({ moveX: 0, moveY: 0, aimDirection: 0, buttons: 2 });
     clientA.sendAbility('healing_zone', 0);
     clock.runAll();
-    authority.step(2);
+    authority.step(1);
+    clientA.sendInput({ moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 });
+    clock.runAll();
+    authority.step(1);
     authority.sendFullCorrection();
     clock.runAll();
 

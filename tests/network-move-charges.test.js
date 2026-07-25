@@ -39,7 +39,7 @@ describe('authority move charges', () => {
       actions: [{ action: 'ABILITY', abilityId: 'death_ball', aimDirection: 0 }],
     };
     simulation.updateGame({ p1: hold }, FIXED_DELTA_SECONDS);
-    expect(player.smashCharge).toEqual(expect.objectContaining({ moveKey: 'death_ball' }));
+    expect(player.heldCharge).toEqual(expect.objectContaining({ moveKey: 'death_ball' }));
     expect(Object.values(simulation.state.projectiles)).toHaveLength(0);
 
     // Keep holding for half the five-second charge, then release. The cast must
@@ -55,7 +55,7 @@ describe('authority move charges', () => {
     expect(ball).toEqual(expect.objectContaining({ radius: expect.any(Number), damage: expect.any(Number) }));
     expect(ball.radius).toBeGreaterThan(16);
     expect(ball.damage).toBeGreaterThan(40);
-    expect(player.smashCharge).toBeNull();
+    expect(player.heldCharge).toBeNull();
   });
 
   test('Thorn can spend two dash charges back to back', () => {
