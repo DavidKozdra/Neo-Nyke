@@ -106,6 +106,34 @@ describe('network multiplayer game view', () => {
     expect(noteInputMode).toHaveBeenCalledWith('keyboard');
   });
 
+  test('sends movement-first dash intent while retaining aim as the stationary fallback', () => {
+    const sendDash = jest.fn();
+    const session = {
+      combatPredictionCorrelation: true,
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendDash,
+    };
+    const view = new NetworkGameView({ session, neo: { getFirstPersonYaw: () => 0 } });
+    view.active = true;
+    view.keys.add('KeyW');
+    view.localPredictedPlayer = {
+      id: 'p1', x: 100, y: 100, radius: 18, moveSpeed: 180,
+      equippedMoves: { dash: 'dash' },
+    };
+    view.currentSample = {
+      tick: 10,
+      state: { floorState: { width: 900, height: 700, wallThickness: 28 }, players: { p1: view.localPredictedPlayer } },
+    };
+
+    view._useSlot('dash');
+
+    expect(sendDash).toHaveBeenCalledWith('dash', 0, expect.objectContaining({
+      dashMoveX: 1,
+      dashMoveY: 0,
+      originServerTick: 10,
+    }));
+  });
+
   test('uses normalized controller movement and remapped action queues online', () => {
     const sent = [];
     const queued = new Set(['slash', 'laser', 'smash', 'dash', 'interact', 'tool1']);

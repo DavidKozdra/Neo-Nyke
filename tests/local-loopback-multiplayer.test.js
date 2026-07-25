@@ -387,7 +387,9 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.lastAcknowledgedInput).toBeGreaterThanOrEqual(0);
     expect(clientB.lastAcknowledgedInput).toBeGreaterThanOrEqual(0);
     expect(network.getMetrics().dropped).toBeGreaterThan(0);
-    expect(authority.metrics.snapshots).toBe(16);
+    // Loss may now cause a targeted full-resync in addition to the scheduled
+    // snapshots; it must never remove the normal publication cadence.
+    expect(authority.metrics.snapshots).toBeGreaterThanOrEqual(16);
   });
 
   test('sends entity deltas between periodic full correction snapshots', async () => {
@@ -417,6 +419,46 @@ describe('protocol-driven local multiplayer session', () => {
     expect(delta.entities.enemies).toEqual({});
     expect(delta.floorState).toBeNull();
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
+  });
+
+  test('acknowledges snapshots and repairs a coalesced delta with a scoped full resync', async () => {
+    const { clock, authority, clientA, clientB, clientATransport, clientBTransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const clientASnapshots = [];
+    const clientBSnapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') clientASnapshots.push(message.payload);
+    });
+    clientBTransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') clientBSnapshots.push(message.payload);
+    });
+    authority.sendFullCorrection();
+    clock.runAll();
+    expect(authority.lastSnapshotAckByPeer.get(clientATransport.identity.id)).toBe(0);
+    expect(authority.lastSnapshotAckByPeer.get(clientBTransport.identity.id)).toBe(0);
+
+    // Model one missed replaceable delta for client A. The recovery request
+    // must not force client B through a full correction or reset its sequence.
+    clientA._onMessage('authority', createEnvelope('WORLD_SNAPSHOT', 900, authority.simulation.state.tick, {
+      snapshotSequence: 2,
+      serverTick: authority.simulation.state.tick,
+      full: false,
+      lastProcessedInput: {},
+      entities: {},
+      removedEntityIds: [],
+      floorState: null,
+      bossState: null,
+      bossStateChanged: false,
+    }), getDeliveryIntent('WORLD_SNAPSHOT'));
+    clock.runAll();
+
+    expect(authority.metrics.snapshotResyncs).toBe(1);
+    expect(authority.metrics.snapshotAcks).toBeGreaterThanOrEqual(3);
+    expect(clientA.pendingSnapshotResync).toBe(false);
+    expect(clientA.state.players).toEqual(authority.simulation.state.snapshot().players);
+    expect(clientASnapshots.at(-1)).toEqual(expect.objectContaining({ full: true, snapshotSequence: 1 }));
+    expect(clientBSnapshots.map(snapshot => snapshot.snapshotSequence)).toEqual([0]);
   });
 
   test('packs steady-state local-room projectile transforms and restores them on the client', async () => {

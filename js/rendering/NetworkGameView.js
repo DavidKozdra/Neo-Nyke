@@ -976,10 +976,15 @@
           const movement = this._readMovement();
           this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton });
         } else {
-          const prediction = this._predictLocalAbility(abilityId, slot);
+          const dashInput = slot === 'dash' ? this._readMovement() : null;
+          const dashOptions = dashInput
+            ? { dashMoveX: dashInput.moveX, dashMoveY: dashInput.moveY }
+            : {};
+          const prediction = this._predictLocalAbility(abilityId, slot, dashOptions);
           const actionOptions = {
             predictionId: prediction?.event?.eventId,
             originServerTick: this.currentSample?.tick,
+            ...dashOptions,
           };
           if (slot === 'dash') {
             if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, actionOptions);
@@ -989,8 +994,10 @@
           return;
         }
         if (slot === 'dash') {
-          if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick });
-          else this.session.sendDash(abilityId, this.aimDirection);
+          const dashInput = this._readMovement();
+          const dashOptions = { dashMoveX: dashInput.moveX, dashMoveY: dashInput.moveY };
+          if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick, ...dashOptions });
+          else this.session.sendDash(abilityId, this.aimDirection, dashOptions);
         } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick });
         else this.session.sendAbility(abilityId, this.aimDirection);
       } catch {
@@ -1317,6 +1324,11 @@
       if (!player) return;
       const stats = MOVE_BASE_STATS[abilityId] || {};
       const presentation = deriveAbilityPresentation({ abilityId, slot });
+      const dashMoveX = Math.max(-1, Math.min(1, Number(options.dashMoveX) || 0));
+      const dashMoveY = Math.max(-1, Math.min(1, Number(options.dashMoveY) || 0));
+      const actionAimDirection = slot === 'dash' && Math.hypot(dashMoveX, dashMoveY) > 0.15
+        ? Math.atan2(dashMoveY, dashMoveX)
+        : this.aimDirection;
       const chargeRatio = clamp(Number(options.chargeRatio || 0), 0, 1);
       const radius = abilityId === 'death_ball' ? 16 + chargeRatio * 34
         : abilityId === 'healing_zone' ? 62 * (1 + chargeRatio)
@@ -1331,7 +1343,7 @@
         slot,
         abilityId,
         mode: presentation.kind || slot,
-        aimDirection: this.aimDirection,
+        aimDirection: actionAimDirection,
         presentationKey: abilityId,
         presentation: { key: abilityId, kind: presentation.kind, style: presentation.style },
         originX,
@@ -1343,13 +1355,13 @@
       const floor = this.currentSample?.state?.floorState || {};
       const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
       const clampDestination = distance => ({
-        x: clamp(originX + Math.cos(this.aimDirection) * distance, minimum, Number(floor.width || 900) - minimum),
-        y: clamp(originY + Math.sin(this.aimDirection) * distance, minimum, Number(floor.height || 700) - minimum),
+        x: clamp(originX + Math.cos(actionAimDirection) * distance, minimum, Number(floor.width || 900) - minimum),
+        y: clamp(originY + Math.sin(actionAimDirection) * distance, minimum, Number(floor.height || 700) - minimum),
       });
       if (abilityId === 'dash') {
         const speed = 520 + Number(player.attackSpeed || 0) * 28;
-        data.dashVx = Math.cos(this.aimDirection) * speed;
-        data.dashVy = Math.sin(this.aimDirection) * speed;
+        data.dashVx = Math.cos(actionAimDirection) * speed;
+        data.dashVy = Math.sin(actionAimDirection) * speed;
       } else if (abilityId === 'nimrod_stomp') {
         const distance = 108 + (Math.max(Number(floor.width || 900), Number(floor.height || 700)) - 108) * chargeRatio;
         const destination = clampDestination(distance);
@@ -1904,13 +1916,15 @@
         if (!livePlayerIds.has(playerId)) this.presentationPlayerActors.delete(playerId);
       });
       const projectedPlayerSlots = Object.values(players || {}).map(player => {
-        const authoritativeActionEvent = this.combatEffects.some(effect => (
+        const authoritativeMeleeEvent = this.combatEffects.some(effect => (
           effect.data?.playerId === player.id
-          && ['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED'].includes(effect.eventType)
+          && ['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP'].includes(effect.eventType)
           && now - Number(effect.startedAt || 0) <= 220
         ));
-        const attacking = authoritativeActionEvent
-          || (player.action !== 'idle' && serverTick - Number(player.actionTick || 0) <= 4);
+        // Ability and dash events have their own presentation. Routing every
+        // ability through the shared melee swing made a dash look like an M1.
+        const attacking = authoritativeMeleeEvent
+          || (player.action === 'attack' && serverTick - Number(player.actionTick || 0) <= 4);
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
         const actor = this.presentationPlayerActors.get(player.id) || {};

@@ -24,6 +24,9 @@ describe('Durable Object daily usage controls', () => {
     expect(server).toContain("this.authority.endMatch?.('match-time-limit')");
     expect(server).toContain('syncTicking()');
     expect(server).toContain('stopTicking()');
+    expect(server).toContain('const MAX_TICK_CATCH_UP_STEPS = 3');
+    expect(server).toContain('this.tickMetrics.maxDriftMs');
+    expect(server).toContain('this.authority.step(tickCount)');
   });
 
   test('debounces checkpoints and expires empty rooms with bounded alarms', () => {
@@ -49,7 +52,22 @@ describe('Durable Object daily usage controls', () => {
 
   test('serializes each authority broadcast only once', () => {
     expect(server).toContain('const serialized = JSON.stringify(message)');
-    expect(server).toContain('this.sendSerialized(peerId, serialized)');
+    expect(server).toContain('this.sendSerialized(peerId, serialized, delivery)');
+  });
+
+  test('coalesces replaceable snapshots and protects rooms from slow readers', () => {
+    expect(server).toContain('const SLOW_CLIENT_BUFFER_WARNING_BYTES = 256 * 1024');
+    expect(server).toContain('const SLOW_CLIENT_BUFFER_CLOSE_BYTES = 1024 * 1024');
+    expect(server).toContain("this.disconnectPeer(peerId, 'slow-client')");
+    expect(server).toContain('this.pendingReplaceable.set(pendingKey, serialized)');
+  });
+
+  test('places new rooms from a validated host region and records aggregate telemetry', () => {
+    expect(server).toContain('const DURABLE_OBJECT_REGION_HINTS = new Set([');
+    expect(server).toContain('get(env.MULTIPLAYER_ROOMS.idFromName(roomCode), { locationHint })');
+    expect(server).toContain("code: 'INVALID_REGION'");
+    expect(server).toContain('MULTIPLAYER_ANALYTICS?.writeDataPoint?.({');
+    expect(wrangler).toContain('binding = "MULTIPLAYER_ANALYTICS"');
   });
 
   test('keeps handshake state in socket attachments instead of writing a checkpoint', () => {
@@ -81,6 +99,13 @@ describe('Durable Object daily usage controls', () => {
     expect(server).toContain('deferFloorGeneration: true');
   });
 
+  test('persists and restores the human room code instead of relying on an opaque DO id', () => {
+    expect(server).toContain('const requestedRoomCode = normalizeRoomCode(options.roomCode)');
+    expect(server).toContain('this.roomCode = normalizeRoomCode(room.roomCode) || this.roomCode');
+    expect(server).toContain('this.transport.roomCode = this.roomCode');
+    expect(server).toContain('body: JSON.stringify({ roomCode, mode, maxPlayers, region })');
+  });
+
   test('rejects invalid socket upgrades before invoking the Durable Object', () => {
     const workerRoomRoute = server.slice(
       server.indexOf("const roomRoute = path.match"),
@@ -95,6 +120,13 @@ describe('Durable Object daily usage controls', () => {
     expect(wrangler).toContain('name = "MULTIPLAYER_SOCKET_LIMITER"');
     expect(server).toContain('distributedRateLimit(env.MULTIPLAYER_CREATE_LIMITER, ip)');
     expect(server).toContain('distributedRateLimit(env.MULTIPLAYER_SOCKET_LIMITER, ip)');
+  });
+
+  test('permits a token-bound staging browser load run without opening public limits', () => {
+    expect(server).toContain('function hasLoadTestBypass(request, env)');
+    expect(server).toContain("requestCookie(request, 'neonyke_load_test')");
+    expect(server).toContain('const expected = String(env?.MULTIPLAYER_LOAD_TEST_TOKEN || \'\')');
+    expect(server).toContain('const loadTestBypass = hasLoadTestBypass(request, env)');
   });
 
   test('bounds room-creation bodies before parsing JSON', () => {

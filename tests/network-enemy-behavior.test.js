@@ -562,4 +562,80 @@ describe('shared-roster rivals hunt the party and curse the next floor', () => {
     expect(state.pendingRivalCurses.reducePotions).toBe(true);
     expect(state.pendingRivalCurses.gellehTurrets).toBe(4);
   });
+
+  // Campaign parity for updateMinorEnemyPackPressure (game/enemies.js). The
+  // shared steerEnemy body already read minorPackSpeedMultiplier, but nothing on
+  // the authority ever set it, so packed rooms were softer in multiplayer.
+  describe('minor enemy pack pressure', () => {
+    test('a lone minor enemy gets no pack bonus', () => {
+      const { state, simulation } = behaviorHarness();
+      const lone = injectEnemy(state, 'hunter', 500, 350);
+      tick(simulation, 1);
+      expect(lone.minorPackStacks).toBe(0);
+      expect(lone.minorPackSpeedMultiplier).toBe(1);
+      expect(lone.minorPackDamageMultiplier).toBe(1);
+      expect(lone.minorPackCooldownRate).toBe(1);
+    });
+
+    test('stacks with nearby minor allies and caps at three', () => {
+      const { state, simulation } = behaviorHarness();
+      const leader = injectEnemy(state, 'hunter', 500, 350);
+      // Five allies well inside the 260px radius — the cap must hold at 3.
+      for (let index = 0; index < 5; index += 1) injectEnemy(state, 'hunter', 510 + index * 10, 350);
+      tick(simulation, 1);
+      expect(leader.minorPackStacks).toBe(3);
+      expect(leader.minorPackSpeedMultiplier).toBeCloseTo(1.12);
+      expect(leader.minorPackCooldownRate).toBeCloseTo(1.18);
+      expect(leader.minorPackDamageMultiplier).toBeCloseTo(1.09);
+    });
+
+    test('ignores allies beyond the pack radius, elites, and other rooms', () => {
+      const { state, simulation } = behaviorHarness();
+      const leader = injectEnemy(state, 'hunter', 200, 350);
+      injectEnemy(state, 'hunter', 200 + 300, 350); // outside 260px
+      injectEnemy(state, 'hunter', 210, 350, { elite: true }); // elites don't count
+      injectEnemy(state, 'hunter', 215, 350, { roomId: 'some-other-room' });
+      tick(simulation, 1);
+      expect(leader.minorPackStacks).toBe(0);
+    });
+
+    test('elites and non-minor types never receive pack pressure', () => {
+      const { state, simulation } = behaviorHarness();
+      const elite = injectEnemy(state, 'hunter', 500, 350, { elite: true });
+      const golem = injectEnemy(state, 'bulk_golem', 520, 350);
+      for (let index = 0; index < 3; index += 1) injectEnemy(state, 'hunter', 505 + index * 8, 350);
+      tick(simulation, 1);
+      expect(elite.minorPackSpeedMultiplier).toBe(1);
+      expect(golem.minorPackSpeedMultiplier).toBe(1);
+    });
+
+    test('packed minor enemies hit the player harder than a lone one', () => {
+      const damageFrom = allies => {
+        const { state, simulation } = behaviorHarness();
+        const player = state.players.p1;
+        player.itemStats = {};
+        const attacker = injectEnemy(state, 'hunter', 500, 350);
+        for (let index = 0; index < allies; index += 1) injectEnemy(state, 'hunter', 505 + index * 8, 350);
+        tick(simulation, 1);
+        const before = player.hp;
+        // Drive one hit from the packed attacker through the authority's
+        // damagePlayer via a hostile projectile it owns.
+        const projectileId = state.allocateEntityId('projectile');
+        state.projectiles[projectileId] = {
+          id: projectileId, ownerId: attacker.id, roomId: player.roomId, hostile: true,
+          type: 'test_round', attackKind: 'test_projectile',
+          x: player.x, y: player.y, vx: 0, vy: 0,
+          radius: 6, damage: 20, knockback: 0, expiresTick: state.tick + 40,
+        };
+        simulation.updateGame({}, 0.05);
+        return before - player.hp;
+      };
+      const solo = damageFrom(0);
+      const packed = damageFrom(3);
+      expect(solo).toBeGreaterThan(0);
+      // +3% per stack, 3 stacks => 1.09x
+      expect(packed).toBeGreaterThan(solo);
+      expect(packed / solo).toBeCloseTo(1.09, 1);
+    });
+  });
 });

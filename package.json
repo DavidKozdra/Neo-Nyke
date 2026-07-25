@@ -11,15 +11,20 @@
     "i18n:check:strict": "node scripts/check-i18n.js --strict",
     "i18n:fill": "node scripts/fill-i18n-translations.js",
     "i18n:sync": "node scripts/sync-i18n-content.js",
-    "start": "python3 -m http.server 5173",
-    "start:py": "python -m http.server 5173",
+    "start": "npm run precache && python3 -m http.server 5173",
+    "start:py": "npm run precache && python -m http.server 5173",
     "editor": "node server/editor-server.js",
     "multiplayer:local": "node scripts/run-local-multiplayer-harness.js",
+    "multiplayer:load": "node scripts/load-multiplayer-slo.js",
+    "multiplayer:profile": "node scripts/profile-multiplayer-bottlenecks.js --enforce",
+    "multiplayer:playwright:40": "NEONYKE_PLAYWRIGHT_PLAYERS=40 node scripts/load-browser-multiplayer.js",
+    "multiplayer:playwright:100": "node scripts/load-browser-multiplayer.js",
     "multiplayer:dev": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml",
+    "multiplayer:dev:load": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml --var MULTIPLAYER_LOAD_TEST_TOKEN:playwright-local-100",
     "multiplayer:smoke": "node scripts/smoke-cloudflare-multiplayer.js",
     "precache": "node scripts/generate-precache.js",
     "precache:check": "node scripts/generate-precache.js --check",
-    "build": "npm run precache && rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/"
+    "build": "npm run precache && rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/ && node scripts/verify-precache-build.js dist"
   },
   "devDependencies": {
     "canvas": "^3.2.3",

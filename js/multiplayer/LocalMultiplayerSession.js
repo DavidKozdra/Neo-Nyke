@@ -42,6 +42,7 @@
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
+  const RESYNC_MIN_TICKS = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
@@ -311,6 +312,10 @@
       this.chatSequence = 0;
       this.outgoingSequence = 0;
       this.snapshotSequence = 0;
+      this.snapshotSequenceByPeer = new Map();
+      this.lastSnapshotSentByPeer = new Map();
+      this.lastSnapshotAckByPeer = new Map();
+      this.lastResyncTickByPeer = new Map();
       this.peerRecords = new Map();
       this.playerIdByPeer = new Map();
       this.pendingInputs = {};
@@ -339,6 +344,8 @@
         duplicateActions: 0,
         gameplayEvents: 0,
         snapshots: 0,
+        snapshotAcks: 0,
+        snapshotResyncs: 0,
         invalidMessages: 0,
       };
       this.simulation = this._createSimulation(this.matchSeed, this.baseMatchId);
@@ -350,6 +357,10 @@
       return cloneSerializable({
         outgoingSequence: this.outgoingSequence,
         snapshotSequence: this.snapshotSequence,
+        snapshotSequenceByPeer: Array.from(this.snapshotSequenceByPeer.entries()),
+        lastSnapshotSentByPeer: Array.from(this.lastSnapshotSentByPeer.entries()),
+        lastSnapshotAckByPeer: Array.from(this.lastSnapshotAckByPeer.entries()),
+        lastResyncTickByPeer: Array.from(this.lastResyncTickByPeer.entries()),
         rematchSerial: this.rematchSerial,
         chatSequence: this.chatSequence,
         mode: this.mode,
@@ -378,6 +389,10 @@
       if (!runtime || typeof runtime !== 'object') return false;
       this.outgoingSequence = Math.max(0, Math.trunc(Number(runtime.outgoingSequence) || 0));
       this.snapshotSequence = Math.max(0, Math.trunc(Number(runtime.snapshotSequence) || 0));
+      this.snapshotSequenceByPeer = new Map(Array.isArray(runtime.snapshotSequenceByPeer) ? runtime.snapshotSequenceByPeer : []);
+      this.lastSnapshotSentByPeer = new Map(Array.isArray(runtime.lastSnapshotSentByPeer) ? runtime.lastSnapshotSentByPeer : []);
+      this.lastSnapshotAckByPeer = new Map(Array.isArray(runtime.lastSnapshotAckByPeer) ? runtime.lastSnapshotAckByPeer : []);
+      this.lastResyncTickByPeer = new Map(Array.isArray(runtime.lastResyncTickByPeer) ? runtime.lastResyncTickByPeer : []);
       this.rematchSerial = Math.max(0, Math.trunc(Number(runtime.rematchSerial) || 0));
       this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
       this.mode = runtime.mode === 'rival' ? 'rival' : 'coop';
@@ -579,6 +594,8 @@
         case 'GAME_COMMAND': this._handleGameCommand(peerId, message.payload); break;
         case 'CHAT_SEND': this._handleChat(peerId, message.payload); break;
         case 'REMATCH_REQUEST': this._handleRematchRequest(peerId, message.payload); break;
+        case 'SNAPSHOT_ACK': this._handleSnapshotAck(peerId, message.payload); break;
+        case 'SNAPSHOT_RESYNC_REQUEST': this._handleSnapshotResyncRequest(peerId, message.payload); break;
         case 'PING': this._send(peerId, 'PONG', {
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
@@ -818,6 +835,8 @@
         action: payload.action,
         aimDirection: payload.aimDirection,
         abilityId: payload.abilityId,
+        dashMoveX: payload.dashMoveX,
+        dashMoveY: payload.dashMoveY,
         inputSequence: payload.inputSequence,
         predictionId: payload.predictionId,
         // This is deliberately only a bounded hint. Simulation state remains
@@ -907,6 +926,35 @@
       this._maybeStartRematch();
     }
 
+    _handleSnapshotAck(peerId, payload) {
+      if (!this.playerIdByPeer.has(peerId) || this.simulation.state.status !== 'running') return;
+      const acknowledged = Math.max(0, Math.trunc(Number(payload.snapshotSequence) || 0));
+      const sent = this.lastSnapshotSentByPeer.get(peerId);
+      if (!Number.isInteger(sent) || acknowledged > sent) {
+        this._rejectInvalidMessage(peerId, ['snapshot acknowledgement exceeds the latest sent snapshot']);
+        return;
+      }
+      const previous = this.lastSnapshotAckByPeer.get(peerId);
+      if (previous !== undefined && acknowledged <= previous) return;
+      this.lastSnapshotAckByPeer.set(peerId, acknowledged);
+      this.metrics.snapshotAcks += 1;
+    }
+
+    _handleSnapshotResyncRequest(peerId, payload) {
+      if (!this.playerIdByPeer.has(peerId) || this.simulation.state.status !== 'running') return;
+      const expected = Math.max(0, Math.trunc(Number(payload.expectedSequence) || 0));
+      const received = Math.max(0, Math.trunc(Number(payload.receivedSequence) || 0));
+      if (received < expected) {
+        this._rejectInvalidMessage(peerId, ['snapshot resync sequence is invalid']);
+        return;
+      }
+      const lastResyncTick = this.lastResyncTickByPeer.get(peerId);
+      if (lastResyncTick !== undefined && this.simulation.state.tick - lastResyncTick < RESYNC_MIN_TICKS) return;
+      this.lastResyncTickByPeer.set(peerId, this.simulation.state.tick);
+      this.metrics.snapshotResyncs += 1;
+      this._publishSnapshot(true, [peerId]);
+    }
+
     _maybeStartRematch() {
       if (this.simulation.state.status !== 'ended') return false;
       const joined = Array.from(this.peerRecords.entries()).filter(([, record]) => record.playerId);
@@ -915,6 +963,10 @@
       this.rematchSerial += 1;
       this.simulation = this._createSimulation(this.matchSeed, `${this.baseMatchId}:rematch:${this.rematchSerial}`);
       this.snapshotSequence = 0;
+      this.snapshotSequenceByPeer.clear();
+      this.lastSnapshotSentByPeer.clear();
+      this.lastSnapshotAckByPeer.clear();
+      this.lastResyncTickByPeer.clear();
       this.snapshotEntitySignatures = {};
       this.snapshotFloorSignature = '';
       this.snapshotBossSignature = '';
@@ -1070,6 +1122,10 @@
       let cleaned = this.peerRecords.delete(peerId);
       cleaned = this.seenReliableSequences.delete(peerId) || cleaned;
       cleaned = this.invalidMessageCount.delete(peerId) || cleaned;
+      cleaned = this.snapshotSequenceByPeer.delete(peerId) || cleaned;
+      cleaned = this.lastSnapshotSentByPeer.delete(peerId) || cleaned;
+      cleaned = this.lastSnapshotAckByPeer.delete(peerId) || cleaned;
+      cleaned = this.lastResyncTickByPeer.delete(peerId) || cleaned;
       const replaceablePrefix = `${peerId}|`;
       Array.from(this.lastReplaceableSequence.keys()).forEach(key => {
         if (!key.startsWith(replaceablePrefix)) return;
@@ -1230,7 +1286,7 @@
       this._broadcastLobbyState();
     }
 
-    _publishSnapshot(full) {
+    _publishSnapshot(full, recipientPeerIds = null) {
       const actualFull = full || !SNAPSHOT_ENTITY_COLLECTIONS.every(collection => this.snapshotEntitySignatures[collection]);
       const entities = {};
       const removedEntityIds = [];
@@ -1266,12 +1322,13 @@
       const bossSignature = JSON.stringify(this.simulation.state.bossState || null);
       const bossStateChanged = bossSignature !== this.snapshotBossSignature;
       this.snapshotBossSignature = bossSignature;
-      const snapshotSequence = this.snapshotSequence++;
+      const recipients = recipientPeerIds || Array.from(this.playerIdByPeer.keys());
       // Snapshot recipients receive only their active room's world entities.
       // Players remain global for party HUD/spectator state. A room transition
       // sends a scoped full bootstrap, which safely discards entities from the
       // previous room without tracking a second per-client world cache.
-      this.playerIdByPeer.forEach((playerId, peerId) => {
+      recipients.forEach(peerId => {
+        const playerId = this.playerIdByPeer.get(peerId);
         const player = this.simulation.state.players[playerId];
         if (!player) return;
         const roomChanged = this.enableSnapshotPacking && this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
@@ -1293,7 +1350,7 @@
           });
         }
         const payload = {
-          snapshotSequence,
+          snapshotSequence: this.snapshotSequenceByPeer.get(peerId) || 0,
           serverTick: this.simulation.state.tick,
           full: clientFull,
           lastProcessedInput: { [playerId]: this.lastProcessedInput[playerId] ?? -1 },
@@ -1308,7 +1365,10 @@
           ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }
           : getDeliveryIntent('WORLD_SNAPSHOT');
         this._send(peerId, 'WORLD_SNAPSHOT', payload, delivery);
+        this.snapshotSequenceByPeer.set(peerId, payload.snapshotSequence + 1);
+        this.lastSnapshotSentByPeer.set(peerId, payload.snapshotSequence);
       });
+      this.snapshotSequence += 1;
       this.metrics.snapshots += 1;
     }
 
@@ -1342,6 +1402,7 @@
       this.state = null;
       this.lobbyState = null;
       this.latestSnapshotSequence = -1;
+      this.pendingSnapshotResync = false;
       this.lastAcknowledgedInput = -1;
       this.seenReliableSequences = new Set();
       this.receivedTypes = [];
@@ -1422,6 +1483,8 @@
         aimDirection: Number(aimDirection) || 0,
         ...(options.abilityId ? { abilityId: String(options.abilityId) } : {}),
         ...(options.predictionId ? { predictionId: String(options.predictionId).slice(0, 96) } : {}),
+        ...(Number.isFinite(Number(options.dashMoveX)) ? { dashMoveX: Math.max(-1, Math.min(1, Number(options.dashMoveX))) } : {}),
+        ...(Number.isFinite(Number(options.dashMoveY)) ? { dashMoveY: Math.max(-1, Math.min(1, Number(options.dashMoveY))) } : {}),
         originServerTick: Math.max(0, Math.trunc(Number(options.originServerTick ?? this.state?.tick) || 0)),
       });
       return inputSequence;
@@ -1511,11 +1574,13 @@
         case 'MATCH_STARTING':
           this.runEnd = null;
           this.latestSnapshotSequence = -1;
+          this.pendingSnapshotResync = false;
           if (this.status !== 'running') this.status = 'starting';
           break;
         case 'INITIAL_STATE':
           this.state = new GameState(message.payload.state);
           this.lastAcknowledgedInput = message.payload.lastProcessedInput[this.playerId] ?? -1;
+          this.pendingSnapshotResync = false;
           this.status = 'running';
           break;
         case 'WORLD_SNAPSHOT': this._applySnapshot(message.payload); break;
@@ -1588,6 +1653,17 @@
 
     _applySnapshot(snapshot) {
       if (snapshot.snapshotSequence <= this.latestSnapshotSequence) return;
+      const expectedSequence = this.latestSnapshotSequence + 1;
+      if (!snapshot.full && snapshot.snapshotSequence !== expectedSequence) {
+        if (!this.pendingSnapshotResync) {
+          this.pendingSnapshotResync = true;
+          this._send('SNAPSHOT_RESYNC_REQUEST', {
+            expectedSequence,
+            receivedSequence: snapshot.snapshotSequence,
+          });
+        }
+        return;
+      }
       this.latestSnapshotSequence = snapshot.snapshotSequence;
       if (!this.state) return;
       this.state.tick = snapshot.serverTick;
@@ -1603,6 +1679,11 @@
       this.state.floorState = cloneSerializable(snapshot.floorState || this.state.floorState);
       if (snapshot.bossStateChanged) this.state.bossState = snapshot.bossState == null ? null : cloneSerializable(snapshot.bossState);
       this.lastAcknowledgedInput = snapshot.lastProcessedInput[this.playerId] ?? this.lastAcknowledgedInput;
+      if (snapshot.full) this.pendingSnapshotResync = false;
+      this._send('SNAPSHOT_ACK', {
+        snapshotSequence: snapshot.snapshotSequence,
+        serverTick: snapshot.serverTick,
+      });
     }
 
     getStateSnapshot() {

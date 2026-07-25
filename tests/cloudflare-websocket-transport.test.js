@@ -73,6 +73,19 @@ describe('CloudflareWebSocketTransport', () => {
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
+  test('passes the host-selected region only when creating a new room', async () => {
+    const fetch = jest.fn(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ roomCode: 'ABC234', status: 'waiting', maxPlayers: 4, region: 'weur' }),
+    }));
+    const transport = new CloudflareWebSocketTransport({
+      apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
+    });
+    await transport.createSession({ region: 'weur' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'coop', maxPlayers: 4, region: 'weur' });
+  });
+
   test('only reports availability after the multiplayer health route responds successfully', async () => {
     const fetch = jest.fn(async () => ({
       ok: true,

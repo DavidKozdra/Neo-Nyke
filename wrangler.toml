@@ -33,6 +33,10 @@ namespace_id = "82024002"
   limit = 30
   period = 60
 
+[[analytics_engine_datasets]]
+binding = "MULTIPLAYER_ANALYTICS"
+dataset = "neonyke_multiplayer"
+
 [[migrations]]
 tag = "multiplayer-rooms-v1"
 new_sqlite_classes = ["MultiplayerRoom"]

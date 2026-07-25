@@ -140,6 +140,25 @@
       await cache.put(request, response);
     }
 
+    // A network error rejection from respondWith() is fatal to the page, so an
+    // uncacheable offline miss degrades to a response the caller can handle.
+    // Media and images simply fire their own error events on a 503, but a script
+    // or stylesheet that 503s aborts the importing module graph, so those get an
+    // empty 200 body and fail at the point of use instead of at load.
+    const EMPTY_BODY_DESTINATIONS = new Set(["script", "worker", "style"]);
+
+    function offlineResponse(request) {
+      if (EMPTY_BODY_DESTINATIONS.has(request?.destination)) {
+        const type = request.destination === "style" ? "text/css" : "text/javascript";
+        return new Response("", { status: 200, headers: { "Content-Type": type } });
+      }
+      return new Response("Offline", {
+        status: 503,
+        statusText: "Offline",
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+
     function isNetworkOnly(pathname) {
       return networkOnly.some(function matches(prefix) {
         return pathname === prefix || pathname.startsWith(prefix);
@@ -182,7 +201,12 @@
       if (knownPaths.has(pathname)) {
         const cached = await matchPrecache(pathname);
         if (cached) return cached;
-        const response = await fetchImpl(request);
+        // Optional entries (audio, credits media) may be absent when quota or an
+        // early offline switch cut the warm pass short. A rejected respondWith()
+        // surfaces as a network error and can break the running page, so failed
+        // asset lookups must resolve to a response instead of throwing.
+        const response = await fetchImpl(request).catch(function offlineMiss() { return null; });
+        if (!response) return offlineResponse(request);
         if (isSuccessfulResponse(response)) {
           const copy = response.clone();
           const write = scope.caches.open(cacheNames.precache)
@@ -195,7 +219,8 @@
       const runtimeCache = await scope.caches.open(cacheNames.runtime);
       const runtime = await runtimeCache.match(request);
       if (runtime) return runtime;
-      const response = await fetchImpl(request);
+      const response = await fetchImpl(request).catch(function offlineMiss() { return null; });
+      if (!response) return offlineResponse(request);
       if (isSuccessfulResponse(response)) {
         const copy = response.clone();
         const write = runtimeCache.put(request, copy);

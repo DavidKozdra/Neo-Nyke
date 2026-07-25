@@ -90,6 +90,8 @@
         body: JSON.stringify({
           maxPlayers: options.maxPlayers || 4,
           mode: options.mode === 'rival' ? 'rival' : 'coop',
+          // Placement is honored only while the room is first created.
+          ...(options.region ? { region: options.region } : {}),
           // Omitted unless the host typed one, so the server keeps generating
           // collision-retried codes for the normal path.
           ...(options.roomCode ? { roomCode: options.roomCode } : {}),
