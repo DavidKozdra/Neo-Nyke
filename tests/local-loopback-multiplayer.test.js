@@ -90,6 +90,35 @@ describe('LocalLoopbackTransport', () => {
 });
 
 describe('protocol-driven local multiplayer session', () => {
+  test('keeps Death Ball charging until the client sends button-up', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      latencyMs: 0,
+      jitterMs: 0,
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    player.equippedMoves.smash = 'death_ball';
+
+    // This is the exact client ordering: held input is sent before the action.
+    clientA.sendInput({ moveX: 0, moveY: 0, aimDirection: 0, buttons: 2 });
+    clientA.sendAbility('death_ball', 0);
+    clock.runAll();
+    authority.step(1);
+
+    expect(player.heldCharge).toEqual(expect.objectContaining({ moveKey: 'death_ball', heldSeen: true }));
+    expect(Object.values(authority.simulation.state.projectiles)
+      .some(projectile => projectile.kind === 'death_ball')).toBe(false);
+
+    clientA.sendInput({ moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 });
+    clock.runAll();
+    authority.step(1);
+
+    expect(player.heldCharge).toBeNull();
+    expect(Object.values(authority.simulation.state.projectiles)
+      .some(projectile => projectile.kind === 'death_ball')).toBe(true);
+  });
+
   test('defers floor generation until an admitted lobby actually starts', async () => {
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
