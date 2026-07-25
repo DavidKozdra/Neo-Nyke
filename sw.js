@@ -164,6 +164,7 @@ const KOZ_PWA_CONFIG = {
     "/js/ui/move-preview.js",
     "/js/ui/notifications.js",
     "/js/ui/panels.js",
+    "/js/ui/pwa-update-prompt.js",
     "/js/ui/settings-ui.js",
     "/js/ui/sprite-editor.js",
     "/js/ui/tutorial-controller.js",
@@ -314,14 +315,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 301,
-    "bytes": 72104994,
-    "criticalEntries": 246,
-    "criticalBytes": 9044897,
+    "entries": 302,
+    "bytes": 72110442,
+    "criticalEntries": 247,
+    "criticalBytes": 9050345,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "a717b1f424eb66fe"
+  "version": "660fcac26dd3f88e"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");
