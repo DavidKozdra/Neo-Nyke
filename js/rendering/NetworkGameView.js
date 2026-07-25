@@ -150,7 +150,7 @@
   ]);
 
   function deriveAbilityPresentation(data = {}) {
-    const key = String(data.presentation?.key || data.presentationKey || data.abilityId || '');
+    const key = String(data.abilityId || '');
     const authored = ABILITY_PRESENTATIONS[key];
     if (authored) return authored;
     if (data.slot === 'dash') return { color: '#8fdcff', style: 'light' };
@@ -1344,8 +1344,6 @@
         abilityId,
         mode: presentation.kind || slot,
         aimDirection: actionAimDirection,
-        presentationKey: abilityId,
-        presentation: { key: abilityId, kind: presentation.kind, style: presentation.style },
         originX,
         originY,
         destinationX: originX,
@@ -1463,7 +1461,7 @@
       const destinationY = Number.isFinite(Number(data.destinationY))
         ? Number(data.destinationY) : Number(this.localPredictedPlayer.y || 0);
       const presentation = deriveAbilityPresentation(data);
-      const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
+      const kind = String(presentation.kind || data.mode || '');
       // The plain glide dash isn't a teleport: it moves the hero over ~0.16s
       // via dashUntilTick/dashVx/dashVy, which prediction already integrates.
       // Snapping to destination here would freeze it at its start point, so we
@@ -1533,7 +1531,7 @@
         const destinationX = Number.isFinite(Number(data.destinationX)) ? Number(data.destinationX) : Number(entity.x);
         const destinationY = Number.isFinite(Number(data.destinationY)) ? Number(data.destinationY) : Number(entity.y);
         const radius = Math.max(1, Number(data.effectRadius || (data.slot === 'smash' ? 140 : 34)));
-        const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
+        const kind = String(presentation.kind || data.mode || '');
         this._applyAuthoritativeAbilityMovement(data);
         if (['aoe', 'dash_aoe'].includes(kind) && typeof this.neo.spawnAoeShockwave === 'function') {
           const impactX = kind === 'dash_aoe' ? destinationX : originX;
@@ -1556,12 +1554,12 @@
           }
         }
       } else if (event.eventType === 'ABILITY_ENTITY_PULSED') {
-        const presentation = deriveAbilityPresentation({ presentationKey: data.presentationKey });
+        const presentation = deriveAbilityPresentation({ abilityId: data.abilityId });
         const pulseX = Number(data.x || 0);
         const pulseY = Number(data.y || 0);
         const radius = Math.max(8, Number(data.radius || 32));
         this.neo.ringBurst?.(pulseX, pulseY, Math.max(12, radius * 0.55), presentation.color, 0.32);
-        if (['chaos_burst', 'lightning_columns', 'holy_turrets'].includes(data.presentationKey)) {
+        if (['chaos_burst', 'lightning_columns', 'holy_turrets'].includes(data.abilityId)) {
           this.neo.spawnAoeShockwave?.(pulseX, pulseY, radius, presentation.color, 'light');
         }
       }

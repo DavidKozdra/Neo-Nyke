@@ -971,11 +971,11 @@ describe('network multiplayer game view', () => {
     expect(source).toContain('this.neo.destructibles = this.neo.currentRoom?.destructibles || []');
   });
 
-  test('uses campaign-authored ability presentation from the authority event', () => {
-    expect(deriveAbilityPresentation({ presentationKey: 'crimson_smash', slot: 'smash' })).toEqual(expect.objectContaining({
+  test('derives campaign-authored ability presentation locally from ability identity', () => {
+    expect(deriveAbilityPresentation({ abilityId: 'crimson_smash', slot: 'smash' })).toEqual(expect.objectContaining({
       kind: 'aoe', color: '#ff3048', style: 'heavy', sound: 'aoe',
     }));
-    expect(deriveAbilityPresentation({ presentationKey: 'healing_zone', mode: 'support' })).toEqual(expect.objectContaining({
+    expect(deriveAbilityPresentation({ abilityId: 'healing_zone', mode: 'support' })).toEqual(expect.objectContaining({
       kind: 'support', color: '#35ff6f', style: 'light', sound: 'aoe',
     }));
   });
@@ -994,8 +994,7 @@ describe('network multiplayer game view', () => {
     view._spawnGameplayEventEffect({
       eventType: 'PLAYER_ABILITY_USED',
       data: {
-        playerId: 'p1', abilityId: 'crimson_smash', presentationKey: 'crimson_smash',
-        presentation: { key: 'crimson_smash', kind: 'aoe', style: 'heavy' },
+        playerId: 'p1', abilityId: 'crimson_smash',
         originX: 240, originY: 310, effectRadius: 140,
       },
     });
@@ -1015,7 +1014,7 @@ describe('network multiplayer game view', () => {
 
     view._spawnGameplayEventEffect({
       eventType: 'ABILITY_ENTITY_PULSED',
-      data: { playerId: 'p1', presentationKey: 'holy_turrets', x: 440, y: 260, radius: 56 },
+      data: { playerId: 'p1', abilityId: 'holy_turrets', x: 440, y: 260, radius: 56 },
     });
 
     expect(calls).toContainEqual(['ring', 440, 260, 30.800000000000004, '#fff1b0', 0.32]);
@@ -1077,7 +1076,7 @@ describe('network multiplayer game view', () => {
       eventId: 'authority-smash', eventType: 'PLAYER_ABILITY_USED',
       data: {
         playerId: 'p1', roomId: 'r1', slot: 'smash', abilityId: 'crimson_smash',
-        presentation: { kind: 'aoe', style: 'heavy' }, originX: 240, originY: 310, effectRadius: 140,
+        originX: 240, originY: 310, effectRadius: 140,
       },
     }]);
 

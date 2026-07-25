@@ -36,7 +36,7 @@
     if (type === 'CHEST_OPENED' && tutorial) tutorial.chestOpened = true;
     if (type === 'SHOP_PURCHASED' && tutorial) tutorial.shopPurchased = true;
     if (type === 'FORGE_COMMITTED' && tutorial) tutorial.forgeCommitted = true;
-    if (type === 'PLAYER_ABILITY_USED' && tutorial && ['dash', 'warp', 'dash_aoe'].includes(data.presentation?.kind || data.mode)) tutorial.dashed = true;
+    if (type === 'PLAYER_ABILITY_USED' && tutorial && ['dash', 'warp', 'dash_aoe'].includes(data.mode)) tutorial.dashed = true;
     if (type === 'FLOOR_ADVANCED') {
       services.highestFloor = Math.max(Number(services.highestFloor || 1), Number(data.floorNumber || state.floorNumber || 1));
       Object.values(services.tutorialByPlayer).forEach(progress => { progress.ladderUsed = true; });

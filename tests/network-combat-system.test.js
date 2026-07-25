@@ -2,7 +2,7 @@ const { GameState } = require('../js/simulation/GameState');
 const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState, TEST_ROOM } = require('../js/multiplayer/LocalMultiplayerSession');
-const { MOVE_SLOT_KEYS, MOVE_PRESENTATION_DEFS } = require('../js/simulation/SharedMoveContent');
+const { MOVE_SLOT_KEYS } = require('../js/simulation/SharedMoveContent');
 const {
   ATTACK_COOLDOWN_TICKS,
   applyNetworkHeroProfile,
@@ -333,7 +333,6 @@ describe('authoritative network combat system', () => {
     expect(abilityEvent.data).toEqual(expect.objectContaining({
       playerId: 'p1',
       abilityId: 'crimson_smash',
-      presentationKey: 'crimson_smash',
       originX: origin.x,
       originY: origin.y,
       effectRadius: 140,
@@ -436,15 +435,11 @@ describe('authoritative network combat system', () => {
     const event = events.find(candidate => candidate.eventType === 'PLAYER_ABILITY_USED');
     expect(event?.data).toEqual(expect.objectContaining({
       playerId: 'p1', roomId: player.roomId, slot, abilityId: moveKey,
-      presentationKey: moveKey,
-      presentation: {
-        key: moveKey,
-        kind: MOVE_PRESENTATION_DEFS[moveKey].kind,
-        style: MOVE_PRESENTATION_DEFS[moveKey].style,
-      },
       originX: expect.any(Number), originY: expect.any(Number),
       destinationX: expect.any(Number), destinationY: expect.any(Number),
     }));
+    expect(event?.data).not.toHaveProperty('presentation');
+    expect(event?.data).not.toHaveProperty('presentationKey');
   });
 
   test.each([
