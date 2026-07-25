@@ -614,6 +614,25 @@ describe('network multiplayer game view', () => {
     expect(Object.values(local.statuses).every(state => state.stacks === 0)).toBe(true);
   });
 
+  test('projects the authoritative held charge into the existing local charge meter', () => {
+    const neo = { DEATH_BALL_MAX_CHARGE: 5 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.currentSample = { receivedAt: 1_000, state: { tick: 150 } };
+
+    view._syncHeldChargePresentation({
+      heldCharge: { moveKey: 'death_ball', startTick: 100, maxChargeTicks: 100 },
+    }, { tick: 150 }, 1_000);
+
+    expect(neo.deathBallCharging).toBe(true);
+    expect(neo.deathBallChargeTime).toBeCloseTo(2.5);
+
+    // The next authority snapshot has no hold, so the preview cannot linger
+    // after releasing the button.
+    view._syncHeldChargePresentation({}, { tick: 151 }, 1_050);
+    expect(neo.deathBallCharging).toBe(false);
+    expect(neo.deathBallChargeTime).toBe(0);
+  });
+
   test('projects authority-owned shop stock into the normal campaign shop UI state', () => {
     const neo = {};
     const view = new NetworkGameView({ session: {}, neo });
@@ -1001,6 +1020,26 @@ describe('network multiplayer game view', () => {
       action: 'idle',
       equippedMoves: { smash: 'crimson_smash' },
     });
+  });
+
+  test('sends a Death Ball held sample before its cast action', () => {
+    const sent = [];
+    const session = {
+      snapshot: () => ({ status: 'running' }),
+      sendInput: input => sent.push(['input', input]),
+      sendAbility: (...args) => sent.push(['ability', ...args]),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.active = true;
+    view.localPredictedPlayer = { equippedMoves: { smash: 'death_ball' } };
+    view.aimDirection = 0.75;
+
+    view._useSlot('smash');
+
+    expect(sent).toEqual([
+      ['input', expect.objectContaining({ aimDirection: 0.75, buttons: 2 })],
+      ['ability', 'death_ball', 0.75],
+    ]);
   });
 
   test('runtime uses campaign world, beam, and HUD presentation for multiplayer', () => {

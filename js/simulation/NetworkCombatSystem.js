@@ -144,6 +144,11 @@
     nimrod_stomp: Object.freeze({ maxChargeTicks: 25, button: BUTTON_DASH_HELD }),
   });
   const PLAYER_HIT_INVULNERABILITY_TICKS = 15; // campaign parity: 0.75 seconds
+  // Actions use the reliable channel while held-state inputs are replaceable.
+  // On a real connection the action can therefore arrive several authority
+  // ticks before its first `button down` sample.  Do not turn that gap into an
+  // accidental tap/release.
+  const HELD_INPUT_GRACE_TICKS = 12; // 0.6 seconds at the 20 Hz authority tick
   const TURTLE_WAVE_HP_PER_SECOND = 2;
   const HEAVY_HIT_HEALTH_RATIO = 0.5;
   const HEAVY_KNOCKBACK_THRESHOLD = 6600;
@@ -1791,7 +1796,7 @@
       heldSeen: false,
       // An action and its replaceable input can arrive in either order. Give
       // the first held input a short window before treating it as a tap.
-      releaseGraceUntilTick: state.tick + 3,
+      releaseGraceUntilTick: state.tick + HELD_INPUT_GRACE_TICKS,
     };
     setPlayerAction(state, player, slot, moveKey, angle);
     emitEvent('PLAYER_ABILITY_CHARGING', {

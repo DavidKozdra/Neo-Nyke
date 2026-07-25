@@ -117,6 +117,14 @@
   const BUTTON_LASER_HELD = 1;
   const BUTTON_SMASH_HELD = 2;
   const BUTTON_DASH_HELD = 4;
+  const HELD_BUTTON_BY_ABILITY = Object.freeze({
+    love_bomb_laser: BUTTON_LASER_HELD,
+    ghost_ball: BUTTON_LASER_HELD,
+    healing_zone: BUTTON_SMASH_HELD,
+    death_ball: BUTTON_SMASH_HELD,
+    turtle_powerup: BUTTON_SMASH_HELD,
+    nimrod_stomp: BUTTON_DASH_HELD,
+  });
 
   function beamChannelLaserMode(moveKey) {
     return moveKey === 'turtle_wave' || moveKey === 'holy_eye_beams'
@@ -919,6 +927,15 @@
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
       try {
+        const heldButton = HELD_BUTTON_BY_ABILITY[abilityId];
+        if (heldButton) {
+          // The input stream is replaceable while the cast action is reliable.
+          // Put an explicit held sample on the socket first, in the same send
+          // order as the action, so the authority cannot start a charge from an
+          // old button-up snapshot and immediately release a tiny version.
+          const movement = this._readMovement();
+          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton });
+        }
         if (slot === 'dash') this.session.sendDash(abilityId, this.aimDirection);
         else this.session.sendAbility(abilityId, this.aimDirection);
       } catch {
@@ -1673,6 +1690,65 @@
       this._syncSpecialMovePresentation(now);
     }
 
+    // The shared campaign renderer already has the charge meters and previews
+    // for these moves. In multiplayer their state lives on the authority-owned
+    // heldCharge instead of the local combat loop, so project it onto the same
+    // presentation fields every frame. This is deliberately local-player only:
+    // a remote hero's wind-up is gameplay state, but their HUD-style meter must
+    // never overwrite the one above the player we are rendering as ourselves.
+    _syncHeldChargePresentation(localPlayer, state, now) {
+      const neo = this.neo;
+      neo.healingZoneCharging = false;
+      neo.deathBallCharging = false;
+      neo.deathBallPowerUp = false;
+      neo.nimrodStompCharging = false;
+      neo.loveBombCharging = false;
+      neo.ghostBallCharging = false;
+      neo.healingZoneChargeTime = 0;
+      neo.deathBallChargeTime = 0;
+      neo.nimrodStompChargeTime = 0;
+      neo.loveBombChargeTime = 0;
+      neo.ghostBallChargeTime = 0;
+
+      const held = localPlayer?.heldCharge;
+      if (!held) return;
+      const maxTicks = Math.max(1, Number(held.maxChargeTicks || 1));
+      const snapshotTick = Number(state?.tick || 0);
+      // Snapshots arrive at 20 Hz. Advance only the meter cosmetically between
+      // them so it fills continuously without making the client authoritative.
+      const receivedAt = Number(this.currentSample?.receivedAt || now);
+      const estimatedTick = snapshotTick + Math.max(0, Number(now || 0) - receivedAt) / INPUT_INTERVAL_MS;
+      const ratio = clamp((estimatedTick - Number(held.startTick || snapshotTick)) / maxTicks, 0, 1);
+      const setCharge = (chargingKey, timeKey, maxSeconds) => {
+        neo[chargingKey] = true;
+        neo[timeKey] = ratio * Math.max(0.001, Number(maxSeconds || 5));
+      };
+
+      switch (held.moveKey) {
+        case 'healing_zone':
+          setCharge('healingZoneCharging', 'healingZoneChargeTime', neo.HEALING_ZONE_MAX_CHARGE || 5);
+          break;
+        case 'death_ball':
+          setCharge('deathBallCharging', 'deathBallChargeTime', neo.DEATH_BALL_MAX_CHARGE || 5);
+          break;
+        case 'turtle_powerup':
+          setCharge('deathBallCharging', 'deathBallChargeTime', neo.DEATH_BALL_MAX_CHARGE || 5);
+          neo.deathBallPowerUp = true;
+          break;
+        case 'nimrod_stomp':
+          setCharge('nimrodStompCharging', 'nimrodStompChargeTime', neo.NIMROD_STOMP_MAX_CHARGE || 5);
+          break;
+        case 'love_bomb_laser':
+          setCharge('loveBombCharging', 'loveBombChargeTime', neo.LOVE_BOMB_MAX_CHARGE || 5);
+          break;
+        case 'ghost_ball':
+          setCharge('ghostBallCharging', 'ghostBallChargeTime', neo.GHOST_BALL_MAX_CHARGE || 5);
+          break;
+        default:
+          break;
+      }
+    }
+
     // Steer the local hero's beam against the live cursor every frame with the
     // same shared rule the authority applies to our streamed aim. The server
     // stays authoritative for damage; this only removes the network hop from
@@ -1895,6 +1971,7 @@
       this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       this._syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta, visibleRoomId);
+      this._syncHeldChargePresentation(localPlayer, state, now);
       const authorityStruggle = state?.beamStruggles?.[localPlayerId];
       const struggleEnemy = authorityStruggle
         ? this.presentationEnemyActors.get(String(authorityStruggle.enemyId))

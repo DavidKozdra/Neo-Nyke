@@ -58,6 +58,22 @@ describe('authority move charges', () => {
     expect(player.heldCharge).toBeNull();
   });
 
+  test('does not misread a delayed held-input packet as an immediate Death Ball release', () => {
+    const { simulation, player } = run('turtle_boy');
+    // Reliable actions can beat replaceable input packets to the authority.
+    // Keep the first button-down sample back for 0.3 seconds to reproduce that
+    // ordering; the orb must still be charging when it arrives.
+    simulation.updateGame({ p1: {
+      actions: [{ action: 'ABILITY', abilityId: 'death_ball', aimDirection: 0 }],
+    } }, FIXED_DELTA_SECONDS);
+    for (let tick = 0; tick < 6; tick += 1) idle(simulation);
+    expect(player.heldCharge).toEqual(expect.objectContaining({ moveKey: 'death_ball' }));
+    expect(Object.values(simulation.state.projectiles)).toHaveLength(0);
+
+    simulation.updateGame({ p1: { buttons: 2, aimDirection: 0 } }, FIXED_DELTA_SECONDS);
+    expect(player.heldCharge).toEqual(expect.objectContaining({ heldSeen: true }));
+  });
+
   test('Thorn can spend two dash charges back to back', () => {
     const { simulation, player } = run('thorn_knight');
 
