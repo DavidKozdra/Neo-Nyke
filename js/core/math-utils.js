@@ -929,14 +929,21 @@ function triggerInteract(slotId = 1) {
     return;
   }
   const inSpecialRoom = Neo.isSpecialRoom?.();
-  const inShopRoom = Neo.currentRoom?.type === 'shop';
+  const inShopRoom = Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop');
   const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
   if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
     Neo.trySpecialRoomChoiceInteract?.(actor);
     Neo.specialRoomKeyLatch = true;
     setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
   }
-  if (inShopRoom && !Neo.shopKeyLatch) {
+  // A sealed intermission chest within reach is bought instead of opening the
+  // shop panel — the player walked to the chest deliberately.
+  const chestPurchased = !Neo.shopKeyLatch && (Neo.tryEndlessChestPurchase?.(actor) || false);
+  if (chestPurchased) {
+    Neo.shopKeyLatch = true;
+    setTimeout(() => { Neo.shopKeyLatch = false; }, 200);
+  }
+  if (!chestPurchased && inShopRoom && !Neo.shopKeyLatch) {
     if (Neo.toggleShopPanel) Neo.toggleShopPanel();
     else if (Neo.ui?.shopPanel) Neo.ui.shopPanel.classList.toggle('hidden');
     Neo.shopKeyLatch = true;

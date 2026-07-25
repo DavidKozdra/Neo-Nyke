@@ -286,9 +286,10 @@ export function loop(timestamp) {
     Neo.updateEquipmentEffects?.(dt);
     Neo.updatePrincessShieldAutoTrigger?.();
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
-    // Endless mode: tick down the between-waves intermission and spawn the next
-    // wave when it elapses. Frame-driven (not setTimeout) so it pauses with the
-    // game and survives a save/restore.
+    // Endless intermissions no longer auto-advance — the player leaves via the
+    // NEXT WAVE pickup (see openEndlessIntermission). This drain only exists for
+    // saves written by an older build mid-countdown, so they resume instead of
+    // stranding the player in a cleared room with no next wave.
     if (Neo.gameMode === 'endless' && Neo.endlessRespawnTimer > 0) {
       Neo.endlessRespawnTimer = Math.max(0, Neo.endlessRespawnTimer - dt);
       if (Neo.endlessRespawnTimer === 0) Neo.spawnNextEndlessWave?.();
@@ -392,7 +393,7 @@ export function loop(timestamp) {
     const smashKey = _b ? _b.smash : 'r';
     Neo.dashHeld = !!Neo.keys[dashKey] || !!_nt?.dash || !!_gp0?.dash;
     Neo.smashHeld = !!Neo.keys[smashKey] || !!_nt?.smash || !!_gp0?.smash;
-    if (Neo.currentRoom?.type !== 'shop' && Neo.isPanelOpen(Neo.ui.shopPanel)) Neo.setShopPanelOpen(false);
+    if (!(Neo.isShopRoomActive?.() ?? (Neo.currentRoom?.type === 'shop')) && Neo.isPanelOpen(Neo.ui.shopPanel)) Neo.setShopPanelOpen(false);
     if (Neo.currentRoom?.type !== 'anvil' && Neo.isPanelOpen(Neo.ui.anvilPanel)) Neo.setAnvilPanelOpen(false);
     if (!Neo.isSpecialRoom?.() && Neo.isPanelOpen(document.getElementById('specialRoomPanel'))) Neo.setSpecialRoomPanelOpen?.(false);
     const overlayOpen = Neo.isOverlayBlockingInput();

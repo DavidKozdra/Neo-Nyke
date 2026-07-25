@@ -3027,6 +3027,9 @@
   function updateChests() {
     Neo.chests.forEach(chest => {
       if (chest.open) return;
+      // Paid intermission chests stay sealed until bought with E; walking over
+      // one must never open it (see tryEndlessChestPurchase).
+      if (chest.locked) return;
       const nearest = getNearestLivingPlayerSlot(chest.x, chest.y);
       if (!nearest || nearest.distance >= 36) return;
       const chestRandom = Neo.createEntityRandom(chest, 'chest:open');
@@ -3061,7 +3064,10 @@
         ...pickup,
         tutorialTreasureItem: pickup.type === 'item' && !!chest.tutorialTreasureChest,
       }));
-      Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
+      // In an endless intermission the room is already cleared by the wave kill,
+      // and its chests are optional purchases — leaving one sealed must not
+      // un-clear the room and re-arm the combat path.
+      if (!Neo.endlessIntermission) Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
       if (result.revealExit && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
         Neo.pickups.push({ x: chest.x, y: chest.y + 76, type: 'ladder' });
         Neo.spawnParticle({ x: chest.x, y: chest.y + 42, life: 1.2, text: 'LADDER REVEALED', c: '#7dff9e' });
@@ -3069,6 +3075,74 @@
       Neo.updateObjective();
       Neo.scheduleRunSave();
     });
+  }
+
+  const ENDLESS_CHEST_INTERACT_RADIUS = 52;
+
+  // Nearest sealed intermission chest within reach of `actor`, or null.
+  function findEndlessChestInReach(actor = Neo.player) {
+    if (!actor || !Array.isArray(Neo.chests)) return null;
+    let best = null;
+    let bestDistance = ENDLESS_CHEST_INTERACT_RADIUS;
+    Neo.chests.forEach(chest => {
+      if (!chest?.endlessShopChest || chest.open || !chest.locked) return;
+      const distance = Neo.dist(actor.x, actor.y, chest.x, chest.y);
+      if (distance > bestDistance) return;
+      best = chest;
+      bestDistance = distance;
+    });
+    return best;
+  }
+
+  // Prompt text for the sealed chest the player is standing at. Shows the price
+  // either way so an unaffordable chest reads as "save up", not as broken.
+  function getEndlessChestInteractLabel(actor = Neo.player) {
+    const chest = findEndlessChestInReach(actor);
+    if (!chest) return '';
+    const price = Math.max(0, Number(chest.price || 0));
+    const affordable = Number(Neo.player?.coins || 0) >= price;
+    return affordable ? `Buy Chest (${price}g)` : `Need ${price}g`;
+  }
+
+  // E-to-buy handler for intermission chests. Paying only unseals the chest;
+  // the reward pickup itself is spawned by the ordinary updateChests path on the
+  // next frame, so bought chests animate and drop exactly like any other chest.
+  function tryEndlessChestPurchase(actor = Neo.player) {
+    const chest = findEndlessChestInReach(actor);
+    if (!chest) return false;
+    const purchase = globalThis.NeoNyke?.simulation?.purchaseEndlessChest;
+    if (typeof purchase !== 'function') return false;
+    const result = purchase(Neo.player, chest, {
+      random: { next: Neo.createEntityRandom(chest, 'endless:chest:reward') },
+      rollItem: ({ elite }) => Neo.rollItemDrop({
+        elite,
+        random: () => Neo.nextRandom('loot'),
+      }),
+    });
+    if (!result.ok) {
+      if (result.reason === 'INSUFFICIENT_FUNDS') {
+        Neo.spawnParticle?.({
+          x: chest.x,
+          y: chest.y - 34,
+          life: 0.9,
+          text: `NEED ${result.price}g`,
+          c: '#ff8894',
+        });
+        Neo.playSfx?.('error');
+      }
+      return false;
+    }
+    Neo.playSfx?.('coin');
+    Neo.spawnParticle?.({
+      x: chest.x,
+      y: chest.y - 34,
+      life: 1,
+      text: `-${result.price}g`,
+      c: '#ffe07a',
+    });
+    Neo.updateObjective?.();
+    Neo.scheduleRunSave?.();
+    return true;
   }
 
   function canSpawnJesterPortal() {
@@ -3160,6 +3234,15 @@
   // True when the player is standing on/near a usable ladder. Mirrors the
   // proximity check drawLadderPrompt uses so the interact prompt and the actual
   // descend agree. The ladder is only usable once the room is cleared.
+  // True when shop services are live in the current room. Ordinary runs use a
+  // dedicated 'shop' room; endless has only one room, which becomes a shop for
+  // the duration of a between-waves intermission.
+  function isShopRoomActive(room = Neo.currentRoom) {
+    if (!room) return false;
+    if (room.type === 'shop') return true;
+    return Neo.gameMode === 'endless' && !!Neo.endlessIntermission && !!room.shopStocked;
+  }
+
   function isAtLadder(actor = Neo.player) {
     if (Neo.gameState !== 'play' || !Neo.currentRoom?.cleared) return false;
     const ladder = Neo.pickups?.find(pickup => pickup?.type === 'ladder');
@@ -3530,6 +3613,22 @@
         // The ladder is activated by the shared interact action (E / gamepad /
         // mobile button) via Neo.useLadder, not by walking onto it.
         continue;
+      }
+
+      if (pickup.type === 'endlessNextWave') {
+        // Taking the exit item ends the intermission on the player's terms.
+        // spawnNextEndlessWave strips the remaining intermission furniture
+        // (unbought chests, this pickup) before the wave spawns.
+        removePickupAt(index);
+        Neo.spawnParticle({
+          x: pickup.x,
+          y: pickup.y - 30,
+          life: 1,
+          text: `WAVE ${Number(pickup.wave || Neo.endlessWave + 1)}`,
+          c: '#8dffcf',
+        });
+        Neo.spawnNextEndlessWave?.();
+        return;
       }
 
       if (pickup.type === 'secretWarp') {
@@ -4143,6 +4242,10 @@
   Neo.useJesterPortal = useJesterPortal;
   Neo.getChallengeRuneMaxSpeed = getChallengeRuneMaxSpeed;
   Neo.isAtLadder = isAtLadder;
+  Neo.isShopRoomActive = isShopRoomActive;
+  Neo.findEndlessChestInReach = findEndlessChestInReach;
+  Neo.getEndlessChestInteractLabel = getEndlessChestInteractLabel;
+  Neo.tryEndlessChestPurchase = tryEndlessChestPurchase;
   Neo.useLadder = useLadder;
   Neo.updatePickups = updatePickups;
   Neo.updateDeadBodies = updateDeadBodies;

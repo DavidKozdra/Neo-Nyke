@@ -133,6 +133,9 @@ window.Neo = {
   endlessWave: 0,
   endlessWaveActive: false,
   endlessRespawnTimer: 0,
+  // True while the between-waves shop/chest intermission is open. The next wave
+  // waits on the player taking the exit pickup, so this has no timer.
+  endlessIntermission: false,
   bossRushStage: 0,
   bossRushActive: false,
   bossRushNextSpawnAt: 0,

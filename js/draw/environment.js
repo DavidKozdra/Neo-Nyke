@@ -896,6 +896,7 @@
             Neo.ctx.fillText('stand in a circle to confirm', 0, -25);
           }
         }
+        drawEndlessChestPrice(chest);
         Neo.ctx.restore();
         return;
       }
@@ -997,8 +998,26 @@
           Neo.ctx.fillText('stand in a circle to confirm', 0, -25);
         }
       }
+      drawEndlessChestPrice(chest);
       Neo.ctx.restore();
     });
+  }
+
+  // Price tag over a sealed endless-intermission chest. Drawn inside the chest's
+  // own translate, so coordinates are chest-relative. Red when unaffordable so
+  // the player can price the room at a glance instead of walking each chest.
+  function drawEndlessChestPrice(chest) {
+    if (!chest?.endlessShopChest || chest.open || !chest.locked) return;
+    const price = Math.max(0, Number(chest.price || 0));
+    const affordable = Number(Neo.player?.coins || 0) >= price;
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.textAlign = 'center';
+    Neo.ctx.fillStyle = affordable ? '#ffe07a' : '#ff8894';
+    Neo.ctx.font = 'bold 12px system-ui';
+    Neo.ctx.fillText(`${price}g`, 0, -32);
+    Neo.ctx.fillStyle = affordable ? '#cfe6f5' : '#c98d97';
+    Neo.ctx.font = '9px system-ui';
+    Neo.ctx.fillText(affordable ? '[E] buy' : 'not enough', 0, -21);
   }
 
   function drawRoomDecor() {

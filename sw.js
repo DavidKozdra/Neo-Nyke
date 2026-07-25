@@ -131,6 +131,7 @@ const KOZ_PWA_CONFIG = {
     "/js/simulation/SharedCombatContent.js",
     "/js/simulation/SharedDamageSystem.js",
     "/js/simulation/SharedEncounterSystem.js",
+    "/js/simulation/SharedEndlessIntermissionSystem.js",
     "/js/simulation/SharedEnemyAISystem.js",
     "/js/simulation/SharedEnemyBehaviorSystem.js",
     "/js/simulation/SharedEnemyContent.js",
@@ -313,14 +314,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 300,
-    "bytes": 72020114,
-    "criticalEntries": 245,
-    "criticalBytes": 8960017,
+    "entries": 301,
+    "bytes": 72047278,
+    "criticalEntries": 246,
+    "criticalBytes": 8987181,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "df8ba060c5b3b073"
+  "version": "0e4610c645b4531a"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");

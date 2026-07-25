@@ -1525,6 +1525,14 @@
       }
       trySpawnMooggyAssassin(room);
     }
+    // An endless intermission keeps its 'combat' room type but carries shop
+    // stock, so re-point the live offer list at it (restock is not re-run — the
+    // saved stock, including what was already bought, is authoritative).
+    if (Neo.gameMode === 'endless' && Neo.endlessIntermission && room.shopStocked) {
+      room.shopMoveOffers = Array.isArray(room.shopMoveOffers) ? room.shopMoveOffers : [];
+      room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
+      Neo.shopOffers = room.shopOffers || [];
+    }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room);
       room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];

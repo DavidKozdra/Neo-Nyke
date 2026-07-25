@@ -472,10 +472,11 @@
   function triggerWorldInteract() {
     if (window.Neo?.gameState !== 'play') return false;
     const roomType = window.Neo?.currentRoom?.type;
-    const canShop = roomType === 'shop' && !isPanelOpen(window.Neo?.ui?.shopPanel);
+    const canShop = (window.Neo?.isShopRoomActive?.() ?? (roomType === 'shop')) && !isPanelOpen(window.Neo?.ui?.shopPanel);
     const canAnvil = roomType === 'anvil' && !isPanelOpen(window.Neo?.ui?.anvilPanel);
     const canLadder = !!window.Neo?.isAtLadder?.();
-    if (!canShop && !canAnvil && !canLadder) return false;
+    const canBuyChest = !!window.Neo?.findEndlessChestInReach?.();
+    if (!canShop && !canAnvil && !canLadder && !canBuyChest) return false;
     // Online chests/stairs belong to authority. Let the network view issue the
     // interaction instead of running the local floor transition.
     if (window.Neo?.multiplayerGameView?.active && window.Neo.multiplayerGameView.interact?.()) return true;

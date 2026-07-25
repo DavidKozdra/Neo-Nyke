@@ -5293,19 +5293,107 @@
     }
     dropCoins(cx, cy - 20, 30 + Neo.endlessWave * 8);
     grantXp(20 + Neo.endlessWave * 4);
-    // Arm a frame-driven countdown instead of a bare setTimeout. The timer is
-    // serialized with the run (see serializeRun) and ticked in update.js, so a
-    // reload during the intermission resumes correctly instead of stranding the
-    // player in an empty cleared room with no next wave.
-    const delay = Neo.endlessWave <= 2 ? 4 : Neo.endlessWave <= 5 ? 3 : 2;
-    Neo.endlessRespawnTimer = delay;
+    // The wave does not auto-advance. Clearing opens an intermission — a stocked
+    // shop plus a row of paid chests — and the player starts the next wave by
+    // taking the exit pickup, so they choose when the pressure resumes.
+    openEndlessIntermission();
     Neo.scheduleRunSave?.();
   }
 
-  // Spawns the next endless wave once the intermission countdown elapses. Called
-  // from the update loop (and on restore when the saved timer has run out).
+  // Turns the cleared wave room into a between-waves shop. The room keeps its
+  // 'combat' type (endless never leaves its single room), so shop UI is gated on
+  // Neo.endlessIntermission alongside the room type — see isShopRoomActive.
+  function openEndlessIntermission() {
+    const room = Neo.currentRoom;
+    if (!room) return;
+    Neo.endlessIntermission = true;
+    const wave = Math.max(1, Number(Neo.endlessWave || 0));
+    const random = { next: Neo.createScopedRandom(`endless:intermission:${wave}`) };
+
+    // Restock from scratch every intermission: offers are per-wave, and stale
+    // `bought` flags from the previous visit would otherwise persist.
+    room.shopStocked = false;
+    room.shopOffers = [];
+    room.shopMoveOffers = [];
+    room.shopWeaponOffers = [];
+    room.shopTradeOffer = null;
+    const stockCampaignShop = globalThis.NeoNyke?.simulation?.stockCampaignShop;
+    if (typeof stockCampaignShop === 'function') {
+      // Endless pins Neo.floor at 1, so price/pool depth rides the wave counter
+      // instead — otherwise every intermission would sell floor-1 stock forever.
+      const depth = 1 + Math.floor(wave / 2);
+      // stockCampaignShop guards on room.type === 'shop' and writes onto the
+      // object it is handed. The endless room stays 'combat', so stock a shop-typed
+      // stand-in and copy the results back.
+      const stocked = { ...room, type: 'shop' };
+      stockCampaignShop({
+        floorNumber: depth,
+        elapsedSeconds: Neo.gameElapsedTime || 0,
+        matchRules: {
+          shopItemOffers: Neo.getDifficultyDef?.()?.shopItemOffers ?? 3,
+          shopPriceMultiplier: Number(Neo.getDifficultyDef?.()?.shopPriceMultiplier || 1),
+          cursedShops: false,
+          godSweepUnlocked: Number(Neo.metaProgress?.godsKilled || 0) > 0
+            && Number(Neo.metaProgress?.loopCrystals || 0) >= 5,
+        },
+      }, stocked, Neo.player, random);
+      room.shopOffers = stocked.shopOffers || [];
+      room.shopMoveOffers = stocked.shopMoveOffers || [];
+      room.shopWeaponOffers = stocked.shopWeaponOffers || [];
+      room.shopTradeOffer = stocked.shopTradeOffer || null;
+      room.shopStocked = true;
+      Neo.shopOffers = room.shopOffers;
+    }
+
+    const createChests = globalThis.NeoNyke?.simulation?.createEndlessIntermissionChests;
+    if (typeof createChests === 'function') {
+      const chests = createChests({
+        waveNumber: wave,
+        geometry: { width: Neo.ROOM_W, height: Neo.ROOM_H },
+      }, { next: Neo.createScopedRandom(`endless:intermission:${wave}:chests`) });
+      chests.forEach(chest => Neo.chests.push(chest));
+      room.chests = Neo.chests;
+    }
+
+    // The exit sits opposite the chest row so leaving is never a misclick on a
+    // chest the player was still deciding about.
+    Neo.pickups.push({
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H / 2 - 132,
+      type: 'endlessNextWave',
+      wave: wave + 1,
+    });
+    Neo.spawnParticle({
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H / 2 - 168,
+      life: 1.6,
+      text: 'INTERMISSION',
+      c: '#8dffcf',
+    });
+    Neo.minimapLegendDirty = true;
+    Neo.updateObjective?.();
+  }
+
+  // Ends the intermission and spawns the next wave. Driven by the exit pickup
+  // (see updatePickups); the old auto-countdown path calls through here too so a
+  // save written mid-countdown by an older build still resolves.
   function spawnNextEndlessWave() {
     Neo.endlessRespawnTimer = 0;
+    Neo.endlessIntermission = false;
+    // Clear out any intermission furniture the player chose to leave behind.
+    Neo.chests = Neo.chests.filter(chest => !chest?.endlessShopChest);
+    Neo.pickups = Neo.pickups.filter(pickup => pickup?.type !== 'endlessNextWave');
+    if (Neo.currentRoom) {
+      Neo.currentRoom.chests = Neo.chests;
+      Neo.currentRoom.pickups = Neo.pickups;
+      Neo.currentRoom.shopStocked = false;
+      Neo.currentRoom.shopOffers = [];
+      Neo.currentRoom.shopMoveOffers = [];
+      Neo.currentRoom.shopWeaponOffers = [];
+      Neo.currentRoom.shopTradeOffer = null;
+    }
+    Neo.shopOffers = [];
+    Neo.setShopPanelOpen?.(false);
     if (Neo.gameMode !== 'endless' || Neo.gameState !== 'play' || !Neo.currentRoom) return;
     Neo.currentRoom.cleared = false;
     Neo.endlessWaveActive = true;
@@ -5885,6 +5973,7 @@
   Neo.dropFinalRivalRelic = dropFinalRivalRelic;
   Neo.onEnemyDie = onEnemyDie;
   Neo.onEndlessWaveCleared = onEndlessWaveCleared;
+  Neo.openEndlessIntermission = openEndlessIntermission;
   Neo.spawnNextEndlessWave = spawnNextEndlessWave;
   Neo.dropCoins = dropCoins;
   Neo.rollItemDrop = rollItemDrop;

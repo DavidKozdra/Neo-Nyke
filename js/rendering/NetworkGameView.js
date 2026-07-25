@@ -115,6 +115,7 @@
     'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer',
   ]);
   const BUTTON_LASER_HELD = 1;
+  const BUTTON_SMASH_HELD = 2;
 
   function beamChannelLaserMode(moveKey) {
     return moveKey === 'turtle_wave' || moveKey === 'holy_eye_beams'
@@ -283,6 +284,9 @@
       this.keyboardLaserHeld = false;
       this.gamepadLaserHeld = false;
       this.touchLaserHeld = false;
+      this.keyboardSmashHeld = false;
+      this.gamepadSmashHeld = false;
+      this.touchSmashHeld = false;
       this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false, beamMash: false };
       this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
       this.localBeamAngle = null;
@@ -358,6 +362,9 @@
         this.keyboardLaserHeld = false;
         this.gamepadLaserHeld = false;
         this.touchLaserHeld = false;
+        this.keyboardSmashHeld = false;
+        this.gamepadSmashHeld = false;
+        this.touchSmashHeld = false;
       };
       this.boundPauseResume = event => {
         event?.preventDefault?.();
@@ -451,6 +458,9 @@
       this.keyboardLaserHeld = false;
       this.gamepadLaserHeld = false;
       this.touchLaserHeld = false;
+      this.keyboardSmashHeld = false;
+      this.gamepadSmashHeld = false;
+      this.touchSmashHeld = false;
       this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false, beamMash: false };
       this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
       this.presentationPlayerSlots = [];
@@ -571,6 +581,7 @@
       this.keys.clear();
       this.laserHeld = false;
       this.keyboardLaserHeld = false;
+      this.keyboardSmashHeld = false;
       form.classList.remove('hidden');
       // Releasing pointer lock normally opens the multiplayer pause menu. Chat
       // is its own intentional focus transition, so disarm that edge first.
@@ -795,6 +806,13 @@
         event.preventDefault();
         this.keyboardLaserHeld = pressed;
         if (pressed && !event.repeat) this._useSlot('laser');
+        root.NeoSettings?.noteInputMode?.('keyboard');
+        return;
+      }
+      if (key === String(bindings.smash).toLowerCase() && !['lmb', 'rmb'].includes(key)) {
+        event.preventDefault();
+        this.keyboardSmashHeld = pressed;
+        if (pressed && !event.repeat) this._useSlot('smash');
         root.NeoSettings?.noteInputMode?.('keyboard');
         return;
       }
@@ -1304,6 +1322,7 @@
       const pad = root.NeoGamepad?.[0];
       if (!pad?.active) {
         this.gamepadLaserHeld = false;
+        this.gamepadSmashHeld = false;
         this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
         return;
       }
@@ -1332,6 +1351,7 @@
         }
       }
       this.gamepadLaserHeld = current.laser;
+      this.gamepadSmashHeld = current.smash;
       this.previousGamepadActions = current;
     }
 
@@ -1359,6 +1379,7 @@
         if (queued.beamMash || current.beamMash && !this.previousTouchActions.beamMash) this._useSlot('laser');
       }
       this.touchLaserHeld = current.laser;
+      this.touchSmashHeld = current.smash;
       this.previousTouchActions = current;
     }
 
@@ -1380,7 +1401,12 @@
       const firstPersonYaw = this.neo.getFirstPersonYaw?.();
       if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
       const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
-      const input = { ...movement, aimDirection: this.aimDirection, buttons: beamHeld ? BUTTON_LASER_HELD : 0 };
+      const smashHeld = this.keyboardSmashHeld || this.gamepadSmashHeld || this.touchSmashHeld;
+      const input = {
+        ...movement,
+        aimDirection: this.aimDirection,
+        buttons: (beamHeld ? BUTTON_LASER_HELD : 0) | (smashHeld ? BUTTON_SMASH_HELD : 0),
+      };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
           this.localPredictedPlayer,
