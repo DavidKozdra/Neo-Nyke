@@ -590,7 +590,142 @@
     state.floorState.encounters[room.id] = encounter;
     // A rival scheduled to return this floor joins the first fight it reaches.
     spawnPendingRivals(state, room, emitEvent);
+    // An accepted bounty plants its marked elite in the first combat room the
+    // contract holder reaches, exactly like spawnAcceptedBountyTarget() in
+    // game/specialRooms.js. Without this the authority created the contract and
+    // never fielded a target, leaving an uncompletable bounty.
+    spawnAcceptedBountyTargets(state, room, random, emitEvent);
     return encounter;
+  }
+
+  // Mirrors BOUNTY_DEFS in game/specialRooms.js. The reward payouts live with
+  // the contract resolution in SharedSpecialRoomSystem; only what the authority
+  // needs to field the target is duplicated here.
+  const BOUNTY_TARGET_DEFS = Object.freeze({
+    elite_hunter: Object.freeze({ enemyType: 'hunter', contractType: 'execution', title: 'Elite Hunter' }),
+    elite_charger: Object.freeze({ enemyType: 'charger', contractType: 'capture', title: 'Elite Charger' }),
+    elite_sniper: Object.freeze({ enemyType: 'sniper', contractType: 'theft', title: 'Elite Sniper' }),
+  });
+
+  function spawnAcceptedBountyTargets(state, room, random, emitEvent) {
+    if (!room || room.type !== 'combat' || room.cleared) return;
+    Object.values(state.players || {}).forEach(player => {
+      const bounty = player?.activeBounty;
+      if (!bounty || bounty.targetSpawned || player.disconnected) return;
+      if (player.roomId !== room.id) return;
+      const depth = Math.max(1, Number(state.floorNumber || 1));
+      if (Number(bounty.returnDepth || 0) > depth) return;
+      const def = BOUNTY_TARGET_DEFS[bounty.kind];
+      if (!def) return;
+      const living = Object.values(state.enemies || {})
+        .find(enemy => enemy?.bountyTargetId === bounty.targetId && !enemy.dead);
+      if (living) {
+        bounty.targetSpawned = true;
+        bounty.targetRoomKey = `${room.gx},${room.gy}`;
+        return;
+      }
+      const archetype = getEnemyDefinition(def.enemyType) || getEnemyDefinition('hunter');
+      const stream = random.scoped(`bounty-target:${bounty.targetId}`);
+      const angle = stream.next() * Math.PI * 2;
+      const distance = 180 + stream.next() * 90;
+      const width = Number(state.floorState?.width || 900);
+      const height = Number(state.floorState?.height || 700);
+      // Escaped targets come back tougher, matching the campaign's escalation.
+      const escapes = Math.max(0, Number(bounty.escapes || 0));
+      const healthScale = 1.35 * (1 + escapes * 0.35);
+      const damageScale = 1.18 * (1 + escapes * 0.22);
+      const enemyId = state.allocateEntityId('enemy');
+      state.enemies[enemyId] = {
+        id: enemyId,
+        type: def.enemyType,
+        spriteKey: archetype.spriteKey,
+        behavior: archetype.behavior,
+        roomId: room.id,
+        x: Math.max(90, Math.min(width - 90, width / 2 + Math.cos(angle) * distance)),
+        y: Math.max(90, Math.min(height - 90, height / 2 + Math.sin(angle) * distance)),
+        vx: 0,
+        vy: 0,
+        radius: archetype.radius,
+        moveSpeed: archetype.moveSpeed,
+        maxHealth: Math.max(1, Math.round(archetype.maxHealth * healthScale)),
+        health: Math.max(1, Math.round(archetype.maxHealth * healthScale)),
+        contactDamage: Math.max(1, Math.round(archetype.contactDamage * damageScale)),
+        projectileDamage: Math.max(5, Math.round(Number(archetype.projectileDamage || archetype.contactDamage * 0.75) * damageScale)),
+        elite: true,
+        eliteTypes: ['knight', 'bounty'],
+        elitePowers: [],
+        patterns: archetype.patterns || [],
+        boss: false,
+        bleedImmune: !!archetype.bleedImmune,
+        fireImmune: !!archetype.fireImmune,
+        poisonImmune: !!archetype.poisonImmune,
+        statuses: createCampaignStatusMap(),
+        contactCooldownUntilTick: 0,
+        attackCooldownUntilTick: state.tick + Math.max(4, Math.round(Number(archetype.attackCooldown || 1) * 20)),
+        attackWindupUntilTick: 0,
+        state: 'chasing',
+        facing: 1,
+        spawnTick: state.tick,
+        hitTick: -1,
+        dead: false,
+        stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0,
+        swingTime: 0, dashTime: 0,
+        attackCd: Math.max(0, Number(archetype.attackCooldown || 1)) + stream.next() * 0.3,
+        ...(def.enemyType === 'sniper' ? { sniperBehavior: 'stayback' } : {}),
+        // Contract bookkeeping the reward path reads on kill.
+        bountyTarget: true,
+        bountyTargetId: bounty.targetId,
+        bountyOwnerId: player.id,
+        bountyContractKind: bounty.kind,
+        bountyContractType: bounty.contractType || def.contractType,
+        bountyName: bounty.targetName || def.title,
+        bountyEscapes: escapes,
+      };
+      const encounter = state.floorState.encounters?.[room.id];
+      if (encounter && Array.isArray(encounter.enemyIds)) encounter.enemyIds.push(enemyId);
+      bounty.targetSpawned = true;
+      bounty.targetRoomKey = `${room.gx},${room.gy}`;
+      emitEvent('ENEMY_SPAWNED', {
+        enemyId, roomId: room.id, enemyType: def.enemyType, elite: true, elitePower: null,
+        bountyTarget: true, bountyName: bounty.targetName || def.title, playerId: player.id,
+      });
+    });
+  }
+
+  // Killing the marked elite resolves the contract for its holder. The campaign
+  // additionally supports capture/theft interacts (game/specialRooms.js); on the
+  // authority every contract resolves on the kill, so a multiplayer bounty is
+  // always completable rather than silently stalling at "accepted".
+  function resolveBountyTargetKill(state, enemy, playerId, emitEvent) {
+    const owner = state.players?.[enemy.bountyOwnerId] || state.players?.[playerId];
+    const bounty = owner?.activeBounty;
+    if (!bounty || bounty.targetId !== enemy.bountyTargetId) return;
+    const rewardMultiplier = Math.max(1, Number(bounty.rewardMultiplier || 1));
+    const trophies = Math.max(1, 1 + Math.floor(Number(bounty.escapes || 0)));
+    const randomService = combatRandomByState.get(state);
+    const stream = randomService?.scoped(`bounty-reward:${bounty.targetId}`);
+    let rewardKey = '';
+    if (bounty.kind === 'elite_hunter') {
+      owner.coins = Math.max(0, Number(owner.coins || 0)) + Math.round(90 * rewardMultiplier);
+    } else if (bounty.kind === 'elite_charger') {
+      collectSharedCampaignItem(owner, 'forge_voucher');
+      owner.xp = Math.max(0, Number(owner.xp || 0))
+        + Math.round((35 + Math.max(1, Number(state.floorNumber || 1)) * 5) * rewardMultiplier);
+    } else if (bounty.kind === 'elite_sniper') {
+      rewardKey = rollCampaignItem(stream ? () => stream.next() : Math.random, { elite: true }) || '';
+      if (rewardKey) collectSharedCampaignItem(owner, rewardKey);
+      if (Number(bounty.escapes || 0) > 0) {
+        owner.coins = Math.max(0, Number(owner.coins || 0)) + Math.round(60 * rewardMultiplier);
+      }
+    }
+    owner.bountyTrophies = Math.max(0, Number(owner.bountyTrophies || 0)) + trophies;
+    owner.lastBountyStatus = `COMPLETE: ${bounty.targetName || bounty.kind}`;
+    owner.activeBounty = null;
+    emitEvent('BOUNTY_COMPLETED', {
+      playerId: owner.id, killedBy: playerId, roomId: enemy.roomId, kind: bounty.kind,
+      contractType: bounty.contractType, targetName: bounty.targetName || '',
+      trophies, rewardKey, coins: Number(owner.coins || 0),
+    });
   }
 
   function ensureNetworkRoomReward(state, random, emitEvent = () => {}, roomId = null) {
@@ -894,6 +1029,7 @@
     enemy.vy = 0;
     enemy.deathTick = state.tick;
     emitEvent('ENEMY_DEFEATED', { enemyId: enemy.id, playerId, roomId: enemy.roomId });
+    if (enemy.bountyTarget) resolveBountyTargetKill(state, enemy, playerId, emitEvent);
     const player = state.players?.[playerId];
     if (player) {
       player.kills = Math.max(0, Number(player.kills || 0)) + 1;
@@ -1802,7 +1938,7 @@
     player.beamChannel = null;
   }
 
-  function beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent) {
+  function beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent, action = {}) {
     const profile = HOLD_TO_CHARGE_MOVES[moveKey];
     if (!profile || player.heldCharge) return null;
     const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
@@ -1814,6 +1950,8 @@
       moveKey,
       slot,
       angle,
+      dashMoveX: Math.max(-1, Math.min(1, Number(action.dashMoveX) || 0)),
+      dashMoveY: Math.max(-1, Math.min(1, Number(action.dashMoveY) || 0)),
       startTick: state.tick,
       maxChargeTicks: profile.maxChargeTicks,
       cooldownTicks: scaledCooldownTicks,
@@ -1846,6 +1984,8 @@
       if (buttons & profile.button) {
         charge.heldSeen = true;
         if (Number.isFinite(Number(input.aimDirection))) charge.angle = Number(input.aimDirection);
+        charge.dashMoveX = Math.max(-1, Math.min(1, Number(input.moveX) || 0));
+        charge.dashMoveY = Math.max(-1, Math.min(1, Number(input.moveY) || 0));
       }
       const startTick = Number.isFinite(Number(charge.startTick)) ? Number(charge.startTick) : state.tick;
       const elapsedTicks = Math.max(0, state.tick - startTick);
@@ -1857,6 +1997,7 @@
       player.heldCharge = null;
       resolvePlayerAbility(state, player, {
         action: charge.slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: charge.moveKey, aimDirection: charge.angle,
+        dashMoveX: charge.dashMoveX, dashMoveY: charge.dashMoveY,
       }, emitEvent, random, { releaseHeldCharge: true, chargeRatio: ratio });
       rescheduleLatestMoveCharge(player, charge.moveKey, state.tick + Math.max(1, Number(charge.cooldownTicks || 1)));
     });
@@ -2147,13 +2288,20 @@
     if (!execution.releaseHeldCharge && !hasMoveCharge(player, moveKey)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
+    const dashMoveX = Math.max(-1, Math.min(1, Number(action.dashMoveX) || 0));
+    const dashMoveY = Math.max(-1, Math.min(1, Number(action.dashMoveY) || 0));
+    // Campaign dashes follow movement when a direction is held, then fall back
+    // to aim. Preserve that rule in the authoritative protocol.
+    const dashAngle = Math.hypot(dashMoveX, dashMoveY) > 0.15
+      ? Math.atan2(dashMoveY, dashMoveX)
+      : angle;
     // God mode slashes ability cooldowns (laser 2.8s, smash 2s, dash 0.7x).
     const godCooldownMult = godModeActive(state, player)
       ? (slot === 'laser' ? 2.8 / Math.max(0.5, Number(stats.cooldown || 3.2)) : slot === 'smash' ? 2 / Math.max(0.5, Number(stats.cooldown || 4.2)) : 0.7)
       : 1;
     const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20 * godCooldownMult));
     if (HOLD_TO_CHARGE_MOVES[moveKey] && !execution.releaseHeldCharge) {
-      return beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent);
+      return beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent, action);
     }
     const chargeRatio = Math.max(0, Math.min(1, Number(execution.chargeRatio || 0)));
     const projectileIds = [];
@@ -2174,8 +2322,8 @@
         const minimumLeap = 108;
         const maximumLeap = Math.max(Number(floor.width || 900), Number(floor.height || 700));
         const leapDistance = minimumLeap + (maximumLeap - minimumLeap) * chargeRatio;
-        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(angle) * leapDistance));
-        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(angle) * leapDistance));
+        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(dashAngle) * leapDistance));
+        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(dashAngle) * leapDistance));
         const radius = 108 + chargeRatio * 54;
         const damage = Math.max(1, Math.round(Number(stats.damage || 46) * (1 + chargeRatio * 0.7)));
         effectRadius = radius;
@@ -2204,8 +2352,8 @@
         const dashSpeed = (520 + Number(player.attackSpeed || 0) * 28) * (godModeActive(state, player) ? 1.1 : 1);
         const dashTicks = Math.max(1, Math.round(0.16 * 20));
         player.dashUntilTick = state.tick + dashTicks;
-        player.dashVx = Math.cos(angle) * dashSpeed;
-        player.dashVy = Math.sin(angle) * dashSpeed;
+        player.dashVx = Math.cos(dashAngle) * dashSpeed;
+        player.dashVy = Math.sin(dashAngle) * dashSpeed;
         player.vx = player.dashVx;
         player.vy = player.dashVy;
         player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), state.tick + Math.round(0.18 * 20));
@@ -2216,10 +2364,10 @@
         const distance = moveKey === 'warp' ? 300 : moveKey === 'zip_lightning' ? 230 : 170;
         const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
         const before = { x: player.x, y: player.y };
-        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(angle) * distance));
-        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(angle) * distance));
-        player.vx = Math.cos(angle) * distance * 5;
-        player.vy = Math.sin(angle) * distance * 5;
+        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(dashAngle) * distance));
+        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(dashAngle) * distance));
+        player.vx = Math.cos(dashAngle) * distance * 5;
+        player.vy = Math.sin(dashAngle) * distance * 5;
         player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), state.tick + (moveKey === 'warp' ? 12 : 5));
         if (Number(stats.damage || 0) > 0) {
           livingEncounterEnemies(state, player.roomId).forEach(enemy => {
@@ -2434,7 +2582,8 @@
     }
     const destinationX = Number(player.x);
     const destinationY = Number(player.y);
-    setPlayerAction(state, player, slot, moveKey, angle);
+    const actionAngle = slot === 'dash' ? dashAngle : angle;
+    setPlayerAction(state, player, slot, moveKey, actionAngle);
     emitEvent('PLAYER_ABILITY_USED', {
       playerId: player.id,
       ...(action.predictionId ? { predictionId: action.predictionId } : {}),
@@ -2443,7 +2592,7 @@
       slot,
       abilityId: moveKey,
       mode,
-      aimDirection: angle,
+      aimDirection: actionAngle,
       cooldownTicks,
       presentationKey: moveKey,
       presentation: { key: moveKey, kind: presentation.kind, style: presentation.style },
@@ -2690,7 +2839,12 @@
       return;
     }
     const itemStats = player.itemStats || {};
-    let incoming = Math.max(0, Number(damage || 0))
+    // Campaign parity (game/world.js damagePlayer): a minor enemy fighting in a
+    // pack hits harder. Scales the base amount, so damage reduction, barriers
+    // and the per-hit cap below still apply on top.
+    const packAttacker = sourceId ? state.enemies?.[sourceId] : null;
+    const packDamageMultiplier = Math.max(1, Number(packAttacker?.minorPackDamageMultiplier || 1));
+    let incoming = Math.max(0, Number(damage || 0)) * packDamageMultiplier
       * (1 - Math.max(0, Math.min(0.85, Number(itemStats.damageReduction || 0))));
     incoming = Math.max(0, incoming - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
     const room = currentRoom(state, player.roomId);
@@ -3525,6 +3679,54 @@
     }
   }
 
+  // Campaign parity: minor enemies fighting in a pack press harder together.
+  // Mirrors updateMinorEnemyPackPressure() in game/enemies.js — same eligible
+  // types, 260px radius, 3-ally cap and per-stack multipliers. The shared
+  // steerEnemy body already reads minorPackSpeedMultiplier; without this nothing
+  // ever set it, so packed rooms were measurably softer in multiplayer.
+  const MINOR_PACK_ENEMY_TYPES = new Set(['hunter', 'charger', 'laser', 'cult_follower']);
+  const MINOR_PACK_RADIUS = 260;
+  const MINOR_PACK_MAX_ALLIES = 3;
+
+  function updateMinorEnemyPackPressure(state, enemy) {
+    const eligible = enemy
+      && MINOR_PACK_ENEMY_TYPES.has(enemy.type)
+      && !enemy.elite
+      && !enemy.miniBoss
+      && !enemy.dead;
+    if (!eligible) {
+      if (enemy) {
+        enemy.minorPackStacks = 0;
+        enemy.minorPackSpeedMultiplier = 1;
+        enemy.minorPackCooldownRate = 1;
+        enemy.minorPackDamageMultiplier = 1;
+      }
+      return 0;
+    }
+    let nearbyAllies = 0;
+    const allies = state.enemies || {};
+    for (const key of Object.keys(allies)) {
+      if (nearbyAllies >= MINOR_PACK_MAX_ALLIES) break;
+      const ally = allies[key];
+      if (!ally
+        || ally === enemy
+        || ally.dead
+        || ally.elite
+        || ally.miniBoss
+        || ally.roomId !== enemy.roomId
+        || !MINOR_PACK_ENEMY_TYPES.has(ally.type)) {
+        continue;
+      }
+      if (Math.hypot(enemy.x - ally.x, enemy.y - ally.y) <= MINOR_PACK_RADIUS) nearbyAllies += 1;
+    }
+    const stacks = Math.min(MINOR_PACK_MAX_ALLIES, nearbyAllies);
+    enemy.minorPackStacks = stacks;
+    enemy.minorPackSpeedMultiplier = 1 + stacks * 0.04;
+    enemy.minorPackCooldownRate = 1 + stacks * 0.06;
+    enemy.minorPackDamageMultiplier = 1 + stacks * 0.03;
+    return stacks;
+  }
+
   function updateAuthoredEnemy(state, enemy, fixedDelta, emitEvent, floor) {
     // Campaign alias fields + per-tick timers (mirrors update.js's enemy wrapper).
     enemy.r = Number(enemy.radius || 18);
@@ -3533,7 +3735,9 @@
     enemy.hp = Number(enemy.health || 0);
     enemy.max = Math.max(1, Number(enemy.maxHealth || 1));
     enemy.stun = Math.max(0, (Number(enemy.stunnedUntilTick || 0) - state.tick) / 20);
-    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - fixedDelta);
+    // Pack pressure also shortens the gap between attacks (campaign core/update.js).
+    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0)
+      - fixedDelta * Math.max(1, Number(enemy.minorPackCooldownRate || 1)));
     const foldGodInvulnerability = () => {
       if (Number(enemy.inv || 0) > 0) {
         enemy.invulnerableUntilTick = Math.max(Number(enemy.invulnerableUntilTick || 0), state.tick + Math.round(Number(enemy.inv) * 20));
@@ -3611,6 +3815,7 @@
         return;
       }
       if (enemy.state === 'spawning') enemy.state = 'chasing';
+      updateMinorEnemyPackPressure(state, enemy);
       if (enemyBehaviors && SHARED_ENEMY_BEHAVIOR_SET.has(enemy.type)) {
         // Standard-roster enemies run the campaign's authored behavior bodies —
         // wind-ups, dashes, beams, bursts, cover, summons, shields, heals —

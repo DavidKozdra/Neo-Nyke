@@ -17,7 +17,7 @@
   const CLIENT_MESSAGE_TYPES = Object.freeze([
     'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
     'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND',
-    'CHAT_SEND', 'REMATCH_REQUEST', 'LEAVE_MATCH', 'PING',
+    'CHAT_SEND', 'REMATCH_REQUEST', 'SNAPSHOT_ACK', 'SNAPSHOT_RESYNC_REQUEST', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
     'SERVER_HELLO', 'JOIN_ACCEPTED', 'JOIN_REJECTED', 'LOBBY_STATE', 'MATCH_STARTING',
@@ -95,6 +95,11 @@
         // Correlates immediate client-only presentation with the authoritative
         // result. It is an opaque identifier, never an authority grant.
         predictionId: field('string', { maxLength: 96 }),
+        // Dash movement is distinct from aim. The authority uses it for the
+        // campaign-compatible movement-first dash direction, falling back to
+        // aim only while the player is stationary.
+        dashMoveX: field('number', { min: -1, max: 1 }),
+        dashMoveY: field('number', { min: -1, max: 1 }),
         // Most recently observed authority tick. The server clamps it to its
         // bounded co-op validation history before using it.
         originServerTick: field('integer', { min: 0, max: Number.MAX_SAFE_INTEGER }),
@@ -145,6 +150,26 @@
       delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
       fields: {
         ready: field('boolean', { required: true }),
+      },
+    },
+    // Snapshot deltas are intentionally replaceable. These control messages
+    // establish the client baseline and let the authority repair a skipped
+    // delta with one scoped full snapshot instead of replaying an unbounded
+    // history.
+    SNAPSHOT_ACK: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        snapshotSequence: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
+        serverTick: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
+      },
+    },
+    SNAPSHOT_RESYNC_REQUEST: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        expectedSequence: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
+        receivedSequence: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
       },
     },
     LEAVE_MATCH: {

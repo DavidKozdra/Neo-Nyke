@@ -185,6 +185,55 @@ describe("Koz PWA service worker runtime", () => {
     expect(scope.fetch).not.toHaveBeenCalled();
   });
 
+  test("never rejects when an uncached asset is requested offline", async () => {
+    // An optional asset can be missing when quota or an early offline switch cut
+    // the warm pass short. Rejecting here fails respondWith() with a network
+    // error, which black-screens the running game instead of losing one sound.
+    const offline = new Error("Failed to fetch");
+    const scope = createWorkerScope({
+      "/music.ogg": offline,
+      "/late.png": offline,
+    });
+    const runtime = pwaWorker.install(scope, {
+      cachePrefix: "game",
+      version: "one",
+      critical: ["/index.html"],
+      optional: ["/music.ogg"],
+      warmOptionalOnInstall: false,
+    });
+    await runtime.cacheCritical();
+
+    const known = await runtime.handleFetch({
+      request: new Request("https://game.test/music.ogg"),
+      waitUntil: jest.fn(),
+    });
+    expect(known.status).toBe(503);
+
+    const unknown = await runtime.handleFetch({
+      request: new Request("https://game.test/late.png"),
+      waitUntil: jest.fn(),
+    });
+    expect(unknown.status).toBe(503);
+  });
+
+  test("serves an inert script body offline so a missing module cannot abort the page", async () => {
+    const scope = createWorkerScope({ "/late.js": new Error("Failed to fetch") });
+    const runtime = pwaWorker.install(scope, {
+      cachePrefix: "game",
+      version: "one",
+      critical: ["/index.html"],
+      warmOptionalOnInstall: false,
+    });
+    await runtime.cacheCritical();
+
+    const request = new Request("https://game.test/late.js");
+    Object.defineProperty(request, "destination", { value: "script" });
+    const response = await runtime.handleFetch({ request, waitUntil: jest.fn() });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   test("tracks required and optional offline readiness separately", async () => {
     const scope = createWorkerScope();
     const runtime = pwaWorker.install(scope, {

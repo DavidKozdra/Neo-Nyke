@@ -16,3 +16,7 @@ jobs:
       - run: npm ci
       - run: npm run precache:check
       - run: npm test
+      # Proves the shippable output actually contains every precached URL. The
+      # critical install is atomic, so a file the copy step misses would leave
+      # every visitor stuck on the previous service worker.
+      - run: npm run build

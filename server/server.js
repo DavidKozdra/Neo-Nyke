@@ -31,6 +31,7 @@ const MULTIPLAYER_ROOM_LIMIT = 4;
 const MULTIPLAYER_MIN_PLAYERS = 1;
 const MAX_ROOM_CREATE_BYTES = 2 * 1024;
 const ROOM_TICK_INTERVAL_MS = 50;
+const MAX_TICK_CATCH_UP_STEPS = 3;
 const CHECKPOINT_INTERVAL_TICKS = 20 * 15;
 const SOCKET_HANDSHAKE_TIMEOUT_MS = 15_000;
 const MAX_SOCKET_MESSAGES_PER_SECOND = 60;
@@ -44,6 +45,12 @@ const SOCKET_HEARTBEAT_RESPONSE = '__neo_pong__';
 // tabs to wake and reclaim it.
 const EMPTY_ROOM_TTL_MS = 30 * 60 * 1000;
 const ABANDONED_LOBBY_TTL_MS = 5 * 60 * 1000;
+const SLOW_CLIENT_BUFFER_WARNING_BYTES = 256 * 1024;
+const SLOW_CLIENT_BUFFER_CLOSE_BYTES = 1024 * 1024;
+const MULTIPLAYER_TELEMETRY_INTERVAL_MS = 60 * 1000;
+const DURABLE_OBJECT_REGION_HINTS = new Set([
+  'wnam', 'enam', 'sam', 'weur', 'eeur', 'apac', 'apac-ne', 'apac-se', 'oc', 'afr', 'me',
+]);
 
 const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
 const protocolApi = globalThis.NeoNyke?.protocol || {};
@@ -65,9 +72,33 @@ function createRoomCode(randomValues = crypto.getRandomValues(new Uint8Array(ROO
   return code;
 }
 
-function getRoomStub(env, roomCode) {
+function normalizeRegionHint(value) {
+  const region = String(value || '').trim().toLowerCase();
+  return DURABLE_OBJECT_REGION_HINTS.has(region) ? region : null;
+}
+
+// A location hint matters only on the first get() that creates an object.
+// getByName remains the local/test fallback where the lower-level namespace API
+// is unavailable.
+function getRoomStub(env, roomCode, regionHint = null) {
   if (!env?.MULTIPLAYER_ROOMS) return null;
+  const locationHint = normalizeRegionHint(regionHint);
+  if (locationHint && typeof env.MULTIPLAYER_ROOMS.idFromName === 'function'
+    && typeof env.MULTIPLAYER_ROOMS.get === 'function') {
+    return env.MULTIPLAYER_ROOMS.get(env.MULTIPLAYER_ROOMS.idFromName(roomCode), { locationHint });
+  }
   return env.MULTIPLAYER_ROOMS.getByName(roomCode);
+}
+
+// Stable non-cryptographic Analytics Engine sampling key; room codes never
+// become a telemetry dimension or visible user identifier.
+function telemetryIndex(value) {
+  let hash = 2166136261;
+  for (const character of String(value || 'unknown')) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `match-${(hash >>> 0).toString(36)}`;
 }
 
 class DurableObjectRoomTransport extends NetworkTransport {
@@ -77,6 +108,8 @@ class DurableObjectRoomTransport extends NetworkTransport {
     this.peers = new Map();
     this.messageBuckets = new Map();
     this.lastActivityAt = new Map();
+    this.pendingReplaceable = new Map();
+    this.metrics = { coalescedSnapshots: 0, slowClientDisconnects: 0, maxBufferedBytes: 0 };
     this.maxPeers = MULTIPLAYER_ROOM_LIMIT;
   }
 
@@ -147,26 +180,46 @@ class DurableObjectRoomTransport extends NetworkTransport {
     this.peers.delete(peerId);
     this.messageBuckets.delete(peerId);
     this.lastActivityAt.delete(peerId);
+    Array.from(this.pendingReplaceable.keys()).forEach(key => {
+      if (key.startsWith(`${peerId}|`)) this.pendingReplaceable.delete(key);
+    });
     this._emit('peerDisconnected', peer.identity, reason);
     return true;
   }
 
-  send(peerId, message) {
-    return this.sendSerialized(peerId, JSON.stringify(message));
+  send(peerId, message, delivery = {}) {
+    return this.sendSerialized(peerId, JSON.stringify(message), delivery);
   }
 
-  sendSerialized(peerId, serialized) {
+  sendSerialized(peerId, serialized, delivery = {}) {
     const peer = this.peers.get(String(peerId));
     if (!peer || peer.socket.readyState !== 1) throw new Error(`Room peer is unavailable: ${peerId}`);
+    const bufferedAmount = Math.max(0, Number(peer.socket.bufferedAmount) || 0);
+    this.metrics.maxBufferedBytes = Math.max(this.metrics.maxBufferedBytes, bufferedAmount);
+    if (bufferedAmount >= SLOW_CLIENT_BUFFER_CLOSE_BYTES) {
+      this.metrics.slowClientDisconnects += 1;
+      this.disconnectPeer(peerId, 'slow-client');
+      return { queued: false, dropped: true, reason: 'slow-client' };
+    }
+    const channel = String(delivery?.channel || 'control');
+    const pendingKey = `${peerId}|${channel}`;
+    if (delivery?.replaceable === true && bufferedAmount >= SLOW_CLIENT_BUFFER_WARNING_BYTES) {
+      // A WebSocket cannot be unreliable. Coalescing replaceable snapshots
+      // bounds the server-side queue until the receiver catches up.
+      this.pendingReplaceable.set(pendingKey, serialized);
+      this.metrics.coalescedSnapshots += 1;
+      return { queued: true, dropped: true, reason: 'coalesced' };
+    }
+    this.pendingReplaceable.delete(pendingKey);
     peer.socket.send(serialized);
     return { queued: true, dropped: false };
   }
 
-  broadcast(message) {
+  broadcast(message, delivery = {}) {
     const serialized = JSON.stringify(message);
     const results = [];
     this.peers.forEach((_peer, peerId) => {
-      try { results.push(this.sendSerialized(peerId, serialized)); } catch { /* disconnect cleanup handles stale sockets */ }
+      try { results.push(this.sendSerialized(peerId, serialized, delivery)); } catch { /* disconnect cleanup handles stale sockets */ }
     });
     return results;
   }
@@ -189,6 +242,7 @@ export class MultiplayerRoom {
     this.ctx = ctx;
     this.env = env;
     this.roomCode = normalizeRoomCode(ctx.id?.name) || 'UNKNOWN';
+    this.region = 'auto';
     this.transport = new DurableObjectRoomTransport(this.roomCode);
     // A hibernated lobby may reconstruct this class for a heartbeat, close, or
     // alarm. Delay floor generation and simulation wiring until a route actually
@@ -201,6 +255,15 @@ export class MultiplayerRoom {
     this.lastCheckpointTick = -1;
     this.lastCheckpointRevision = -1;
     this.lastIdleSweepAt = 0;
+    this.nextTickAt = null;
+    this.tickMetrics = {
+      ticks: 0,
+      catchUpTicks: 0,
+      overruns: 0,
+      maxDriftMs: 0,
+      checkpointFailures: 0,
+    };
+    this.lastTelemetryAt = 0;
     if (typeof WebSocketRequestResponsePair === 'function') {
       this.ctx.setWebSocketAutoResponse?.(
         new WebSocketRequestResponsePair(SOCKET_HEARTBEAT_REQUEST, SOCKET_HEARTBEAT_RESPONSE),
@@ -238,9 +301,18 @@ export class MultiplayerRoom {
       this.startPromise = (async () => {
         const room = roomHint || await this.ctx.storage.get('room');
         if (!room) return false;
+        // DurableObjectId is an opaque identifier: it does not reliably expose
+        // the human room code supplied to getByName(). The persisted room row
+        // is therefore the authority for the protocol session ID.
+        this.roomCode = normalizeRoomCode(room.roomCode) || this.roomCode;
+        this.transport.roomCode = this.roomCode;
+        this.region = room.region || 'auto';
         this.authority = this.createAuthority(room);
         const checkpoint = await this.ctx.storage.get('checkpoint');
         if (checkpoint?.serialized && GameState) {
+          if (checkpoint.checksum && checkpoint.checksum !== telemetryIndex(checkpoint.serialized)) {
+            throw new Error('Multiplayer checkpoint integrity check failed');
+          }
           const restored = GameState.deserialize(checkpoint.serialized);
           this.authority.simulation.state = restored;
           if (restored.randomState) this.authority.simulation.random.restore(restored.randomState);
@@ -285,7 +357,9 @@ export class MultiplayerRoom {
     }
     const serialized = this.authority.simulation.serialize();
     this.checkpointWrite = this.ctx.storage.put('checkpoint', {
+      version: 2,
       serialized,
+      checksum: telemetryIndex(serialized),
       runtime: this.authority.exportRuntimeCheckpoint?.() || null,
       tick,
       persistenceRevision,
@@ -297,6 +371,9 @@ export class MultiplayerRoom {
       this.lastCheckpointTick = Math.max(this.lastCheckpointTick, tick);
       this.lastCheckpointRevision = Math.max(this.lastCheckpointRevision, persistenceRevision);
       return true;
+    }).catch(error => {
+      this.tickMetrics.checkpointFailures += 1;
+      throw error;
     }).finally(() => {
       this.checkpointWrite = null;
       if (this.checkpointQueued) {
@@ -387,11 +464,16 @@ export class MultiplayerRoom {
     const options = await request.json().catch(() => ({}));
     const mode = options.mode === 'rival' ? 'rival' : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    const requestedRoomCode = normalizeRoomCode(options.roomCode);
+    if (!requestedRoomCode) return json({ error: 'Room code is required' }, 400);
+    this.roomCode = requestedRoomCode;
+    this.transport.roomCode = requestedRoomCode;
     const room = {
-      roomCode: this.roomCode,
+      roomCode: requestedRoomCode,
       createdAt: Date.now(),
       maxPlayers,
       mode,
+      region: normalizeRegionHint(options.region),
       status: 'waiting',
     };
     await this.ctx.storage.put('room', room);
@@ -466,6 +548,7 @@ export class MultiplayerRoom {
     if (this.tickTimer !== null || !this.authority
       || this.authority.simulation.state.status !== 'running'
       || this.authority.playerIdByPeer.size === 0) return;
+    this.nextTickAt = Date.now() + ROOM_TICK_INTERVAL_MS;
     this.tickTimer = setInterval(() => {
       if (this.authority.playerIdByPeer.size === 0 || this.authority.simulation.state.status !== 'running') {
         this.stopTicking();
@@ -483,13 +566,24 @@ export class MultiplayerRoom {
         this.stopTicking();
         return;
       }
+      const now = Date.now();
+      const driftMs = Math.max(0, now - (this.nextTickAt || now));
+      const tickCount = Math.min(MAX_TICK_CATCH_UP_STEPS, 1 + Math.floor(driftMs / ROOM_TICK_INTERVAL_MS));
+      this.tickMetrics.ticks += tickCount;
+      this.tickMetrics.maxDriftMs = Math.max(this.tickMetrics.maxDriftMs, driftMs);
+      if (tickCount > 1) {
+        this.tickMetrics.catchUpTicks += tickCount - 1;
+        this.tickMetrics.overruns += 1;
+      }
+      this.nextTickAt = Math.max(now, this.nextTickAt || now) + ROOM_TICK_INTERVAL_MS;
       const previousFloor = Number(this.authority.simulation.state.floorNumber || 1);
       const previousRevision = Number(this.authority.simulation.state.runServices?.saveRevision || 0);
-      this.authority.step(1);
+      this.authority.step(tickCount);
       const crossedBoundary = Number(this.authority.simulation.state.floorNumber || 1) !== previousFloor
         || Number(this.authority.simulation.state.runServices?.saveRevision || 0) !== previousRevision
         || this.authority.simulation.state.status !== 'running';
       this.persistCheckpoint({ force: crossedBoundary || idleDisconnects > 0 });
+      this.flushTelemetry();
       if (this.authority.simulation.state.status !== 'running') this.stopTicking();
     }, ROOM_TICK_INTERVAL_MS);
   }
@@ -510,6 +604,39 @@ export class MultiplayerRoom {
     if (this.tickTimer === null) return;
     clearInterval(this.tickTimer);
     this.tickTimer = null;
+    this.nextTickAt = null;
+  }
+
+  flushTelemetry(force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastTelemetryAt < MULTIPLAYER_TELEMETRY_INTERVAL_MS) return false;
+    this.lastTelemetryAt = now;
+    const state = this.authority?.simulation.state;
+    try {
+      this.env.MULTIPLAYER_ANALYTICS?.writeDataPoint?.({
+        // blobs: region, mode, status. doubles: scheduler/network health.
+        blobs: [this.region, String(this.authority?.mode || 'coop'), String(state?.status || 'waiting')],
+        doubles: [
+          this.tickMetrics.maxDriftMs,
+          this.tickMetrics.catchUpTicks,
+          this.tickMetrics.overruns,
+          this.tickMetrics.checkpointFailures,
+          this.transport.metrics.coalescedSnapshots,
+          this.transport.metrics.slowClientDisconnects,
+          this.transport.metrics.maxBufferedBytes,
+          this.authority?.playerIdByPeer.size || 0,
+        ],
+        indexes: [telemetryIndex(this.roomCode)],
+      });
+      this.tickMetrics.maxDriftMs = 0;
+      this.tickMetrics.catchUpTicks = 0;
+      this.tickMetrics.overruns = 0;
+      this.tickMetrics.checkpointFailures = 0;
+      this.transport.metrics.coalescedSnapshots = 0;
+      this.transport.metrics.slowClientDisconnects = 0;
+      this.transport.metrics.maxBufferedBytes = 0;
+      return true;
+    } catch { return false; }
   }
 
   syncTicking() {
@@ -643,6 +770,8 @@ export class MultiplayerRoom {
     this.lastCheckpointTick = -1;
     this.lastCheckpointRevision = -1;
     this.lastIdleSweepAt = 0;
+    this.lastTelemetryAt = 0;
+    this.region = 'auto';
   }
 }
 
@@ -845,6 +974,26 @@ async function distributedRateLimit(binding, key) {
   }
 }
 
+function requestCookie(request, name) {
+  const cookies = String(request.headers.get('Cookie') || '').split(';');
+  const prefix = `${name}=`;
+  const match = cookies.find(cookie => cookie.trim().startsWith(prefix));
+  return match ? decodeURIComponent(match.trim().slice(prefix.length)) : '';
+}
+
+// A staging-only load token allows a controlled browser swarm to exercise the
+// normal admission/WebSocket path without weakening public rate limits. The
+// binding is intentionally a secret and absent in ordinary development and
+// production. Browser WebSockets cannot attach custom headers, so the runner
+// also supplies this token in an isolated test cookie.
+function hasLoadTestBypass(request, env) {
+  const expected = String(env?.MULTIPLAYER_LOAD_TEST_TOKEN || '');
+  if (!expected) return false;
+  const presented = request.headers.get('X-Neo-Load-Test')
+    || requestCookie(request, 'neonyke_load_test');
+  return String(presented || '') === expected;
+}
+
 /**
  * Main router for all API endpoints.
  *
@@ -871,8 +1020,9 @@ async function handleRequest(request, env) {
 
   if (path === '/multiplayer/rooms' && request.method === 'POST') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
-    if (!rateLimit(`room-create:${ip}`, 10, 60_000)
-      || !await distributedRateLimit(env.MULTIPLAYER_CREATE_LIMITER, ip)) {
+    const loadTestBypass = hasLoadTestBypass(request, env);
+    if (!loadTestBypass && (!rateLimit(`room-create:${ip}`, 10, 60_000)
+      || !await distributedRateLimit(env.MULTIPLAYER_CREATE_LIMITER, ip))) {
       return json({ error: 'Too many room creation requests' }, 429);
     }
     let options;
@@ -883,6 +1033,10 @@ async function handleRequest(request, env) {
     }
     const mode = options.mode === 'rival' ? 'rival' : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    const region = options.region == null || options.region === '' ? null : normalizeRegionHint(options.region);
+    if (options.region != null && options.region !== '' && !region) {
+      return json({ error: 'Unsupported multiplayer region', code: 'INVALID_REGION' }, 400);
+    }
 
     // A host may ask for a specific code (the lobby's pencil edit). Unlike a
     // generated code we must NOT retry on collision: silently handing back a
@@ -892,11 +1046,11 @@ async function handleRequest(request, env) {
     if (options.roomCode !== undefined && options.roomCode !== null && options.roomCode !== '') {
       const requested = normalizeRoomCode(options.roomCode);
       if (!requested) return json({ error: 'Invalid room code', code: 'INVALID_ROOM_CODE' }, 400);
-      const stub = getRoomStub(env, requested);
+      const stub = getRoomStub(env, requested, region);
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, maxPlayers }),
+        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region }),
       }));
       if (initialized.status === 409) return json({ error: 'That code is already in use', code: 'ROOM_CODE_TAKEN' }, 409);
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -905,17 +1059,18 @@ async function handleRequest(request, env) {
         status: 'waiting',
         maxPlayers,
         mode,
+        region,
         socketPath: `/api/multiplayer/rooms/${requested}/socket`,
       }, 201);
     }
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const roomCode = createRoomCode();
-      const stub = getRoomStub(env, roomCode);
+      const stub = getRoomStub(env, roomCode, region);
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, maxPlayers }),
+        body: JSON.stringify({ roomCode, mode, maxPlayers, region }),
       }));
       if (initialized.status === 409) continue;
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -924,6 +1079,7 @@ async function handleRequest(request, env) {
         status: 'waiting',
         maxPlayers,
         mode,
+        region,
         socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,
       }, 201);
     }
@@ -939,9 +1095,10 @@ async function handleRequest(request, env) {
     }
     const rateKey = roomRoute[2] ? 'room-socket' : 'room-info';
     const rateMax = roomRoute[2] ? 30 : 120;
-    const distributedAllowed = !roomRoute[2]
-      || await distributedRateLimit(env.MULTIPLAYER_SOCKET_LIMITER, ip);
-    if (!distributedAllowed || !rateLimit(`${rateKey}:${ip}`, rateMax, 60_000)) {
+    const loadTestBypass = hasLoadTestBypass(request, env);
+    const distributedAllowed = loadTestBypass || (!roomRoute[2]
+      || await distributedRateLimit(env.MULTIPLAYER_SOCKET_LIMITER, ip));
+    if (!distributedAllowed || (!loadTestBypass && !rateLimit(`${rateKey}:${ip}`, rateMax, 60_000))) {
       return json({ error: 'Too many multiplayer room requests' }, 429);
     }
     const roomCode = normalizeRoomCode(roomRoute[1]);

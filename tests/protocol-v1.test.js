@@ -55,6 +55,29 @@ describe('gameplay protocol v1 runtime validation', () => {
     expect(validateEnvelope(action, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
   });
 
+  test('accepts a bounded movement-first dash direction separately from aim', () => {
+    const dash = createEnvelope('PLAYER_ACTION', 14, 30, {
+      action: 'DASH', inputSequence: 13, aimDirection: Math.PI,
+      abilityId: 'dash', dashMoveX: 1, dashMoveY: 0,
+    });
+    expect(validateEnvelope(dash, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope({ ...dash, payload: { ...dash.payload, dashMoveX: 2 } }, {
+      direction: CLIENT_TO_AUTHORITY,
+    }).errors).toContain('payload.dashMoveX is above maximum');
+  });
+
+  test('defines reliable snapshot acknowledgement and recovery control messages', () => {
+    const acknowledgement = createEnvelope('SNAPSHOT_ACK', 14, 30, {
+      snapshotSequence: 12, serverTick: 30,
+    });
+    const resync = createEnvelope('SNAPSHOT_RESYNC_REQUEST', 15, 30, {
+      expectedSequence: 13, receivedSequence: 15,
+    });
+    expect(validateEnvelope(acknowledgement, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope(resync, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(getDeliveryIntent('SNAPSHOT_ACK')).toEqual({ reliability: 'reliable', channel: 'control', replaceable: false });
+  });
+
   test('validates authority-controlled multiplayer character choices', () => {
     const selection = createEnvelope('PLAYER_CHARACTER', 3, 0, { characterKey: 'sarge' });
     expect(validateEnvelope(selection, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
