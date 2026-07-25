@@ -39,7 +39,6 @@
     PROJECTILE_TYPE_DEFS = {},
     WEAPON_BASE_STATS = {},
     MOVE_BASE_STATS = {},
-    MOVE_PRESENTATION_DEFS = {},
     MOVE_SLOT_BY_KEY = {},
     KIT_ALTERNATIVES = {},
     CONTINUOUS_BEAM_MOVES = [],
@@ -897,11 +896,11 @@
             .sort((a, b) => a.distance - b.distance)
             .slice(0, Math.min(12, 7 + intent.stacks - 1))
             .forEach(({ enemy }) => damageEnemy(state, enemy, 15 + (intent.stacks - 1) * 3, player.id, emitEvent, { attackKind: intent.itemKey }));
-          createAbilityEntity(state, player, { kind: 'lightning_column', presentationKey: intent.itemKey, radius: 42, damage: 13 + (intent.stacks - 1) * 2, durationTicks: 11, pulseIntervalTicks: 5 });
+          createAbilityEntity(state, player, { kind: 'lightning_column', abilityId: intent.itemKey, radius: 42, damage: 13 + (intent.stacks - 1) * 2, durationTicks: 11, pulseIntervalTicks: 5 });
         } else if (intent.kind === 'mines') {
           for (let index = 0; index < Math.min(3, intent.stacks); index += 1) {
             const angle = state.tick * 1.7 + index * Math.PI * 2 / Math.min(3, intent.stacks);
-            createAbilityEntity(state, player, { kind: 'thorn_mine', presentationKey: intent.itemKey, x: player.x + Math.cos(angle) * (42 + index * 12), y: player.y + Math.sin(angle) * (42 + index * 12), radius: 62 + (intent.stacks - 1) * 6, damage: 18 + (intent.stacks - 1) * 4, durationTicks: 100, firstPulseDelayTicks: 4, pulseIntervalTicks: 100 });
+            createAbilityEntity(state, player, { kind: 'thorn_mine', abilityId: intent.itemKey, x: player.x + Math.cos(angle) * (42 + index * 12), y: player.y + Math.sin(angle) * (42 + index * 12), radius: 62 + (intent.stacks - 1) * 6, damage: 18 + (intent.stacks - 1) * 4, durationTicks: 100, firstPulseDelayTicks: 4, pulseIntervalTicks: 100 });
           }
         }
         emitEvent('EQUIPMENT_EFFECT_PULSED', { playerId: player.id, roomId: player.roomId, ...intent });
@@ -1372,8 +1371,10 @@
       y: Number(definition.y ?? player.y),
       radius: Math.max(1, Number(definition.radius || 32)),
       r: Math.max(1, Number(definition.radius || 32)),
-      kind: String(definition.kind || definition.presentationKey || 'ability'),
-      presentationKey: String(definition.presentationKey || definition.kind || 'ability'),
+      kind: String(definition.kind || definition.abilityId || definition.presentationKey || 'ability'),
+      // `presentationKey` was the old checkpoint field. The source ability is
+      // gameplay identity; visual presentation is derived locally by clients.
+      abilityId: String(definition.abilityId || definition.presentationKey || definition.kind || 'ability'),
       damage: Math.max(0, Number(definition.damage || 0)),
       heal: Math.max(0, Number(definition.heal || 0)),
       range: Math.max(0, Number(definition.range || 0)),
@@ -1393,25 +1394,25 @@
     const spawned = [];
     if (moveKey === 'healing_zone') {
       spawned.push(createAbilityEntity(state, player, {
-        kind: 'healing_zone', presentationKey: moveKey, radius: stats.range || 130,
+        kind: 'healing_zone', abilityId: moveKey, radius: stats.range || 130,
         damage: stats.damage || 12, heal: 4, durationTicks: Math.round(Number(stats.duration || 3) * 20),
         pulseIntervalTicks: 10,
       }));
     } else if (moveKey === 'fire_circle') {
       spawned.push(createAbilityEntity(state, player, {
-        kind: 'fire_circle', presentationKey: moveKey, radius: stats.range || 100,
+        kind: 'fire_circle', abilityId: moveKey, radius: stats.range || 100,
         damage: stats.damage || 18, durationTicks: Math.round(Number(stats.duration || 3.5) * 20),
         pulseIntervalTicks: 10, followOwner: true,
       }));
     } else if (moveKey === 'floor_lava') {
       spawned.push(createAbilityEntity(state, player, {
-        kind: 'lava', presentationKey: moveKey, radius: 52,
+        kind: 'lava', abilityId: moveKey, radius: 52,
         damage: stats.damage || 12, durationTicks: Math.round(Number(stats.duration || 4) * 20),
         pulseIntervalTicks: 10, followOwner: true,
       }));
     } else if (moveKey === 'chaos_burst') {
       spawned.push(createAbilityEntity(state, player, {
-        kind: 'chaos_burst', presentationKey: moveKey, radius: stats.range || 100,
+        kind: 'chaos_burst', abilityId: moveKey, radius: stats.range || 100,
         damage: stats.damage || 30, durationTicks: 36, pulseIntervalTicks: 4,
         followOwner: true,
       }));
@@ -1419,7 +1420,7 @@
       for (let index = 0; index < 3; index += 1) {
         const turretAngle = angle + (index - 1) * 0.7;
         spawned.push(createAbilityEntity(state, player, {
-          kind: 'holy_turret', presentationKey: moveKey,
+          kind: 'holy_turret', abilityId: moveKey,
           x: player.x + Math.cos(turretAngle) * 74,
           y: player.y + Math.sin(turretAngle) * 74,
           radius: 26, range: stats.range || 360, burstRadius: 56,
@@ -1430,7 +1431,7 @@
     } else if (moveKey === 'lightning_columns') {
       for (const offset of [-42, 42]) {
         spawned.push(createAbilityEntity(state, player, {
-          kind: 'lightning_column', presentationKey: moveKey,
+          kind: 'lightning_column', abilityId: moveKey,
           x: player.x + Math.cos(angle) * Number(stats.range || 180) + Math.cos(angle + Math.PI / 2) * offset,
           y: player.y + Math.sin(angle) * Number(stats.range || 180) + Math.sin(angle + Math.PI / 2) * offset,
           radius: 54, damage: stats.damage || 30, durationTicks: 90, pulseIntervalTicks: 9,
@@ -1479,19 +1480,22 @@
         pulseY = Number(target.y);
       }
       const targetIds = [];
+      // Accept legacy checkpoints while all newly created entities use the
+      // gameplay-named `abilityId` field.
+      const abilityId = entity.abilityId || entity.presentationKey;
       abilityTargetsInRadius(state, owner, pulseX, pulseY, pulseRadius).forEach(enemy => {
-        damageEnemy(state, enemy, entity.damage, owner.id, emitEvent, { attackKind: entity.presentationKey });
-        if (!enemy.dead && entity.presentationKey === 'fire_circle') applyFireStatus(state, enemy, 1, 3, owner.id);
-        if (!enemy.dead && entity.presentationKey === 'chaos_burst') applyPoisonStatus(state, enemy, 1, 4.8, owner.id);
+        damageEnemy(state, enemy, entity.damage, owner.id, emitEvent, { attackKind: abilityId });
+        if (!enemy.dead && abilityId === 'fire_circle') applyFireStatus(state, enemy, 1, 3, owner.id);
+        if (!enemy.dead && abilityId === 'chaos_burst') applyPoisonStatus(state, enemy, 1, 4.8, owner.id);
         targetIds.push(enemy.id);
       });
-      damageRivalsInRadius(state, owner, pulseX, pulseY, pulseRadius, entity.damage, emitEvent, entity.presentationKey, targetIds);
+      damageRivalsInRadius(state, owner, pulseX, pulseY, pulseRadius, entity.damage, emitEvent, abilityId, targetIds);
       if (entity.kind === 'healing_zone' && Math.hypot(owner.x - pulseX, owner.y - pulseY) <= pulseRadius) {
         owner.hp = Math.min(Number(owner.maxHp || 100), Number(owner.hp || 0) + Number(entity.heal || 0));
       }
       emitEvent('ABILITY_ENTITY_PULSED', {
         entityId, playerId: owner.id, roomId: entity.roomId,
-        presentationKey: entity.presentationKey, x: pulseX, y: pulseY,
+        abilityId, x: pulseX, y: pulseY,
         radius: pulseRadius, targetIds,
       });
     });
@@ -2284,7 +2288,6 @@
     const expectedAction = slot === 'dash' ? 'DASH' : 'ABILITY';
     if (action.action !== expectedAction) return null;
     const stats = applyForgeStats(player, 'move', moveKey, MOVE_BASE_STATS[moveKey] || {});
-    const presentation = MOVE_PRESENTATION_DEFS[moveKey] || { kind: slot, style: 'normal' };
     if (!execution.releaseHeldCharge && !hasMoveCharge(player, moveKey)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
@@ -2491,7 +2494,7 @@
         statusUntil[moveKey] = state.tick + Math.max(1, Math.round(Number(stats.duration || 3) * 20));
         if (moveKey === 'healing_zone') {
           const entity = createAbilityEntity(state, player, {
-            kind: 'healing_zone', presentationKey: moveKey,
+            kind: 'healing_zone', abilityId: moveKey,
             radius: 62 * (1 + chargeRatio),
             damage: Number(stats.damage || 12) * (1 + chargeRatio * 1.5),
             heal: 4 * (1 + chargeRatio * 1.2),
@@ -2594,8 +2597,6 @@
       mode,
       aimDirection: actionAngle,
       cooldownTicks,
-      presentationKey: moveKey,
-      presentation: { key: moveKey, kind: presentation.kind, style: presentation.style },
       originX,
       originY,
       destinationX,
