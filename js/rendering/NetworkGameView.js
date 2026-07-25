@@ -122,14 +122,15 @@
   // short client-only presentation record until its authoritative event arrives
   // (or it naturally expires if the action was rejected).
   const PREDICTED_COMBAT_CONFIRMATION_MS = 1200;
-  const HELD_BUTTON_BY_ABILITY = Object.freeze({
-    love_bomb_laser: BUTTON_LASER_HELD,
-    ghost_ball: BUTTON_LASER_HELD,
-    healing_zone: BUTTON_SMASH_HELD,
-    death_ball: BUTTON_SMASH_HELD,
-    turtle_powerup: BUTTON_SMASH_HELD,
-    nimrod_stomp: BUTTON_DASH_HELD,
-  });
+  // The authority owns the hold-to-charge table (button bit + maxChargeTicks).
+  // Deriving both the held-button map and the predicted charge clock from it
+  // keeps client presentation on exactly the profile the server will release
+  // against, instead of a second copy that silently drifts out of parity.
+  const HOLD_TO_CHARGE_MOVES = combatSystem.HOLD_TO_CHARGE_MOVES || Object.freeze({});
+  const HELD_BUTTON_BY_ABILITY = Object.freeze(
+    Object.fromEntries(Object.entries(HOLD_TO_CHARGE_MOVES)
+      .map(([moveKey, profile]) => [moveKey, profile.button])),
+  );
 
   function beamChannelLaserMode(moveKey) {
     return moveKey === 'turtle_wave' || moveKey === 'holy_eye_beams'
@@ -1323,15 +1324,12 @@
 
     _startPredictedHeldCharge(abilityId, slot, button) {
       if (this.pendingHeldCharge?.abilityId === abilityId) return;
-      const profile = {
-        love_bomb_laser: 100, ghost_ball: 100, healing_zone: 25,
-        death_ball: 100, turtle_powerup: 25, nimrod_stomp: 25,
-      };
+      const profile = HOLD_TO_CHARGE_MOVES[abilityId];
       const player = this.localPredictedPlayer;
-      if (!player || !profile[abilityId]) return;
+      if (!player || !profile) return;
       this.pendingHeldCharge = {
         abilityId, moveKey: abilityId, slot, button, startAt: root.performance?.now?.() || Date.now(),
-        maxChargeTicks: profile[abilityId],
+        maxChargeTicks: profile.maxChargeTicks,
       };
     }
 
@@ -1757,9 +1755,11 @@
       if (localPlayerId && this.localPredictedPlayer) {
         const local = { ...this.localPredictedPlayer };
         if (this.pendingBeamPresentation && now >= this.pendingBeamPresentation.untilAt) this.pendingBeamPresentation = null;
-        if (this.localBeamReleaseRequested) {
-          local.beamChannel = null;
-        } else if (!local.beamChannel && this.pendingBeamPresentation) {
+        // The release latch only suppresses the *predicted* beam after the
+        // button comes up. It must never blank an authoritative beamChannel:
+        // enemy-applied channels and beam struggles arrive that way, and the
+        // latch stays set for as long as the beam button is idle.
+        if (!local.beamChannel && this.pendingBeamPresentation && !this.localBeamReleaseRequested) {
           const remainingTicks = Math.max(1, Math.ceil((this.pendingBeamPresentation.untilAt - now) / INPUT_INTERVAL_MS));
           local.beamChannel = {
             moveKey: this.pendingBeamPresentation.moveKey,
