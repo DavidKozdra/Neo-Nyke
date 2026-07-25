@@ -134,10 +134,14 @@
   // is released.  Keeping that timing on the authority prevents a client from
   // authoring a damage multiplier.
   const BUTTON_SMASH_HELD = 2;
-  const HOLD_TO_CHARGE_SMASH_MOVES = Object.freeze({
-    death_ball: Object.freeze({ maxChargeTicks: 100 }), // 5 seconds
-    // Turtle Power-Up charges four times as quickly in the campaign.
-    turtle_powerup: Object.freeze({ maxChargeTicks: 25 }),
+  const BUTTON_DASH_HELD = 4;
+  const HOLD_TO_CHARGE_MOVES = Object.freeze({
+    love_bomb_laser: Object.freeze({ maxChargeTicks: 100, button: BUTTON_LASER_HELD }),
+    ghost_ball: Object.freeze({ maxChargeTicks: 100, button: BUTTON_LASER_HELD }),
+    healing_zone: Object.freeze({ maxChargeTicks: 25, button: BUTTON_SMASH_HELD }),
+    death_ball: Object.freeze({ maxChargeTicks: 100, button: BUTTON_SMASH_HELD }),
+    turtle_powerup: Object.freeze({ maxChargeTicks: 25, button: BUTTON_SMASH_HELD }),
+    nimrod_stomp: Object.freeze({ maxChargeTicks: 25, button: BUTTON_DASH_HELD }),
   });
   const PLAYER_HIT_INVULNERABILITY_TICKS = 15; // campaign parity: 0.75 seconds
   const TURTLE_WAVE_HP_PER_SECOND = 2;
@@ -1769,16 +1773,17 @@
     player.beamChannel = null;
   }
 
-  function beginHeldSmashCharge(state, player, moveKey, angle, cooldownTicks, emitEvent) {
-    const profile = HOLD_TO_CHARGE_SMASH_MOVES[moveKey];
-    if (!profile || player.smashCharge) return null;
+  function beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent) {
+    const profile = HOLD_TO_CHARGE_MOVES[moveKey];
+    if (!profile || player.heldCharge) return null;
     const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
     // Spend now, then rewrite the recharge deadline when the held move ends.
     // This matches the campaign's deferred held-skill recharge without allowing
     // a player to begin several charges on the same available pip.
     if (!spendMoveCharge(player, moveKey, state.tick + profile.maxChargeTicks + scaledCooldownTicks)) return null;
-    player.smashCharge = {
+    player.heldCharge = {
       moveKey,
+      slot,
       angle,
       startTick: state.tick,
       maxChargeTicks: profile.maxChargeTicks,
@@ -1788,39 +1793,41 @@
       // the first held input a short window before treating it as a tap.
       releaseGraceUntilTick: state.tick + 3,
     };
-    setPlayerAction(state, player, 'smash', moveKey, angle);
+    setPlayerAction(state, player, slot, moveKey, angle);
     emitEvent('PLAYER_ABILITY_CHARGING', {
       playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
-      slot: 'smash', abilityId: moveKey, aimDirection: angle,
+      slot, abilityId: moveKey, aimDirection: angle,
       maxChargeTicks: profile.maxChargeTicks,
     });
-    return { moveKey, slot: 'smash', mode: 'charging' };
+    return { moveKey, slot, mode: 'charging' };
   }
 
-  function updatePlayerSmashCharges(state, inputs, emitEvent, random) {
+  function updatePlayerHeldCharges(state, inputs, emitEvent, random) {
     Object.values(state.players || {}).forEach(player => {
-      const charge = player?.smashCharge;
+      const charge = player?.heldCharge;
       if (!charge) return;
+      const profile = HOLD_TO_CHARGE_MOVES[charge.moveKey];
+      if (!profile) { player.heldCharge = null; return; }
       if (player.downed || player.disconnected) {
-        player.smashCharge = null;
+        player.heldCharge = null;
         return;
       }
       const input = inputs?.[player.id] || {};
       const buttons = Math.trunc(Number(input.buttons) || 0);
-      if (buttons & BUTTON_SMASH_HELD) {
+      if (buttons & profile.button) {
         charge.heldSeen = true;
         if (Number.isFinite(Number(input.aimDirection))) charge.angle = Number(input.aimDirection);
       }
       const startTick = Number.isFinite(Number(charge.startTick)) ? Number(charge.startTick) : state.tick;
       const elapsedTicks = Math.max(0, state.tick - startTick);
-      const released = charge.heldSeen && !(buttons & BUTTON_SMASH_HELD);
+      const released = charge.heldSeen && !(buttons & profile.button);
       const tapWithoutInput = !charge.heldSeen && state.tick >= Number(charge.releaseGraceUntilTick || state.tick);
       const fullyCharged = elapsedTicks >= Math.max(1, Number(charge.maxChargeTicks || 1));
       if (!released && !tapWithoutInput && !fullyCharged) return;
       const ratio = Math.max(0, Math.min(1, elapsedTicks / Math.max(1, Number(charge.maxChargeTicks || 1))));
-      player.smashCharge = null;
+      player.heldCharge = null;
       resolvePlayerAbility(state, player, {
-        action: 'ABILITY', abilityId: charge.moveKey, aimDirection: charge.angle,
+        action: charge.slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: charge.moveKey, aimDirection: charge.angle,
       }, emitEvent, random, { releaseHeldCharge: true, chargeRatio: ratio });
       rescheduleLatestMoveCharge(player, charge.moveKey, state.tick + Math.max(1, Number(charge.cooldownTicks || 1)));
     });
@@ -2097,8 +2104,8 @@
       ? (slot === 'laser' ? 2.8 / Math.max(0.5, Number(stats.cooldown || 3.2)) : slot === 'smash' ? 2 / Math.max(0.5, Number(stats.cooldown || 4.2)) : 0.7)
       : 1;
     const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20 * godCooldownMult));
-    if (slot === 'smash' && HOLD_TO_CHARGE_SMASH_MOVES[moveKey] && !execution.releaseHeldCharge) {
-      return beginHeldSmashCharge(state, player, moveKey, angle, cooldownTicks, emitEvent);
+    if (HOLD_TO_CHARGE_MOVES[moveKey] && !execution.releaseHeldCharge) {
+      return beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent);
     }
     const chargeRatio = Math.max(0, Math.min(1, Number(execution.chargeRatio || 0)));
     const projectileIds = [];
@@ -2114,7 +2121,28 @@
     if (slot === 'dash') {
       const floor = state.floorState || {};
       const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
-      if (moveKey === 'flying_unhitable' || moveKey === 'cowards_way' || moveKey === 'mooggy_zoomies') {
+      if (moveKey === 'nimrod_stomp') {
+        const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
+        const minimumLeap = 108;
+        const maximumLeap = Math.max(Number(floor.width || 900), Number(floor.height || 700));
+        const leapDistance = minimumLeap + (maximumLeap - minimumLeap) * chargeRatio;
+        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(angle) * leapDistance));
+        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(angle) * leapDistance));
+        const radius = 108 + chargeRatio * 54;
+        const damage = Math.max(1, Math.round(Number(stats.damage || 46) * (1 + chargeRatio * 0.7)));
+        effectRadius = radius;
+        abilityTargetsInRadius(state, player, player.x, player.y, radius).forEach(enemy => {
+          damageEnemy(state, enemy, damage, player.id, emitEvent, {
+            attackKind: moveKey,
+            angle: Math.atan2(enemy.y - player.y, enemy.x - player.x),
+            knockback: 260,
+          });
+          targetIds.push(enemy.id);
+        });
+        damageRivalsInRadius(state, player, player.x, player.y, radius, damage, emitEvent, moveKey, targetIds);
+        player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), state.tick + 6);
+        mode = 'dash_aoe';
+      } else if (moveKey === 'flying_unhitable' || moveKey === 'cowards_way' || moveKey === 'mooggy_zoomies') {
         const durationTicks = Math.max(1, Math.round(Number(stats.duration || 3) * 20));
         statusUntil[moveKey] = state.tick + durationTicks;
         mode = 'status';
@@ -2182,16 +2210,24 @@
           const count = moveKey === 'nail_shot' ? 8 : 1;
           for (let index = 0; index < count; index += 1) {
             const spread = count > 1 ? (index - (count - 1) / 2) * (moveKey === 'nail_shot' ? Math.PI * 2 / count : 0.14) : 0;
+            const chargeDamage = moveKey === 'love_bomb_laser' || moveKey === 'ghost_ball'
+              ? Math.max(1, Math.round(Number(stats.damage || 34) * (0.6 + chargeRatio * 1.6)))
+              : Number(stats.damage || 20);
+            const chargeRadius = moveKey === 'love_bomb_laser'
+              ? 10 + chargeRatio * 6
+              : moveKey === 'ghost_ball'
+                ? 18 + chargeRatio * 22
+                : 7;
             projectileIds.push(createPlayerProjectile(state, player, {
               kind: moveKey,
               attackKind: moveKey,
-              damage: Number(stats.damage || 20),
-              speed: moveKey === 'ghost_ball' ? 300 : 520,
-              radius: moveKey === 'love_bomb_laser' ? 14 : 7,
+              damage: chargeDamage,
+              speed: moveKey === 'ghost_ball' ? 300 : moveKey === 'love_bomb_laser' ? 340 + chargeRatio * 120 : 520,
+              radius: chargeRadius,
               lifeTicks: Math.max(12, Math.round(Number(stats.range || 320) / 18)),
               pierce: moveKey === 'ghost_ball' ? 8 : 0,
-              splash: moveKey === 'love_bomb_laser' ? 105 : 0,
-              splashDamage: Number(stats.damage || 20),
+              splash: moveKey === 'love_bomb_laser' ? 48 + chargeRatio * 42 : 0,
+              splashDamage: chargeDamage,
             }, angle + spread).id);
           }
         }
@@ -2258,7 +2294,16 @@
         const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
         statusUntil[moveKey] = state.tick + Math.max(1, Math.round(Number(stats.duration || 3) * 20));
         if (moveKey === 'healing_zone') {
-          abilityEntityIds.push(...spawnPersistentMoveEntities(state, player, moveKey, stats, angle).map(entity => entity.id));
+          const entity = createAbilityEntity(state, player, {
+            kind: 'healing_zone', presentationKey: moveKey,
+            radius: 62 * (1 + chargeRatio),
+            damage: Number(stats.damage || 12) * (1 + chargeRatio * 1.5),
+            heal: 4 * (1 + chargeRatio * 1.2),
+            durationTicks: Math.round(4.8 * (1 + chargeRatio) * 20),
+            pulseIntervalTicks: 10,
+          });
+          abilityEntityIds.push(entity.id);
+          effectRadius = entity.radius;
         }
         mode = 'support';
       } else if (moveKey === 'death_ball') {
@@ -2329,7 +2374,7 @@
     const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
     if (execution.releaseHeldCharge) {
       // The charge was spent at hold start. Its timer is rescheduled by
-      // updatePlayerSmashCharges at the actual release tick.
+      // updatePlayerHeldCharges at the actual release tick.
     } else if (player.beamChannel?.moveKey === moveKey && player.beamChannel.startTick === state.tick) {
       // Held beams recharge from the moment the channel ends, like the
       // campaign's queueHeldSkillRecharge. Assume the full duration here;
@@ -4331,7 +4376,7 @@
       // is spendable on this tick, rather than a tick late.
       tickMoveCharges(state);
       updatePlayerActions(state, inputs, emitEvent, random);
-      updatePlayerSmashCharges(state, inputs, emitEvent, random);
+      updatePlayerHeldCharges(state, inputs, emitEvent, random);
       updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
       updateAbilityEntities(state, emitEvent, random);
