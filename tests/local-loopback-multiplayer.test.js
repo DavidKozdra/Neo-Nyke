@@ -87,6 +87,28 @@ describe('LocalLoopbackTransport', () => {
     expect(received).toEqual(['kept']);
     expect(network.getMetrics().dropped).toBe(1);
   });
+
+  test('serializes each directional link when a bandwidth cap is configured', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ bytesPerSecond: 1_000, clock });
+    const host = transport(network, 'host', 'Host');
+    const client = transport(network, 'client', 'Client');
+    await host.createSession({ sessionId: 'BANDWIDTH' });
+    await client.joinSession('BANDWIDTH');
+    const received = [];
+    host.onMessage((_peerId, message) => received.push({ value: message.value, at: clock.now() }));
+
+    client.send('host', { value: 'large', payload: 'x'.repeat(980) }, { reliability: 'reliable', channel: 'control' });
+    client.send('host', { value: 'small' }, { reliability: 'reliable', channel: 'control' });
+
+    clock.advanceBy(900);
+    expect(received).toEqual([]);
+    clock.runAll();
+
+    expect(received.map(entry => entry.value)).toEqual(['large', 'small']);
+    expect(received[0].at).toBeGreaterThanOrEqual(1_000);
+    expect(received[1].at).toBeGreaterThan(received[0].at);
+  });
 });
 
 describe('protocol-driven local multiplayer session', () => {

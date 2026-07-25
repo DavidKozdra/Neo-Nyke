@@ -301,6 +301,7 @@
       this.buildVersion = String(options.buildVersion || LOCAL_BUILD_VERSION);
       this.generationVersion = Math.max(1, Math.trunc(Number(options.generationVersion) || LOCAL_GENERATION_VERSION));
       this.contentHash = String(options.contentHash || LOCAL_CONTENT_HASH);
+      this.enableSnapshotPacking = options.enableSnapshotPacking !== false;
       this.contentVersion = String(options.contentVersion || LOCAL_CONTENT_VERSION);
       this.matchSeed = options.matchSeed ?? 'local-match-seed';
       this.baseMatchId = String(options.matchId || 'local-match');
@@ -1230,13 +1231,17 @@
       this.playerIdByPeer.forEach((playerId, peerId) => {
         const player = this.simulation.state.players[playerId];
         if (!player) return;
-        const roomChanged = this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
+        const roomChanged = this.enableSnapshotPacking && this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
         const clientFull = actualFull || roomChanged;
         this.lastSnapshotRoomByPlayer[playerId] = player.roomId;
-        const source = clientFull ? this.simulation.state : { ...this.simulation.state, ...entities };
-        const scoped = scopedSnapshotEntities(source, player.roomId);
-        const packedDynamic = clientFull ? undefined : packDynamicEntities(scoped);
-        if (!clientFull) {
+        const source = clientFull
+          ? Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [collection, this.simulation.state[collection] || {}]))
+          : entities;
+        const scoped = this.enableSnapshotPacking
+          ? scopedSnapshotEntities(source, player.roomId)
+          : source;
+        const packedDynamic = this.enableSnapshotPacking && !clientFull ? packDynamicEntities(scoped) : undefined;
+        if (packedDynamic) {
           // New dynamic entities have no static bootstrap on this client yet;
           // send their complete record once, then use packed transforms only.
           PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
