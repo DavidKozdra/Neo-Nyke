@@ -2386,7 +2386,7 @@ describe('authoritative network combat system', () => {
     expect(parsed.floorState.width).toBe(TEST_ROOM.width);
   });
 
-  test('keeps Sarge Hammer Throw as a returning campaign boomerang with its catch reward', () => {
+  test('keeps Sarge Hammer Throw as a returning campaign boomerang without moving multiplayer loot', () => {
     const { state, simulation, events } = combatHarness('sarge');
     const player = state.players.p1;
     applyNetworkHeroProfile(player, 'sarge');
@@ -2415,10 +2415,13 @@ describe('authoritative network combat system', () => {
 
     expect(state.projectiles[hammer.id]).toBeUndefined();
     expect(player.hp).toBe(24);
-    expect(state.pickups.hammerCatchCoin.vx).toBeLessThan(0);
+    expect(state.pickups.hammerCatchCoin).toEqual(expect.objectContaining({
+      x: player.x + 200, y: player.y, vx: 0, vy: 0,
+    }));
+    expect(state.pickups.hammerCatchCoin.magnetized).toBeUndefined();
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'SARGES_HAMMER_RETURNED',
-      data: expect.objectContaining({ projectileId: hammer.id, playerId: player.id, healedAmount: 4, pickupIds: ['hammerCatchCoin'] }),
+      data: expect.objectContaining({ projectileId: hammer.id, playerId: player.id, healedAmount: 4, pickupIds: [] }),
     }));
   });
 

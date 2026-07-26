@@ -7,9 +7,10 @@ describe('right-click input latch safety', () => {
   const htmlSource = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 
   test('clears mouse-held state when browser button state or focus is lost', () => {
-    expect(panelsSource).toContain("if ((event.buttons & 2) === 0) Neo.mouse.right = false");
+    expect(panelsSource).toContain("if ((event.buttons & 2) === 0) releaseMouseButton(2)");
     expect(panelsSource).toContain('const clearMouseButtons = () => clearGameplayInput()');
     expect(panelsSource).toContain('Neo._laserWasHeld = false');
+    expect(panelsSource).toContain("if (Neo.laserActive && !Neo.isBeamStruggleActive?.()) Neo.endActiveLaser?.()");
     expect(panelsSource).toContain("window.addEventListener('mousemove', syncMouseButtons");
     expect(panelsSource).toContain("window.addEventListener('pointerup'");
     expect(panelsSource).toContain("window.addEventListener('pointercancel', clearMouseButtons)");

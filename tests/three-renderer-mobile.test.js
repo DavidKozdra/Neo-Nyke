@@ -10,6 +10,11 @@ describe('3D renderer mobile resilience', () => {
     expect(renderer).toContain('performance.now() - failedAt < WEBGL_RETRY_DELAY_MS');
   });
 
+  test('persists the 2D fallback when WebGL context creation fails', () => {
+    expect(renderer).toContain('setRender3D(false);');
+    expect(renderer).toContain("new CustomEvent('neo-view-mode-changed', { detail: '2d' })");
+  });
+
   test('uses the same flooring rule as WebGLRenderer for fractional DPR buffers', () => {
     expect(renderer).toContain('const bufferW = Math.floor(w * ratio)');
     expect(renderer).toContain('const bufferH = Math.floor(h * ratio)');

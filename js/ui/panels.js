@@ -11,14 +11,29 @@ if (!window.__neoNativeContextMenuBlocked) {
 
 export function bindInput() {
     const releaseMouseButton = button => {
+      const bindings = Neo.getMouseBindings?.() || { slash: 'lmb', laser: 'rmb' };
+      const binding = button === 0 ? 'lmb' : button === 2 ? 'rmb' : '';
+      if (!binding) return;
       if (button === 0) Neo.mouse.down = false;
       if (button === 2) Neo.mouse.right = false;
+      // A click can be released and pressed again between two render frames.
+      // Clear the matching edge latch here so the next press is never mistaken
+      // for one continuous hold. This matters for charged melee and every
+      // instant laser move, not only the default RMB laser binding.
+      if (bindings.slash === binding) Neo._meleeWasHeld = false;
+      if (bindings.laser === binding) {
+        Neo._laserWasHeld = false;
+        // The frame loop normally ends a sustained beam after observing an
+        // unheld frame. Do it at the actual release too, otherwise a rapid
+        // release/repress can keep the prior beam active and reject the click.
+        if (Neo.laserActive && !Neo.isBeamStruggleActive?.()) Neo.endActiveLaser?.();
+      }
     };
     const clearMouseButtons = () => clearGameplayInput();
     const syncMouseButtons = event => {
       if (!event || typeof event.buttons !== 'number') return;
-      if ((event.buttons & 1) === 0) Neo.mouse.down = false;
-      if ((event.buttons & 2) === 0) Neo.mouse.right = false;
+      if ((event.buttons & 1) === 0) releaseMouseButton(0);
+      if ((event.buttons & 2) === 0) releaseMouseButton(2);
     };
     Neo.canvas.addEventListener('contextmenu', event => event.preventDefault());
     Neo.canvas.addEventListener('auxclick', event => {

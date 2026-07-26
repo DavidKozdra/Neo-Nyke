@@ -135,6 +135,15 @@
   // short client-only presentation record until its authoritative event arrives
   // (or it naturally expires if the action was rejected).
   const PREDICTED_COMBAT_CONFIRMATION_MS = 1200;
+  // Audio can arrive behind reliable combat traffic. Beyond this age, playing
+  // the cue is more distracting than omitting it because the animation has
+  // already completed on screen. At 20 Hz this is a 400 ms grace window.
+  const NETWORK_SFX_MAX_EVENT_AGE_TICKS = 8;
+  const NETWORK_SFX_MAX_DECODE_DELAY_MS = 120;
+  const NETWORK_SFX_PRELOAD_IDS = Object.freeze([
+    'sword_swing', 'fire', 'fire_burn', 'lazer_blast', 'aoe',
+    'lightning_charge', 'dash', 'enemy_hit', 'coin', 'item_collect',
+  ]);
   // The authority owns the hold-to-charge table (button bit + maxChargeTicks).
   // Deriving both the held-button map and the predicted charge clock from it
   // keeps client presentation on exactly the profile the server will release
@@ -534,6 +543,7 @@
       this.touchMeleeHeld = false;
       this.camera = { x: 0, y: 0, roomId: null };
       this.lastPresentationFrameAt = 0;
+      this.latestAuthorityTick = 0;
       this.lastWorldTransform = null;
       this.paused = false;
       this.lastTransmittedInput = null;
@@ -617,6 +627,10 @@
       if (!this.canvas || !this.ctx) throw new Error('NetworkGameView requires the Neo Nyke canvas');
       this._captureCampaignPresentationState();
       this.active = true;
+      // Start fetching/decoding the compact combat set while the lobby-to-run
+      // transition is happening. This keeps the first remote cast from being
+      // delayed by Web Audio's first-use decode.
+      void this.neo.preloadSfx?.(NETWORK_SFX_PRELOAD_IDS);
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
       // Use the campaign's real presentation/UI state. The main update loop
@@ -783,6 +797,7 @@
       this.transitionFlashUntil = 0;
       this.lastRoomCode = '';
       this.lastPresentationFrameAt = 0;
+      this.latestAuthorityTick = 0;
       this.camera = { x: 0, y: 0, roomId: null };
       this.spectatorPlayerId = null;
       this.localWasDowned = false;
@@ -954,7 +969,8 @@
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
       this._renderChat(snapshot.chatMessages || []);
       const state = snapshot.gameState;
-      this._consumeGameplayEvents(snapshot.gameplayEvents || []);
+      this.latestAuthorityTick = Math.max(0, Number(state?.tick) || this.latestAuthorityTick || 0);
+      this._consumeGameplayEvents(snapshot.gameplayEvents || [], state?.tick);
       if (!state || !state.players) return;
       this._syncSpectatorState(state, snapshot.playerId);
       const receivedAt = root.performance?.now?.() || Date.now();
@@ -1348,7 +1364,7 @@
       }
     }
 
-    _consumeGameplayEvents(events) {
+    _consumeGameplayEvents(events, authorityTick = this.latestAuthorityTick) {
       const now = root.performance?.now?.() || Date.now();
       const localPlayerId = this.session.snapshot().playerId;
       events.forEach(event => {
@@ -1401,10 +1417,10 @@
             : weaponKey === 'gelleh_lightning_spear' ? 'lightning_charge'
               : ['princess_wand'].includes(weaponKey) ? 'fire'
                 : 'sword_swing';
-          if (!predicted) this.neo.playSfx?.(sound);
+          if (!predicted) this._playNetworkSfx(sound, event, authorityTick);
         }
         if (event.eventType === 'PLAYER_ABILITY_USED') {
-          if (!predicted) this.neo.playSfx?.(deriveAbilityPresentation(event.data).sound || 'lazer_blast');
+          if (!predicted) this._playNetworkSfx(deriveAbilityPresentation(event.data).sound || 'lazer_blast', event, authorityTick);
         }
         if (event.eventType === 'PLAYER_HIT' && event.data?.playerId === localPlayerId
           && this.localPredictedPlayer && Number(event.data.knockbackMagnitude || 0) > 0) {
@@ -1419,11 +1435,11 @@
           // A duplicate roll gets the campaign's compact "Copied!" toast next
           // to the normal pickup card, exactly as collectItem presents it.
           if (Number(event.data.amount || 1) >= 2) this.neo.pushCopiedNotification?.(event.data.itemKey);
-          this.neo.playSfx?.('item_collect');
+          this._playNetworkSfx('item_collect', event, authorityTick);
         }
         if (event.eventType === 'UPGRADE_APPLIED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
           this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
-          this.neo.playSfx?.('item_collect');
+          this._playNetworkSfx('item_collect', event, authorityTick);
         }
         if (event.eventType === 'SHOP_PURCHASED' && event.data?.playerId === localPlayerId) {
           if (event.data?.kind === 'item' && event.data?.key) this.neo.pushItemNotification?.(event.data.key, 1);
@@ -1445,7 +1461,7 @@
             this.neo.spawnBarrelExplosionFx?.(prop, {});
           } else {
             this.neo.spawnDestructibleBreakFx?.(prop, {});
-            this.neo.playSfx?.('break_furniture');
+            this._playNetworkSfx('break_furniture', event, authorityTick);
           }
         }
         // The provisional effect already began on the local input frame. Keep
@@ -1470,6 +1486,14 @@
         now - prediction.startedAt < PREDICTED_COMBAT_CONFIRMATION_MS
       ));
       this.predictedProjectiles = this.predictedProjectiles.filter(projectile => now < projectile.expiresAt);
+    }
+
+    _playNetworkSfx(sound, event, authorityTick = this.latestAuthorityTick) {
+      const eventTick = Number(event?.data?.tick);
+      const referenceTick = Math.max(0, Number(authorityTick) || 0, Number(this.currentSample?.state?.tick) || 0);
+      if (Number.isFinite(eventTick) && referenceTick - eventTick > NETWORK_SFX_MAX_EVENT_AGE_TICKS) return false;
+      this.neo.playSfx?.(sound, { maxStartDelayMs: NETWORK_SFX_MAX_DECODE_DELAY_MS });
+      return true;
     }
 
     _acknowledgePredictedCombatEvent(event, now) {
