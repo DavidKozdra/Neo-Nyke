@@ -50,9 +50,9 @@
     fire_circle: Object.freeze({ damage: 18, cooldown: 4.50, duration: 3.5, range: 100 }),
     floor_lava: Object.freeze({ damage: 12, cooldown: 5.00, duration: 4.0, range: 160 }),
     dash: Object.freeze({ cooldown: 1.20 }),
-    nimrod_stomp: Object.freeze({ damage: 60, cooldown: 2.50, range: 110 }),
+    nimrod_stomp: Object.freeze({ damage: 46, cooldown: 2.50, range: 110 }),
     warp: Object.freeze({ cooldown: 3.40 }),
-    zip_lightning: Object.freeze({ damage: 30, cooldown: 2.00 }),
+    zip_lightning: Object.freeze({ damage: 26, cooldown: 2.00 }),
     flying_unhitable: Object.freeze({ cooldown: 18.00, duration: 15.0 }),
     princess_shield: Object.freeze({ cooldown: 16.00 }),
     cowards_way: Object.freeze({ cooldown: 6.00, duration: 3.0 }),
@@ -255,6 +255,7 @@
   // each runtime only adapts the returned records into its entity storage.
   function createPowerDiskBurstDescriptors(options = {}) {
     const damageMultiplier = Math.max(0, Number(options.damageMultiplier ?? 1));
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 20));
     const metao = String(options.characterKey || '') === 'metao';
     const diskHitOptions = metao
       ? { drainChanceBonus: 0.05, fireChance: 0.4, fireStacks: 1, fireDuration: 3 }
@@ -268,7 +269,7 @@
       speed: 440,
       radius: 7,
       lifeSeconds: 1.8,
-      damage: Math.max(1, Math.round(20 * damageMultiplier)),
+      damage: Math.max(1, Math.round(baseDamage * damageMultiplier)),
       hitOptions: { ...diskHitOptions },
       subSpawn: {
         kind: 'disk_shard',
@@ -276,7 +277,7 @@
         speed: 620,
         radius: 4,
         lifeSeconds: 0.7,
-        damage: Math.max(1, Math.round(8 * damageMultiplier)),
+        damage: Math.max(1, Math.round(baseDamage * damageMultiplier * 0.4)),
         count: 2,
         jitterRadians: 0.5,
         hitOptions: { ...shardHitOptions },

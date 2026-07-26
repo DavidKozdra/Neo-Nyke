@@ -295,6 +295,10 @@ export function getPlayerBeamRange(mode = Neo.laserMode, moveKey = Neo.getEquipp
 }
 
 export function getPlayerBeamBounceCount(mode = Neo.laserMode) {
+  const sharedBeamPath = globalThis.NeoNyke?.simulation;
+  if (typeof sharedBeamPath?.getCampaignPlayerBeamBounceCount === 'function') {
+    return sharedBeamPath.getCampaignPlayerBeamBounceCount(mode);
+  }
   // Thorn's fan of beams ricochet like the standard beam so each bends with
   // the room rather than punching straight through.
   return (mode === 'beam' || mode === 'thorn_blood_beams') ? Neo.PLAYER_BEAM_BOUNCES : Neo.HEAVY_BEAM_BOUNCES;
@@ -571,6 +575,15 @@ function finalizeBeamPath(path) {
 }
 
 function buildRicochetBeamPathUncached(originX, originY, angle, range, maxBounces = 0) {
+  const sharedBeamPath = globalThis.NeoNyke?.simulation;
+  if (typeof sharedBeamPath?.buildCampaignRicochetBeamPath === 'function') {
+    return sharedBeamPath.buildCampaignRicochetBeamPath({
+      originX, originY, angle, range, maxBounces,
+      rects: getBeamReflectRects(),
+      nudge: Neo.BEAM_RICOCHET_NUDGE,
+      epsilon: Neo.BEAM_RICOCHET_EPSILON,
+    });
+  }
   const path = [];
   let remaining = Math.max(0, Number(range || 0));
   let startX = originX;
@@ -641,6 +654,10 @@ export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces
 }
 
 export function beamPathHitsCircle(path, cx, cy, radius) {
+  const sharedBeamPath = globalThis.NeoNyke?.simulation;
+  if (typeof sharedBeamPath?.campaignBeamPathHitsCircle === 'function') {
+    return sharedBeamPath.campaignBeamPathHitsCircle(path, cx, cy, radius);
+  }
   const bounds = getBeamPathBounds(path);
   if (
     bounds
@@ -660,6 +677,10 @@ export function beamPathHitsCircle(path, cx, cy, radius) {
 
 export function beamPathHitsDestructible(path, prop, padding = 0) {
   const rect = getDestructibleRect(prop);
+  const sharedBeamPath = globalThis.NeoNyke?.simulation;
+  if (typeof sharedBeamPath?.campaignBeamPathHitsRect === 'function') {
+    return sharedBeamPath.campaignBeamPathHitsRect(path, rect, padding);
+  }
   for (let index = 0; index < path.length; index += 1) {
     const segment = path[index];
     if (Neo.lineIntersectsRect(segment.x1, segment.y1, segment.x2, segment.y2, rect, padding)) return segment;

@@ -90,6 +90,42 @@
     return { weaponKey, stats: WEAPON_BASE_STATS[weaponKey], behavior: DEFAULT_WEAPON_ATTACKS[weaponKey] };
   }
 
+  function mergeProjectileHitOptions(...sources) {
+    const merged = {};
+    sources.forEach(source => {
+      if (source && typeof source === 'object') Object.assign(merged, source);
+    });
+    return Object.keys(merged).length ? merged : null;
+  }
+
+  // Both campaign and the multiplayer authority create these projectiles.  A
+  // single factory is important: weapon-level tuning must override a reusable
+  // projectile type, and an upgrade may override either without losing the
+  // type's authored on-hit effects.
+  function buildCampaignWeaponProjectileConfig(weaponKey, overrides = {}) {
+    const attack = WEAPON_PROJECTILE_ATTACKS[weaponKey] || {};
+    const projectileType = overrides.projectileType ?? attack.projectileType;
+    if (!projectileType) return null;
+    const type = PROJECTILE_TYPE_DEFS[projectileType] || {};
+    return {
+      angle: Number(overrides.angle || 0),
+      speed: Number(overrides.speed ?? attack.speed ?? type.speed ?? 520),
+      damage: Number(overrides.damage ?? attack.damage ?? type.damage ?? 18),
+      knockback: Number(overrides.knockback ?? attack.knockback ?? type.knockback ?? 140),
+      r: Number(overrides.r ?? attack.r ?? type.r ?? 5),
+      life: Number(overrides.life ?? attack.life ?? type.life ?? 1.2),
+      kind: overrides.kind ?? attack.kind ?? type.kind ?? 'weapon_shot',
+      color: overrides.color ?? attack.color ?? type.color ?? '#ffd7aa',
+      pierceCount: Number(overrides.pierceCount ?? attack.pierceCount ?? type.pierceCount ?? 0),
+      hitOptions: mergeProjectileHitOptions(type.hitOptions, attack.hitOptions, overrides.hitOptions),
+      recoil: Number(overrides.recoil ?? attack.recoil ?? type.recoil ?? 0),
+      muzzleRing: Number(overrides.muzzleRing ?? attack.muzzleRing ?? type.muzzleRing ?? 0),
+      burstCount: Number(overrides.burstCount ?? attack.burstCount ?? type.burstCount ?? 1),
+      burstDelay: Number(overrides.burstDelay ?? attack.burstDelay ?? type.burstDelay ?? 0),
+      spread: Number(overrides.spread ?? attack.spread ?? type.spread ?? 0),
+    };
+  }
+
   return {
     WEAPON_BASE_STATS,
     PROJECTILE_TYPE_DEFS,
@@ -99,5 +135,6 @@
     DEFAULT_WEAPON_ATTACKS,
     getCharacterDefaultWeapon,
     getDefaultWeaponAttack,
+    buildCampaignWeaponProjectileConfig,
   };
 });

@@ -34,10 +34,11 @@ describe('rune challenge movement', () => {
 
   test('keeps the standard dash faster than a fleeing rune', () => {
     const getChallengeRuneMaxSpeed = extractFunction(worldSource, 'getChallengeRuneMaxSpeed');
-    const dashSpeedMatch = combatSource.match(/const dashSpeed = \((\d+) \+ Neo\.player\.attackSpeed/);
+    const { resolveCampaignDashBurst } = require('../js/simulation/CampaignMovementRules');
+    const dash = resolveCampaignDashBurst({ aimDirection: 0, attackSpeed: 0 });
 
-    expect(dashSpeedMatch).not.toBeNull();
-    expect(Number(dashSpeedMatch[1])).toBeGreaterThan(getChallengeRuneMaxSpeed());
+    expect(combatSource).toContain('resolveCampaignDashBurst');
+    expect(dash.speed).toBeGreaterThan(getChallengeRuneMaxSpeed());
   });
 
   test('caps combined rune drift and flee movement', () => {

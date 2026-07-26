@@ -11,6 +11,7 @@ const {
   collectCampaignPickup,
   createCampaignJesterGate,
   useCampaignJesterGate,
+  getCampaignRichMansBluesCrystalReward,
 } = require('../js/simulation/SharedAcquisitionSystem');
 
 function player(overrides = {}) {
@@ -25,6 +26,12 @@ function player(overrides = {}) {
 }
 
 describe('shared campaign acquisition transactions', () => {
+  test("Rich Man's Blues uses the campaign's floor-scaled crystal transaction", () => {
+    expect(getCampaignRichMansBluesCrystalReward(1, 1)).toBe(27);
+    expect(getCampaignRichMansBluesCrystalReward(4, 2)).toBe(66);
+    expect(getCampaignRichMansBluesCrystalReward(0, 3)).toBe(81);
+  });
+
   test('Wizard Paw validates exactly two choices and applies campaign math once', () => {
     const target = player({ wizardPawPendingCount: 1 });
     expect(applyWizardPawSelection(target, ['maxHp'])).toMatchObject({ ok: false });

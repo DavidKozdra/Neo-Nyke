@@ -24,6 +24,12 @@
   const itemCount = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
   const SCROLL_KEYS = new Set(['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego']);
 
+  function getCampaignRichMansBluesCrystalReward(floor = 1, stacks = 1) {
+    const floorCount = Math.max(1, Math.floor(Number(floor) || 1));
+    const itemStacks = Math.max(0, Math.floor(Number(stacks) || 0));
+    return (25 + floorCount * 2) * itemStacks;
+  }
+
   function getScrollItemPool(options = {}) {
     const excluded = new Set(options.exclude || []);
     const owned = options.player?.items || {};
@@ -303,6 +309,7 @@
     applyCampaignScrollSelection,
     applyJestersDiceAcquisition,
     collectCampaignPickup, createCampaignJesterGate, useCampaignJesterGate,
+    getCampaignRichMansBluesCrystalReward,
     applyAcquisitionCommand,
   };
 });

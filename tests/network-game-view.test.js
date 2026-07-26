@@ -9,6 +9,8 @@ const {
   deriveAbilityPresentation,
   INPUT_HEARTBEAT_MS,
   NetworkGameView,
+  planChargedProjectilePreview,
+  planPredictedDashPreview,
 } = require('../js/rendering/NetworkGameView');
 const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/LocalMultiplayerSession');
 
@@ -738,6 +740,49 @@ describe('network multiplayer game view', () => {
     expect(firstProjectile.x).toBe(3);
   });
 
+  test('uses packed enemy hp/maxHp for the shared health-bar renderer after a full bootstrap', () => {
+    const neo = { ensureStatuses: jest.fn() };
+    const view = new NetworkGameView({ session: {}, neo });
+    const floorState = {
+      currentRoomId: 'room-a', visitedRoomIds: ['room-a'],
+      layout: { floorNumber: 1, rooms: [{ id: 'room-a', type: 'combat' }] },
+    };
+    // A full snapshot left these old aliases on the client; the compact delta
+    // must win because it carries the current health for the normal renderer.
+    view._syncNeoPresentationFloor(floorState, {
+      e1: { id: 'e1', roomId: 'room-a', health: 80, maxHealth: 80, hp: 31, maxHp: 100, radius: 18 },
+    }, {}, { tick: 20, interactables: {}, abilityEntities: {} });
+
+    expect(neo.enemies[0]).toEqual(expect.objectContaining({ hp: 31, max: 100 }));
+  });
+
+  test('runs the shared corpse physics updater from the multiplayer presentation frame', () => {
+    const updateDeadBodies = jest.fn();
+    const neo = { ensureStatuses: jest.fn(), updateDeadBodies, updateParticles: jest.fn() };
+    const session = { snapshot: () => ({ playerId: 'p1' }) };
+    const view = new NetworkGameView({ session, neo, canvas: { width: 900, height: 700 }, context: {} });
+    view.active = true;
+    view._updateHud = jest.fn();
+    view.currentSample = {
+      receivedAt: performance.now(),
+      state: {
+        tick: 20,
+        floorState: {
+          currentRoomId: 'room-a', width: 900, height: 700, visitedRoomIds: ['room-a'],
+          layout: { floorNumber: 1, rooms: [{ id: 'room-a', type: 'combat' }] },
+        },
+        players: { p1: { id: 'p1', roomId: 'room-a', x: 450, y: 350, hp: 100, maxHp: 100 } },
+        enemies: { e1: { id: 'e1', roomId: 'room-a', type: 'hunter', x: 520, y: 350, radius: 20, dead: true, deathTick: 20 } },
+        projectiles: {}, pickups: {}, interactables: {}, abilityEntities: {},
+      },
+    };
+
+    view.syncPresentation();
+
+    expect(neo.deadBodies).toHaveLength(1);
+    expect(updateDeadBodies).toHaveBeenCalledWith(expect.any(Number));
+  });
+
   test('projects authoritative beam channels as ordinary client presentation effects', () => {
     const neo = {};
     // The authority's live channel state drives the beam — angle updates every
@@ -779,6 +824,71 @@ describe('network multiplayer game view', () => {
     expect(neo.titanHammer).toEqual(expect.objectContaining({ ownerId: 'p1', x: 420, y: 350 }));
     expect(neo.skySwords).toHaveLength(5);
     expect(neo.skySwords[0]).toEqual(expect.objectContaining({ x: 400, y: 350 }));
+  });
+
+  test('uses the authoritative live Titan Hammer transform over the cast-event fallback', () => {
+    const neo = { projectiles: [] };
+    const actor = { id: 'p1', x: 300, y: 350, aimDirection: 0 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
+    view.currentSample = { tick: 50, state: { tick: 50, abilityEntities: {
+      hammer: {
+        id: 'hammer', kind: 'titan_hammer', ownerId: 'p1', x: 425, y: 410, angle: 1.2,
+        radius: 98, swinging: 0.75, swingsLeft: 1, expiresTick: 120, swingCooldownUntilTick: 65,
+      },
+    } } };
+    const now = performance.now();
+    view.combatEffects = [{ eventId: 'old-hammer', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'titan_hammer', aimDirection: 0 } }];
+
+    view._syncSpecialMovePresentation(now);
+
+    expect(neo.titanHammer).toEqual(expect.objectContaining({
+      id: 'hammer', x: 425, y: 410, angle: 1.2, radius: 98, swinging: 0.75, swingsLeft: 1,
+    }));
+    expect(neo.titanHammer.life).toBe(3.5);
+  });
+
+  test('uses authoritative live Blade Justice transforms over its cast-event fallback', () => {
+    const neo = { projectiles: [] };
+    const actor = { id: 'p1', x: 300, y: 350, aimDirection: 0 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
+    view.currentSample = { tick: 50, state: { tick: 50, abilityEntities: {
+      blade: {
+        id: 'blade', kind: 'blade_justice', ownerId: 'p1', x: 410, y: 470, angle: 1.2,
+        radius: 16, expiresTick: 82, justiceEffect: { durationSeconds: 2.1 },
+      },
+    } } };
+    const now = performance.now();
+    view.combatEffects = [{ eventId: 'old-blade', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'blade_justice', aimDirection: 0 } }];
+
+    view._syncSpecialMovePresentation(now);
+
+    expect(neo.justiceBlades).toEqual([expect.objectContaining({
+      id: 'blade', x: 410, y: 470, angle: 1.2, radius: 16, life: 1.6,
+    })]);
+  });
+
+  test('uses authoritative Excalibur phase and spin over its cast-event fallback', () => {
+    const neo = { projectiles: [] };
+    const actor = { id: 'p1', x: 300, y: 350, aimDirection: 0 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
+    view.currentSample = { tick: 50, state: { tick: 50, abilityEntities: {
+      sword: {
+        id: 'sword', kind: 'excalibur_strike', ownerId: 'p1', x: 425, y: 410,
+        radius: 95, phase: 'hover', angle: 1.2, spin: -6.5,
+        delayUntilTick: 44, impactTick: 47, hoverUntilTick: 60, fadeUntilTick: 66, expiresTick: 66,
+      },
+    } } };
+    const now = performance.now();
+    view.combatEffects = [{ eventId: 'old-sword', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'excalibur_strike', originX: 400, originY: 350 } }];
+
+    view._syncSpecialMovePresentation(now);
+
+    expect(neo.skySwords).toEqual([expect.objectContaining({
+      id: 'sword', x: 425, y: 410, radius: 95, phase: 'hover', angle: 1.2, spin: -6.5, hoverTime: 0.5,
+    })]);
   });
 
   test('preserves the shared enemy spawn window from authority ticks', () => {
@@ -1049,6 +1159,39 @@ describe('network multiplayer game view', () => {
     });
   });
 
+  test('holds Mooggy Swipe without predicting an instant primary attack, then predicts its release', () => {
+    const sent = [];
+    const session = {
+      combatPredictionCorrelation: true,
+      snapshot: () => ({ status: 'running', playerId: 'p1' }),
+      sendInput: input => sent.push(['input', input]),
+      sendAction: (...args) => sent.push(['action', ...args]),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.active = true;
+    view.localPredictedPlayer = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200, equippedWeapon: null,
+      equippedMoves: { melee: 'mooggy_swipe' }, itemStats: {},
+    };
+
+    view._attack();
+    expect(view.pendingCombatPredictions).toHaveLength(0);
+    expect(view.pendingHeldCharge).toEqual(expect.objectContaining({ abilityId: 'mooggy_swipe', slot: 'melee' }));
+    expect(sent).toEqual([
+      ['input', expect.objectContaining({ buttons: 8 })],
+      ['action', 'ATTACK', 0, expect.objectContaining({ predictionId: 'predicted:1' })],
+    ]);
+
+    view.pendingHeldCharge.startAt -= 2500;
+    view._releasePredictedHeldCharge();
+    expect(view.pendingCombatPredictions).toHaveLength(1);
+    const release = view.pendingCombatPredictions[0].event;
+    expect(release.eventId).toBe('predicted:1');
+    expect(release.eventType).toBe('PLAYER_ATTACKED');
+    expect(release.data.attackKind).toBe('mooggy_swipe');
+    expect(release.data.chargeRatio).toBeCloseTo(0.5, 2);
+  });
+
   test('starts local combat presentation immediately and replaces it with the authority event', () => {
     const sent = [];
     const sounds = [];
@@ -1133,6 +1276,45 @@ describe('network multiplayer game view', () => {
     expect(projectile.r).toBeCloseTo(33);
   });
 
+  test('uses the shared Mooggy Hairball AOE descriptor for provisional ability radius', () => {
+    const view = new NetworkGameView({ session: {}, neo: {} });
+    view.localPredictedPlayer = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200, characterKey: 'mooggy',
+      itemStats: { aoeRadiusMultiplier: 1.25, aoeDamageMultiplier: 1.5 },
+    };
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 200 } } } };
+
+    const prediction = view._predictLocalAbility('mooggy_hairball', 'smash');
+    expect(prediction.event.data.effectRadius).toBe(165);
+  });
+
+  test('uses the shared ground-smash descriptor for provisional Crimson Smash radius', () => {
+    const view = new NetworkGameView({ session: {}, neo: {} });
+    view.localPredictedPlayer = { id: 'p1', roomId: 'r1', x: 100, y: 200, itemStats: { aoeRadiusMultiplier: 1.25 } };
+    view.currentSample = { state: { tick: 20, players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 200 } } } };
+
+    expect(view._predictLocalAbility('crimson_smash', 'smash').event.data.effectRadius).toBe(185);
+  });
+
+  test('uses the shared charged-projectile policies for provisional visuals', () => {
+    const player = { itemStats: { damageMultiplier: 1.2, beamDamageMultiplier: 1.5, aoeRadiusMultiplier: 1.25, projectileSpeedMultiplier: 1.1 } };
+    const origin = { originX: 0, originY: 0, targetX: 1000, targetY: 0 };
+
+    const deathBall = planChargedProjectilePreview('death_ball', player, origin, 1);
+    expect(deathBall).toEqual(expect.objectContaining({
+      kind: 'death_ball', radius: 62.5, damage: 125, speed: 320,
+    }));
+    expect(deathBall.lifeSeconds).toBeCloseTo(2.4);
+    const loveBomb = planChargedProjectilePreview('love_bomb_laser', player, origin, 1);
+    expect(loveBomb).toEqual(expect.objectContaining({
+      kind: 'love_bomb', radius: 16, damage: 135, aoeRadius: 112.5,
+    }));
+    expect(loveBomb.speed).toBeCloseTo(506);
+    expect(planChargedProjectilePreview('ghost_ball', player, origin, 1)).toEqual(expect.objectContaining({
+      kind: 'ghost_ball', radius: 50, damage: 112, speed: 300,
+    }));
+  });
+
   test('predicts a dash destination immediately, then leaves final reconciliation to authority', () => {
     const session = { snapshot: () => ({ playerId: 'p1' }) };
     const view = new NetworkGameView({ session, neo: {} });
@@ -1148,6 +1330,37 @@ describe('network multiplayer game view', () => {
 
     expect(view.localPredictedPlayer.x).toBeCloseTo(400);
     expect(view.localPredictedPlayer.y).toBeCloseTo(200);
+  });
+
+  test('uses shared dash, safe-landing, and chain policies for immediate movement prediction', () => {
+    const player = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200, radius: 18, attackSpeed: 1,
+      itemStats: { attackSpeedMultiplier: 1.25 }, level: 7,
+    };
+    const state = {
+      tick: 20,
+      floorState: {
+        width: 900, height: 700, wallThickness: 28,
+        layout: { rooms: [{ id: 'r1', structures: [{ id: 'pillar', x: 400, y: 200, r: 24 }], destructibles: [] }] },
+      },
+      enemies: {
+        cursor: { id: 'cursor', roomId: 'r1', x: 420, y: 200, radius: 20, health: 100 },
+        chain: { id: 'chain', roomId: 'r1', x: 620, y: 200, radius: 20, health: 100 },
+      },
+    };
+    const dash = planPredictedDashPreview({ abilityId: 'dash', player, state, aimDirection: 0 });
+    expect(dash).toEqual(expect.objectContaining({ kind: 'glide', speed: 555, vx: 555, vy: 0 }));
+
+    const warp = planPredictedDashPreview({ abilityId: 'warp', player, state, targetX: 400, targetY: 200, aimDirection: 0 });
+    // The shared safe-landing spiral must move the client preview out of the
+    // pillar, rather than showing a blink the authority will reject/adjust.
+    expect(warp).toEqual(expect.objectContaining({ kind: 'blink', destinationY: 200 }));
+    expect(warp.destinationX).toBeGreaterThan(400);
+
+    const zip = planPredictedDashPreview({ abilityId: 'zip_lightning', player, state, targetX: 400, targetY: 200, aimDirection: 0 });
+    expect(zip.plan.hops.map(hop => hop.targetId)).toEqual(['cursor', 'chain']);
+    expect(zip.destinationX).toBeCloseTo(zip.plan.hops[1].x);
+    expect(zip.destinationY).toBeCloseTo(zip.plan.hops[1].y);
   });
 
   test('projects a local beam before its authoritative channel snapshot arrives', () => {

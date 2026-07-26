@@ -1,33 +1,50 @@
-const { applyResponsiveVelocity, resolveCampaignMovementInput } = require('../js/simulation/CampaignMovementRules');
-const { createCampaignMovementSystem, createCampaignFloorState } = require('../js/simulation/CampaignSimulation');
-const { GameState } = require('../js/simulation/GameState');
+const {
+  resolveCampaignDashBurst,
+  resolveCampaignBlinkDestination,
+  resolveCampaignNimrodStomp,
+} = require('../js/simulation/CampaignMovementRules');
 
 describe('campaign movement rules', () => {
-  test('shares normalized free movement between world and camera-relative 3D controls', () => {
-    const diagonal = resolveCampaignMovementInput(1, -1);
-    expect(Math.hypot(diagonal.moveX, diagonal.moveY)).toBeCloseTo(1);
-    expect(resolveCampaignMovementInput(0, -1, 0)).toEqual({ moveX: 1, moveY: 0 });
-    const turned = resolveCampaignMovementInput(0, -1, Math.PI / 2);
-    expect(turned.moveX).toBeCloseTo(0);
-    expect(turned.moveY).toBeCloseTo(1);
-  });
-
-  test('uses the campaign responsive acceleration rule for starts, stops, and turns', () => {
-    expect(applyResponsiveVelocity(0, 228, 0.05)).toBeCloseTo(159.6);
-    expect(applyResponsiveVelocity(159.6, 228, 0.05)).toBeCloseTo(207.48);
-    expect(applyResponsiveVelocity(100, -228, 0.05)).toBeCloseTo(-228);
-    expect(applyResponsiveVelocity(3, 0, 0.05)).toBe(0);
-  });
-
-  test('shared authority movement applies that same acceleration before advancing position', () => {
-    const floorState = createCampaignFloorState({ matchSeed: 'movement', floorSeed: 'movement-floor' });
-    const state = new GameState({
-      status: 'running', floorState,
-      players: { p1: { id: 'p1', x: 450, y: 350, radius: 18, moveSpeed: 228, roomId: floorState.currentRoomId } },
+  test('uses held movement before aim and returns the canonical dash glide timing', () => {
+    const dash = resolveCampaignDashBurst({
+      moveX: 1, moveY: 0, aimDirection: Math.PI / 2, attackSpeed: 2, godMode: true,
     });
-    createCampaignMovementSystem()({ state, inputs: { p1: { moveX: 1 } }, fixedDelta: 0.05 });
 
-    expect(state.players.p1.vx).toBeCloseTo(159.6);
-    expect(state.players.p1.x).toBeCloseTo(457.98);
+    expect(dash).toEqual(expect.objectContaining({
+      angle: 0,
+      speed: (520 + 56) * 1.1,
+      durationSeconds: 0.16,
+      invulnerabilitySeconds: 0.18,
+    }));
+    expect(dash.vx).toBeCloseTo(dash.speed);
+    expect(dash.vy).toBeCloseTo(0);
+  });
+
+  test('clamps cursor blink targets and searches the same deterministic safe ring', () => {
+    const landing = resolveCampaignBlinkDestination({
+      originX: 100, originY: 100, targetX: 450, targetY: 350,
+      radius: 18, width: 900, height: 700, wall: 28,
+      isBlocked: (x, y) => Math.hypot(x - 450, y - 350) < 30,
+    });
+    expect(landing).toEqual(expect.objectContaining({ targetX: 450, targetY: 350, adjusted: true }));
+    expect(Math.hypot(landing.x - 450, landing.y - 350)).toBeGreaterThanOrEqual(30);
+  });
+
+  test('scales Nimrod Stomp from its authored tap values through a full-room charge', () => {
+    const tap = resolveCampaignNimrodStomp({ chargeRatio: 0, width: 900, height: 700, rangeMultiplier: 1 });
+    const full = resolveCampaignNimrodStomp({ chargeRatio: 1, width: 900, height: 700, rangeMultiplier: 1.25 });
+
+    expect(tap).toEqual({
+      leapDistance: 108,
+      radius: 108,
+      damageMultiplier: 1,
+      invulnerabilitySeconds: 0.32,
+    });
+    expect(full).toEqual({
+      leapDistance: 1125,
+      radius: 202.5,
+      damageMultiplier: 1.7,
+      invulnerabilitySeconds: 0.32,
+    });
   });
 });

@@ -4,7 +4,9 @@ const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState } = require('../js/multiplayer/LocalMultiplayerSession');
 const { getEnemyDefinition, ENEMY_CATALOG } = require('../js/simulation/SharedEnemyContent');
 const { createCampaignEnemyBehaviors } = require('../js/simulation/SharedEnemyBehaviorSystem');
-const { applyNetworkHeroProfile, createNetworkCombatSystem } = require('../js/simulation/NetworkCombatSystem');
+const {
+  applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, advanceToNextFloor,
+} = require('../js/simulation/NetworkCombatSystem');
 
 function behaviorHarness() {
   const state = new GameState({
@@ -75,6 +77,67 @@ function tick(simulation, count = 1) {
 }
 
 describe('authored campaign enemy behaviors on the authority', () => {
+  test('Endless creates the campaign sealed single-arena floor at multiplayer startup', () => {
+    const floorState = createNetworkFloorState({ matchSeed: 'endless-layout', floorSeed: 'endless-layout|floor:1', gameMode: 'endless' });
+    expect(floorState.layout.rooms).toHaveLength(1);
+    expect(floorState.layout.rooms[0]).toMatchObject({ type: 'combat', doors: { n: false, s: false, e: false, w: false } });
+    expect(floorState.layout.exitRoomId).toBe(floorState.layout.startRoomId);
+  });
+
+  test('Boss Rush creates the campaign sealed single-arena floor at multiplayer startup', () => {
+    const floorState = createNetworkFloorState({ matchSeed: 'boss-rush-layout', floorSeed: 'boss-rush-layout|floor:5', floorNumber: 5, gameMode: 'boss_rush' });
+    expect(floorState.layout.rooms).toHaveLength(1);
+    expect(floorState.layout.rooms[0]).toMatchObject({ type: 'combat', doors: { n: false, s: false, e: false, w: false } });
+    expect(floorState.layout.exitRoomId).toBe(floorState.layout.startRoomId);
+  });
+
+  test('Rival Rumble creates the campaign sealed single-arena floor and fields a hostile duel rival', () => {
+    const floorState = createNetworkFloorState({ matchSeed: 'rival-rumble-layout', floorSeed: 'rival-rumble-layout|floor:5', floorNumber: 5, gameMode: 'rival_rumble' });
+    expect(floorState.layout.rooms).toHaveLength(1);
+    expect(floorState.layout.rooms[0]).toMatchObject({ type: 'combat', doors: { n: false, s: false, e: false, w: false } });
+
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.matchRules.gameMode = 'rival_rumble';
+    const arena = state.floorState.layout.rooms.find(room => room.id === player.roomId);
+    arena.type = 'combat';
+    arena.doors = { n: false, s: false, e: false, w: false };
+    state.floorState.layout.rooms = [arena];
+    state.floorState.layout.startRoomId = arena.id;
+    state.floorState.layout.exitRoomId = arena.id;
+    state.enemies = {};
+    state.floorState.encounters = {};
+
+    simulation.updateGame({}, 0.05);
+    const rival = Object.values(state.enemies).find(enemy => !enemy.dead && enemy.type === 'rival');
+    expect(state.rivalRumble).toEqual(expect.objectContaining({ initialized: true, active: true, stage: 0, finale: false }));
+    expect(player.coins).toBe(120);
+    expect(rival).toEqual(expect.objectContaining({ rivalRumbleStage: 0, rivalRumbleFinale: false }));
+    expect(rival.rivalBrain).toEqual(expect.objectContaining({ stance: 'hostile', intention: 'engage' }));
+
+    player.x = rival.x - 12;
+    player.y = rival.y;
+    rival.health = 1;
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+    expect(state.rivalRumble).toEqual(expect.objectContaining({ stage: 1, active: false, finale: false }));
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'RIVAL_RUMBLE_STAGE_CLEARED', data: expect.objectContaining({ stage: 1 }) }));
+
+    state.tick = state.rivalRumble.nextSpawnTick;
+    simulation.updateGame({}, 0.05);
+    expect(Object.values(state.enemies).some(enemy => !enemy.dead && enemy.type === 'rival' && enemy.rivalRumbleStage === 1)).toBe(true);
+
+    state.enemies = {};
+    state.floorState.encounters = {};
+    state.rivalRumble.stage = state.rivalRumble.order.length;
+    state.rivalRumble.active = false;
+    state.rivalRumble.finale = true;
+    state.rivalRumble.nextSpawnTick = state.tick;
+    simulation.updateGame({}, 0.05);
+    const finaleRivals = Object.values(state.enemies).filter(enemy => !enemy.dead && enemy.rivalRumbleFinale);
+    expect(finaleRivals).toHaveLength(state.rivalRumble.order.length);
+    expect(finaleRivals.every(enemy => enemy.rivalVendetta && enemy.maxHealth >= 440)).toBe(true);
+  });
+
   test('chargers telegraph a wind-up, then dash and hit like the campaign', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
@@ -173,6 +236,227 @@ describe('authored campaign enemy behaviors on the authority', () => {
     expect(events.some(event => event.eventType === 'ENEMY_SPAWNED' && event.data.enemyId === boss.id && event.data.boss)).toBe(true);
   });
 
+  test("Rich Man's Blues grants its campaign loop-crystal boss payout on the authority", () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    player.items.rich_mans_blues = 2;
+    const boss = injectEnemy(state, 'bowman_bane', player.x + 44, player.y, {
+      health: 1, maxHealth: 1, contactDamage: 0, attackCd: 9,
+    });
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+
+    expect(boss.dead).toBe(true);
+    expect(player.loopCrystals).toBe(2);
+    expect(player.runCrystalsEarned).toBe(2);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'LOOP_CRYSTALS_AWARDED', data: expect.objectContaining({ playerId: player.id, enemyId: boss.id, amount: 2 }),
+    }));
+  });
+
+  test("Rich Man's Blues grants its floor-scaled pickup crystals through every authority item transaction", () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.pickups.richMansBlues = {
+      id: 'richMansBlues', type: 'item', key: 'rich_mans_blues', amount: 1,
+      roomId: player.roomId, x: player.x, y: player.y, radius: 13, spawnTick: state.tick,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    expect(player.items.rich_mans_blues).toBe(1);
+    expect(player.loopCrystals).toBe(27);
+    expect(player.runCrystalsEarned).toBe(27);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'LOOP_CRYSTALS_AWARDED', data: expect.objectContaining({ playerId: player.id, amount: 27, source: 'item_pickup' }),
+    }));
+  });
+
+  test('Charged Adapter opens a delayed authority portal and pays half coins only on walk-in', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    player.items.charged_adapter = 1;
+    player.equipmentSlots = ['charged_adapter'];
+    player.escapeReady = true;
+    player.escapeChargeKills = 20;
+    player.coins = 101;
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ACTIVATE_EQUIPMENT', itemKey: 'charged_adapter' }] } }, 0.05);
+    const portal = Object.values(state.pickups).find(pickup => pickup.type === 'adapterPortal');
+    expect(portal).toBeTruthy();
+    expect(player).toMatchObject({ escapeReady: false, escapeChargeKills: 0, coins: 101, roomId: state.floorState.currentRoomId });
+
+    player.x = portal.x;
+    player.y = portal.y;
+    tick(simulation, 16);
+
+    const ladder = state.floorState.layout.rooms.find(room => room.type === 'ladder');
+    expect(player.roomId).toBe(ladder.id);
+    expect(player.coins).toBe(51);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ADAPTER_PORTAL_USED', data: expect.objectContaining({ playerId: player.id, goldSpent: 50, targetRoomId: ladder.id }),
+    }));
+  });
+
+  test("Mateo's Bag equipment slot routes to the authority stored-potion action", () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    player.items.mateos_bag = 1;
+    player.equipmentSlots = ['mateos_bag'];
+    player.storedPotions = 1;
+    player.hp = 500;
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ACTIVATE_EQUIPMENT', itemKey: 'mateos_bag' }] } }, 0.05);
+
+    expect(player.storedPotions).toBe(0);
+    expect(player.hp).toBeGreaterThan(500);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'POTION_USED', data: expect.objectContaining({ playerId: player.id, storedPotions: 0 }),
+    }));
+  });
+
+  test('Treasure Hunt authority owns vault-key escape, collapse, and the returned exit', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.matchRules.gameMode = 'treasure_hunt';
+    const escapeRoom = state.floorState.layout.rooms.find(room => room.type === 'combat');
+    player.roomId = escapeRoom.id;
+    state.pickups.vaultKey = {
+      id: 'vaultKey', type: 'treasureKey', roomId: player.roomId,
+      x: player.x, y: player.y, radius: 18, spawnTick: state.tick,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    expect(state.treasureHunt).toEqual(expect.objectContaining({ phase: 'escape', hasKey: true }));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'TREASURE_HUNT_KEY_COLLECTED', data: expect.objectContaining({ playerId: player.id }),
+    }));
+    const nonStartRooms = state.floorState.layout.rooms.filter(room => room.type !== 'start');
+    expect(nonStartRooms.some(room => room.hazards?.some(hazard => hazard.source === 'treasure_hunt_trap'))).toBe(true);
+
+    state.treasureHunt.blastTick = 0;
+    simulation.updateGame({}, 0.05);
+    const currentRoom = state.floorState.layout.rooms.find(room => room.id === player.roomId);
+    expect(currentRoom.hazards.some(hazard => hazard.source === 'dungeon_collapse')).toBe(true);
+
+    const start = state.floorState.layout.rooms.find(room => room.type === 'start');
+    player.roomId = start.id;
+    simulation.updateGame({}, 0.05);
+
+    expect(state.treasureHunt.phase).toBe('returned');
+    expect(Object.values(state.interactables).some(item => item.roomId === start.id
+      && (item.kind === 'stairs' || item.treasureHuntExitChest))).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'TREASURE_HUNT_RETURNED', data: expect.objectContaining({ roomId: start.id }),
+    }));
+  });
+
+  test('a Treasure Hunt vault clear yields a key instead of the ordinary stairs', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.matchRules.gameMode = 'treasure_hunt';
+    const vault = state.floorState.layout.rooms.find(room => room.type === 'combat');
+    vault.type = 'boss';
+    player.roomId = vault.id;
+    const boss = injectEnemy(state, 'bowman_bane', player.x + 44, player.y, {
+      roomId: vault.id, health: 1, maxHealth: 1, contactDamage: 0, attackCd: 9,
+    });
+    state.floorState.encounters[vault.id] = { roomId: vault.id, status: 'active', enemyIds: [boss.id] };
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+
+    expect(Object.values(state.pickups).some(pickup => pickup.type === 'treasureKey' && pickup.roomId === vault.id)).toBe(true);
+    expect(Object.values(state.interactables).some(item => item.kind === 'stairs' && item.roomId === vault.id)).toBe(false);
+  });
+
+  test('Endless authority opens a shared intermission, sells paid chests, and starts the next wave', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.matchRules.gameMode = 'endless';
+    const arena = state.floorState.layout.rooms.find(room => room.id === player.roomId);
+    arena.type = 'combat';
+    const waveEnemy = injectEnemy(state, 'hunter', player.x + 44, player.y, {
+      roomId: arena.id, health: 1, maxHealth: 1, contactDamage: 0, attackCd: 9,
+    });
+    state.floorState.encounters[arena.id] = { roomId: arena.id, status: 'active', enemyIds: [waveEnemy.id] };
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+
+    expect(arena.endlessIntermission).toBe(true);
+    const exit = Object.values(state.pickups).find(pickup => pickup.type === 'endlessNextWave');
+    const chest = Object.values(state.interactables).find(item => item.kind === 'endless_chest');
+    expect(exit).toBeTruthy();
+    expect(chest).toBeTruthy();
+    player.coins = chest.price + 10;
+    player.x = chest.x;
+    player.y = chest.y;
+    simulation.updateGame({ p1: { actions: [{ action: 'INTERACT', targetEntityId: chest.id }] } }, 0.05);
+    expect(chest.opened).toBe(true);
+    expect(player.coins).toBe(10);
+    expect(player.items[chest.rewardKey]).toBeGreaterThanOrEqual(1);
+
+    player.x = exit.x;
+    player.y = exit.y;
+    simulation.updateGame({}, 0.05);
+    expect(arena.endlessIntermission).toBe(false);
+    expect(state.endlessWaveActive).toBe(true);
+    simulation.updateGame({}, 0.05);
+    expect(Object.values(state.enemies).filter(enemy => !enemy.dead && enemy.roomId === arena.id)).toHaveLength(5);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ENDLESS_WAVE_STARTED', data: expect.objectContaining({ playerId: player.id, roomId: arena.id }),
+    }));
+  });
+
+  test('Boss Rush authority grants its start, stage rewards, serialized next boss, and final victory', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    state.matchRules.gameMode = 'boss_rush';
+    const arena = state.floorState.layout.rooms.find(room => room.id === player.roomId);
+    arena.type = 'combat';
+    arena.doors = { n: false, s: false, e: false, w: false };
+    state.floorState.layout.rooms = [arena];
+    state.floorState.layout.startRoomId = arena.id;
+    state.floorState.layout.exitRoomId = arena.id;
+    state.enemies = {};
+    state.floorState.encounters = {};
+
+    simulation.updateGame({}, 0.05);
+    expect(state.floorNumber).toBe(5);
+    expect(player.coins).toBe(120);
+    expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('queen_cult');
+    const firstBoss = Object.values(state.enemies).find(enemy => !enemy.dead);
+    player.x = firstBoss.x - 12;
+    player.y = firstBoss.y;
+    firstBoss.health = 1;
+    firstBoss.queenFinisherDone = true;
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+
+    expect(state.bossRush).toEqual(expect.objectContaining({ stage: 1, active: false }));
+    expect(Object.values(state.pickups).some(pickup => pickup.source === 'boss_rush_stage' && pickup.type === 'item')).toBe(true);
+    expect(Object.values(state.pickups).some(pickup => pickup.source === 'boss_rush_stage' && pickup.type === 'potion')).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'BOSS_RUSH_STAGE_CLEARED', data: expect.objectContaining({ nextBossType: 'bulk_golem' }) }));
+
+    state.tick = state.bossRush.nextSpawnTick;
+    simulation.updateGame({}, 0.05);
+    expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('bulk_golem');
+
+    state.bossRush.stage = 5;
+    state.bossRush.active = true;
+    state.enemies = {};
+    state.floorState.encounters[arena.id] = { roomId: arena.id, status: 'active', enemyIds: [], bossRushStage: 5 };
+    const finalBoss = injectEnemy(state, 'god', player.x + 44, player.y, {
+      roomId: arena.id, health: 1, maxHealth: 1, contactDamage: 0, attackCd: 9,
+    });
+    state.floorState.encounters[arena.id].enemyIds.push(finalBoss.id);
+    player.x = finalBoss.x - 12;
+    player.y = finalBoss.y;
+    finalBoss.rebirthUsed = true;
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+    expect(state.status).toBe('ended');
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'RUN_ENDED', data: expect.objectContaining({ reason: 'boss-rush-completed' }) }));
+  });
+
   test('hunters attack on a cooldown — no walk-over contact damage', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
@@ -181,6 +465,787 @@ describe('authored campaign enemy behaviors on the authority', () => {
     tick(simulation, 10); // 0.5s adjacent to the player
     const hits = events.filter(event => event.eventType === 'PLAYER_HIT' && event.data.attackKind === 'hunter');
     expect(hits.length).toBe(1); // one authored swing, then the 1.05s cooldown
+  });
+
+  test('lazered elites create the authored, seeded lightning-column pair', () => {
+    const first = behaviorHarness();
+    const second = behaviorHarness();
+    const configure = ({ state }) => injectEnemy(state, 'laser', state.players.p1.x + 240, state.players.p1.y, {
+      elite: true,
+      eliteTypes: ['lazered'],
+      eliteLaserModeIndex: 4, // authored cycle: lightning_columns
+      eliteLaserCd: 0,
+    });
+    configure(first);
+    configure(second);
+
+    tick(first.simulation);
+    tick(second.simulation);
+    const firstHazards = first.state.floorState.layout.rooms
+      .find(room => room.id === first.state.floorState.currentRoomId).hazards;
+    const secondHazards = second.state.floorState.layout.rooms
+      .find(room => room.id === second.state.floorState.currentRoomId).hazards;
+
+    expect(firstHazards).toHaveLength(2);
+    expect(firstHazards).toEqual(secondHazards);
+    expect(firstHazards).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'lightning_column', enemy: true, r: 46, ttl: 1.25,
+        tick: 0, interval: 0.36, damage: Math.round(ENEMY_CATALOG.laser.contactDamage * 0.78),
+      }),
+    ]));
+    firstHazards.forEach(hazard => {
+      expect(hazard.x).toBeGreaterThanOrEqual(88);
+      expect(hazard.x).toBeLessThanOrEqual(812);
+      expect(hazard.y).toBeGreaterThanOrEqual(88);
+      expect(hazard.y).toBeLessThanOrEqual(612);
+    });
+  });
+
+  test('guarded rivals warn and hold fire before their campaign warning expires', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 110, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'princess', rivalFriend: false, rivalVendetta: false,
+      mirrorMoves: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorWeapon: 'princess_wand', mirrorWeaponStats: { damage: 20, range: 380, knockback: 100 },
+    });
+
+    tick(simulation, 1);
+    expect(rival.rivalBrain).toMatchObject({ stance: 'warning', intention: 'observe' });
+    expect(player.hp).toBe(1000);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'RIVAL_DISPOSITION_CHANGED', data: expect.objectContaining({ enemyId: rival.id, stance: 'warning', reason: 'proximity' }),
+    }));
+  });
+
+  test('pending rivals enter the authority with their shared campaign loadout', () => {
+    const { state, simulation } = behaviorHarness();
+    const room = state.floorState.layout.rooms.find(candidate => candidate.type === 'combat');
+    state.players.p1.roomId = room.id;
+    state.floorState.currentRoomId = room.id;
+    state.rivalRoster = [{ characterKey: 'gelleh', pendingSpawn: true, dead: false, friend: false, vendetta: false }];
+
+    ensureNetworkEncounter(state, simulation.randomService || new RandomService({ matchSeed: state.matchSeed }), () => {}, room.id);
+    const rival = Object.values(state.enemies).find(enemy => enemy.type === 'rival');
+    expect(rival).toEqual(expect.objectContaining({
+      rivalCharacterKey: 'gelleh', mirrorWeapon: 'gelleh_lightning_spear',
+      mirrorMoves: expect.objectContaining({ laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' }),
+    }));
+    expect(rival.rivalLoadout).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'gelleh_lightning_spear', slot: 'melee' }),
+      expect.objectContaining({ key: 'blade_justice', slot: 'laser' }),
+      expect.objectContaining({ key: 'healing_zone', slot: 'smash' }),
+      expect.objectContaining({ key: 'zip_lightning', slot: 'dash' }),
+    ]));
+  });
+
+  test('Metao rival Power Disks uses the shared radial disk and shard entities', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 250, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true,
+      contactDamage: 40, mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'power_disks', slot: 'laser', damageMult: 0.72 }],
+      mirrorItemStats: { beamDamageMultiplier: 1 },
+    });
+
+    tick(simulation, 12); // laser wind-up, then the shared eight-disk burst
+    const disks = Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'disk');
+    expect(disks).toHaveLength(8);
+    expect(disks.map(disk => Math.round(Math.atan2(disk.vy, disk.vx) * 1e6) / 1e6).sort((a, b) => a - b))
+      .toEqual(Array.from({ length: 8 }, (_, index) => Math.round((index * Math.PI * 2 / 8 > Math.PI ? index * Math.PI * 2 / 8 - Math.PI * 2 : index * Math.PI * 2 / 8) * 1e6) / 1e6).sort((a, b) => a - b));
+    expect(disks).toEqual(expect.arrayContaining([expect.objectContaining({
+      damage: 29, radius: 7, remainingPierces: 0, subSpawn: expect.objectContaining({ kind: 'disk_shard', count: 2 }),
+    })]));
+
+    tick(simulation, 4); // 0.2 seconds: each disk emits its first shard pair
+    expect(Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'disk_shard').length).toBeGreaterThanOrEqual(16);
+  });
+
+  test('Mooggy rival Nail Shot uses the shared bounced twelve-nail ring', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 250, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'mooggy', rivalVendetta: true,
+      contactDamage: 40, mirrorMoves: { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'nail_shot', slot: 'laser', damageMult: 0.85 }],
+      mirrorItemStats: { beamDamageMultiplier: 1 },
+    });
+
+    tick(simulation, 12);
+    const nails = Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'nail');
+    expect(nails).toHaveLength(12);
+    expect(nails).toEqual(expect.arrayContaining([expect.objectContaining({
+      damage: 34, radius: 3, bouncesRemaining: 3, hitOptions: expect.objectContaining({ bleedChance: 0.08 }),
+    })]));
+  });
+
+  test('Mooggy rival Random Pounce uses the shared burst and homing fang plan', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'mooggy', rivalVendetta: true,
+      contactDamage: 40, mirrorMoves: { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'random_pounce', slot: 'smash', damageMult: 1.1 }],
+    });
+
+    tick(simulation, 10);
+    const fangs = Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'fang');
+    expect(fangs).toHaveLength(8);
+    expect(fangs).toEqual(expect.arrayContaining([expect.objectContaining({
+      damage: 22, radius: 5, homing: true, homingTargetId: player.id,
+      hitOptions: expect.objectContaining({ bleedChance: 0.55, bleedStacks: 2, bleedDuration: 5 }),
+    })]));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ attackKind: 'random_pounce', damage: expect.any(Number) }),
+    }));
+  });
+
+  test('Gelleh rival Blade Justice owns three shared moving sword entities', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      contactDamage: 40, mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+
+    tick(simulation, 12);
+    expect(rival.rivalJusticeBlades).toHaveLength(3);
+    expect(rival.rivalJusticeEffect).toEqual(expect.objectContaining({
+      count: 3, durationSeconds: 2.1, radius: 16, reach: 120, damage: 29,
+    }));
+    const before = rival.rivalJusticeBlades.map(blade => ({ x: blade.x, y: blade.y, life: blade.life }));
+    tick(simulation, 2);
+    expect(rival.rivalJusticeBlades).toHaveLength(3);
+    expect(rival.rivalJusticeBlades.some((blade, index) => blade.x !== before[index].x || blade.y !== before[index].y)).toBe(true);
+    expect(rival.rivalJusticeBlades.every((blade, index) => blade.life < before[index].life)).toBe(true);
+  });
+
+  test('Metao rival Fire Staff uses the shared full-speed volley, splash, burn, and recoil payload', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 250, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'metao_fire_staff',
+      mirrorWeaponStats: { damage: 37, range: 470, knockback: 110 },
+      mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'metao_fire_staff', slot: 'melee', damageMult: 0.92 }],
+    });
+
+    tick(simulation, 1);
+    const fireballs = Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'fireball');
+    expect(fireballs).toHaveLength(3);
+    expect(fireballs).toEqual(expect.arrayContaining([expect.objectContaining({
+      damage: 37, radius: 8, splash: 48, splashDamage: 24,
+      fireStacks: 2, splashFireStacks: 1, fireDuration: 3.4,
+    })]));
+    expect(fireballs.map(projectile => Math.round(Math.hypot(projectile.vx, projectile.vy)))).toEqual([560, 560, 560]);
+    expect(rival.state).toBe('rivalFireballVolley');
+    // Steering and recoil resolve in the same authority step; the resulting
+    // velocity still preserves the campaign recoil instead of full chase speed.
+    expect(rival.vx).toBeLessThan(100);
+  });
+
+  test('Turtle Boy rival Death Ball uses the shared charged projectile instead of a generic smash', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 160, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'turtle_boy', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'extending_staff', mirrorWeaponStats: { damage: 46, range: 130, knockback: 500 },
+      mirrorMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'death_ball', slot: 'smash', damageMult: 1.05 }],
+    });
+
+    tick(simulation, 10);
+    const ball = Object.values(state.projectiles).find(projectile => projectile.ownerId === rival.id && projectile.type === 'death_ball');
+    expect(ball).toEqual(expect.objectContaining({
+      damage: 88, radius: 41.5, knockback: 415, remainingPierces: 10,
+    }));
+    expect(Math.round(Math.hypot(ball.vx, ball.vy))).toBe(370);
+  });
+
+  test('Gelleh rival Lightning Spear uses the shared Smite blade payload', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 250, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'gelleh_lightning_spear',
+      mirrorWeaponStats: { damage: 45, range: 420, knockback: 200 },
+      mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'gelleh_lightning_spear', slot: 'melee', damageMult: 0.94 }],
+    });
+
+    tick(simulation, 1);
+    const spear = Object.values(state.projectiles).find(projectile => projectile.ownerId === rival.id && projectile.type === 'blade_justice');
+    expect(spear).toEqual(expect.objectContaining({
+      damage: 38, radius: 7, knockback: 80, remainingPierces: 99,
+      statusEffects: [{ key: 'static', chance: 0.35, stacks: 1, duration: 3 }],
+    }));
+    expect(Math.round(Math.hypot(spear.vx, spear.vy))).toBe(820);
+  });
+
+  test('wounded Gelleh rivals create and heal through the shared hostile Healing Zone', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 160, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      maxHealth: 100, health: 50, hp: 50, contactDamage: 40,
+      mirrorWeapon: 'gelleh_lightning_spear', mirrorWeaponStats: { damage: 45, range: 420, knockback: 200 },
+      mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'healing_zone', slot: 'smash', healRatio: 0.14 }],
+    });
+
+    tick(simulation, 10);
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === rival.roomId);
+    const zone = room.hazards.find(hazard => hazard.kind === 'healing_zone' && hazard.ownerId === rival.id);
+    expect(zone).toEqual(expect.objectContaining({
+      r: 100, ttl: expect.any(Number), healPerSecond: 12.512, damagePerSecond: 20, damageInterval: 0.2,
+    }));
+    expect(rival.health).toBeGreaterThan(50);
+    expect(events.some(event => event.eventType === 'PLAYER_HIT' && event.data.attackKind === 'healing_zone')).toBe(false);
+  });
+
+  test('Princess rival Love Bomb uses the shared full-size hostile bomb and detonates in an area', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 250, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'princess', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'princess_wand', mirrorWeaponStats: { damage: 30, range: 380, knockback: 160 },
+      mirrorMoves: { melee: 'slash', laser: 'love_bomb_laser', smash: 'kicky_kick', dash: 'flying_unhitable' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'love_bomb_laser', slot: 'laser', damageMult: 1 }],
+    });
+
+    tick(simulation, 12);
+    const bomb = Object.values(state.projectiles).find(projectile => projectile.ownerId === rival.id && projectile.type === 'love_bomb');
+    expect(bomb).toEqual(expect.objectContaining({
+      damage: 64, radius: 16, aoeRadius: 90, sparkleChance: 0.8, knockback: 180,
+    }));
+    expect(Math.round(Math.hypot(bomb.vx, bomb.vy))).toBe(420);
+
+    tick(simulation, 12);
+    expect(player.hp).toBeLessThan(1000);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'LOVE_BOMB_DETONATED', data: expect.objectContaining({ enemyId: rival.id, targetIds: [player.id] }),
+    }));
+  });
+
+  test('Metao rival Chaos Burst creates the shared persistent hostile eruption field', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 160, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'metao_fire_staff', mirrorWeaponStats: { damage: 22, range: 470, knockback: 110 },
+      mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'chaos_burst', slot: 'smash', damageMult: 0.85 }],
+    });
+
+    tick(simulation, 10);
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === rival.roomId);
+    const field = room.hazards.find(hazard => hazard.kind === 'chaos_burst' && hazard.ownerId === rival.id);
+    expect(field).toEqual(expect.objectContaining({
+      r: 180, ttl: expect.any(Number), interval: 0.22, damage: 21, poisonDurationSeconds: 4.8, followEnemy: true,
+    }));
+    const before = player.hp;
+    player.x = field.x;
+    player.y = field.y;
+    player.radius = 300; // guarantee contact with the seeded eruption geometry without leaving room bounds
+    player.invulnerableUntilTick = 0;
+    field.tick = 0; // force the next deterministic field pulse
+    tick(simulation, 1);
+    expect(player.hp).toBeLessThan(before);
+    expect(player.statuses?.poison?.stacks || 0).toBeGreaterThan(0);
+  });
+
+  test('Princess rival Kicky Kick uses the shared rival-scaled heavy impact', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'princess', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'princess_wand', mirrorWeaponStats: { damage: 30, range: 380, knockback: 160 },
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'kicky_kick', slot: 'smash', damageMult: 1.4 }],
+    });
+
+    tick(simulation, 10);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'kicky_kick', knockbackMagnitude: 680 }),
+    }));
+    expect(player.hp).toBeLessThan(1000);
+    expect(rival.state).not.toBe('mirrorSmash');
+  });
+
+  test('Thorn rival Crimson Smash uses the shared direct hit and eight bleeding rocks', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'thorn_knight', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'thorns_bleed_blade', mirrorWeaponStats: { damage: 24, range: 72, knockback: 340 },
+      mirrorMoves: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'crimson_smash', slot: 'smash', damageMult: 1.3 }],
+    });
+
+    tick(simulation, 10);
+    const rocks = Object.values(state.projectiles).filter(projectile => projectile.ownerId === rival.id && projectile.type === 'rock');
+    expect(rocks.length).toBeGreaterThanOrEqual(7); // one forward rock can contact in its spawn frame
+    expect(rocks).toEqual(expect.arrayContaining([expect.objectContaining({
+      damage: 23, radius: 7, remainingPierces: 1,
+      statusEffects: [{ key: 'bleed', chance: 0.2, stacks: 1, duration: 4 }],
+    })]));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'crimson_smash', knockbackMagnitude: 320 }),
+    }));
+  });
+
+  test('Mooggy rival Hairball applies its shared poison and short slow payload', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'mooggy', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'claw_gauntlets', mirrorWeaponStats: { damage: 24, range: 72, knockback: 260 },
+      mirrorMoves: { melee: 'slash', laser: 'mooggy_blood_beam', smash: 'mooggy_hairball', dash: 'mooggy_zoomies' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'mooggy_hairball', slot: 'smash', damageMult: 0.9 }],
+    });
+
+    tick(simulation, 10);
+    expect(player.statuses).toEqual(expect.objectContaining({
+      poison: expect.objectContaining({ stacks: 3 }), slow: expect.objectContaining({ stacks: 1 }),
+    }));
+    expect(rival.state).not.toBe('mirrorSmash');
+  });
+
+  test('Mooggy rival Claw Gauntlets executes the shared delayed bleed follow-up', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 30, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'mooggy', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'claw_gauntlets', mirrorWeaponStats: { damage: 40, range: 72, knockback: 0 },
+      mirrorMoves: { melee: 'slash', laser: 'mooggy_blood_beam', smash: 'mooggy_hairball', dash: 'mooggy_zoomies' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 99, mirrorSmashCd: 99, mirrorDashCd: 99,
+    });
+
+    tick(simulation, 26);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'mirror_claw_gauntlets' }),
+    }));
+    // The normal campaign hit i-frames can block the damage portion of the
+    // 0.12-second follow-up, but the authored swipe and its bleed still occur.
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_DAMAGE_BLOCKED', data: expect.objectContaining({ attackKind: 'claw_gauntlets_followup' }),
+    }));
+    expect(player.statuses.bleed).toEqual(expect.objectContaining({ stacks: expect.any(Number) }));
+  });
+
+  test('Metao rival Potion Bath uses the shared hostile heal, protection, and seven-burst plan', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true,
+      maxHealth: 500, health: 200, hp: 200, contactDamage: 40,
+      mirrorWeapon: 'metao_fire_staff', mirrorWeaponStats: { damage: 22, range: 470, knockback: 110 },
+      mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'potion_bath', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'potion_bath', slot: 'smash', damageMult: 1 }],
+    });
+
+    tick(simulation, 10);
+    expect(rival.health).toBe(300);
+    expect(rival.hp).toBe(300);
+    expect(rival.invulnerableUntilTick).toBeGreaterThan(state.tick + 80);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'potion_bath', damage: expect.any(Number), knockbackMagnitude: 100 }),
+    }));
+  });
+
+  test('Gelleh rival Holy Turrets use the shared placement, pulse cadence, and hostile target selection', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'gelleh_lightning_spear', mirrorWeaponStats: { damage: 45, range: 420, knockback: 200 },
+      mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'holy_turrets', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'holy_turrets', slot: 'smash', damageMult: 0.8 }],
+    });
+
+    tick(simulation, 11);
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === rival.roomId);
+    const turrets = room.hazards.filter(hazard => hazard.kind === 'holy_turret' && hazard.ownerId === rival.id);
+    expect(turrets).toHaveLength(3);
+    expect(turrets).toEqual(expect.arrayContaining([expect.objectContaining({
+      r: 26, ttl: expect.any(Number), interval: 0.6, range: 360, burstRadius: 56, damage: 32,
+    })]));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'holy_turrets', knockbackMagnitude: 120 }),
+    }));
+  });
+
+  test('Gelleh rival Excalibur Strike uses the shared delayed five-sword impact plan', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'gelleh_lightning_spear', mirrorWeaponStats: { damage: 45, range: 420, knockback: 200 },
+      mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'excalibur_strike', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+      rivalLoadout: [{ key: 'excalibur_strike', slot: 'smash', damageMult: 1 }],
+    });
+
+    tick(simulation, 20);
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === rival.roomId);
+    const swords = room.hazards.filter(hazard => hazard.kind === 'excalibur_strike' && hazard.ownerId === rival.id);
+    expect(swords).toHaveLength(5);
+    expect(swords).toEqual(expect.arrayContaining([expect.objectContaining({
+      r: 76, damage: 40, impactDelay: expect.any(Number), ttl: expect.any(Number),
+    })]));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'excalibur_strike', knockbackMagnitude: 180 }),
+    }));
+  });
+
+  test('Gelleh rival Zip Lightning uses the shared safe three-hop movement plan', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 180, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'gelleh', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'gelleh_lightning_spear', mirrorWeaponStats: { damage: 45, range: 420, knockback: 200 },
+      mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+      rivalLoadout: [{ key: 'zip_lightning', slot: 'dash', damageMult: 1 }],
+    });
+
+    tick(simulation, 6);
+    expect(Math.hypot(rival.x - player.x, rival.y - player.y)).toBeLessThanOrEqual(rival.radius + player.radius + 24);
+    expect(rival.invulnerableUntilTick).toBeGreaterThan(state.tick);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'zip_lightning', knockbackMagnitude: 185 }),
+    }));
+  });
+
+  test('Thorn rival Knight Slash Dash uses the shared beyond-target hop and bleed payload', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 180, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'thorn_knight', rivalVendetta: true,
+      contactDamage: 40, mirrorWeapon: 'thorns_bleed_blade', mirrorWeaponStats: { damage: 24, range: 72, knockback: 340 },
+      mirrorMoves: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'knight_slash_dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+      rivalLoadout: [{ key: 'knight_slash_dash', slot: 'dash', damageMult: 1.2 }],
+    });
+
+    tick(simulation, 6);
+    expect(rival.x).toBeLessThan(player.x);
+    expect(player.statuses?.bleed?.stacks).toBeGreaterThanOrEqual(3);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'knight_slash_dash', knockbackMagnitude: 170 }),
+    }));
+  });
+
+  test('Princess rival Flight and Shield retain campaign invulnerability and stacking barrier policies', () => {
+    const flightHarness = behaviorHarness();
+    const flightPlayer = flightHarness.state.players.p1;
+    const flyer = injectEnemy(flightHarness.state, 'rival', flightPlayer.x + 180, flightPlayer.y, {
+      behavior: 'mirror', rivalCharacterKey: 'princess', rivalVendetta: true,
+      contactDamage: 40, mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(flightHarness.simulation, 6);
+    expect(flyer.rivalFlightUntilTick).toBeGreaterThan(flightHarness.state.tick + 280);
+    expect(flyer.invulnerableUntilTick).toBe(flyer.rivalFlightUntilTick);
+
+    const copiedFlightHarness = behaviorHarness();
+    const copiedFlightPlayer = copiedFlightHarness.state.players.p1;
+    const copiedFlyer = injectEnemy(copiedFlightHarness.state, 'mirror_knight', copiedFlightPlayer.x + 180, copiedFlightPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(copiedFlightHarness.simulation, 6);
+    expect(copiedFlyer.rivalFlightUntilTick).toBeUndefined();
+    expect(copiedFlyer.invulnerableUntilTick).toBeGreaterThan(copiedFlightHarness.state.tick + 15);
+    expect(copiedFlyer.invulnerableUntilTick).toBeLessThan(copiedFlightHarness.state.tick + 30);
+
+    const shieldHarness = behaviorHarness();
+    const shieldPlayer = shieldHarness.state.players.p1;
+    const shielder = injectEnemy(shieldHarness.state, 'rival', shieldPlayer.x + 180, shieldPlayer.y, {
+      behavior: 'mirror', rivalCharacterKey: 'princess', rivalVendetta: true,
+      maxHealth: 500, health: 500, barrier: 30, contactDamage: 40,
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'princess_shield' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(shieldHarness.simulation, 6);
+    expect(shielder.barrier).toBe(230);
+
+    const cowardHarness = behaviorHarness();
+    const cowardPlayer = cowardHarness.state.players.p1;
+    const coward = injectEnemy(cowardHarness.state, 'mirror_knight', cowardPlayer.x + 300, cowardPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'cowards_way' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(cowardHarness.simulation, 6);
+    expect(coward.invulnerableUntilTick).toBeGreaterThan(cowardHarness.state.tick);
+
+    const stompHarness = behaviorHarness();
+    const stompPlayer = stompHarness.state.players.p1;
+    const stomper = injectEnemy(stompHarness.state, 'mirror_knight', stompPlayer.x + 300, stompPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'nimrod_stomp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(stompHarness.simulation, 6);
+    expect(Math.hypot(stomper.x - stompPlayer.x, stomper.y - stompPlayer.y)).toBeLessThanOrEqual(14);
+    expect(stompHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: stomper.id, attackKind: 'mirror_stomp', knockbackMagnitude: 310 }),
+    }));
+
+    const kickHarness = behaviorHarness();
+    const kickPlayer = kickHarness.state.players.p1;
+    const kicker = injectEnemy(kickHarness.state, 'mirror_knight', kickPlayer.x + 150, kickPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    tick(kickHarness.simulation, 12);
+    expect(kickHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: kicker.id, attackKind: 'mirror_kick', knockbackMagnitude: 680 }),
+    }));
+
+    const healingHarness = behaviorHarness();
+    const healingPlayer = healingHarness.state.players.p1;
+    const healer = injectEnemy(healingHarness.state, 'mirror_knight', healingPlayer.x + 100, healingPlayer.y, {
+      behavior: 'mirror', maxHealth: 500, health: 300,
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'healing_zone', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    tick(healingHarness.simulation, 12);
+    expect(healer.health).toBe(340);
+
+    const fireHarness = behaviorHarness();
+    const firePlayer = fireHarness.state.players.p1;
+    injectEnemy(fireHarness.state, 'mirror_knight', firePlayer.x + 100, firePlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'floor_lava', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    tick(fireHarness.simulation, 12);
+    expect(firePlayer.statuses?.fire?.stacks).toBeGreaterThanOrEqual(2);
+
+    const laserHarness = behaviorHarness();
+    const laserPlayer = laserHarness.state.players.p1;
+    injectEnemy(laserHarness.state, 'mirror_knight', laserPlayer.x + 300, laserPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(laserHarness.simulation, 14);
+    expect(Object.values(laserHarness.state.projectiles).filter(projectile => projectile.attackKind === 'mirror_disk')).toHaveLength(8);
+
+    const justiceHarness = behaviorHarness();
+    const justicePlayer = justiceHarness.state.players.p1;
+    const justice = injectEnemy(justiceHarness.state, 'mirror_knight', justicePlayer.x + 120, justicePlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'blade_justice', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(justiceHarness.simulation, 14);
+    expect(justiceHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: justice.id, attackKind: 'mirror_blade', knockbackMagnitude: 280 }),
+    }));
+
+    const columnHarness = behaviorHarness();
+    const columnPlayer = columnHarness.state.players.p1;
+    const columnCaster = injectEnemy(columnHarness.state, 'mirror_knight', columnPlayer.x + 300, columnPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'lightning_columns', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(columnHarness.simulation, 14);
+    expect(columnHarness.state.floorState.layout.rooms.find(room => room.id === columnCaster.roomId).hazards
+      .filter(hazard => hazard.ownerId === columnCaster.id && hazard.kind === 'lightning_column')).toHaveLength(2);
+
+    const chaosHarness = behaviorHarness();
+    const chaosPlayer = chaosHarness.state.players.p1;
+    const chaosCaster = injectEnemy(chaosHarness.state, 'mirror_knight', chaosPlayer.x + 160, chaosPlayer.y, {
+      behavior: 'mirror', mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'chaos_burst', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    tick(chaosHarness.simulation, 12);
+    expect(chaosHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: chaosCaster.id, attackKind: 'mirror_chaos', knockbackMagnitude: 120 }),
+    }));
+
+    const zipHarness = behaviorHarness();
+    const zipPlayer = zipHarness.state.players.p1;
+    const zipper = injectEnemy(zipHarness.state, 'mirror_knight', zipPlayer.x + 180, zipPlayer.y, {
+      behavior: 'mirror', contactDamage: 40,
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'zip_lightning' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+    tick(zipHarness.simulation, 5);
+    expect(zipper.mirrorDashMove).toBe('zip_lightning');
+    expect(Math.hypot(zipper.vx, zipper.vy)).toBeCloseTo(700, 8);
+
+    const fireballsHarness = behaviorHarness();
+    const fireballsPlayer = fireballsHarness.state.players.p1;
+    injectEnemy(fireballsHarness.state, 'mirror_knight', fireballsPlayer.x + 90, fireballsPlayer.y, {
+      behavior: 'mirror', mirrorWeapon: '', mirrorWeaponStats: null,
+      mirrorMoves: { melee: 'fire_balls', laser: 'love_beam', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(fireballsHarness.simulation, 2);
+    expect(Object.values(fireballsHarness.state.projectiles)
+      .filter(projectile => projectile.attackKind === 'mirror_fire_balls')).toHaveLength(3);
+
+    const missileHarness = behaviorHarness();
+    const missilePlayer = missileHarness.state.players.p1;
+    const missileCaster = injectEnemy(missileHarness.state, 'mirror_knight', missilePlayer.x + 160, missilePlayer.y, {
+      behavior: 'mirror', mirrorItemStats: { homingMissileChance: 1 },
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'hammer_smash', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    missileCaster.mirrorPendingAction = 'smash';
+    missileCaster.mirrorPendingSmash = 'hammer_smash';
+    missileCaster.mirrorWindupUntilTick = missileHarness.state.tick;
+    tick(missileHarness.simulation, 1);
+    expect(Object.values(missileHarness.state.projectiles)
+      .filter(projectile => projectile.attackKind === 'mirror_homing_missile')).toHaveLength(2);
+
+    const projectileHarness = behaviorHarness();
+    const projectilePlayer = projectileHarness.state.players.p1;
+    injectEnemy(projectileHarness.state, 'mirror_knight', projectilePlayer.x + 300, projectilePlayer.y, {
+      behavior: 'mirror', mirrorWeapon: 'hunters_bow', mirrorWeaponStats: { damage: 24, range: 520, knockback: 140 },
+      mirrorItemStats: { projectileSpeedMultiplier: 1.5, projectileBounces: 2, projectileHomingStrength: 0.2 },
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(projectileHarness.simulation, 2);
+    const copiedShot = Object.values(projectileHarness.state.projectiles).find(projectile => projectile.attackKind === 'mirror_hunters_bow');
+    expect(Math.hypot(copiedShot.vx, copiedShot.vy)).toBeCloseTo(1140, 8);
+    expect(copiedShot.bouncesRemaining).toBe(2);
+    expect(copiedShot.homing).toBe(true);
+
+    const directProcHarness = behaviorHarness();
+    const directProcPlayer = directProcHarness.state.players.p1;
+    const directProcCaster = injectEnemy(directProcHarness.state, 'mirror_knight', directProcPlayer.x + 90, directProcPlayer.y, {
+      behavior: 'mirror', mirrorItemStats: { snakeKnifePoisonChance: 1, knockbackMultiplier: 2 },
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 0, mirrorDashCd: 8,
+    });
+    directProcCaster.mirrorPendingAction = 'smash';
+    directProcCaster.mirrorPendingSmash = 'kicky_kick';
+    directProcCaster.mirrorWindupUntilTick = directProcHarness.state.tick;
+    tick(directProcHarness.simulation, 1);
+    expect(directProcPlayer.statuses?.poison?.stacks).toBeGreaterThanOrEqual(1);
+    expect(directProcHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: directProcCaster.id, attackKind: 'mirror_kick', knockbackMagnitude: 1360 }),
+    }));
+  });
+
+  test('Mooggy rival Zoomies drives the campaign twelve-second 1.55x chase speed', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rival = injectEnemy(state, 'rival', player.x + 180, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'mooggy', rivalVendetta: true,
+      contactDamage: 40, moveSpeed: 200,
+      mirrorMoves: { melee: 'slash', laser: 'mooggy_blood_beam', smash: 'mooggy_hairball', dash: 'mooggy_zoomies' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+
+    tick(simulation, 6);
+    expect(rival.rivalHasteUntilTick).toBeGreaterThan(state.tick + 220);
+    tick(simulation, 1);
+    expect(Math.hypot(rival.vx, rival.vy)).toBeGreaterThan(80);
+  });
+
+  test('Metao rival Warp uses the campaign safe-landing search around blocked destinations', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.structures = [{ kind: 'pillar', x: player.x + 72, y: player.y, w: 48, h: 48 }];
+    const rival = injectEnemy(state, 'rival', player.x + 180, player.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true,
+      contactDamage: 40,
+      mirrorMoves: { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 },
+      mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
+    });
+
+    tick(simulation, 6);
+    expect(Math.hypot(rival.x - (player.x + 72), rival.y - player.y)).toBeGreaterThan(42);
+    expect(rival.invulnerableUntilTick).toBeGreaterThan(state.tick);
+  });
+
+  test('rival alternative beam profiles retain their authored fan, damage, and status payloads', () => {
+    const thornHarness = behaviorHarness();
+    const thornPlayer = thornHarness.state.players.p1;
+    thornPlayer.radius = 80; // exercise the four offset rays, not only the omitted centerline
+    const thorn = injectEnemy(thornHarness.state, 'rival', thornPlayer.x + 220, thornPlayer.y, {
+      behavior: 'mirror', rivalCharacterKey: 'thorn_knight', rivalVendetta: true, contactDamage: 40,
+      mirrorMoves: { melee: 'slash', laser: 'thorn_blood_beams', smash: 'crimson_smash', dash: 'dash' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 }, mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(thornHarness.simulation, 12);
+    expect(thorn.rivalBeamPaths).toHaveLength(4);
+    expect(thornHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: thorn.id, attackKind: 'thorn_blood_beams', knockbackMagnitude: 60 }),
+    }));
+
+    const wizardHarness = behaviorHarness();
+    const wizardPlayer = wizardHarness.state.players.p1;
+    const wizard = injectEnemy(wizardHarness.state, 'rival', wizardPlayer.x + 220, wizardPlayer.y, {
+      behavior: 'mirror', rivalCharacterKey: 'metao', rivalVendetta: true, contactDamage: 40,
+      mirrorMoves: { melee: 'slash', laser: 'wizard_lazer', smash: 'chaos_burst', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 3.2, smash: 4.2, dash: 1.8 }, mirrorLaserCd: 0, mirrorSmashCd: 8, mirrorDashCd: 8,
+    });
+    tick(wizardHarness.simulation, 12);
+    expect(wizard.mirrorBeamUntilTick).toBeGreaterThan(wizardHarness.state.tick);
+    expect(wizardHarness.events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: wizard.id, attackKind: 'wizard_lazer', knockbackMagnitude: 150 }),
+    }));
   });
 });
 
@@ -461,6 +1526,9 @@ describe('the mirror champion fights with the triggering player\'s kit', () => {
     player.equippedMoves = { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'warp' };
     player.equippedWeapon = 'thorns_bleed_blade';
     player.maxHp = 260;
+    player.hp = 137;
+    player.items.drink_master = 1;
+    player.anvilUpgrades = { weapon: { thorns_bleed_blade: { damage: 2 } }, move: {} };
     delete state.floorState.encounters[room.id];
 
     const { ensureNetworkEncounter } = require('../js/simulation/NetworkCombatSystem');
@@ -472,6 +1540,11 @@ describe('the mirror champion fights with the triggering player\'s kit', () => {
     expect(champion.mirrorMoves).toEqual(player.equippedMoves);
     expect(champion.mirrorWeapon).toBe('thorns_bleed_blade');
     expect(champion.maxHealth).toBe(260); // mirrors the source hero's HP
+    expect(champion.health).toBe(137); // current HP, not a multiplayer-only full heal
+    expect(champion.mirrorInventory).toEqual(expect.objectContaining({
+      items: expect.objectContaining({ drink_master: 1 }),
+      anvilUpgrades: player.anvilUpgrades,
+    }));
     expect(events.some(event => event.eventType === 'ENEMY_SPAWNED' && event.data.mirrorSourcePlayerId === 'p1')).toBe(true);
   });
 
@@ -507,6 +1580,22 @@ describe('the mirror champion fights with the triggering player\'s kit', () => {
     }
     expect(firedP90).toBe(true);
   });
+
+  test('mirrored Lazer Glases enters the copied laser channel, not a synthetic bullet path', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const mirror = injectMirror(state, player, {
+      x: player.x + 220, y: player.y,
+      mirrorWeapon: 'lazer_glasses',
+      mirrorWeaponStats: { damage: 40, range: 520, knockback: 80 },
+      mirrorLaserCd: 9, mirrorSmashCd: 9, mirrorDashCd: 9,
+    });
+
+    for (let step = 0; step < 8; step += 1) simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+    expect(mirror.mirrorBeamUntilTick).toBeGreaterThan(state.tick);
+    expect(mirror.state).toBe('mirrorLaser');
+    expect(Object.values(state.projectiles).some(projectile => projectile.type === 'lazer_glasses')).toBe(false);
+  });
 });
 
 describe('shared-roster rivals hunt the party and curse the next floor', () => {
@@ -535,6 +1624,40 @@ describe('shared-roster rivals hunt the party and curse the next floor', () => {
     expect(rival.x - player.x).toBeLessThan(startDistance);
   });
 
+  test('uses a scoped match RNG for returning-rival spawn placement', () => {
+    const createSpawn = () => {
+      const { state } = behaviorHarness();
+      const room = state.floorState.layout.rooms.find(candidate => candidate.type === 'combat');
+      state.players.p1.roomId = room.id;
+      state.floorState.currentRoomId = room.id;
+      state.rivalRoster = [{ characterKey: 'thorn_knight', pendingSpawn: true, lives: 1, dead: false, friend: false }];
+      const random = new RandomService({ matchSeed: state.matchSeed });
+      ensureNetworkEncounter(state, random, () => {}, room.id);
+      const rival = Object.values(state.enemies).find(enemy => enemy.type === 'rival');
+      return { x: rival.x, y: rival.y };
+    };
+    expect(createSpawn()).toEqual(createSpawn());
+  });
+
+  test('keeps a befriended rival in the authoritative roster across floors', () => {
+    const { state } = behaviorHarness();
+    const entry = addPartyRival(state, 'princess', { friend: true, returnFloor: 1 });
+    const events = [];
+    advanceToNextFloor(state, (eventType, data) => events.push({ eventType, data }));
+    expect(entry.pendingSpawn).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'RIVAL_COMPANION_RETURNING', data: expect.objectContaining({ characterKey: 'princess', floorNumber: 2 }),
+    }));
+
+    const room = state.floorState.layout.rooms.find(candidate => candidate.type === 'combat');
+    state.players.p1.roomId = room.id;
+    state.floorState.currentRoomId = room.id;
+    ensureNetworkEncounter(state, new RandomService({ matchSeed: state.matchSeed }), () => {}, room.id);
+    expect(Object.values(state.enemies)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'rival', rivalCharacterKey: 'princess', rivalFriend: true }),
+    ]));
+  });
+
   test('befriended rivals are invulnerable and never attack', () => {
     const { state, simulation, events } = behaviorHarness();
     const player = state.players.p1;
@@ -553,6 +1676,23 @@ describe('shared-roster rivals hunt the party and curse the next floor', () => {
     simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
     for (let step = 0; step < 4; step += 1) simulation.updateGame({ p1: { moveX: 0, aimDirection: 0, buttons: 1 } }, 0.05);
     expect(friend.health).toBe(300);
+  });
+
+  test('befriended rivals shadow a distant party member without entering combat', () => {
+    const { state, simulation, events } = behaviorHarness();
+    const player = state.players.p1;
+    const friend = injectEnemy(state, 'rival', player.x + 320, player.y, {
+      boss: true, rivalCharacterKey: 'princess', rivalFriend: true,
+      maxHealth: 300, health: 300, moveSpeed: 228,
+      mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'warp' },
+      mirrorCooldowns: { melee: 0.4, laser: 0.01, smash: 0.01, dash: 0.01 },
+      dmg: 24, contactDamage: 24, attackCd: 0,
+    });
+    const initialDistance = Math.hypot(friend.x - player.x, friend.y - player.y);
+    for (let step = 0; step < 8; step += 1) simulation.updateGame({ p1: { moveX: 0, moveY: 0 } }, 0.05);
+    expect(Math.hypot(friend.x - player.x, friend.y - player.y)).toBeLessThan(initialDistance);
+    expect(friend.state).toBe('friendly');
+    expect(events.some(event => event.eventType === 'PLAYER_HIT' && event.data.enemyId === friend.id)).toBe(false);
   });
 
   test('rivals arm a party-wide curse on the next floor', () => {

@@ -58,7 +58,7 @@ describe('gameplay protocol v1 runtime validation', () => {
   test('accepts a bounded movement-first dash direction separately from aim', () => {
     const dash = createEnvelope('PLAYER_ACTION', 14, 30, {
       action: 'DASH', inputSequence: 13, aimDirection: Math.PI,
-      abilityId: 'dash', dashMoveX: 1, dashMoveY: 0,
+      abilityId: 'dash', dashMoveX: 1, dashMoveY: 0, targetX: 450, targetY: 350,
     });
     expect(validateEnvelope(dash, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
     expect(validateEnvelope({ ...dash, payload: { ...dash.payload, dashMoveX: 2 } }, {

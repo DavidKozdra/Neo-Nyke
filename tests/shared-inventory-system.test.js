@@ -41,6 +41,17 @@ describe('shared campaign inventory operations', () => {
     expect(actor.hp).toBe(50);
     expect(actor.equipmentCooldownUntilTick.churu_stick).toBe(920);
   });
+
+  test('Charged Adapter shares its validated delayed-portal and charge-spend transaction', () => {
+    const actor = player({ items: { charged_adapter: 1 }, escapeReady: true, escapeChargeKills: 12 });
+    const portal = inventory.prepareCampaignChargedAdapterWarp(actor, {
+      hasCurrentRoom: true, roomType: 'combat', hasTargetRoom: true, targetRoomId: 'ladder', targetGx: 3, targetGy: 4,
+      x: 280, y: 190, activateAt: 0.75, activateDelayTicks: 15,
+    });
+    expect(portal).toMatchObject({ ok: true, type: 'adapterPortal', targetRoomId: 'ladder', active: false, activateDelayTicks: 15 });
+    expect(actor).toMatchObject({ escapeReady: false, escapeChargeKills: 0 });
+    expect(inventory.prepareCampaignChargedAdapterWarp(actor, { hasCurrentRoom: true, roomType: 'combat', hasTargetRoom: true })).toEqual({ ok: false, reason: 'ADAPTER_CHARGING' });
+  });
 });
 
 describe('shared timed equipment effects', () => {

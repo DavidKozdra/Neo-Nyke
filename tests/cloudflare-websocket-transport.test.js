@@ -73,6 +73,18 @@ describe('CloudflareWebSocketTransport', () => {
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
+  test('preserves Boss Rush as a multiplayer room mode', async () => {
+    const fetch = jest.fn(async () => ({
+      ok: true, status: 201,
+      json: async () => ({ roomCode: 'B5542', status: 'waiting', maxPlayers: 4 }),
+    }));
+    const transport = new CloudflareWebSocketTransport({
+      apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
+    });
+    await transport.createSession({ mode: 'boss_rush', maxPlayers: 1 });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'boss_rush', maxPlayers: 1 });
+  });
+
   test('passes the host-selected region only when creating a new room', async () => {
     const fetch = jest.fn(async () => ({
       ok: true,

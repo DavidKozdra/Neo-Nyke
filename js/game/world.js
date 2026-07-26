@@ -568,9 +568,11 @@
     // one-shot guard below, so it can't bypass the per-hit cap.
     const eliteAttacker = options.attacker;
     const minorPackDamageMultiplier = Math.max(1, Number(eliteAttacker?.minorPackDamageMultiplier || 1));
-    let critAmount = numericAmount * minorPackDamageMultiplier;
-    if (eliteAttacker?.elite && Number(eliteAttacker.eliteCrit || 0) > 0 && Neo.nextRandom('encounter') < eliteAttacker.eliteCrit) {
-      critAmount = numericAmount * 1.4;
+    const eliteCrit = globalThis.NeoNyke.simulation.resolveCampaignEliteCrit(eliteAttacker, {
+      random: () => Neo.nextRandom('encounter'),
+    });
+    let critAmount = numericAmount * minorPackDamageMultiplier * eliteCrit.multiplier;
+    if (eliteCrit.isCrit) {
       if (showPopup) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff9f1c' });
     }
     // Enemy crit aggression (time-based ramp). Applies to enemy attacks that don't
@@ -578,20 +580,15 @@
     // elite crit above) opt out. Every 5 min adds +5% damage and +5% crit chance;
     // a rolled crit multiplies by the time-scaled crit multiplier (see
     // getEnemyTimeAggression / applyCritRollback for the 100%→×1.5→75% roll-back).
-    const aggressionSource = String(options.sourceKey || source || '').toLowerCase();
-    const isHazardSource = ENEMY_AGGRESSION_EXEMPT_SOURCES.has(aggressionSource);
-    const skipAggression = options.noEnemyAggression
-      || isHazardSource
-      || (eliteAttacker?.elite && Number(eliteAttacker.eliteCrit || 0) > 0); // elite already rolled its own crit
-    if (!skipAggression && critAmount > 0) {
-      const aggression = Neo.getEnemyTimeAggression?.();
-      if (aggression && aggression.steps > 0) {
-        critAmount *= aggression.damageMultiplier;
-        if (aggression.critChance > 0 && Neo.nextRandom('encounter') < aggression.critChance) {
-          critAmount *= aggression.critMultiplier;
-          if (showPopup) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff5d5d' });
-        }
-      }
+    const aggressionHit = globalThis.NeoNyke.simulation.resolveCampaignEnemyAggressionHit({
+      damage: critAmount, enemy: eliteAttacker, sourceKey: options.sourceKey || source,
+      noEnemyAggression: options.noEnemyAggression, elapsedSeconds: Neo.gameElapsedTime,
+      overclockedWatchAggressionCut: itemStats.overclockedWatchAggressionCut,
+      random: () => Neo.nextRandom('encounter'),
+    });
+    critAmount = aggressionHit.damage;
+    if (aggressionHit.isCrit && showPopup) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff5d5d' });
     }
     const sourceKey = String(options.sourceKey || source || '').toLowerCase();
     const bossLike = Neo.isBossFightActive?.()
@@ -658,9 +655,12 @@
     // elite deals through this choke point.
     if (eliteAttacker?.elite) Neo.applyEliteProcsToPlayer?.(eliteAttacker);
 
-    if (Neo.getItemCount('insurance') > 0 && Neo.player.insuranceReady && hpBeforeHit > halfHpThreshold && Neo.player.hp <= halfHpThreshold) {
-      Neo.player.hp = Math.max(Neo.player.hp, halfHpThreshold);
-      Neo.consumeCharge('insurance');
+    const insuranceResult = globalThis.NeoNyke.simulation.applyCampaignInsuranceOnHit(Neo.player, {
+      healthBeforeHit: hpBeforeHit,
+      healthAfterHit: Neo.player.hp,
+      getItemCount: () => Neo.getItemCount('insurance'),
+    });
+    if (insuranceResult.triggered) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'INSURANCE USED', c: '#e6eeff' });
     }
 
@@ -668,14 +668,14 @@
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
     // Heme's Scarf retaliates: when hit, a chance per scarf stack to bleed the
     // attacker. Bleeds the enemy, never the player.
-    if (finalAmount > 0 && itemStats.scarfBleedsOnHit > 0 && !options.noInvFrames) {
-      const scarfBleedChance = Math.min(0.75, itemStats.scarfBleedsOnHit * 0.25);
-      if (Neo.nextRandom('encounter') < scarfBleedChance) {
-        const attacker = Neo.findKillerEnemyEntity?.(options.sourceKey || source, Neo.lastDamageSource);
-        if (attacker && !attacker.dead && !attacker.bleedImmune) {
-          Neo.applyBleed(attacker, 1, 4);
-        }
-      }
+    const scarfAttacker = Neo.findKillerEnemyEntity?.(options.sourceKey || source, Neo.lastDamageSource);
+    const scarfRetaliation = globalThis.NeoNyke.simulation.resolveCampaignHemesScarfRetaliation(
+      Neo.player,
+      scarfAttacker,
+      { damageDealt: finalAmount, noInvFrames: options.noInvFrames, itemStats, random: () => Neo.nextRandom('encounter') },
+    );
+    if (scarfRetaliation) {
+      Neo.applyBleed(scarfAttacker, scarfRetaliation.stacks, scarfRetaliation.duration);
     }
 
     if (applyHitstop) {
@@ -1108,11 +1108,10 @@
   // Detonates an enemy projectile's `enemyBlast` config at (x, y): a frost/AOE
   // burst that damages the player (and props) in a radius and applies a status.
   function detonateEnemyProjectileBlast(projectile, x = projectile?.x, y = projectile?.y) {
-    const blast = projectile?.enemyBlast;
+    const blast = globalThis.NeoNyke?.simulation?.resolveCampaignEnemyProjectileBlast?.(projectile);
     if (!blast || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    const radius = Math.max(1, Number(blast.radius || 0));
-    const damage = Math.max(0, Number(blast.damage || 0));
-    const color = blast.color || projectile.color || '#9fe8ff';
+    const { radius, damage } = blast;
+    const color = projectile.enemyBlast?.color || projectile.color || '#9fe8ff';
     spawnAoeShockwave(x, y, radius, color, 'explosion');
     Neo.spawnParticle({ x, y, life: 0.5, ring: radius, c: color });
     if (damage > 0) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
@@ -1125,7 +1124,7 @@
     });
     forEachDestructibleNearCircle(x, y, radius + 80, prop => {
       if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
-        damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.4 });
+        damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: blast.destructibleForce });
       }
     });
   }
@@ -1393,7 +1392,7 @@
       kind: null, color: null, enemy: false,
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
-      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
+      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, splashFireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       homingPath: null, homingPathTimer: 0, homingPathRefreshInterval: 0.16,
       homingTargetRef: null, homingTargetTimer: 0,
@@ -1408,7 +1407,7 @@
       kind: null, color: null, enemy: false,
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
-      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
+      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, splashFireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       homingPath: null, homingPathTimer: 0, homingPathRefreshInterval: 0.16,
       homingTargetRef: null, homingTargetTimer: 0,
@@ -1488,6 +1487,7 @@
     p.splashDamage = props.splashDamage ?? 0;
     p.blockedSplashDamage = props.blockedSplashDamage ?? 0;
     p.fireStacks = props.fireStacks ?? 0;
+    p.splashFireStacks = props.splashFireStacks ?? 0;
     p.fireDuration = props.fireDuration ?? 0;
     const baseProjectileSpeed = Math.hypot(p.vx, p.vy) || 180;
     const grantedHoming = !enemyProjectile && projectileHomingStrength > 0 && !hasExplicitHoming;
@@ -1973,26 +1973,26 @@
     if (!projectile || projectile.boomerangCaught) return;
     projectile.boomerangCaught = true;
     if (!Neo.player) return;
-    const healAmount = Math.max(2, Math.round(Neo.player.maxHp * 0.04));
+    const catchResult = globalThis.NeoNyke?.simulation?.resolveCampaignBoomerangCatch?.({
+      player: Neo.player,
+      healingMultiplier: Neo.getItemStats?.()?.healingMultiplier,
+      pickups: Neo.pickups,
+    });
+    if (!catchResult) throw new Error('Shared boomerang catch policy is unavailable');
     const heal = Neo.applyPlayerHealing?.(
-      Neo.scalePlayerHealing ? Neo.scalePlayerHealing(healAmount, 1) : healAmount,
+      catchResult.requestedHeal,
       { showBarrier: false }
     ) ?? 0;
     if (heal > 0) Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 24, heal, { color: '#9bb8ff', size: 13 });
     // Pull every pickup in range straight to the player.
-    const pullRadius = 280;
-    const pullSq = pullRadius * pullRadius;
-    if (Array.isArray(Neo.pickups)) {
-      Neo.pickups.forEach(pickup => {
-        if (!pickup || typeof pickup.x !== 'number') return;
-        const dx = Neo.player.x - pickup.x;
-        const dy = Neo.player.y - pickup.y;
-        if (dx * dx + dy * dy > pullSq) return;
-        pickup.vx = (pickup.vx || 0) + dx * 4;
-        pickup.vy = (pickup.vy || 0) + dy * 4;
-        pickup.magnetized = true;
-      });
-    }
+    (catchResult.pickupImpulses || []).forEach(intent => {
+      const pickup = (Neo.pickups || [])[Number.isInteger(intent.index) ? intent.index : -1]
+        || (Neo.pickups || []).find(candidate => candidate?.id === intent.id);
+      if (!pickup) return;
+      pickup.vx = Number(pickup.vx || 0) + Number(intent.vx || 0);
+      pickup.vy = Number(pickup.vy || 0) + Number(intent.vy || 0);
+      pickup.magnetized = !!intent.magnetized;
+    });
     Neo.ringBurst?.(Neo.player.x, Neo.player.y, 52, '#9bb8ff', 0.5);
     Neo.playSfx?.('item_collect');
   }
@@ -2017,25 +2017,13 @@
       const prevY = previous.y;
       recordProjectileTrail(projectile, prevX, prevY);
       if (projectile.subSpawn && projectile.life > 0) emitProjectileSubSpawn(projectile, dt);
-      let hitProp = null;
-      forEachDestructibleNearCircle(projectile.x, projectile.y, projectile.r + 80, prop => {
-        if (hitProp) return;
-        if (Neo.destructibleIntersectsCircle(prop, projectile.x, projectile.y, projectile.r)) hitProp = prop;
-      });
-      if (!projectile.enemy && hitProp) {
-        damageDestructible(hitProp, projectile.damage || 1, {
-          impactX: projectile.x,
-          impactY: projectile.y,
-          angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
-          impactType: projectile.kind || 'projectile',
-          force: projectile.kind === 'fireball' ? 1.35 : 1,
-        });
-        if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.blockedSplashDamage || 16, '#ff8844');
-        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
-        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        removeProjectileAt(index);
-        continue;
-      }
+      const findProjectileObstacle = globalThis.NeoNyke?.simulation?.findCampaignProjectileObstacleSweepHit;
+      if (typeof findProjectileObstacle !== 'function') throw new Error('Shared projectile obstacle sweep is unavailable');
+      const hitProp = !projectile.enemy
+        ? findProjectileObstacle(projectile, { x: prevX, y: prevY }, Neo.destructibles || [], {
+          include: prop => !prop?.broken && !prop?.hidden,
+        })?.obstacle
+        : null;
       if (projectile.life <= 0) {
         // A boomerang that times out mid-flight turns around to find the player
         // instead of vanishing; if it times out on the way back, it still pays out.
@@ -2069,6 +2057,26 @@
         removeProjectileAt(index);
         continue;
       }
+      // The authority resolves static blockers and lifetime before a
+      // destructible impact. Keep campaign in that same order so a shot cannot
+      // break a prop through a wall or after it has already expired.
+      if (!projectile.enemy && hitProp) {
+        const resolvePropImpact = globalThis.NeoNyke?.simulation?.resolveCampaignProjectileDestructibleImpact;
+        if (typeof resolvePropImpact !== 'function') throw new Error('Shared projectile destructible impact policy is unavailable');
+        const impact = resolvePropImpact(projectile, hitProp);
+        damageDestructible(hitProp, impact.directDamage, {
+          impactX: projectile.x,
+          impactY: projectile.y,
+          angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
+          impactType: projectile.kind || 'projectile',
+          force: projectile.kind === 'fireball' ? 1.35 : 1,
+        });
+        if (impact.blast) blastRadius(projectile.x, projectile.y, impact.blast.radius, impact.blast.damage, '#ff8844');
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
+        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
+        removeProjectileAt(index);
+        continue;
+      }
       if (!projectile.enemy) {
         if (hitPvpPlayer2InRadius(projectile.x, projectile.y, projectile.r, projectile.damage || 16, projectile.knockback || 90, 'pvp_p1_projectile')) {
           if (projectile.kind === 'fireball') {
@@ -2078,16 +2086,17 @@
           removeProjectileAt(index);
           continue;
         }
-        let target = null;
-        forEachEnemyNearCircle(projectile.x, projectile.y, projectile.r + 80, enemy => {
-          if (target) return;
-          // A boomerang shouldn't re-hit a foe it already struck on this trip.
-          if (projectile.boomerangHitSet && projectile.boomerangHitSet.has(enemy)) return;
-          const hitRadius = projectile.r + enemy.r;
-          const dx = projectile.x - enemy.x;
-          const dy = projectile.y - enemy.y;
-          if (dx * dx + dy * dy <= hitRadius * hitRadius) target = enemy;
-        });
+        const findProjectileTarget = globalThis.NeoNyke?.simulation?.findCampaignProjectileEntitySweepHit;
+        if (typeof findProjectileTarget !== 'function') throw new Error('Shared projectile target sweep is unavailable');
+        const target = findProjectileTarget(
+          projectile,
+          { x: prevX, y: prevY },
+          Neo.enemies || [],
+          {
+            include: enemy => !enemy?.dead
+              && !(projectile.boomerangHitSet && projectile.boomerangHitSet.has(enemy)),
+          },
+        )?.entity;
         if (target && projectile.kind === 'love_bomb') {
           // Love Bomb Laser detonates immediately on first enemy contact rather
           // than piercing through to its arrival point — the AOE + sparkle burst
@@ -2118,7 +2127,7 @@
           if (projectile.kind === 'fireball') {
             Neo.applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
-            Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
+            Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', projectile.splashFireStacks || 1, projectile.fireDuration || 3, null);
           }
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
           if (projectile.boomerang) {
@@ -2159,13 +2168,17 @@
           }
         }
       } else {
-        const hitSlot = getLocalCoopSlots({ livingOnly: true }).find(slot => {
-          const actor = slot.getEntity();
-          const hitRadius = projectile.r + actor.r;
-          const dx = projectile.x - actor.x;
-          const dy = projectile.y - actor.y;
-          return dx * dx + dy * dy <= hitRadius * hitRadius;
-        });
+        const findProjectileTarget = globalThis.NeoNyke?.simulation?.findCampaignProjectileEntitySweepHit;
+        if (typeof findProjectileTarget !== 'function') throw new Error('Shared projectile target sweep is unavailable');
+        const hitSlot = findProjectileTarget(
+          projectile,
+          { x: prevX, y: prevY },
+          getLocalCoopSlots({ livingOnly: true }),
+          {
+            getEntity: slot => slot.getEntity(),
+            getId: (slot, actor) => actor?.id ?? slot?.id,
+          },
+        )?.candidate;
         if (!hitSlot) continue;
         const hitPlayer = hitSlot.getEntity();
         if (projectile.kind === 'love_bomb') {
@@ -2249,7 +2262,10 @@
         hazard.x = hazard.ownerEnemy.x;
         hazard.y = hazard.ownerEnemy.y;
       }
-      hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
+      // Lava owns its own shared contact cadence below. Other hazards retain
+      // the legacy status clock used by their authored effects.
+      if (hazard.kind !== 'lava') hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
+      let lavaContact = null;
       if (hazard.kind === 'thorn_mine') {
         // owner distinguishes the player's "sweepy mine" tool (owner 'player' →
         // anti-enemy only) from dungeon-authored mines (owner 'dungeon' → also
@@ -2319,16 +2335,19 @@
           hazard.ttl = 0;
         }
       }
-      if (hazard.kind === 'lava') getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
-        const actor = slot.getEntity();
-        if (Number(actor.lavaWalkTime || 0) > 0) return;
-        const inside = hazard.shape === 'rect'
-          ? Neo.circleRect(actor.x, actor.y, actor.r - 6, hazard.left, hazard.top, hazard.w, hazard.h)
-          : Neo.dist(actor.x, actor.y, hazard.x, hazard.y) < hazard.r + actor.r - 10;
-        if (!inside) return;
-        damagePlayerSlot(slot, 6 * dt, 0, 0, 'lava', { ignoreInv: true, noInvFrames: true });
-        if (hazard.statusTick <= 0) Neo.applyFire(actor, Math.max(1, Number(hazard.statusStacks || 1)), 2.6, hazard.source || 'lava');
-      });
+      if (hazard.kind === 'lava') {
+        lavaContact = globalThis.NeoNyke?.simulation?.advanceCampaignLavaContact?.(hazard, { delta: dt });
+        if (!lavaContact) throw new Error('Shared lava-contact policy is unavailable');
+        getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
+          const actor = slot.getEntity();
+          if (Number(actor.lavaWalkTime || 0) > 0) return;
+          const inside = globalThis.NeoNyke?.simulation?.campaignLavaHitsEntity?.(hazard, actor);
+          if (inside == null) throw new Error('Shared lava-contact geometry is unavailable');
+          if (!inside) return;
+          damagePlayerSlot(slot, lavaContact.damage, 0, 0, 'lava', { ignoreInv: true, noInvFrames: true, applyDamageCaps: false });
+          if (lavaContact.applyFire) Neo.applyFire(actor, Math.max(1, Number(hazard.statusStacks || 1)), 2.6, hazard.source || 'lava');
+        });
+      }
       if (hazard.kind === 'explosive_trap') {
         if (!hazard.triggered) {
           const playerNear = getLocalCoopSlots({ livingOnly: true }).some(slot => {
@@ -2342,15 +2361,18 @@
           });
           // A rock rolling over the plate sets it off too.
           const rockNear = rockProjectileInRadius(hazard.x, hazard.y, hazard.triggerRadius);
-          if (playerNear || enemyNear || rockNear) {
-            hazard.triggered = true;
-            hazard.fuse = hazard.fuseDuration || 0.75;
+          const transition = globalThis.NeoNyke?.simulation?.advanceCampaignExplosiveTrap?.(hazard, {
+            triggered: playerNear || enemyNear || rockNear,
+          });
+          if (!transition) throw new Error('Shared explosive-trap lifecycle is unavailable');
+          if (transition.justTriggered) {
             hazard.sparkTick = 0;
             Neo.playSfx?.('bomb_explosion');
             Neo.spawnParticle({ x: hazard.x, y: hazard.y - 20, life: 0.5, text: 'CLICK', c: '#ffcc66', size: 12 });
           }
         } else {
-          hazard.fuse -= dt;
+          const transition = globalThis.NeoNyke?.simulation?.advanceCampaignExplosiveTrap?.(hazard, { delta: dt });
+          if (!transition) throw new Error('Shared explosive-trap lifecycle is unavailable');
           hazard.sparkTick = Number(hazard.sparkTick || 0) - dt;
           if (hazard.sparkTick <= 0) {
             Neo.spawnParticle({
@@ -2365,7 +2387,7 @@
             });
             hazard.sparkTick = 0.07;
           }
-          if (hazard.fuse <= 0) {
+          if (transition.justExploded) {
             const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 18);
             getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
               const actor = slot.getEntity();
@@ -2380,21 +2402,19 @@
       }
       if (hazard.kind === 'lava') {
         const applyLavaToEnemy = enemy => {
-          const inside = hazard.shape === 'rect'
-            ? Neo.circleRect(enemy.x, enemy.y, enemy.r - 4, hazard.left, hazard.top, hazard.w, hazard.h)
-            : Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.r + enemy.r - 6;
+          const inside = globalThis.NeoNyke?.simulation?.campaignLavaHitsEntity?.(hazard, enemy, { targetKind: 'enemy' });
+          if (inside == null) throw new Error('Shared lava-contact geometry is unavailable');
           if (!inside) return;
           // Floor Is Lava trail puddles carry a dps field and burn enemies for
           // direct damage; authored lava rooms leave dps unset (fire only).
           if (hazard.dps) Neo.hitEnemy(enemy, hazard.dps * dt, 0, 0, '#ff7a32');
-          if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8, hazard.source);
+          if (lavaContact?.applyFire) Neo.applyFire(enemy, 1, 2.8, hazard.source);
         };
         if (hazard.shape === 'rect') {
           forEachEnemyNearRect(hazard.left, hazard.top, hazard.w, hazard.h, applyLavaToEnemy, { padding: 80 });
         } else {
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, applyLavaToEnemy);
         }
-        if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       }
       if (hazard.kind === 'red_spikes') {
         hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
@@ -2445,8 +2465,8 @@
         }
         const rivalOwner = hazard.enemy ? hazard.ownerEnemy : null;
         if (rivalOwner && !rivalOwner.dead && Neo.dist(rivalOwner.x, rivalOwner.y, hazard.x, hazard.y) < hazard.r) {
-          const healMult = Number(hazard.healMult || 1);
-          rivalOwner.hp = Math.min(rivalOwner.max, rivalOwner.hp + 7.36 * healMult * dt);
+          const healPerSecond = Number(hazard.healPerSecond || 7.36 * Number(hazard.healMult || 1));
+          rivalOwner.hp = Math.min(rivalOwner.max, rivalOwner.hp + healPerSecond * dt);
           if (rivalOwner.rivalData) {
             rivalOwner.rivalData.hp = rivalOwner.hp;
             rivalOwner.rivalData.hpSnapshot = rivalOwner.hp;
@@ -2479,8 +2499,10 @@
               const actor = slot.getEntity();
               return Neo.dist(actor.x, actor.y, hazard.x, hazard.y) < hazard.r + actor.r;
             });
-            if (victims.length) hazard.playerDamageTick = 0.2;
-            victims.forEach(slot => damagePlayerSlot(slot, Math.max(1, Math.round(2 * zoneDamageMult)), 0, 35, hazard.source || 'rival_healing_zone'));
+            const damageInterval = Number(hazard.damageInterval || 0.2);
+            if (victims.length) hazard.playerDamageTick = damageInterval;
+            const damage = Math.max(1, Math.round(Number(hazard.damagePerSecond || 10 * zoneDamageMult) * damageInterval));
+            victims.forEach(slot => damagePlayerSlot(slot, damage, 0, 35, hazard.source || 'rival_healing_zone'));
           }
         } else {
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
@@ -3337,48 +3359,42 @@
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: readyColor });
         }
       } else if (pickup.type === 'challengeRune') {
-        const runeRadius = 16;
-        const minX = Neo.WALL + runeRadius;
-        const maxX = Neo.ROOM_W - Neo.WALL - runeRadius;
-        const minY = Neo.WALL + runeRadius;
-        const maxY = Neo.ROOM_H - Neo.WALL - runeRadius;
         if (!Number.isFinite(pickup.vx) || !Number.isFinite(pickup.vy)) {
           const angle = Neo.rand(Math.PI * 2, 0, 'world');
           const speed = Neo.rand(82, 56, 'world');
           pickup.vx = Math.cos(angle) * speed;
           pickup.vy = Math.sin(angle) * speed;
         }
-        let runeMoveX = pickup.vx;
-        let runeMoveY = pickup.vy;
-        // Runes flee from the player so collecting them feels like a puzzle/chase
-        // rather than a passive vacuum. Their total drift plus flee speed is capped
-        // at 1.8x base player movement, leaving the standard dash fast enough to catch them.
-        const fleeRadius = 150;
-        const fdx = pickup.x - playerX;
-        const fdy = pickup.y - playerY;
-        const fleeDistSq = fdx * fdx + fdy * fdy;
-        if (fleeDistSq < fleeRadius * fleeRadius && fleeDistSq > 0.000001) {
-          const fleeDist = Math.sqrt(fleeDistSq);
-          const fleeSpeed = 250 + (1 - fleeDist / fleeRadius) * 260;
-          runeMoveX += (fdx / fleeDist) * fleeSpeed;
-          runeMoveY += (fdy / fleeDist) * fleeSpeed;
-        }
-        const runeMoveSpeed = Math.hypot(runeMoveX, runeMoveY);
-        const runeMaxSpeed = getChallengeRuneMaxSpeed();
-        if (runeMoveSpeed > runeMaxSpeed) {
-          const speedScale = runeMaxSpeed / runeMoveSpeed;
-          runeMoveX *= speedScale;
-          runeMoveY *= speedScale;
-        }
-        pickup.x += runeMoveX * dt;
-        pickup.y += runeMoveY * dt;
-        if (pickup.x <= minX || pickup.x >= maxX) {
-          pickup.x = Neo.clamp(pickup.x, minX, maxX);
-          pickup.vx *= -1;
-        }
-        if (pickup.y <= minY || pickup.y >= maxY) {
-          pickup.y = Neo.clamp(pickup.y, minY, maxY);
-          pickup.vy *= -1;
+        const advanceRune = globalThis.NeoNyke?.simulation?.advanceCampaignChallengeRune;
+        if (typeof advanceRune === 'function') {
+          advanceRune(pickup, { x: playerX, y: playerY }, dt, {
+            width: Neo.ROOM_W, height: Neo.ROOM_H, wallThickness: Neo.WALL, radius: 16,
+            playerMoveSpeed: Neo.player?.moveSpeed || 228,
+          });
+        } else {
+          // Standalone compatibility for legacy embedding/tests before shared
+          // simulation modules are loaded; the normal campaign uses the shared
+          // operation above.
+          let runeMoveX = pickup.vx;
+          let runeMoveY = pickup.vy;
+          const fdx = pickup.x - playerX;
+          const fdy = pickup.y - playerY;
+          const fleeDist = Math.hypot(fdx, fdy);
+          if (fleeDist < 150 && fleeDist > 0.001) {
+            const fleeSpeed = 250 + (1 - fleeDist / 150) * 260;
+            runeMoveX += (fdx / fleeDist) * fleeSpeed;
+            runeMoveY += (fdy / fleeDist) * fleeSpeed;
+          }
+          const runeMoveSpeed = Math.hypot(runeMoveX, runeMoveY);
+          const runeMaxSpeed = getChallengeRuneMaxSpeed();
+          if (runeMoveSpeed > runeMaxSpeed) { runeMoveX *= runeMaxSpeed / runeMoveSpeed; runeMoveY *= runeMaxSpeed / runeMoveSpeed; }
+          pickup.x += runeMoveX * dt;
+          pickup.y += runeMoveY * dt;
+          const runeRadius = 16;
+          const minX = Neo.WALL + runeRadius; const maxX = Neo.ROOM_W - Neo.WALL - runeRadius;
+          const minY = Neo.WALL + runeRadius; const maxY = Neo.ROOM_H - Neo.WALL - runeRadius;
+          if (pickup.x <= minX || pickup.x >= maxX) { pickup.x = Neo.clamp(pickup.x, minX, maxX); pickup.vx *= -1; }
+          if (pickup.y <= minY || pickup.y >= maxY) { pickup.y = Neo.clamp(pickup.y, minY, maxY); pickup.vy *= -1; }
         }
       } else if (pickup.type === 'challengeSwitch') {
         const switchDistance = Neo.dist(playerX, playerY, pickup.x, pickup.y);
@@ -3452,23 +3468,24 @@
       }
 
       if (pickup.type === 'potion') {
-        const potionCap = Neo.getPotionCarryCap();
-        const stored = Number(pickupPlayer.storedPotions || 0);
-        const doubled = potionDoubleChance > 0 && Neo.rng() < potionDoubleChance;
-        const potionApplications = doubled ? 2 : 1;
-        if (pickupPlayer.hp < pickupPlayer.maxHp) {
-          const potionHeal = Neo.getPotionHealAmount() * potionApplications;
-          const gained = healPickupPlayer(potionHeal);
-          if (gained > 0) spawnHealPopup(pickupPlayer.x + Neo.rand(-10, 10), pickupPlayer.y - 20, gained);
-          if (doubled) Neo.spawnParticle({ x: pickupPlayer.x, y: pickupPlayer.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
-        } else if (potionCap > 0 && stored < potionCap) {
-          const storedGain = Math.min(potionApplications, potionCap - stored);
-          pickupPlayer.storedPotions = stored + storedGain;
-          Neo.spawnParticle({ x: pickupPlayer.x, y: pickupPlayer.y - 20, life: 0.7, text: `POTION STORED (${pickupPlayer.storedPotions}/${potionCap})`, c: '#a0e8ff' });
-          if (doubled && storedGain > 1) Neo.spawnParticle({ x: pickupPlayer.x, y: pickupPlayer.y - 36, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
+        const potion = globalThis.NeoNyke?.simulation?.resolveCampaignPotionPickup?.(pickupPlayer, {
+          itemStats: Neo.getItemStats?.() || {},
+          baseHeal: Neo.getPotionHealAmount(),
+          random: () => Neo.rng(),
+          getPotionCarryCap: () => Neo.getPotionCarryCap(),
+          heal: potionHeal => healPickupPlayer(potionHeal),
+        });
+        if (!potion?.ok) continue;
+        if (potion.kind === 'heal' && potion.healedAmount > 0) {
+          spawnHealPopup(pickupPlayer.x + Neo.rand(-10, 10), pickupPlayer.y - 20, potion.healedAmount);
+        }
+        if (potion.kind === 'stored') {
+          Neo.spawnParticle({ x: pickupPlayer.x, y: pickupPlayer.y - 20, life: 0.7, text: `POTION STORED (${potion.storedPotions}/${potion.potionCap})`, c: '#a0e8ff' });
           Neo.updateHud();
-        } else {
-          continue;
+        }
+        if (potion.doubled) {
+          const y = potion.kind === 'stored' && potion.storedGain > 1 ? -36 : -34;
+          Neo.spawnParticle({ x: pickupPlayer.x, y: pickupPlayer.y + y, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
         }
       }
 
@@ -3663,7 +3680,6 @@
         }
         if (result.rewardKey) {
           Neo.collectItem(result.rewardKey);
-          Neo.player.lastSecretVendorRewardKey = result.rewardKey;
         } else if (result.offerKind === 'vitality') {
           Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(result.heal, 20));
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
@@ -3768,6 +3784,10 @@
       }
 
       if (pickup.type === 'descend') {
+        const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
+          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
+        });
+        if (endgameChoice && !endgameChoice.ok) return;
         Neo.floor += 1;
         // Turtle Boy's signature: a free laser tier every 3 floors descended
         // (floors 3, 6, 9, ...). Each step permanently buffs his Turtle Wave.
@@ -3792,7 +3812,11 @@
       }
 
       if (pickup.type === 'returnGate') {
-        if (Neo.gameMode === 'competitive') {
+        const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
+          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
+        });
+        if (endgameChoice && !endgameChoice.ok) return;
+        if (endgameChoice?.action === 'victory' || Neo.gameMode === 'competitive') {
           Neo.win();
         } else {
           returnToFloorOne();
@@ -3801,6 +3825,10 @@
       }
 
       if (pickup.type === 'crown') {
+        const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
+          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
+        });
+        if (endgameChoice && !endgameChoice.ok) return;
         Neo.win();
         return;
       }

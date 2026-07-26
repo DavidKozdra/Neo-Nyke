@@ -37,4 +37,19 @@ describe('shared campaign item effects', () => {
     expect(stats.pickupVacuumRange).toBe(9999);
     expect(stats.coinPickupMultiplier).toBe(2.5);
   });
+
+  test('plans Sweepy Box mines with campaign arm, blast, damage, and bleed scaling', () => {
+    expect(itemEffects.planCampaignThornMine(3)).toEqual({
+      count: 3, durationSeconds: 5, armSeconds: 0.18, triggerRadius: 34,
+      blastRadius: 74, damage: 26, knockback: 170, bleedStacks: 2, bleedDuration: 5.3,
+    });
+  });
+
+  test('plans El Barto Graffiti with its campaign chance and raw pulse profile', () => {
+    expect(itemEffects.planCampaignElBartoGraffiti(2, () => 0.19)).toEqual({
+      spawn: true, radius: 48, durationSeconds: 12, intervalSeconds: 0.65, damage: 24, knockback: 55,
+    });
+    expect(itemEffects.planCampaignElBartoGraffiti(2, () => 0.2).spawn).toBe(false);
+    expect(itemEffects.planCampaignElBartoGraffiti(3, () => 1).spawn).toBe(true);
+  });
 });

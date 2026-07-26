@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { createCampaignCircuitSequence } = require('../js/simulation/SharedRoomLifecycleSystem');
 
 function extractFunction(source, functionName, dependencies = {}) {
   const start = source.indexOf(`function ${functionName}`);
@@ -29,13 +30,7 @@ describe('challenge circuit and protect trial', () => {
   });
 
   test('does not generate the same switch twice in a row', () => {
-    const CHALLENGE_CIRCUIT_SWITCHES = [{}, {}, {}, {}];
-    const createChallengeCircuitSequence = extractFunction(
-      enemiesSource,
-      'createChallengeCircuitSequence',
-      { CHALLENGE_CIRCUIT_SWITCHES },
-    );
-    const sequence = createChallengeCircuitSequence(6, () => 0);
+    const sequence = createCampaignCircuitSequence(6, () => 0);
 
     expect(sequence).toHaveLength(6);
     sequence.slice(1).forEach((value, index) => {

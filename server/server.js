@@ -2,7 +2,9 @@ import '../js/simulation/RandomService.js';
 import '../js/simulation/SharedCombatContent.js';
 import '../js/simulation/SharedMoveContent.js';
 import '../js/simulation/SharedEnemyContent.js';
+import '../js/simulation/SharedRivalSystem.js';
 import '../js/simulation/SharedItemContent.js';
+import '../js/simulation/SharedEndgameSystem.js';
 import '../js/simulation/SharedRoomLifecycleSystem.js';
 import '../js/simulation/SharedRunServiceSystem.js';
 import '../js/simulation/GameState.js';
@@ -272,7 +274,7 @@ export class MultiplayerRoom {
   }
 
   createAuthority(room = {}) {
-    const mode = room.mode === 'rival' ? 'rival' : 'coop';
+    const mode = ['rival', 'boss_rush'].includes(room.mode) ? room.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT,
       Math.trunc(Number(room.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const authority = new MultiplayerRoomAuthority({
@@ -288,6 +290,7 @@ export class MultiplayerRoom {
     authority.mode = mode;
     authority.simulation.state.matchRules = {
       mode,
+      gameMode: mode,
       friendlyFire: mode === 'rival',
       reviveEnabled: mode === 'coop',
       floorAdvance: mode === 'rival' ? 'first' : 'all-living',
@@ -462,7 +465,7 @@ export class MultiplayerRoom {
     const existing = await this.ctx.storage.get('room');
     if (existing) return json({ error: 'Room code collision' }, 409);
     const options = await request.json().catch(() => ({}));
-    const mode = options.mode === 'rival' ? 'rival' : 'coop';
+    const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const requestedRoomCode = normalizeRoomCode(options.roomCode);
     if (!requestedRoomCode) return json({ error: 'Room code is required' }, 400);
@@ -1031,7 +1034,7 @@ async function handleRequest(request, env) {
     } catch (error) {
       return json({ error: error?.message || 'Invalid room creation request' }, Number(error?.status) || 400);
     }
-    const mode = options.mode === 'rival' ? 'rival' : 'coop';
+    const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const region = options.region == null || options.region === '' ? null : normalizeRegionHint(options.region);
     if (options.region != null && options.region !== '' && !region) {

@@ -61,12 +61,16 @@ describe('floor progression, run end, and revive', () => {
     expect(events.some(e => e.eventType === 'FLOOR_ADVANCED' && e.data.floorNumber === 2)).toBe(true);
   });
 
-  test('clearing the god floor ends the run in victory', () => {
+  test('clearing the god floor creates the campaign crown/loop decision', () => {
     const { state, simulation, events } = progressionHarness({ floorNumber: MAX_FLOOR });
-    stepMany(simulation, 60);
-    expect(state.status).toBe('ended');
-    const runEnd = events.find(e => e.eventType === 'RUN_ENDED');
-    expect(runEnd?.data.result).toBe('victory');
+    simulation.updateGame({}, 1 / 20);
+    const crown = Object.values(state.pickups).find(pickup => pickup.type === 'crown' && pickup.endgameChoice);
+    const loop = Object.values(state.pickups).find(pickup => pickup.type === 'returnGate' && pickup.endgameChoice);
+    expect(crown).toBeTruthy();
+    expect(loop).toBeTruthy();
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'GOD_ENDGAME_CHOICES_SPAWNED', data: expect.objectContaining({ choices: ['crown', 'returnGate'] }),
+    }));
     expect(state.floorNumber).toBe(MAX_FLOOR); // did not advance past the final floor
   });
 

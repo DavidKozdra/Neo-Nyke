@@ -49,4 +49,36 @@ describe('SharedProjectileSystem campaign rules', () => {
     expect(descriptors.map(entry => entry.angle)).toEqual([Math.PI / 2, -Math.PI / 2]);
     expect(descriptors[0]).toEqual(expect.objectContaining({ kind: 'power_disk', speed: 480, damage: 10 }));
   });
+
+  test('plans Sarge hammer double-kill projectile properties once', () => {
+    expect(projectile.planCampaignSargesHammerDoubleKill({ baseDamage: 30 })).toEqual({
+      kind: 'sarges_hammer', damage: 42, speed: 620, radius: 11, lifeSeconds: 6,
+      knockback: 320, pierce: 1, homing: true, homingTarget: 'enemy', homingRadius: 1100,
+      homingSpeed: 900, homingAccel: 3.2, homingTurnRate: 4.2, returning: true,
+    });
+  });
+
+  test('keeps direct prop damage and fireball blocked-impact splash together', () => {
+    expect(projectile.resolveCampaignProjectileDestructibleImpact({ kind: 'void_piercer', damage: 55 }))
+      .toEqual({ directDamage: 55, blast: null });
+    expect(projectile.resolveCampaignProjectileDestructibleImpact({
+      kind: 'fireball', damage: 22, splash: 48, blockedSplashDamage: 16,
+    })).toEqual({
+      directDamage: 22,
+      blast: { radius: 48, damage: 16, knockback: 180, destructibleForce: 1.6 },
+    });
+    expect(projectile.resolveCampaignProjectileDestructibleImpact(
+      { kind: 'rock', damage: 24, ownerId: 'p1' }, { kind: 'cover_wall', ownerId: 'p1' },
+    )).toEqual({ directDamage: 1, blast: null });
+  });
+
+  test('normalizes hostile projectile blast payloads for both runtimes', () => {
+    expect(projectile.resolveCampaignEnemyProjectileBlast({
+      enemyBlast: { radius: 48, damage: 14, knockback: 110, statusKey: 'fire', statusStacks: 1, statusDuration: 3.4 },
+    })).toEqual({
+      radius: 48, damage: 14, knockback: 110, statusKey: 'fire', statusStacks: 1, statusDuration: 3.4,
+      destructibleForce: 1.4,
+    });
+    expect(projectile.resolveCampaignEnemyProjectileBlast({ enemyBlast: { radius: 0, damage: 14 } })).toBeNull();
+  });
 });

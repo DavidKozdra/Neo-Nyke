@@ -3,6 +3,9 @@ const {
   LocalLoopbackNetwork,
   LocalLoopbackTransport,
 } = require('../js/multiplayer/LocalLoopbackTransport');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 const {
   LocalMultiplayerAuthority,
   LocalMultiplayerClient,
@@ -14,6 +17,7 @@ const {
 } = require('../js/multiplayer/LocalMultiplayerSession');
 const { GameState } = require('../js/simulation/GameState');
 const { createEnvelope, getDeliveryIntent } = require('../js/protocol/ProtocolV1');
+const { NetworkGameView } = require('../js/rendering/NetworkGameView');
 
 function transport(network, id, displayName) {
   return new LocalLoopbackTransport({
@@ -183,6 +187,27 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.simulation.state.status).toBe('running');
     expect(authority.simulation.state.floorState.layout.rooms.length).toBeGreaterThan(0);
     expect(client.state.floorState).toEqual(authority.simulation.state.floorState);
+  });
+
+  test('starts a one-player Boss Rush lobby with the authoritative game mode', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+      mode: 'boss_rush', minPlayers: 1, deferFloorGeneration: true,
+    });
+    const client = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    await authority.start();
+    await client.connect('neo-local-room');
+    clock.runAll();
+    client.sendReady(true);
+    clock.runAll();
+    authority.step(1);
+
+    expect(authority.mode).toBe('boss_rush');
+    expect(authority.simulation.state.matchRules).toEqual(expect.objectContaining({ mode: 'boss_rush', gameMode: 'boss_rush' }));
+    expect(authority.simulation.state.floorState.layout.rooms).toHaveLength(1);
+    expect(authority.simulation.state.floorNumber).toBe(5);
   });
 
   test('keeps lobby slots stable and reports intentional leaves versus dropped connections', async () => {
@@ -490,6 +515,72 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.projectiles[projectile.id]).toEqual(expect.objectContaining({ x: 12.5 + player.x, kind: 'death_ball' }));
   });
 
+  test('carries an authority kill through a packed snapshot into one persistent physical multiplayer corpse', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    const enemy = {
+      id: 'corpse-proof-enemy', roomId: player.roomId, type: 'hunter',
+      x: player.x + 90, y: player.y, vx: 0, vy: 0, radius: 20,
+      health: 80, maxHealth: 80, dead: false, spawnTick: authority.simulation.state.tick,
+    };
+    authority.simulation.state.enemies[enemy.id] = enemy;
+    // Bootstrap the static record, then send the kill in the compact delta
+    // path that previously omitted dead/deathTick and made corpses impossible.
+    authority._publishSnapshot(false);
+    clock.runAll();
+    enemy.health = 0;
+    enemy.dead = true;
+    enemy.deathTick = authority.simulation.state.tick;
+    enemy._lastHitAngle = 0;
+    authority._publishSnapshot(false);
+    clock.runAll();
+
+    expect(clientA.state.enemies[enemy.id]).toEqual(expect.objectContaining({
+      hp: 0, maxHp: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
+    }));
+
+    const neo = { ensureStatuses: jest.fn(), getEnemySpriteKey: source => source.type };
+    const view = new NetworkGameView({ session: {}, neo });
+    view._syncNeoPresentationFloor(clientA.state.floorState, clientA.state.enemies, {}, clientA.state);
+    const body = neo.deadBodies[0];
+    expect(body).toEqual(expect.objectContaining({
+      x: enemy.x, y: enemy.y, vx: expect.any(Number), vz: expect.any(Number),
+      angularV: expect.any(Number), z: 0,
+    }));
+    expect(body.vx).toBeGreaterThan(0);
+    expect(body.vz).toBeGreaterThan(0);
+
+    // Run the real campaign corpse updater against the body created from the
+    // multiplayer snapshot. A later snapshot must retain its fall/slide state
+    // rather than redraw the standing enemy sprite.
+    const corpseRuntime = {
+      deadBodies: neo.deadBodies,
+      CORPSE_FALL_TIME: 0.45,
+      CORPSE_LIFETIME: 11,
+      clamp: (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value)),
+    };
+    vm.runInNewContext(
+      fs.readFileSync(path.join(__dirname, '..', 'js', 'game', 'world.js'), 'utf8'),
+      { Neo: corpseRuntime, Math, globalThis: {} },
+    );
+    const { x: fallenX, z: fallenZ, angularOffset: fallenAngle } = body;
+    corpseRuntime.updateDeadBodies(1 / 60);
+    expect(body.x).toBeGreaterThan(fallenX);
+    expect(body.z).toBeGreaterThan(fallenZ);
+    expect(body.angularOffset).not.toBe(fallenAngle);
+    const simulatedBody = { x: body.x, z: body.z, angularOffset: body.angularOffset };
+    authority._publishSnapshot(false);
+    clock.runAll();
+    view._syncNeoPresentationFloor(clientA.state.floorState, clientA.state.enemies, {}, clientA.state);
+
+    expect(neo.deadBodies[0]).toBe(body);
+    expect(neo.deadBodies[0]).toEqual(expect.objectContaining({
+      ...simulatedBody,
+    }));
+  });
+
   test('does not send another room\'s projectile corrections to this client', async () => {
     const { clock, authority, clientA, clientATransport } = await createRunningHarness({
       latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
@@ -616,13 +707,13 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
 
     expect(enemy.dead).toBe(true);
-    expect(Object.values(authority.simulation.state.pickups)).toHaveLength(1);
+    expect(Object.values(authority.simulation.state.pickups).reduce((total, pickup) => total + pickup.value, 0)).toBe(5);
     expect(clientA.state.enemies).toEqual(authority.simulation.state.enemies);
     expect(clientB.state.enemies).toEqual(authority.simulation.state.enemies);
     expect(clientA.state.pickups).toEqual(authority.simulation.state.pickups);
     expect(clientB.state.pickups).toEqual(authority.simulation.state.pickups);
     expect(clientA.gameplayEvents.filter(event => event.eventType === 'ENEMY_DEFEATED')).toHaveLength(1);
-    expect(clientB.gameplayEvents.filter(event => event.eventType === 'PICKUP_SPAWNED')).toHaveLength(1);
+    expect(clientB.gameplayEvents.filter(event => event.eventType === 'PICKUP_SPAWNED')).toHaveLength(5);
     expect(authority.metrics.acceptedActions).toBe(2);
   });
 

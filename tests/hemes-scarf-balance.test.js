@@ -6,6 +6,8 @@ const playerSource = fs.readFileSync(path.join(root, 'js/game/player.js'), 'utf8
 const updateSource = fs.readFileSync(path.join(root, 'js/core/update.js'), 'utf8');
 const gameStateSource = fs.readFileSync(path.join(root, 'js/core/game-state.js'), 'utf8');
 const sharedEventSource = fs.readFileSync(path.join(root, 'js/simulation/SharedEventItemSystem.js'), 'utf8');
+const authoritySource = fs.readFileSync(path.join(root, 'js/simulation/NetworkCombatSystem.js'), 'utf8');
+const { advanceCampaignHemesScarfDrain } = require('../js/simulation/SharedEventItemSystem.js');
 
 describe("Heme's Scarf charge and healing balance", () => {
   test('starts uncharged and requires ten kill-charge steps', () => {
@@ -17,21 +19,21 @@ describe("Heme's Scarf charge and healing balance", () => {
 
   test('low health cannot arm the scarf without kills', () => {
     expect(updateSource).not.toContain('if (Neo.player.hp < 50) Neo.player.scarfHealReady = true');
-    expect(updateSource).toContain('&& Neo.player.scarfHealReady');
+    expect(updateSource).toContain('advanceCampaignHemesScarfDrain');
+    expect(sharedEventSource).toContain('player.scarfHealReady');
   });
 
   test('uses the reduced heal rate and caps extreme bleed healing', () => {
-    expect(updateSource).toContain('Neo.player.maxHp * 0.0003 * totalBleed * itemStats.bleedHealScale * dt');
-    expect(updateSource).toContain('Math.min(rawHeal, Neo.player.maxHp * 0.025 * dt)');
+    expect(sharedEventSource).toContain('maxHp || 0) * 0.0003 * bleed');
+    expect(sharedEventSource).toContain('maxHp || 0) * 0.025 * delta');
   });
 
   test('spends the charge up front and limits each discharge to three seconds', () => {
-    const spendAt = updateSource.indexOf("Neo.consumeCharge('hemes_scarf')");
-    const startAt = updateSource.indexOf('Neo.player.scarfHealTime = 3', spendAt);
-    const healAt = updateSource.indexOf('const rawHeal =', startAt);
-    expect(spendAt).toBeGreaterThan(-1);
-    expect(startAt).toBeGreaterThan(spendAt);
-    expect(healAt).toBeGreaterThan(startAt);
-    expect(sharedEventSource).toContain('Number(player.scarfHealTime || 0) <= 0');
+    const player = { hp: 49, maxHp: 100, scarfHealReady: true, scarfHealTime: 0, itemStats: { bleedHealScale: 1 } };
+    const started = advanceCampaignHemesScarfDrain(player, 3, 0.05);
+    expect(started.started).toBe(true);
+    expect(player.scarfHealReady).toBe(false);
+    expect(player.scarfHealTime).toBeCloseTo(2.95);
+    expect(authoritySource).toContain('advanceCampaignHemesScarfDrain(player, totalBleed, fixedDelta');
   });
 });

@@ -89,7 +89,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           maxPlayers: options.maxPlayers || 4,
-          mode: options.mode === 'rival' ? 'rival' : 'coop',
+          mode: ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop',
           // Placement is honored only while the room is first created.
           ...(options.region ? { region: options.region } : {}),
           // Omitted unless the host typed one, so the server keeps generating

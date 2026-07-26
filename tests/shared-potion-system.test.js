@@ -1,6 +1,11 @@
-const { resolveCampaignStoredPotion } = require('../js/simulation/SharedPotionSystem');
+const { resolveCampaignPotionBaseHeal, resolveCampaignStoredPotion, resolveCampaignPotionPickup } = require('../js/simulation/SharedPotionSystem');
 
 describe('shared campaign stored-potion policy', () => {
+  test('derives the campaign difficulty-aware potion base before stored-potion modifiers', () => {
+    expect(resolveCampaignPotionBaseHeal()).toBe(39);
+    expect(resolveCampaignPotionBaseHeal({ difficulty: { statMultiplier: 1 }, healingMultiplier: 1.2 })).toBe(48);
+  });
+
   test('uses the deterministic Drink Master roll and consumes exactly one stored potion', () => {
     const player = { hp: 20, maxHp: 120, storedPotions: 2 };
     const result = resolveCampaignStoredPotion(player, {
@@ -22,5 +27,18 @@ describe('shared campaign stored-potion policy', () => {
 
     const empty = { hp: 25, maxHp: 100, storedPotions: 0 };
     expect(resolveCampaignStoredPotion(empty)).toEqual(expect.objectContaining({ ok: false, reason: 'EMPTY' }));
+  });
+
+  test('uses the campaign walk-over rule: heal while hurt, otherwise store only with Mateo\'s Bag', () => {
+    const hurt = { hp: 60, maxHp: 120, storedPotions: 0, items: {} };
+    expect(resolveCampaignPotionPickup(hurt, { baseHeal: 30, itemStats: { potionDoubleChance: 0.5 }, random: () => 0 }))
+      .toEqual(expect.objectContaining({ ok: true, kind: 'heal', doubled: true, requestedHeal: 60, healedAmount: 60 }));
+    expect(hurt).toEqual(expect.objectContaining({ hp: 120, storedPotions: 0 }));
+
+    const bag = { hp: 120, maxHp: 120, storedPotions: 2, items: { mateos_bag: 1 } };
+    expect(resolveCampaignPotionPickup(bag, { itemStats: { potionDoubleChance: 0.5 }, random: () => 0 }))
+      .toEqual(expect.objectContaining({ ok: true, kind: 'stored', doubled: true, storedGain: 1, storedPotions: 3, potionCap: 3 }));
+    expect(resolveCampaignPotionPickup({ hp: 120, maxHp: 120, storedPotions: 0, items: {} }))
+      .toEqual(expect.objectContaining({ ok: false, reason: 'UNUSABLE' }));
   });
 });

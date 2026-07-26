@@ -177,5 +177,26 @@
     return state;
   }
 
-  return { getItemTagCounts, getActiveBuildTags, applyCritRollback, deriveCampaignItemStats, syncCampaignItemStats };
+  function planCampaignThornMine(stacks = 1) {
+    const count = Math.max(1, Math.min(3, Math.floor(Number(stacks || 1))));
+    return {
+      count,
+      durationSeconds: 5,
+      armSeconds: 0.18,
+      triggerRadius: 34,
+      blastRadius: 62 + (count - 1) * 6,
+      damage: 18 + (count - 1) * 4,
+      knockback: 170,
+      bleedStacks: Math.min(4, 1 + Math.floor((count - 1) / 2)),
+      bleedDuration: 4.5 + (count - 1) * 0.4,
+    };
+  }
+
+  function planCampaignElBartoGraffiti(stacks = 1, random = () => 1) {
+    const count = Math.max(1, Math.floor(Number(stacks || 1)));
+    const spawn = count >= 3 || Number(random()) < Math.min(1, count * 0.1);
+    return { spawn, radius: 44 + (count - 1) * 4, durationSeconds: 12, intervalSeconds: 0.65, damage: 18 + (count - 1) * 6, knockback: 55 };
+  }
+
+  return { getItemTagCounts, getActiveBuildTags, applyCritRollback, deriveCampaignItemStats, syncCampaignItemStats, planCampaignThornMine, planCampaignElBartoGraffiti };
 });

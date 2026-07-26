@@ -50,7 +50,8 @@ describe('local co-op systems use active player slots', () => {
 
   test('enemy homing and direct projectile hits select living player slots', () => {
     expect(world).toContain('getNearestLivingPlayerSlot(projectile.x, projectile.y)?.entity');
-    expect(world).toContain('const hitSlot = getLocalCoopSlots({ livingOnly: true }).find');
+    expect(world).toContain('findCampaignProjectileEntitySweepHit');
+    expect(world).toContain('getLocalCoopSlots({ livingOnly: true })');
     expect(world).toContain('damagePlayerSlot(hitSlot, projectile.damage || 10');
     expect(world).toContain('applyProjectileStatusEffectsToPlayer(projectile, hitPlayer)');
   });

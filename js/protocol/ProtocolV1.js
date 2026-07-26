@@ -81,6 +81,8 @@
         moveY: field('number', { required: true, min: -1, max: 1 }),
         aimDirection: field('number', { required: true, min: -Math.PI * 4, max: Math.PI * 4 }),
         buttons: field('integer', { min: 0, max: 0xffff }),
+        targetX: field('number', { min: -1024, max: 2048 }),
+        targetY: field('number', { min: -1024, max: 2048 }),
       },
     },
     PLAYER_ACTION: {
@@ -100,6 +102,11 @@
         // aim only while the player is stationary.
         dashMoveX: field('number', { min: -1, max: 1 }),
         dashMoveY: field('number', { min: -1, max: 1 }),
+        // Cursor-world target for campaign cursor-placement dashes (currently
+        // Warp). The authority bounds and collision-resolves it; it never
+        // grants a client-authored position.
+        targetX: field('number', { min: -1024, max: 2048 }),
+        targetY: field('number', { min: -1024, max: 2048 }),
         // Most recently observed authority tick. The server clamps it to its
         // bounded co-op validation history before using it.
         originServerTick: field('integer', { min: 0, max: Number.MAX_SAFE_INTEGER }),
@@ -223,7 +230,7 @@
         members: field('array', { required: true, maxLength: 4 }),
         minPlayers: field('integer', { required: true, min: 1, max: 4 }),
         maxPlayers: field('integer', { required: true, min: 1, max: 4 }),
-        mode: field('string', { required: true, enum: ['coop', 'rival'] }),
+        mode: field('string', { required: true, enum: ['coop', 'rival', 'boss_rush'] }),
       },
     },
     MATCH_STARTING: {

@@ -156,7 +156,7 @@ export function createUIController(view) {
     }
 
     function setMultiplayerModeChoice(mode) {
-      const next = mode === 'rival' ? 'rival' : 'coop';
+      const next = ['rival', 'boss_rush'].includes(mode) ? mode : 'coop';
       if (view.multiplayerMode) view.multiplayerMode.value = next;
       document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
         const active = button.dataset.multiplayerModeOption === next;
@@ -657,7 +657,8 @@ export function createUIController(view) {
         view.multiplayerRoomStatus.textContent = latestError?.message || statusMessages[snapshot.status] || 'Preparing multiplayer…';
       }
       const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
-      const multiplayerMode = snapshot.lobbyState?.mode === 'rival' ? 'RIVAL' : 'CO-OP';
+      const multiplayerMode = snapshot.lobbyState?.mode === 'rival' ? 'RIVAL'
+        : snapshot.lobbyState?.mode === 'boss_rush' ? 'BOSS RUSH' : 'CO-OP';
       if (view.multiplayerRoomCodeDisplay && roomCode) view.multiplayerRoomCodeDisplay.textContent = `${multiplayerMode} • ROOM ${roomCode}`;
       const multiplayerCharacterNames = MULTIPLAYER_CHARACTER_NAMES;
       if (view.multiplayerMemberList) {
@@ -3682,7 +3683,7 @@ export function createUIController(view) {
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.multiplayerBtn?.addEventListener('click', () => setMultiplayerPanelOpen(true));
         view.multiplayerCreateRoom?.addEventListener('click', () => {
-          const mode = view.multiplayerMode?.value === 'rival' ? 'rival' : 'coop';
+          const mode = ['rival', 'boss_rush'].includes(view.multiplayerMode?.value) ? view.multiplayerMode.value : 'coop';
           void runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4 }));
         });
         view.multiplayerJoinRoom?.addEventListener('click', () => {
@@ -3788,7 +3789,7 @@ export function createUIController(view) {
             return;
           }
           showRoomCodeError('');
-          const mode = view.multiplayerMode?.value === 'rival' ? 'rival' : 'coop';
+          const mode = ['rival', 'boss_rush'].includes(view.multiplayerMode?.value) ? view.multiplayerMode.value : 'coop';
           // runBrowserMultiplayerAction handles its own failures (it renders a
           // rejected snapshot rather than rethrowing), so confirm success by
           // checking the code we actually ended up with instead of catching.

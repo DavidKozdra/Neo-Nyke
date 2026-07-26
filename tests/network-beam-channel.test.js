@@ -67,6 +67,21 @@ describe('channelled laser beams (multiplayer parity)', () => {
     expect(state.players.p1.beamChannel).toBeFalsy();
   });
 
+  test('continuous campaign beams ricochet off authoritative room geometry', () => {
+    const { state, simulation } = beamHarness();
+    simulation.updateGame({}, 0.05);
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.structures = [{ kind: 'forge', x: player.x + 50, y: player.y, w: 10, h: 100 }];
+    const enemy = stillEnemyNextTo(state, -50);
+    enemy.health = 10000;
+    enemy.maxHealth = 10000;
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 }] } }, 0.05);
+
+    expect(enemy.health).toBeLessThan(10000);
+  });
+
   test('the beam steers toward the player aim stream while channelling', () => {
     const { state, simulation } = beamHarness();
     simulation.updateGame({}, 0.05);
@@ -122,6 +137,12 @@ describe('channelled laser beams (multiplayer parity)', () => {
     expect(getCampaignPlayerMovementSpeed(player, 0)).toBeCloseTo(228);
     player.beamChannel = { moveKey: 'blood_beam' };
     expect(getCampaignPlayerMovementSpeed(player, 0)).toBeCloseTo(228 * 0.4);
+  });
+
+  test('Turtle Power-Up uses its charged shared movement multiplier instead of a fixed status speed', () => {
+    const player = { moveSpeed: 228, itemStats: {}, turtlePowerUpUntilTick: 40, turtlePowerUpPower: 0.6 };
+    expect(getCampaignPlayerMovementSpeed(player, 39)).toBeCloseTo(228 * 1.6);
+    expect(getCampaignPlayerMovementSpeed(player, 40)).toBeCloseTo(228);
   });
 
   test('steerBeamChannelAngle turns at 3.5 rad/s and takes the short way around', () => {

@@ -604,24 +604,27 @@ export function loop(timestamp) {
     }
 
     if (Neo.player.lavaWalkTime > 0) {
-      Neo.player.lavaWalkTime = Math.max(0, Neo.player.lavaWalkTime - dt);
-      Neo.player.lavaTrailTick -= dt;
-      if (Neo.player.lavaTrailTick <= 0) {
+      const lavaTrail = globalThis.NeoNyke?.simulation?.advanceCampaignFloorLavaTrail?.(Neo.player, dt, {
+        aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
+        aoeDamageMultiplier: itemStats.aoeDamageMultiplier,
+      });
+      if (!lavaTrail) throw new Error('Shared Floor Is Lava trail policy is unavailable');
+      if (lavaTrail.puddle) {
+        const puddle = lavaTrail.puddle;
         Neo.hazards.push({
           kind: 'lava',
           x: Neo.player.x,
           y: Neo.player.y,
-          r: 24 * (itemStats.aoeRadiusMultiplier || 1),
-          ttl: 1.8,
+          r: puddle.puddleRadius,
+          ttl: puddle.puddleDurationSeconds,
           pulse: 2.5,
           wobble: 0.35,
           phase: Neo.rng() * Math.PI * 2,
           // Floor Is Lava trail puddles deal direct DPS to enemies (authored
           // lava-room hazards leave this unset and stay fire-only).
-          dps: 14 * (itemStats.aoeDamageMultiplier || 1),
+          dps: puddle.damagePerSecond,
           source: 'floor_lava',
         });
-        Neo.player.lavaTrailTick = 0.22;
       }
     }
 
@@ -658,10 +661,9 @@ export function loop(timestamp) {
       if (enemy.critSparkle > 0) enemy.critSparkle = Math.max(0, enemy.critSparkle - dt);
       if (enemy.spawnT > 0) { enemy.spawnT = Math.max(0, enemy.spawnT - dt); continue; }
 
-      if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
-        Neo.applyBleed(enemy, Math.max(0, itemStats.passiveBleedStacks - Neo.getStatusStacks(enemy, 'bleed')), 0.25);
-      } else if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type === 'god') {
-        Neo.applyBleed(enemy, Math.max(0, Math.max(1, itemStats.passiveBleedStacks - 1) - Neo.getStatusStacks(enemy, 'bleed')), 0.25);
+      const targetScarfBleedStacks = Neo.simulation?.getCampaignHemesScarfPassiveBleedStacks?.(enemy, itemStats) || 0;
+      if (targetScarfBleedStacks > 0) {
+        Neo.applyBleed(enemy, Math.max(0, targetScarfBleedStacks - Neo.getStatusStacks(enemy, 'bleed')), 0.25);
       }
 
       totalBleed += Neo.updateEnemyStatuses(enemy, dt);
@@ -700,32 +702,13 @@ export function loop(timestamp) {
       Neo.moveCircle(enemy, dt);
     }
 
-    // Heme's Scarf spends one earned charge as soon as its low-health discharge
-    // begins. The discharge is finite; once it ends, another 10-kill charge must
-    // be earned. This prevents one slow discharge from healing forever in bosses.
-    if (
-      itemStats.bleedHealScale > 0
-      && totalBleed > 0
-      && Neo.player.hp < 50
-      && Neo.player.scarfHealReady
-      && Number(Neo.player.scarfHealTime || 0) <= 0
-    ) {
-      Neo.consumeCharge('hemes_scarf');
-      Neo.player.scarfHealTime = 3;
+    const scarfDrain = Neo.simulation?.advanceCampaignHemesScarfDrain?.(Neo.player, totalBleed, dt, { itemStats })
+      || { started: false, heal: 0 };
+    if (scarfDrain.started) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.65, text: 'SCARF DRAIN', c: '#0f8' });
     }
-    if (Number(Neo.player.scarfHealTime || 0) > 0) {
-      Neo.player.scarfHealTime = Math.max(0, Number(Neo.player.scarfHealTime) - dt);
-      if (itemStats.bleedHealScale > 0 && totalBleed > 0 && Neo.player.hp < Neo.player.maxHp) {
-        // Keep large bleed packs from turning the finite discharge into an instant
-        // refill, while preserving stack/bleed scaling within its three seconds.
-        const rawHeal = Neo.player.maxHp * 0.0003 * totalBleed * itemStats.bleedHealScale * dt;
-        const heal = Neo.scalePlayerHealing(Math.min(rawHeal, Neo.player.maxHp * 0.025 * dt));
-        const gained = Neo.applyPlayerHealing?.(heal, { showBarrier: false }) ?? 0;
-        if (gained > 0 && Neo.nextRandom('fx') < 0.14) {
-          Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 18, gained, { color: '#0f8' });
-        }
-      }
+    if (scarfDrain.heal > 0 && Neo.nextRandom('fx') < 0.14) {
+      Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 18, scarfDrain.heal, { color: '#0f8' });
     }
     Neo.updateBeamPractice?.(dt);
     Neo.perfEnd('update.enemies', sectionPerfStart);
@@ -794,48 +777,38 @@ export function loop(timestamp) {
 
   function tryChargedLadderWarp() {
     if (Neo.getItemCount('charged_adapter') <= 0) return;
-    if (!Neo.player.escapeReady) {
-      const needed = Neo.getChargeRequirement(20);
-      const progress = Math.max(0, Number(Neo.player.escapeChargeKills || 0));
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
-      return;
-    }
-    if (!Neo.currentRoom || Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god') {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
-      return;
-    }
-
     const ladderRoom = Neo.rooms.find(room => room.type === 'ladder') || Neo.rooms.find(room => room.type === 'boss');
-    if (!ladderRoom || ladderRoom === Neo.currentRoom) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'ALREADY AT LADDER', c: '#b7ffca' });
-      return;
-    }
-
-    // Don't stack a second gate if one is already open in this room.
-    if (Neo.pickups.some(pickup => pickup?.type === 'adapterPortal')) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: 'PORTAL ALREADY OPEN', c: '#b88cff' });
-      return;
-    }
-
-    // Spend the adapter charge now (the press is what opens the gate), but defer
-    // the coin cost and the actual warp until the player walks into the portal.
-    Neo.consumeCharge('escape');
-
     const preferred = Neo.findSafePointNearTarget(Neo.player.x, Neo.player.y - 96, 24, 180, 20);
     const fallback = Neo.findSafePointNearTarget(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 24, 240, 20) || Neo.findSafeSpawnPoint();
     const spawnPoint = preferred || fallback;
-    Neo.pickups.push({
+    const portal = globalThis.NeoNyke.simulation.prepareCampaignChargedAdapterWarp(Neo.player, {
+      hasCurrentRoom: !!Neo.currentRoom,
+      roomType: Neo.currentRoom?.type,
+      hasTargetRoom: !!ladderRoom,
+      targetIsCurrent: ladderRoom === Neo.currentRoom,
+      hasExistingPortal: Neo.pickups.some(pickup => pickup?.type === 'adapterPortal'),
+      targetRoomId: ladderRoom?.id,
+      targetGx: ladderRoom?.gx,
+      targetGy: ladderRoom?.gy,
       x: spawnPoint.x,
       y: spawnPoint.y,
-      type: 'adapterPortal',
-      // Store grid coords, not the room object — keeps the pickup serializable and
-      // avoids a stale reference after save/restore (resolved at walk-in time).
-      targetGx: ladderRoom.gx,
-      targetGy: ladderRoom.gy,
-      spawnT: 0,
       activateAt: Neo.JESTER_PORTAL_ACTIVATE_DELAY,
-      active: false,
     });
+    if (!portal.ok) {
+      if (portal.reason === 'ADAPTER_CHARGING') {
+        const needed = Neo.getChargeRequirement(20);
+        const progress = Math.max(0, Number(Neo.player.escapeChargeKills || 0));
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
+      } else if (portal.reason === 'NO_WARP_IN_BOSS_ROOM') {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
+      } else if (portal.reason === 'ALREADY_AT_LADDER') {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'ALREADY AT LADDER', c: '#b7ffca' });
+      } else if (portal.reason === 'PORTAL_ALREADY_OPEN') {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: 'PORTAL ALREADY OPEN', c: '#b88cff' });
+      }
+      return;
+    }
+    Neo.pickups.push(portal);
     Neo.ringBurst(spawnPoint.x, spawnPoint.y, 28, '#b88cff', 0.5);
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'LADDER PORTAL', c: '#d6c4ff' });
     Neo.scheduleRunSave();
