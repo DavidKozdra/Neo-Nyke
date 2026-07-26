@@ -2594,6 +2594,17 @@ export function createUIController(view) {
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
 
+    // Selects an Alt Modes tab programmatically, so callers that arrive from
+    // outside the tab bar (multiplayer BACK) land on the tab they came from.
+    function selectAltModesTab(name) {
+      const tab = document.querySelector(`.altmodes-tab[data-tab="${name}"]`);
+      if (!tab) return;
+      document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
+      tab.classList.add('active');
+      document.querySelector(`.altmodes-tab-panel[data-panel="${name}"]`)?.classList.remove('hidden');
+    }
+
     function setCompetitivePanelOpen(open) {
       view.competitivePanel?.classList.toggle('hidden', !open);
       view.competitivePanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -2602,6 +2613,11 @@ export function createUIController(view) {
         initCompetitiveLeaderboard();
       }
     }
+
+    // True when the multiplayer page was opened from the Alt Modes online tab,
+    // so BACK returns there instead of dropping straight to the main menu.
+    // Invite links and session resume open the page directly and skip this.
+    let multiplayerOpenedFromAltModes = false;
 
     function setMultiplayerPanelOpen(open) {
       const shouldOpen = open === true;
@@ -2620,6 +2636,9 @@ export function createUIController(view) {
         });
       } else {
         view.multiplayerPanel?.classList.remove('is-open');
+        // Restoring Alt Modes is BACK's job only: this also runs when a match
+        // starts or the game leaves the menu, where the panel must stay shut.
+        multiplayerOpenedFromAltModes = false;
         if (view.multiplayerPanel?.contains(document.activeElement)) {
           view.multiplayerBtn?.focus?.({ preventScroll: true });
         }
@@ -3700,7 +3719,10 @@ export function createUIController(view) {
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
-        view.multiplayerBtn?.addEventListener('click', () => setMultiplayerPanelOpen(true));
+        view.multiplayerBtn?.addEventListener('click', () => {
+          setMultiplayerPanelOpen(true);
+          multiplayerOpenedFromAltModes = true;
+        });
         view.multiplayerCreateRoom?.addEventListener('click', () => {
           const mode = ['rival', 'boss_rush'].includes(view.multiplayerMode?.value) ? view.multiplayerMode.value : 'coop';
           void runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4 }));
@@ -3837,9 +3859,14 @@ export function createUIController(view) {
         // A stale lobby with no running match is disposed outright by detach().
         // To fully quit a match, use the lobby's LEAVE or the pause Leave Server.
         view.multiplayerBack?.addEventListener('click', () => {
+          const returnToAltModes = multiplayerOpenedFromAltModes;
           if (browserMultiplayerSession) detachBrowserMultiplayerGame();
           else disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
+          if (returnToAltModes) {
+            setAltModesPanelOpen(true);
+            selectAltModesTab('online');
+          }
         });
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
@@ -3939,13 +3966,7 @@ export function createUIController(view) {
         });
         // Alt modes tabs
         document.querySelectorAll('.altmodes-tab').forEach(tab => {
-          tab.addEventListener('click', () => {
-            document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
-            tab.classList.add('active');
-            const panel = document.querySelector(`.altmodes-tab-panel[data-panel="${tab.dataset.tab}"]`);
-            if (panel) panel.classList.remove('hidden');
-          });
+          tab.addEventListener('click', () => selectAltModesTab(tab.dataset.tab));
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
         view.altModeSandboxBtn?.addEventListener('click', () => {

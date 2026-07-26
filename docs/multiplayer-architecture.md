@@ -27,7 +27,7 @@ Only authority and transport change by mode:
 
 ## Player-facing mode boundary and feature flag
 
-The main menu always shows distinct `SINGLE PLAYER` and `MULTIPLAYER` buttons. Networking remains disabled by default in production through `js/config/FeatureFlags.js`. Localhost enables the development room controls automatically; opening the panel alone still does not create a session or WebSocket.
+The main menu shows `CLASSIC RUN` for offline play. Networked play moved off the main menu into the Alt Modes panel, under the `MULTIPLAYER` tab (`data-tab="online"`), whose card opens the same `#multiplayerPanel` page via the unchanged `#multiplayerBtn`. Networking remains disabled by default in production through `js/config/FeatureFlags.js`. Localhost enables the development room controls automatically; opening the panel alone still does not create a session or WebSocket.
 
 The supported local room workflow is:
 
