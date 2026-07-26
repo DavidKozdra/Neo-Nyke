@@ -25,3 +25,6 @@ The game uses a pixel-arcade interface, not a glass or SaaS dashboard.
 - Is every border, glow, and color communicating a state or category?
 - Does this look like it belongs beside the HUD and inventory, not a web dashboard?
 - Does it remain readable at the minimum supported font scale and on a small screen?
+
+
+

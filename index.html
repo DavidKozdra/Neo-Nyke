@@ -834,8 +834,7 @@
       <div class="main-nav">
         <button id="storyModeBtn" class="nav-btn nav-btn--tutorial"><span class="nav-btn__icon" aria-hidden="true">◆</span><span>STORY MODE</span></button>
         <button id="continueBtn" class="nav-btn hidden" data-i18n="menu.continue">CONTINUE</button>
-        <button id="newRunBtn" class="nav-btn">SINGLE PLAYER</button>
-        <button id="multiplayerBtn" class="nav-btn" type="button" aria-expanded="false">MULTIPLAYER</button>
+        <button id="newRunBtn" class="nav-btn">CLASSIC RUN</button>
         <button id="altModesBtn"   class="nav-btn nav-btn--minor" data-i18n="menu.altModes">ALT MODES</button>
         <button id="runHistoryBtn" class="nav-btn nav-btn--minor" data-i18n="menu.archive">ARCHIVE</button>
         <button id="settingsBtn" class="nav-btn nav-btn--minor" data-i18n="menu.settings">SETTINGS</button>
@@ -1057,6 +1056,7 @@
     </div>
     <div class="altmodes-tabs" role="tablist">
       <button class="altmodes-tab active" data-tab="challenges" type="button">CHALLENGES</button>
+      <button class="altmodes-tab" data-tab="online" type="button">MULTIPLAYER</button>
       <button class="altmodes-tab" data-tab="multiplayer" type="button">LOCAL PLAY</button>
       <button class="altmodes-tab" data-tab="testing" type="button">TESTING</button>
     </div>
@@ -1102,6 +1102,17 @@
             <p class="altmode-card__desc">Kill the vault boss, take its key, then fight back through new monsters and explosive traps. Return to the entrance to reveal a ladder or key chest.</p>
           </div>
           <button id="altModeTreasureHuntBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        </div>
+      </div>
+      <!-- Networked play. The card opens the full multiplayer page (#multiplayerPanel). -->
+      <div class="altmodes-tab-panel hidden" data-panel="online">
+        <div class="altmode-card" id="altModeOnlineCard">
+          <div class="altmode-card__icon" aria-hidden="true">&#9741;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">MULTIPLAYER</h3>
+            <p class="altmode-card__desc">Create or join an online party over the network. Play co-op, rival, or boss rush together from anywhere. still in development nothing is promised</p>
+          </div>
+          <button id="multiplayerBtn" class="nav-btn altmode-card__btn" type="button" aria-expanded="false">PLAY</button>
         </div>
       </div>
       <!-- Existing same-device local play; separate from network multiplayer. -->

@@ -21,6 +21,9 @@ async function waitForSessionStatus(page, status, description) {
 
 async function openMultiplayer(page) {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  // Networked play now lives behind Alt Modes > MULTIPLAYER.
+  await page.locator('#altModesBtn').click();
+  await page.locator('.altmodes-tab[data-tab="online"]').click();
   await page.locator('#multiplayerBtn').click();
   await page.locator('#multiplayerCreateRoom').waitFor({ state: 'visible' });
   // Availability is checked asynchronously during startup. Waiting here avoids

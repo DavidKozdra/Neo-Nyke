@@ -44,6 +44,9 @@ async function waitForStatus(page, expected, label) {
 
 async function openMultiplayer(page) {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  // Networked play now lives behind Alt Modes > MULTIPLAYER.
+  await page.locator('#altModesBtn').click();
+  await page.locator('.altmodes-tab[data-tab="online"]').click();
   await page.locator('#multiplayerBtn').click();
   await page.locator('#multiplayerCreateRoom').waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForFunction(() => !document.querySelector('#multiplayerCreateRoom')?.disabled, undefined, { timeout: 20_000 })

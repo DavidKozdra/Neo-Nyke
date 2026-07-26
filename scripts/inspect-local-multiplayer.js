@@ -7,6 +7,9 @@ async function main() {
   await context.addInitScript(apiBase => { globalThis.NEO_MULTIPLAYER_API_BASE = apiBase; }, `${baseUrl}/api/multiplayer`);
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  // Networked play now lives behind Alt Modes > MULTIPLAYER.
+  await page.locator('#altModesBtn').click();
+  await page.locator('.altmodes-tab[data-tab="online"]').click();
   await page.locator('#multiplayerBtn').click();
   await page.waitForTimeout(11_000);
   const state = await page.evaluate(async () => {

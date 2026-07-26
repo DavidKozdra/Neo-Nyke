@@ -15,7 +15,7 @@ At the start of the audit, gameplay and presentation were not separate layers: `
 
 ## Menu and mode selection
 
-- The primary new-run action is now labeled `SINGLE PLAYER`. Selecting it creates an `OfflineGameSession` immediately, then opens the existing character selection flow.
+- The primary new-run action is now labeled `CLASSIC RUN`. Selecting it creates an `OfflineGameSession` immediately, then opens the existing character selection flow.
 - `MULTIPLAYER` is a separate visible primary action. The production flag remains off, while localhost automatically enables Create Room and Join Room for the development room proof. Neither the menu nor the disabled production controls initialize a network service.
 - Existing same-device `coop` and `pvp` remain under `ALT MODES` → `LOCAL PLAY`; they are not treated as network sessions.
 - `CONTINUE`, tutorial, competitive, alternate modes, archive, settings, and credits retain their existing paths.
