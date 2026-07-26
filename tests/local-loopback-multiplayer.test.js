@@ -515,9 +515,13 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.projectiles[projectile.id]).toEqual(expect.objectContaining({ x: 12.5 + player.x, kind: 'death_ball' }));
   });
 
-  test('carries an authority kill through a packed snapshot into one persistent physical multiplayer corpse', async () => {
-    const { clock, authority, clientA } = await createRunningHarness({
+  test('carries a complete authority enemy update into one persistent physical multiplayer corpse', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
       latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
     });
     const player = authority.simulation.state.players[clientA.playerId];
     const enemy = {
@@ -526,8 +530,9 @@ describe('protocol-driven local multiplayer session', () => {
       health: 80, maxHealth: 80, dead: false, spawnTick: authority.simulation.state.tick,
     };
     authority.simulation.state.enemies[enemy.id] = enemy;
-    // Bootstrap the static record, then send the kill in the compact delta
-    // path that previously omitted dead/deathTick and made corpses impossible.
+    // Bootstrap the enemy, then send a normal changed-enemy delta. Enemy state
+    // stays complete on the wire so campaign rendering never has to merge a
+    // new transform with stale health, death, or animation fields.
     authority._publishSnapshot(false);
     clock.runAll();
     enemy.health = 0;
@@ -537,8 +542,14 @@ describe('protocol-driven local multiplayer session', () => {
     authority._publishSnapshot(false);
     clock.runAll();
 
+    const killDelta = snapshots.at(-1);
+    expect(killDelta.entities.enemies[enemy.id]).toEqual(expect.objectContaining({
+      health: 0, maxHealth: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
+    }));
+    expect(killDelta.packedDynamic.packed.enemies).toBeUndefined();
+
     expect(clientA.state.enemies[enemy.id]).toEqual(expect.objectContaining({
-      hp: 0, maxHp: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
+      health: 0, maxHealth: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
     }));
 
     const neo = { ensureStatuses: jest.fn(), getEnemySpriteKey: source => source.type };

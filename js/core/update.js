@@ -165,7 +165,9 @@ export function loop(timestamp) {
     // campaign physics in the core loop rather than reimplementing it in the
     // network adapter.
     if (Neo.gameState === 'play' && Neo.multiplayerGameView?.active) {
+      Neo.lavaAnimTime += dt;
       Neo.updateDeadBodies(dt);
+      Neo.updateParticles(dt);
     }
     if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
