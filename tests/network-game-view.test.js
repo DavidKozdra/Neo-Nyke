@@ -756,31 +756,12 @@ describe('network multiplayer game view', () => {
     expect(neo.enemies[0]).toEqual(expect.objectContaining({ hp: 31, max: 100 }));
   });
 
-  test('runs the shared corpse physics updater from the multiplayer presentation frame', () => {
-    const updateDeadBodies = jest.fn();
-    const neo = { ensureStatuses: jest.fn(), updateDeadBodies, updateParticles: jest.fn() };
-    const session = { snapshot: () => ({ playerId: 'p1' }) };
-    const view = new NetworkGameView({ session, neo, canvas: { width: 900, height: 700 }, context: {} });
-    view.active = true;
-    view._updateHud = jest.fn();
-    view.currentSample = {
-      receivedAt: performance.now(),
-      state: {
-        tick: 20,
-        floorState: {
-          currentRoomId: 'room-a', width: 900, height: 700, visitedRoomIds: ['room-a'],
-          layout: { floorNumber: 1, rooms: [{ id: 'room-a', type: 'combat' }] },
-        },
-        players: { p1: { id: 'p1', roomId: 'room-a', x: 450, y: 350, hp: 100, maxHp: 100 } },
-        enemies: { e1: { id: 'e1', roomId: 'room-a', type: 'hunter', x: 520, y: 350, radius: 20, dead: true, deathTick: 20 } },
-        projectiles: {}, pickups: {}, interactables: {}, abilityEntities: {},
-      },
-    };
-
-    view.syncPresentation();
-
-    expect(neo.deadBodies).toHaveLength(1);
-    expect(updateDeadBodies).toHaveBeenCalledWith(expect.any(Number));
+  test('keeps multiplayer corpse physics in the shared campaign core loop', () => {
+    const updateSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'update.js'), 'utf8');
+    expect(updateSource).toContain("if (Neo.gameState === 'play' && Neo.multiplayerGameView?.active) {");
+    expect(updateSource).toContain('Neo.updateDeadBodies(dt);');
+    expect(fs.readFileSync(path.join(__dirname, '..', 'js', 'rendering', 'NetworkGameView.js'), 'utf8'))
+      .not.toContain('this.neo.updateDeadBodies?.(frameDelta);');
   });
 
   test('projects authoritative beam channels as ordinary client presentation effects', () => {
