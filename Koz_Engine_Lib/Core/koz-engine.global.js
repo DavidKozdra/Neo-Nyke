@@ -445,18 +445,29 @@
     },
   ];
 
+  // A new game shell can briefly be served by the browser while its previous
+  // service worker is still caching an older engine manifest. Do not let one
+  // unavailable module (for example a newly-added AI helper) prevent unrelated
+  // core modules such as Combat/statusBook from being published.
+  const loadFailures = engineNamespace.loadFailures = [];
+
   for (const def of moduleDefs) {
-    const api = loadCommonJsModule(def.path);
-    registerNamespace(def.register, api);
+    try {
+      const api = loadCommonJsModule(def.path);
+      registerNamespace(def.register, api);
 
-    if (def.globals) {
-      for (const [name, factory] of Object.entries(def.globals)) {
-        publishGlobal(name, factory(api));
+      if (def.globals) {
+        for (const [name, factory] of Object.entries(def.globals)) {
+          publishGlobal(name, factory(api));
+        }
       }
-    }
 
-    if (typeof def.afterLoad === "function") {
-      def.afterLoad(api);
+      if (typeof def.afterLoad === "function") {
+        def.afterLoad(api);
+      }
+    } catch (error) {
+      loadFailures.push({ path: def.path, error: String(error?.message || error) });
+      root.console?.warn?.(`[KozEngine] Module unavailable: ${def.path}`, error);
     }
   }
 })(typeof window !== "undefined" ? window : globalThis);
