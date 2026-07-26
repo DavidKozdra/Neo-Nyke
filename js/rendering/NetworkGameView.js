@@ -2813,7 +2813,7 @@
           const elite = !!enemy.elite;
           const launchScale = boss ? 1.45 : elite ? 1.22 : 1;
           body = {
-            id: stableNumericId(enemy.id),
+            id: stableNumericId(enemy.id), sourceEnemyId: String(enemy.id),
             x: Number(enemy.x || 0), y: Number(enemy.y || 0),
             vx: speed > 8 ? vx : Math.cos(direction) * 42 * launchScale,
             vy: speed > 8 ? vy : Math.sin(direction) * 42 * launchScale,

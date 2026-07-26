@@ -146,9 +146,28 @@ export function createUIController(view) {
       }
       multiplayerServiceState = 'checking';
       syncMultiplayerFeatureUI();
-      const probe = new Transport();
-      const available = await probe.checkAvailability?.({ timeoutMs: 4000 }) === true;
-      probe.dispose?.();
+      // A browser fetch can remain pending despite AbortSignal.timeout (notably
+      // while a just-started local Worker finishes binding its socket). Do not
+      // leave the lobby permanently disabled in that state. Time-bound the
+      // actual promise too, then make one clean retry once the service has had
+      // a moment to finish starting.
+      const checkAvailability = async () => {
+        const probe = new Transport();
+        try {
+          const result = await Promise.race([
+            Promise.resolve(probe.checkAvailability?.({ timeoutMs: 4000 })),
+            new Promise(resolve => setTimeout(() => resolve(false), 4_500)),
+          ]);
+          return result === true;
+        } finally {
+          probe.dispose?.();
+        }
+      };
+      let available = await checkAvailability();
+      if (!available) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        available = await checkAvailability();
+      }
       if (checkId !== multiplayerAvailabilityCheckId) return multiplayerServiceState === 'online';
       multiplayerServiceState = available ? 'online' : 'offline';
       syncMultiplayerFeatureUI();

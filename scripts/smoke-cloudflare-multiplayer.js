@@ -23,9 +23,11 @@ async function openMultiplayer(page) {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await page.locator('#multiplayerBtn').click();
   await page.locator('#multiplayerCreateRoom').waitFor({ state: 'visible' });
-  if (await page.locator('#multiplayerCreateRoom').isDisabled()) {
-    throw new Error(`Multiplayer controls are disabled at ${baseUrl}; run this against a localhost Wrangler server`);
-  }
+  // Availability is checked asynchronously during startup. Waiting here avoids
+  // treating that ordinary probe as a false local-server failure.
+  await page.locator('#multiplayerCreateRoom').waitFor({ state: 'attached' });
+  await page.waitForFunction(() => !document.querySelector('#multiplayerCreateRoom')?.disabled, undefined, { timeout: 10_000 })
+    .catch(() => { throw new Error(`Multiplayer controls are disabled at ${baseUrl}; run this against a localhost Wrangler server`); });
 }
 
 async function canvasHasRenderedDungeon(page) {
@@ -53,6 +55,7 @@ async function holdKey(page, key, durationMs) {
 }
 
 async function main() {
+  console.log(`smoke starting against ${baseUrl}`);
   const browser = await chromium.launch({ headless: true });
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -217,6 +220,29 @@ async function main() {
     // Chromium. Bring it forward before asserting requestAnimationFrame-driven
     // campaign drawing; background tabs may legitimately throttle those frames.
     await host.bringToFront();
+    // Three.js/2D drawing functions finish wiring during multiplayer startup,
+    // after the first generic renderer probe above. Attach the 2D observation
+    // at the point we actually select 2D so this checks the live function.
+    await host.evaluate(() => {
+      if (globalThis.Neo?.drawWorldViewport && !globalThis.Neo.__network2dSmokeWrapped) {
+        const originalWorldViewport = globalThis.Neo.drawWorldViewport.bind(globalThis.Neo);
+        globalThis.Neo.__network2dSmokeCalls = 0;
+        globalThis.Neo.__network2dSmokeWrapped = true;
+        globalThis.Neo.drawWorldViewport = (...args) => {
+          globalThis.Neo.__network2dSmokeCalls += 1;
+          return originalWorldViewport(...args);
+        };
+      }
+      if (globalThis.Neo?.draw && !globalThis.Neo.__networkDrawSmokeWrapped) {
+        const originalDraw = globalThis.Neo.draw.bind(globalThis.Neo);
+        globalThis.Neo.__networkDrawSmokeCalls = 0;
+        globalThis.Neo.__networkDrawSmokeWrapped = true;
+        globalThis.Neo.draw = (...args) => {
+          globalThis.Neo.__networkDrawSmokeCalls += 1;
+          return originalDraw(...args);
+        };
+      }
+    });
     // Headless Chromium can still defer a scheduled animation frame even after
     // foregrounding. Exercise the exact normal campaign draw entry point once
     // against the live multiplayer-projected state before asserting its result.
@@ -233,7 +259,7 @@ async function main() {
       && globalThis.Neo?.render3D === false
       && globalThis.Neo?.presentationPlayerSlots?.length === 2
       && (globalThis.Neo?.__network2dSmokeCalls || 0) > 0
-    ), undefined, { timeout: 30_000 }).catch(async error => {
+    ), undefined, { timeout: 5_000 }).catch(async error => {
       const diagnostic = await host.evaluate(() => ({
         viewMode: globalThis.Neo?.getViewMode?.(),
         render3D: globalThis.Neo?.render3D,
@@ -261,6 +287,135 @@ async function main() {
       worldViewportCalls: await host.evaluate(() => globalThis.Neo?.__network2dSmokeCalls || 0),
       canvasRendered: await canvasHasRenderedDungeon(host),
     };
+    // This is deliberately a real browser -> socket -> authority combat path.
+    // It does not inject a dead entity: the browser moves into beam range,
+    // holds Princess's normal Love Beam, and waits for the authority snapshot
+    // to first reduce HP and then mark that same enemy dead.
+    const corpseTarget = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const player = snapshot.gameState.players[snapshot.playerId];
+      const enemy = Object.values(snapshot.gameState.enemies || {})
+        .filter(candidate => !candidate.dead && candidate.roomId === player.roomId)
+        .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+      if (!enemy) throw new Error('No living enemy is available for the browser corpse proof');
+      globalThis.__networkCorpseTargetId = enemy.id;
+      globalThis.__networkCorpseInputTimer = setInterval(() => {
+        const live = globalThis.Neo.gameSession.snapshot();
+        const actor = live.gameState?.players?.[live.playerId];
+        const target = live.gameState?.enemies?.[enemy.id];
+        if (!actor || !target || target.dead) return;
+        const dx = Number(target.x) - Number(actor.x);
+        const dy = Number(target.y) - Number(actor.y);
+        const distance = Math.hypot(dx, dy) || 1;
+        globalThis.Neo.gameSession.sendInput({
+          moveX: distance > 300 ? dx / distance : 0,
+          moveY: distance > 300 ? dy / distance : 0,
+          aimDirection: Math.atan2(dy, dx), buttons: 0,
+        });
+      }, 50);
+      return { id: enemy.id, health: Number(enemy.health ?? enemy.hp), maxHealth: Number(enemy.maxHealth ?? enemy.maxHp) };
+    });
+    await host.waitForFunction(target => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const player = snapshot.gameState?.players?.[snapshot.playerId];
+      const enemy = snapshot.gameState?.enemies?.[target.id];
+      return !!player && !!enemy && !enemy.dead && Math.hypot(enemy.x - player.x, enemy.y - player.y) <= 300;
+    }, corpseTarget, { timeout: 12_000 });
+    await host.evaluate(target => {
+      const neo = globalThis.Neo;
+      const snapshot = neo.gameSession.snapshot();
+      const player = snapshot.gameState.players[snapshot.playerId];
+      const enemy = snapshot.gameState.enemies[target.id];
+      const aimDirection = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      if (!neo.__networkEnemyDrawSmokeWrapped) {
+        const original = neo.drawEnemies.bind(neo);
+        neo.__networkEnemyDrawSmokeCalls = 0;
+        neo.__networkEnemyDrawSmokeWrapped = true;
+        neo.drawEnemies = (...args) => {
+          neo.__networkEnemyDrawSmokeCalls += 1;
+          neo.__networkEnemyDrawnHp = neo.enemies.find(candidate => candidate.id === neo.__networkCorpseTargetId)?.hp;
+          return original(...args);
+        };
+      }
+      if (!neo.__networkCorpseDrawSmokeWrapped) {
+        const original = neo.drawDeadBodies.bind(neo);
+        neo.__networkCorpseDrawSmokeCalls = 0;
+        neo.__networkCorpseDrawSmokeWrapped = true;
+        neo.drawDeadBodies = (...args) => {
+          neo.__networkCorpseDrawSmokeCalls += 1;
+          return original(...args);
+        };
+      }
+      neo.multiplayerGameView.aimDirection = aimDirection;
+      neo.multiplayerGameView.laserHeld = true;
+      neo.gameSession.sendInput({ moveX: 0, moveY: 0, aimDirection, buttons: 1 });
+      neo.gameSession.sendAbility('love_beam', aimDirection);
+      // A channel ends normally and its cooldown begins after release. Recast
+      // through the same browser session until this real encounter enemy dies;
+      // this avoids turning the proof into a one-hit test or injecting damage.
+      neo.__networkCorpseBeamTimer = setInterval(() => {
+        const live = neo.gameSession.snapshot();
+        const actor = live.gameState?.players?.[live.playerId];
+        const targetEnemy = live.gameState?.enemies?.[target.id];
+        if (!actor || !targetEnemy || targetEnemy.dead) return;
+        const angle = Math.atan2(targetEnemy.y - actor.y, targetEnemy.x - actor.x);
+        neo.multiplayerGameView.aimDirection = angle;
+        neo.gameSession.sendInput({ moveX: 0, moveY: 0, aimDirection: angle, buttons: 1 });
+        neo.gameSession.sendAbility('love_beam', angle);
+      }, 3_400);
+    }, corpseTarget);
+    await host.waitForFunction(target => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const enemy = snapshot.gameState?.enemies?.[target.id];
+      const actor = globalThis.Neo.enemies?.find(candidate => candidate.id === target.id);
+      return !!enemy && !enemy.dead
+        && Number(enemy.health ?? enemy.hp) < target.health
+        && Number(actor?.hp) < target.health
+        && (globalThis.Neo.__networkEnemyDrawSmokeCalls || 0) > 0;
+    }, corpseTarget, { timeout: 8_000 });
+    await host.waitForFunction(target => globalThis.Neo.gameSession.snapshot().gameState?.enemies?.[target.id]?.dead === true,
+      corpseTarget, { timeout: 12_000 });
+    const corpseSpawn = await host.evaluate(target => {
+      const neo = globalThis.Neo;
+      neo.multiplayerGameView.laserHeld = false;
+      clearInterval(globalThis.__networkCorpseInputTimer);
+      clearInterval(globalThis.__networkCorpseBeamTimer);
+      neo.gameSession.sendInput({ moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 });
+      const body = neo.deadBodies.find(candidate => String(candidate.id) === String(target.id)
+        || String(candidate.sourceEnemyId) === String(target.id));
+      return {
+        dead: neo.gameSession.snapshot().gameState.enemies[target.id]?.dead === true,
+        health: neo.gameSession.snapshot().gameState.enemies[target.id]?.health,
+        body: body && { x: body.x, y: body.y, z: body.z, age: body.age, angularOffset: body.angularOffset },
+        deadBodyDrawCalls: neo.__networkCorpseDrawSmokeCalls || 0,
+      };
+    }, corpseTarget);
+    await host.waitForFunction(target => {
+      const body = globalThis.Neo.deadBodies.find(candidate => String(candidate.id) === String(target.id)
+        || String(candidate.sourceEnemyId) === String(target.id));
+      return !!body && Number(body.age) > 0.12 && (globalThis.Neo.__networkCorpseDrawSmokeCalls || 0) > 0;
+    }, corpseTarget, { timeout: 4_000 });
+    const corpseProof = await host.evaluate(target => {
+      const neo = globalThis.Neo;
+      const body = neo.deadBodies.find(candidate => String(candidate.id) === String(target.id)
+        || String(candidate.sourceEnemyId) === String(target.id));
+      return {
+        target,
+        healthBar: {
+          hp: neo.__networkEnemyDrawnHp,
+          drawCalls: neo.__networkEnemyDrawSmokeCalls || 0,
+        },
+        corpse: body && { x: body.x, y: body.y, z: body.z, age: body.age, angularOffset: body.angularOffset },
+        deadBodyDrawCalls: neo.__networkCorpseDrawSmokeCalls || 0,
+        canvasRendered: !!document.querySelector('#c')?.getContext('2d'),
+      };
+    }, corpseTarget);
+    if (process.env.NEONYKE_MULTIPLAYER_CORPSE_PROOF === '1') {
+      await host.screenshot({ path: '/tmp/neonyke-multiplayer-corpse.png' });
+      console.log(JSON.stringify({ baseUrl, roomCode, twoDimensionalProof, corpseSpawn, corpseProof, errors }, null, 2));
+      if (!corpseSpawn.dead || !corpseProof.healthBar.drawCalls || !corpseProof.deadBodyDrawCalls || !corpseProof.corpse || errors.length) process.exitCode = 1;
+      return;
+    }
     await host.keyboard.press('Escape');
     await host.locator('#pause').waitFor({ state: 'visible' });
     await host.locator('#pauseSettings').click();
