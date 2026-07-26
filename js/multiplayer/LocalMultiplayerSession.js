@@ -57,7 +57,13 @@
   const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
     'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',
   ]);
-  const PACKED_DYNAMIC_COLLECTIONS = Object.freeze(['enemies', 'projectiles', 'abilityEntities']);
+  // Enemy records are the campaign render contract: health, death state,
+  // statuses, wind-ups, animation timers and authored behavior fields all live
+  // together. Packing only a handful of transform fields made clients retain
+  // stale bootstrap data and forced NetworkGameView to guess. Keep changed
+  // enemies complete; only small transient collections use the compact wire
+  // record.
+  const PACKED_DYNAMIC_COLLECTIONS = Object.freeze(['projectiles', 'abilityEntities']);
 
   function scopedSnapshotEntities(source = {}, roomId) {
     return Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => {

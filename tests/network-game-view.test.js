@@ -25,6 +25,28 @@ describe('network multiplayer game view', () => {
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v28');
   });
 
+  test('starts the shared campaign frame loop for multiplayer visual systems', () => {
+    const requestAnimationFrame = jest.fn();
+    const loop = jest.fn();
+    const neo = { canvas: {}, ctx: {}, loopStarted: false, loop, setGameState: jest.fn() };
+    const view = new NetworkGameView({
+      session: { subscribe: () => () => {}, snapshot: () => ({}) }, neo,
+      canvas: neo.canvas, context: neo.ctx,
+      document: { getElementById: () => null, addEventListener: () => {}, removeEventListener: () => {} },
+    });
+    const previous = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = requestAnimationFrame;
+    try {
+      view.start();
+      expect(neo.loopStarted).toBe(true);
+      expect(requestAnimationFrame).toHaveBeenCalledWith(loop);
+      expect(view.animationFrame).toBeNull();
+    } finally {
+      globalThis.requestAnimationFrame = previous;
+      view.stop();
+    }
+  });
+
   test('normalizes diagonal keyboard/gamepad movement', () => {
     const movement = normalizeMovement(1, 1);
     expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);
@@ -760,8 +782,12 @@ describe('network multiplayer game view', () => {
     const updateSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'update.js'), 'utf8');
     expect(updateSource).toContain("if (Neo.gameState === 'play' && Neo.multiplayerGameView?.active) {");
     expect(updateSource).toContain('Neo.updateDeadBodies(dt);');
+    expect(updateSource).toContain('Neo.updateParticles(dt);');
+    expect(updateSource).toContain('Neo.lavaAnimTime += dt;');
     expect(fs.readFileSync(path.join(__dirname, '..', 'js', 'rendering', 'NetworkGameView.js'), 'utf8'))
       .not.toContain('this.neo.updateDeadBodies?.(frameDelta);');
+    expect(fs.readFileSync(path.join(__dirname, '..', 'js', 'rendering', 'NetworkGameView.js'), 'utf8'))
+      .not.toContain('this.neo.updateParticles?.(frameDelta);');
   });
 
   test('projects authoritative beam channels as ordinary client presentation effects', () => {

@@ -645,7 +645,17 @@
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
       this._onSnapshot(this.session.snapshot());
-      if (!this.neo.loopStarted) this.animationFrame = root.requestAnimationFrame?.(this.boundRenderFrame) ?? null;
+      // Multiplayer replaces only the authority simulation. It still needs the
+      // campaign frame loop for shared presentation updates (corpse physics,
+      // particles, lava, and the normal draw path). Starting an adapter-owned
+      // loop from the menu bypassed those systems entirely.
+      if (!this.neo.loopStarted && typeof this.neo.loop === 'function') {
+        this.neo.loopStarted = true;
+        root.requestAnimationFrame?.(this.neo.loop);
+      } else if (!this.neo.loopStarted) {
+        // Test/minimal hosts without the campaign loop retain a small fallback.
+        this.animationFrame = root.requestAnimationFrame?.(this.boundRenderFrame) ?? null;
+      }
     }
 
     stop() {
@@ -2668,8 +2678,6 @@
         : Number.POSITIVE_INFINITY;
       this.neo.showFloorTransition = floorTransitionAge <= 1.25;
       this.neo.floorTransitionTime = floorTransitionAge;
-      this.neo.lavaAnimTime = Number(this.neo.lavaAnimTime || 0) + frameDelta;
-      this.neo.updateParticles?.(frameDelta);
       this._updateHud(state, players);
       return true;
     }
