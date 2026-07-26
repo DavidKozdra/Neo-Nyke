@@ -134,6 +134,36 @@
     return { ok: true, type: 'ACTIVATE_EQUIPMENT', itemKey: key, kind: definition.kind, stacks, duration, cooldown };
   }
 
+  // Charged Adapter is deliberately unlike the timed tools above: spending a
+  // completed kill charge opens a short-lived walk-in portal, then the portal
+  // (not the key press) pays half the hero's coins and changes rooms. Keep the
+  // validation, charge reset and serializable portal descriptor in one place
+  // so the campaign and authority cannot drift into an instant-warp variant.
+  function prepareCampaignChargedAdapterWarp(player, options = {}) {
+    if (!player || count(player, 'charged_adapter') <= 0) return { ok: false, reason: 'NOT_EQUIPPED' };
+    if (!player.escapeReady) return { ok: false, reason: 'ADAPTER_CHARGING' };
+    const roomType = String(options.roomType || '');
+    if (!options.hasCurrentRoom || roomType === 'boss' || roomType === 'god') return { ok: false, reason: 'NO_WARP_IN_BOSS_ROOM' };
+    if (!options.hasTargetRoom || options.targetIsCurrent) return { ok: false, reason: 'ALREADY_AT_LADDER' };
+    if (options.hasExistingPortal) return { ok: false, reason: 'PORTAL_ALREADY_OPEN' };
+
+    player.escapeReady = false;
+    player.escapeChargeKills = 0;
+    return {
+      ok: true,
+      type: 'adapterPortal',
+      x: Number(options.x || 0),
+      y: Number(options.y || 0),
+      targetRoomId: String(options.targetRoomId || ''),
+      targetGx: Number(options.targetGx || 0),
+      targetGy: Number(options.targetGy || 0),
+      spawnT: 0,
+      activateAt: Math.max(0.01, Number(options.activateAt || 0.75)),
+      activateDelayTicks: Math.max(1, Math.round(Number(options.activateDelayTicks || 15))),
+      active: false,
+    };
+  }
+
   function updateEquipmentEffects(player, currentTick = 0, tickRate = 20) {
     if (!player) return [];
     const now = Math.max(0, Math.floor(Number(currentTick) || 0));
@@ -169,5 +199,5 @@
     return intents;
   }
 
-  return { EQUIPMENT_ACTIVE_DEFS, ACTIVATABLE_ITEM_KEYS, syncEquipmentSlots, collectCampaignItem, applyInventoryCommand, activateEquipment, updateEquipmentEffects };
+  return { EQUIPMENT_ACTIVE_DEFS, ACTIVATABLE_ITEM_KEYS, syncEquipmentSlots, collectCampaignItem, applyInventoryCommand, activateEquipment, prepareCampaignChargedAdapterWarp, updateEquipmentEffects };
 });

@@ -91,5 +91,232 @@
     return { ok: true, type: 'PLAYER_REVIVED', health: player.hp, healthFraction };
   }
 
-  return { chargeRequirement, critCharmRequirement, applyCampaignKillCharge, applyCampaignRevive };
+  // Insurance only saves a hero when a single damage transaction crosses the
+  // half-health threshold. Keep its charge reset here so campaign and
+  // authority cannot agree on the heal while disagreeing about the next kill
+  // charge cycle.
+  function applyCampaignInsuranceOnHit(player, options = {}) {
+    if (!player) return { triggered: false, health: 0 };
+    const getItemCount = typeof options.getItemCount === 'function'
+      ? options.getItemCount
+      : candidate => count(candidate, 'insurance');
+    const healthBeforeHit = Math.max(0, Number(options.healthBeforeHit ?? player.hp ?? 0));
+    const healthAfterHit = Math.max(0, Number(options.healthAfterHit ?? player.hp ?? 0));
+    const halfHealth = Math.max(0, Number(player.maxHp || 0) * 0.5);
+    const eligible = getItemCount(player) > 0
+      && !!player.insuranceReady
+      && healthBeforeHit > halfHealth
+      && healthAfterHit <= halfHealth;
+    if (!eligible) return { triggered: false, health: healthAfterHit };
+    player.hp = Math.max(healthAfterHit, halfHealth);
+    player.insuranceReady = false;
+    player.insuranceChargeKills = 0;
+    player.insuranceActive = false;
+    return { triggered: true, health: player.hp, protectedHealth: halfHealth };
+  }
+
+  // Heme's Scarf rolls after a real, non-status damage hit and retaliates only
+  // against a living, bleedable enemy. The caller supplies local entity lookup
+  // and status rendering/application; the chance and eligibility are shared.
+  function resolveCampaignHemesScarfRetaliation(player, attacker, options = {}) {
+    const stats = options.itemStats || player?.itemStats || {};
+    if (!player || Number(options.damageDealt || 0) <= 0 || options.noInvFrames) return null;
+    const chance = Math.min(0.75, Math.max(0, Number(stats.scarfBleedsOnHit || 0)) * 0.25);
+    if (chance <= 0) return null;
+    const random = typeof options.random === 'function' ? options.random : Math.random;
+    if (random() >= chance) return null;
+    if (!attacker || attacker.dead || attacker.bleedImmune) return null;
+    return { kind: 'bleed', stacks: 1, duration: 4, chance };
+  }
+
+  // Heme's Scarf continuously tops up its short bleed on every eligible enemy.
+  // God keeps the campaign's one-stack reduction; adapters own only their
+  // status-storage representation and visual feedback.
+  function getCampaignHemesScarfPassiveBleedStacks(enemy, itemStats = {}) {
+    if (!enemy || enemy.dead || enemy.bleedImmune) return 0;
+    const stacks = Math.max(0, Math.floor(Number(itemStats.passiveBleedStacks || 0)));
+    if (stacks <= 0) return 0;
+    return enemy.type === 'god' ? Math.max(1, stacks - 1) : stacks;
+  }
+
+  function advanceCampaignHemesScarfDrain(player, totalBleed, delta, options = {}) {
+    const stats = options.itemStats || player?.itemStats || {};
+    if (!player || Number(stats.bleedHealScale || 0) <= 0) return { started: false, active: false, heal: 0 };
+    const bleed = Math.max(0, Number(totalBleed || 0));
+    const duration = Math.max(0, Number(player.scarfHealTime || 0));
+    let started = false;
+    if (bleed > 0 && Number(player.hp || 0) < 50 && player.scarfHealReady && duration <= 0) {
+      player.scarfHealReady = false;
+      player.scarfHealTime = 3;
+      started = true;
+    }
+    if (Number(player.scarfHealTime || 0) <= 0) return { started, active: false, heal: 0 };
+    player.scarfHealTime = Math.max(0, Number(player.scarfHealTime || 0) - Math.max(0, Number(delta || 0)));
+    if (bleed <= 0 || Number(player.hp || 0) >= Number(player.maxHp || 0)) return { started, active: true, heal: 0 };
+    const raw = Math.min(Number(player.maxHp || 0) * 0.0003 * bleed * Number(stats.bleedHealScale || 0) * delta, Number(player.maxHp || 0) * 0.025 * delta);
+    const heal = Math.max(0, raw * Math.max(1, Number(stats.healingMultiplier || 1)));
+    const before = Number(player.hp || 0);
+    player.hp = Math.min(Number(player.maxHp || before), before + heal);
+    return { started, active: true, heal: player.hp - before };
+  }
+
+  function resolveCampaignKillAreaEffects(enemy, player, options = {}) {
+    if (!enemy || !player) return [];
+    const stats = options.itemStats || player.itemStats || {};
+    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const intents = [];
+    const bleedStacks = Math.max(0, Number(options.deathBleedStacks || 0));
+    const splashStacks = Math.max(0, Number(stats.bleedSplashStacks || 0));
+    if (bleedStacks > 0 && splashStacks > 0) intents.push({
+      kind: 'bleed_splash', x: Number(enemy.x || 0), y: Number(enemy.y || 0),
+      radius: 92 + Math.min(70, bleedStacks * 8), stacks: splashStacks, duration: 4.5,
+    });
+    if (Number(stats.graveZoneChance || 0) > 0 && random() < Number(stats.graveZoneChance || 0)) intents.push({
+      kind: 'grave_zone', x: Number(enemy.x || 0), y: Number(enemy.y || 0), radius: 118, duration: 2.5,
+      pushPower: 340 * Math.max(0, Number(stats.moveSpeedMultiplier || 1)),
+      damageTakenMultiplier: Math.max(1, Number(stats.graveZoneDamageTakenMultiplier || 1)),
+    });
+    return intents;
+  }
+
+  // Sarge's equipped hammer rewards a pair of non-tutorial kills made within
+  // one second. Time is an adapter input so campaign seconds and authority
+  // ticks share the same rearm/consume transaction.
+  function resolveCampaignSargesHammerDoubleKill(player, options = {}) {
+    if (!player || options.tutorialDummy || player.equippedWeapon !== 'sarges_hammer') return { triggered: false };
+    const currentTime = Math.max(0, Number(options.currentTime || 0));
+    const lastKillAt = Math.max(0, Number(player.sargesHammerLastKillAt || 0));
+    const rearmUntil = Math.max(0, Number(player.sargesHammerRearmAt || 0));
+    if (lastKillAt > 0 && currentTime - lastKillAt <= 1 && currentTime >= rearmUntil) {
+      player.sargesHammerRearmAt = currentTime + 0.5;
+      player.sargesHammerLastKillAt = 0;
+      return { triggered: true, rearmUntil: player.sargesHammerRearmAt };
+    }
+    player.sargesHammerLastKillAt = currentTime;
+    return { triggered: false, armedAt: currentTime };
+  }
+
+  // A concealed kill arms Moggy's Coat. The next encounter consumes that
+  // charge to open with Dark Drain on every eligible enemy. Both runtimes own
+  // their local status application, but this resolver is the canonical answer
+  // to what the proc consumes and which enemies it affects.
+  function resolveCampaignMoggysCoatOpening(player, enemies, options = {}) {
+    if (!player?.moggysCoatPrimed) return { consumePrime: false, stacks: 0, duration: 0, targets: [] };
+    const getItemCount = typeof options.getItemCount === 'function'
+      ? options.getItemCount
+      : candidate => count(candidate, 'moggys_coat');
+    const isEligibleEnemy = typeof options.isEligibleEnemy === 'function'
+      ? options.isEligibleEnemy
+      : candidate => !!candidate && !candidate.dead;
+    const stacks = Math.max(0, Number(getItemCount(player) || 0));
+    const targets = stacks > 0 && Array.isArray(enemies)
+      ? enemies.filter(isEligibleEnemy)
+      : [];
+    return { consumePrime: true, stacks, duration: 2, targets };
+  }
+
+  // These three relics resolve at the campaign's room-entry boundary. The
+  // shared transaction owns state mutation; each runtime turns its returned
+  // intents into HUD/audio/particle presentation. `firstReveal` is deliberately
+  // supplied by the room authority, since reveal ownership is session-wide in
+  // multiplayer while the campaign has a single hero.
+  function resolveCampaignRoomEntryItemEffects(player, room, options = {}) {
+    if (!player || !room) return { ok: false, intents: [] };
+    const getItemCount = typeof options.getItemCount === 'function'
+      ? options.getItemCount
+      : (candidate, itemKey) => count(candidate, itemKey);
+    const getPotionCarryCap = typeof options.getPotionCarryCap === 'function'
+      ? options.getPotionCarryCap
+      : candidate => {
+        const stacks = Math.max(0, Number(getItemCount(candidate, 'mateos_bag') || 0));
+        return stacks > 0 ? 3 + (stacks - 1) : 0;
+      };
+    const awardCoins = typeof options.awardCoins === 'function'
+      ? options.awardCoins
+      : amount => { player.coins = Math.max(0, Number(player.coins || 0)) + amount; };
+    const floorNumber = Number(options.floorNumber || 0);
+    const intents = [];
+
+    if (options.firstReveal) {
+      const stacks = Math.max(0, Number(getItemCount(player, 'naked_kings_last_penny') || 0));
+      if (stacks > 0) {
+        const amount = Math.round(7 * (1 + (stacks - 1) * 0.2));
+        awardCoins(amount);
+        intents.push({ kind: 'coins', itemKey: 'naked_kings_last_penny', amount, stacks });
+      }
+    }
+
+    const pendantStacks = Math.max(0, Number(getItemCount(player, 'veggys_pendant') || 0));
+    if (pendantStacks > 0) {
+      player.veggysRoomCounter = Math.max(0, Number(player.veggysRoomCounter || 0)) + 1;
+      if (player.veggysRoomCounter >= 3) {
+        player.veggysRoomCounter = 0;
+        const gain = pendantStacks * 0.10;
+        const previousMaxHp = Math.max(1, Number(player.maxHp || 1));
+        const previousHp = Math.max(0, Number(player.hp || 0));
+        player.maxHp = Math.round(previousMaxHp * (1 + gain));
+        player.hp = Math.min(player.maxHp, previousHp + (player.maxHp - previousMaxHp) * 0.5);
+        intents.push({
+          kind: 'max_hp', itemKey: 'veggys_pendant', stacks: pendantStacks,
+          gain, previousMaxHp, maxHp: player.maxHp, healedAmount: Math.max(0, player.hp - previousHp),
+        });
+      }
+    }
+
+    const potionCap = Math.max(0, Number(getPotionCarryCap(player) || 0));
+    if (potionCap > 0 && room.type === 'shop'
+      && Number(player.storedPotions || 0) <= 0
+      && player.mateosBagRefillFloor !== floorNumber) {
+      player.storedPotions = 1;
+      player.mateosBagRefillFloor = floorNumber;
+      intents.push({ kind: 'stored_potion', itemKey: 'mateos_bag', storedPotions: 1, potionCap });
+    }
+
+    return { ok: true, intents };
+  }
+
+  // Room changes deliberately clear short-lived defensive movement. The
+  // campaign stores those values as seconds while the authority stores expiry
+  // ticks, so this adapter centralizes the semantic reset without forcing a
+  // client renderer to imitate server state.
+  function applyCampaignRoomEntryReset(player, options = {}) {
+    if (!player) return { ok: false, cancelledBeam: false };
+    const tickBased = !!options.tickBased;
+    const currentTick = Math.max(0, Number(options.currentTick || 0));
+    const cancelledBeam = !!player.beamChannel;
+    player.vx = 0;
+    player.vy = 0;
+    player.roomDamageTaken = 0;
+    player.blockActive = false;
+    player.blockTimer = 0;
+    if (tickBased) {
+      player.invulnerableUntilTick = currentTick;
+      player.stunnedUntilTick = currentTick;
+      player.dashUntilTick = currentTick;
+      player.dashVx = 0;
+      player.dashVy = 0;
+      const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
+      ['cowards_way', 'mooggy_zoomies', 'flying_unhitable'].forEach(key => { statusUntil[key] = currentTick; });
+    } else {
+      player.inv = 0;
+      player.stun = 0;
+      player.dashTime = 0;
+      player.dashX = 0;
+      player.dashY = 0;
+      player.cowardsWayTime = 0;
+      player.mooggyZoomiesTime = 0;
+      player.princessFlightTime = 0;
+    }
+    return { ok: true, cancelledBeam };
+  }
+
+  return {
+    chargeRequirement, critCharmRequirement, applyCampaignKillCharge, applyCampaignRevive,
+    applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation,
+    getCampaignHemesScarfPassiveBleedStacks,
+    advanceCampaignHemesScarfDrain,
+    resolveCampaignKillAreaEffects, resolveCampaignSargesHammerDoubleKill, resolveCampaignMoggysCoatOpening,
+    resolveCampaignRoomEntryItemEffects,
+    applyCampaignRoomEntryReset,
+  };
 });

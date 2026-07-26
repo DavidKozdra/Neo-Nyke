@@ -18,6 +18,7 @@ function extractFunction(source, functionName) {
 const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
 const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
 const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
+const sharedElite = require('../js/simulation/SharedEliteSystem');
 
 const ELITE_POWER_POOL = ['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed'];
 const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain', 'slow', 'static'];
@@ -48,19 +49,32 @@ function buildElite(Neo, { irandSeq = [], nextRandomSeq = [] } = {}) {
     nextI += 1;
     return v;
   };
+  globalThis.NeoNyke = { ...(globalThis.NeoNyke || {}), simulation: {
+    ...(globalThis.NeoNyke?.simulation || {}), ...sharedElite,
+  } };
   const rollDecl = extractFunction(enemiesSource, 'rollEliteTypes');
   const applyDecl = extractFunction(enemiesSource, 'applyEliteTypes');
   const factory = new Function(
     'Neo', 'ELITE_POWER_POOL', 'getEnemyProgressionLevel', 'applyEliteInventory', 'rollBlessedEliteInventory',
     `${rollDecl}\n${applyDecl}\nreturn { rollEliteTypes, applyEliteTypes };`,
   );
-  return factory(
+  const elite = factory(
     Neo,
     ELITE_POWER_POOL,
     enemy => Math.max(1, Number(enemy?.level) || 1),
     () => {},
     () => ({}),
   );
+  const apply = elite.applyEliteTypes;
+  return {
+    ...elite,
+    applyEliteTypes(enemy) {
+      // This focused source-extraction suite isolates body/power math; the
+      // profile's inventory roll is covered in SharedEliteSystem directly.
+      if (!Object.prototype.hasOwnProperty.call(enemy, 'eliteInventory')) enemy.eliteInventory = {};
+      return apply(enemy);
+    },
+  };
 }
 
 describe('elite body rolls (Knight / Knave)', () => {
@@ -111,22 +125,22 @@ describe('elite body rolls (Knight / Knave)', () => {
   });
 
   test('all-Knave grants unfazed count and accumulates +1% status resist', () => {
-    // nextRandom >= 0.5 => knave; force all knave. irand for status keys + power picks.
+    // nextRandom >= 0.5 => knave; force all knave, then use 0 for status keys.
     // level 15 -> floor(15/3)=5 knave body rolls.
-    const elite = buildElite(baseNeo(), { nextRandomSeq: [0.9], irandSeq: [0] });
+    const elite = buildElite(baseNeo(), { nextRandomSeq: [0.9, 0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0, 0] });
     const enemy = { elite: true, level: 15, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.eliteBody.knave).toBe(5);
     expect(enemy.eliteUnfazed).toBe(5);
-    // irand=0 -> status key 'bleed' picked every time -> 5 * 0.01
+    // shared random 0 -> status key 'bleed' picked every time -> 5 * 0.01
     expect(enemy.statusResistances.bleed).toBeCloseTo(0.05, 5);
   });
 });
 
 describe('elite power rolls', () => {
   test('duplicate Enflamed stacks the fire proc chance', () => {
-    // level 2 -> 2 body + (2%3=2) powers; force powers to enflamed (index 1)
-    const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [1] });
+    // level 2 has two powers; 1/7 selects Enflamed in the shared power pool.
+    const elite = buildElite(baseNeo(), { nextRandomSeq: [0.2] });
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.elitePowers.filter(p => p === 'enflamed')).toHaveLength(2);
@@ -134,8 +148,8 @@ describe('elite power rolls', () => {
   });
 
   test('giant adds 50% HP and a larger radius; blessed sets crit', () => {
-    // level 2 -> 2 powers; alternate giant(5) then blessed(6)
-    const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [5, 6] });
+    // level 2 -> two powers; alternate giant(5) then blessed(6).
+    const elite = buildElite(baseNeo(), { nextRandomSeq: [0.72, 0.87] });
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 20 };
     elite.applyEliteTypes(enemy);
     expect(enemy.elitePowers).toEqual(expect.arrayContaining(['giant', 'blessed']));
@@ -144,7 +158,7 @@ describe('elite power rolls', () => {
   });
 
   test('breezy reduces cold (slow) effectiveness against the elite', () => {
-    const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [2] }); // breezy index 2
+    const elite = buildElite(baseNeo(), { nextRandomSeq: [0.3] }); // Breezy index 2
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.eliteProcs.cold).toBeCloseTo(0.24, 5);
@@ -154,6 +168,9 @@ describe('elite power rolls', () => {
 
 describe('applyEliteProcsToPlayer', () => {
   function buildProcs(Neo) {
+    globalThis.NeoNyke = { ...(globalThis.NeoNyke || {}), simulation: {
+      ...(globalThis.NeoNyke?.simulation || {}), ...sharedElite,
+    } };
     const decl = extractFunction(combatSource, 'applyEliteProcsToPlayer');
     return new Function(
       'Neo', 'applyFire', 'applyPoison',

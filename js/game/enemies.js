@@ -358,74 +358,56 @@
   function getChallengeTrialTuning(type) {
     const floor = Math.max(1, Number(Neo.floor || 1));
     if (type === 'bomb') {
-      return {
-        timer: Neo.scaleChallengeTimer(17),
-        tick: Math.max(1.2, 2.4 - floor * 0.1),
-        spawnCount: floor >= 7 ? 2 : 1,
-      };
-    }
-    if (type === 'survival') {
-      // Survive trial throws ~3x the adds of other trials and they swarm the
-      // obelisk, so the player has to actively peel rather than kite.
-      return {
-        timer: Neo.scaleChallengeTimer(24),
-        tickStart: 2.2,
-        tickEnd: 1.35,
-        spawnCount: floor >= 6 ? 6 : 3,
-      };
-    }
-    if (type === 'runes') {
-      // Chasing fleeing runes already competes for the same movement/dash
-      // budget survival needs against adds, so enemy pressure here stays
-      // lighter than the other trials rather than stacking on top of the
-      // chase itself — floored higher (2.0s) and no floor-7+ spawn bump.
-      return {
-        timer: Neo.scaleChallengeTimer(20),
-        tick: Math.max(2.0, 2.9 - floor * 0.06),
-        spawnCount: 1,
-      };
+      const resolver = globalThis.NeoNyke?.simulation?.getCampaignChallengeTrialTuning;
+      if (typeof resolver === 'function') return resolver('bomb', { floorNumber: floor, scaleTimer: Neo.scaleChallengeTimer });
+      return { timer: Neo.scaleChallengeTimer(17), tick: Math.max(1.2, 2.4 - floor * 0.1), spawnCount: floor >= 7 ? 2 : 1 };
     }
     if (type === 'storm') {
-      return {
-        timer: Neo.scaleChallengeTimer(17),
-        tick: Math.max(0.68, 1.05 - floor * 0.02),
-        burstCount: floor >= 7 ? 4 : floor >= 4 ? 3 : 2,
-      };
+      return globalThis.NeoNyke.simulation.getCampaignChallengeTrialTuning('storm', {
+        floorNumber: floor,
+        scaleTimer: Neo.scaleChallengeTimer,
+      });
+    }
+    if (type === 'survival') {
+      return globalThis.NeoNyke.simulation.getCampaignChallengeTrialTuning('survival', {
+        floorNumber: floor, scaleTimer: Neo.scaleChallengeTimer,
+      });
+    }
+    if (type === 'runes') {
+      const resolver = globalThis.NeoNyke?.simulation?.getCampaignChallengeTrialTuning;
+      if (typeof resolver === 'function') return resolver('runes', { floorNumber: floor, scaleTimer: Neo.scaleChallengeTimer });
+      return { timer: Neo.scaleChallengeTimer(20), tick: Math.max(2.0, 2.9 - floor * 0.06), spawnCount: 1 };
     }
     if (type === 'circuit' || type === 'stillness') {
-      const difficulty = Neo.getDifficultyDef();
-      const pressure = Neo.clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
-      return {
-        timer: Neo.scaleChallengeTimer(18),
-        sequenceLength: 4 + Math.round(pressure * 2),
-        wrongPressPenalty: 2,
-      };
+      const resolver = globalThis.NeoNyke?.simulation?.getCampaignChallengeTrialTuning;
+      if (typeof resolver === 'function') {
+        return resolver('circuit', {
+          scaleTimer: Neo.scaleChallengeTimer,
+          difficultyStatMultiplier: Neo.getDifficultyDef()?.statMultiplier,
+        });
+      }
+      return { timer: Neo.scaleChallengeTimer(18), sequenceLength: 4, wrongPressPenalty: 2 };
     }
     return {};
   }
 
   function getStormChallengeStrikePoint(index) {
-    const player = Neo.player || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, vx: 0, vy: 0 };
+    const resolver = globalThis.NeoNyke?.simulation?.getCampaignStormStrikePoint;
+    if (typeof resolver === 'function') {
+      return resolver(index, Neo.player, {
+        width: Neo.ROOM_W, height: Neo.ROOM_H, random: () => Neo.nextRandom('world'),
+      });
+    }
+    // Kept as a narrow standalone fallback for legacy embedding/tests that
+    // evaluate this campaign helper before the shared simulation namespace.
     const margin = 110;
     const leadSeconds = 0.42;
-    const targetX = Neo.clamp(
-      Number(player.x || 0) + Number(player.vx || 0) * leadSeconds,
-      margin,
-      Neo.ROOM_W - margin
-    );
-    const targetY = Neo.clamp(
-      Number(player.y || 0) + Number(player.vy || 0) * leadSeconds,
-      margin,
-      Neo.ROOM_H - margin
-    );
+    const targetX = Neo.clamp(Number(Neo.player?.x || 0) + Number(Neo.player?.vx || 0) * leadSeconds, margin, Neo.ROOM_W - margin);
+    const targetY = Neo.clamp(Number(Neo.player?.y || 0) + Number(Neo.player?.vy || 0) * leadSeconds, margin, Neo.ROOM_H - margin);
     if (index === 0) return { x: targetX, y: targetY };
-
     const angle = Neo.nextRandom('world') * Math.PI * 2;
     const distance = 90 + Neo.nextRandom('world') * 170;
-    return {
-      x: Neo.clamp(targetX + Math.cos(angle) * distance, margin, Neo.ROOM_W - margin),
-      y: Neo.clamp(targetY + Math.sin(angle) * distance, margin, Neo.ROOM_H - margin),
-    };
+    return { x: Neo.clamp(targetX + Math.cos(angle) * distance, margin, Neo.ROOM_W - margin), y: Neo.clamp(targetY + Math.sin(angle) * distance, margin, Neo.ROOM_H - margin) };
   }
 
   // Obelisk HP scales with floor only. It used to also divide by the game
@@ -435,8 +417,7 @@
   // comes entirely from the enemy side (spawn density, drain-per-attacker),
   // leaving the obelisk's own HP a stable, floor-only curve.
   function getChallengeObeliskMaxHp(floorValue = Neo.floor) {
-    const floor = Math.max(1, Number(floorValue || 1));
-    return Math.max(28, Math.round((90 + floor * 17.5) / 2 * 1.4));
+    return globalThis.NeoNyke.simulation.getCampaignChallengeObeliskMaxHp(floorValue);
   }
 
   function buildWavePlan(count, roomType = 'combat') {
@@ -587,164 +568,56 @@
   }
 
   function rollEliteInventory() {
-    const inventory = {};
-    const pool = Neo.ELITE_INVENTORY_POOL.slice();
-    Neo.shuffle(pool, 'encounter');
-    const slots = Neo.irand(1, 3, 'encounter');
-    for (let index = 0; index < slots; index += 1) {
-      const key = pool[index];
-      if (!key) continue;
-      inventory[key] = 1 + (Neo.nextRandom('encounter') < 0.28 ? 1 : 0);
-    }
-    return inventory;
+    const roll = globalThis.NeoNyke.simulation.rollCampaignEliteInventory;
+    if (typeof roll !== 'function') throw new Error('Shared elite inventory rules are unavailable');
+    return roll(() => Neo.nextRandom('encounter'), Neo.ELITE_INVENTORY_POOL);
   }
 
   function rollBlessedEliteInventory() {
-    const inventory = {};
-    const rolls = Neo.irand(10, 15, 'encounter');
-    for (let index = 0; index < rolls; index += 1) {
-      const key = Neo.WHITE_ITEM_POOL[Neo.irand(0, Neo.WHITE_ITEM_POOL.length - 1, 'encounter')];
-      if (key) inventory[key] = Number(inventory[key] || 0) + 1;
-    }
-    return inventory;
+    const roll = globalThis.NeoNyke.simulation.rollCampaignBlessedEliteInventory;
+    if (typeof roll !== 'function') throw new Error('Shared blessed elite inventory rules are unavailable');
+    return roll(() => Neo.nextRandom('encounter'), { whiteItemPool: Neo.WHITE_ITEM_POOL });
   }
 
-  const ELITE_POWER_POOL = ['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed'];
-
-  // Roll the elite's trait tokens. An elite gets one BODY roll every 3 levels
-  // (each either 'knight' or 'knave'), then `level % 3` POWER rolls drawn with
-  // replacement from ELITE_POWER_POOL (duplicates allowed; 'nothing' is a valid
-  // no-op roll). The returned token list drives both mechanics (applyEliteTypes)
-  // and the display name (getEliteEnemyLabel).
-  //
-  // Body count is throttled to level/3 because each knight compounds HP by 1.15x
-  // multiplicatively: at one roll PER LEVEL the ~half that land knight gave
-  // E[1.15^(level/2)] = 1.075^level HP — a Lv40 grunt averaged ~10k HP from
-  // bodies alone (unlucky rolls far more), which is what produced 100k+ elites.
-  // One roll per 3 levels keeps bodies as real, scaling pressure without letting
-  // the knight product run away; power rolls are unchanged.
   function rollEliteTypes(enemy) {
-    const level = Math.max(1, Number(enemy?.level) || getEnemyProgressionLevel(enemy));
-    const tokens = [];
-    const bodyRolls = Math.floor(level / 3);
-    for (let index = 0; index < bodyRolls; index += 1) {
-      tokens.push(Neo.nextRandom('encounter') < 0.5 ? 'knight' : 'knave');
-    }
-    const powerCount = level % 3;
-    for (let index = 0; index < powerCount; index += 1) {
-      tokens.push(ELITE_POWER_POOL[Neo.irand(0, ELITE_POWER_POOL.length - 1, 'encounter')]);
-    }
-    return tokens;
-  }
-
-  function applyEliteInventory(enemy, inventoryOverride = null) {
-    const inventory = inventoryOverride || rollEliteInventory();
-    enemy.eliteInventory = inventory;
-
-    const stacks = key => Number(inventory[key] || 0);
-    const hpMult = 1 + stacks('insurance') * 0.16 + stacks('turtle_shell') * 0.1 + stacks('iron_lung') * 0.24;
-    const dmgMult = 1 + stacks('neo_knife') * 0.08 + stacks('orb_of_blood') * 0.14 + stacks('crit_charm') * 0.12 + stacks('oracles_lens') * 0.2;
-    const speedMult = 1 + stacks('attack_servo') * 0.08 + stacks('turtle_shell') * 0.04;
-    const attackCdMult = Math.max(0.52, 1 - stacks('charged_adapter') * 0.1);
-    const stunResistStacks = stacks('anchor_charm');
-    const bleedResistance = Neo.clamp(stacks('tough_bandaid') * 0.1, 0, 0.8);
-
-    enemy.hp = Math.round(enemy.hp * hpMult);
-    enemy.max = enemy.hp;
-    enemy.dmg = Math.round(enemy.dmg * dmgMult);
-    enemy.speed *= speedMult;
-    enemy.attackCd *= attackCdMult;
-    enemy.r = Math.round(enemy.r * (1 + stacks('iron_lung') * 0.04));
-    enemy.stunResistance = Math.max(Number(enemy.stunResistance || 0), stunResistStacks);
-    enemy.bleedResistance = Math.max(Number(enemy.bleedResistance || 0), bleedResistance);
+    const roll = globalThis.NeoNyke.simulation.rollCampaignEliteTypes;
+    if (typeof roll !== 'function') throw new Error('Shared elite token rules are unavailable');
+    return roll(Math.max(1, Number(enemy?.level) || getEnemyProgressionLevel(enemy)), () => Neo.nextRandom('encounter'));
   }
 
   function applyEliteTypes(enemy) {
     if (!enemy?.elite) return;
-    enemy.eliteTypes = Array.isArray(enemy.eliteTypes) && enemy.eliteTypes.length ? enemy.eliteTypes : rollEliteTypes(enemy);
-    const tokens = enemy.eliteTypes;
-    const countToken = name => tokens.filter(token => token === name).length;
-
-    if (tokens.includes('blessed')) {
-      applyEliteInventory(enemy, rollBlessedEliteInventory());
-    } else {
-      applyEliteInventory(enemy);
-    }
-
-    // Base elite durability: tougher than a normal enemy, without turning every
-    // elite into a prolonged damage sponge before trait rolls are applied.
-    // Difficulties can soften the HP wall via eliteHpMultiplier (easy = 0.6),
-    // which scales the boost above 1x without dropping elites below normal HP.
-    const eliteHpMult = Number(Neo.getDifficultyDef()?.eliteHpMultiplier ?? 1);
-    enemy.max = Math.round(enemy.max * (1 + 0.75 * eliteHpMult));
-    enemy.hp = enemy.max;
-    enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
-    enemy.eliteDurabilityV2 = true;
-
-    // --- BODY ROLLS: Knight / Knave ---
-    const knight = countToken('knight');
-    const knave = countToken('knave');
-    enemy.eliteBody = { knight, knave };
-
-    // Knight: x1.15 to all stats per roll, multiplicative. HP/damage compound
-    // without limit; the realized speed factor is clamped so elites never
-    // outrun the player's projectiles (Neo.ELITE_KNIGHT_SPEED_CAP).
-    const knightMult = Math.pow(1.15, knight);
-    enemy.eliteKnightMult = knightMult;
-    enemy.max = Math.round(enemy.max * knightMult);
-    enemy.hp = enemy.max;
-    enemy.dmg = Math.round(enemy.dmg * knightMult);
-    const speedCap = Number(Neo.ELITE_KNIGHT_SPEED_CAP) || Infinity;
-    enemy.speed *= Math.min(speedCap, knightMult);
-
-    // Knave: "unfazed" scalar (harder to knock back / stun / bait), plus +1%
-    // resistance to one random status per roll written into the shared
-    // statusResistances map that getStatusResistance already reads.
-    enemy.eliteUnfazed = knave;
-    if (knave > 0) {
-      enemy.statusResistances = enemy.statusResistances || {};
-      for (let index = 0; index < knave; index += 1) {
-        const key = Neo.STATUS_KEYS[Neo.irand(0, Neo.STATUS_KEYS.length - 1, 'encounter')];
-        enemy.statusResistances[key] = Neo.clamp(Number(enemy.statusResistances[key] || 0) + 0.01, 0, 0.95);
-      }
-    }
-
-    // --- POWER ROLLS ---
-    const enflamed = countToken('enflamed');
-    const breezy = countToken('breezy');
-    const gross = countToken('gross');
-    enemy.elitePowers = tokens.filter(token => ELITE_POWER_POOL.includes(token));
-    enemy.eliteProcs = {
-      fire: Neo.clamp(enflamed * 0.12, 0, 0.95),
-      cold: Neo.clamp(breezy * 0.12, 0, 0.95),
-      poison: Neo.clamp(gross * 0.12, 0, 0.95),
-    };
-
-    // Breezy also reduces cold effectiveness AGAINST this elite (cold = slow).
-    if (breezy > 0) {
-      enemy.statusResistances = enemy.statusResistances || {};
-      enemy.statusResistances.slow = Neo.clamp(Number(enemy.statusResistances.slow || 0) + breezy * 0.22, 0, 0.95);
-    }
-
-    // Lazered reuses the existing elite laser-mode machine in updateEliteEnemyTraits.
-    if (tokens.includes('lazered')) {
-      enemy.eliteLaserCd = Neo.rand(1.9, 0.8, 'encounter');
-      enemy.eliteLaserModeIndex = 0;
-    }
-
-    // Giant: +35% max HP and a larger body.
-    if (tokens.includes('giant')) {
-      enemy.max = Math.round(enemy.max * 1.35);
-      enemy.hp = enemy.max;
-      enemy.r = Math.round(enemy.r * 1.45);
-      enemy.speed *= 0.84;
-      enemy.dmg = Math.round(enemy.dmg * 1.1);
-    }
-
-    // Blessed: crit chance on attacks against the player (see damagePlayer).
-    if (tokens.includes('blessed')) {
-      enemy.eliteCrit = 0.18;
-    }
+    const resolve = globalThis.NeoNyke.simulation.resolveCampaignEliteProfile;
+    if (typeof resolve !== 'function') throw new Error('Shared elite profile rules are unavailable');
+    const profile = resolve({
+      maxHealth: enemy.max, health: enemy.hp, damage: enemy.dmg, moveSpeed: enemy.speed,
+      radius: enemy.r, attackCooldown: enemy.attackCd, statusResistances: enemy.statusResistances,
+      stunResistance: enemy.stunResistance, bleedResistance: enemy.bleedResistance,
+      defenseMultiplier: enemy.defenseMultiplier,
+    }, {
+      level: Math.max(1, Number(enemy.level) || getEnemyProgressionLevel(enemy)),
+      tokens: enemy.eliteTypes,
+      inventory: enemy.eliteInventory,
+      random: () => Neo.nextRandom('encounter'),
+      inventoryPool: Neo.ELITE_INVENTORY_POOL,
+      whiteItemPool: Neo.WHITE_ITEM_POOL,
+      statusKeys: Neo.STATUS_KEYS,
+      eliteHpMultiplier: Neo.getDifficultyDef()?.eliteHpMultiplier,
+      knightSpeedCap: Neo.ELITE_KNIGHT_SPEED_CAP,
+    });
+    Object.assign(enemy, {
+      hp: profile.health, max: profile.maxHealth, dmg: profile.damage, speed: profile.moveSpeed,
+      r: profile.radius, attackCd: profile.attackCooldown, statusResistances: profile.statusResistances,
+      stunResistance: profile.stunResistance, bleedResistance: profile.bleedResistance,
+      defenseMultiplier: profile.defenseMultiplier, eliteTypes: profile.eliteTypes,
+      eliteInventory: profile.eliteInventory, eliteBody: profile.eliteBody,
+      eliteKnightMult: profile.eliteKnightMult, eliteUnfazed: profile.eliteUnfazed,
+      elitePowers: profile.elitePowers, eliteProcs: profile.eliteProcs,
+      eliteDurabilityV2: profile.eliteDurabilityV2,
+    });
+    if (profile.eliteLaserCd !== undefined) enemy.eliteLaserCd = profile.eliteLaserCd;
+    if (profile.eliteLaserModeIndex !== undefined) enemy.eliteLaserModeIndex = profile.eliteLaserModeIndex;
+    if (profile.eliteCrit !== undefined) enemy.eliteCrit = profile.eliteCrit;
   }
 
   function softCapEnemyScale(value, cap, curve = 0.35) {
@@ -1254,92 +1127,68 @@
     return true;
   }
 
-  function tryPlayKnaveKnightCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'artificer_knave' || !Neo.player) return false;
-    if (Neo.player.character !== 'thorn_knight') return false;
-    if (Neo.knaveKnightCutscenePlayed) return false;
+  function getPlayedBossIntroKeys(enemy) {
+    return [
+      Neo.knaveKnightCutscenePlayed && 'knave_knight',
+      Neo.queenMetaoCutscenePlayed && 'queen_metao',
+      enemy?.thornIntroPlayed && 'bulk_golem_thorn',
+      Neo.handsomeDevilCutscenePlayed && 'handsome_devil_thorn_knight',
+      Neo.handsomeDevilCutscenePlayed && 'handsome_devil_princess',
+      Neo.handsomeDevilCutscenePlayed && 'handsome_devil_gelleh',
+      Neo.handsomeDevilCutscenePlayed && 'handsome_devil_mooggy',
+      Neo.antonyBlemmyeCutscenePlayed && 'antony_blemmye',
+      enemy?.genericIntroPlayed && `generic_${enemy?.type || ''}`,
+    ].filter(Boolean);
+  }
 
-    return startBossCutscene(enemy, [
-      { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
-      { speaker: 'THORN', text: 'The kingdom of God has come for you ...' },
-      { speaker: 'KNAVE', text: 'Violence it is' },
-    ], () => { Neo.knaveKnightCutscenePlayed = true; });
+  function markBossIntroPlayed(enemy, key) {
+    if (key === 'knave_knight') Neo.knaveKnightCutscenePlayed = true;
+    else if (key === 'queen_metao') Neo.queenMetaoCutscenePlayed = true;
+    else if (key === 'bulk_golem_thorn') enemy.thornIntroPlayed = true;
+    else if (key.startsWith('handsome_devil_')) Neo.handsomeDevilCutscenePlayed = true;
+    else if (key === 'antony_blemmye') Neo.antonyBlemmyeCutscenePlayed = true;
+    else if (key.startsWith('generic_')) enemy.genericIntroPlayed = true;
+  }
+
+  function tryPlaySharedBossIntro(enemy, enemyType, expectedKey = null) {
+    if (!enemy || !enemyType || !Neo.player) return false;
+    const resolve = Neo.simulation?.resolveCampaignBossIntro;
+    if (typeof resolve !== 'function') return false;
+    const intro = resolve({
+      enemyType,
+      characterKey: Neo.player.character,
+      playedKeys: getPlayedBossIntroKeys(enemy),
+    });
+    if (!intro || (expectedKey && intro.key !== expectedKey)) return false;
+    return startBossCutscene(enemy, intro.lines, () => markBossIntroPlayed(enemy, intro.key));
+  }
+
+  function tryPlayKnaveKnightCutscene(enemy, enemyType) {
+    return tryPlaySharedBossIntro(enemy, enemyType, 'knave_knight');
   }
 
   function tryPlayQueenMetaoCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'queen_cult' || !Neo.player) return false;
-    if (Neo.player.character !== 'metao') return false;
-    if (Neo.queenMetaoCutscenePlayed) return false;
-
-    return startBossCutscene(enemy, [
-      { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
-      { speaker: 'METAO', text: '...' },
-      { speaker: 'QUEEN', text: 'Your life will be mine !' },
-    ], () => { Neo.queenMetaoCutscenePlayed = true; });
+    return tryPlaySharedBossIntro(enemy, enemyType, 'queen_metao');
   }
 
   function tryPlayBulkGolemThornCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'bulk_golem' || !Neo.player) return false;
-    if (Neo.player.character !== 'thorn_knight' || enemy.thornIntroPlayed) return false;
-
-    return startBossCutscene(enemy, [
-      { speaker: 'BULK GOLEM', text: Neo.BOSS_OPENING_DIALOGUE.bulk_golem },
-    ], () => { enemy.thornIntroPlayed = true; });
+    return tryPlaySharedBossIntro(enemy, enemyType, 'bulk_golem_thorn');
   }
 
   function tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'handsome_devil' || !Neo.player) return false;
-    if (Neo.handsomeDevilCutscenePlayed) return false;
-    const character = Neo.player.character;
-    const dialogueByCharacter = {
-      thorn_knight: [
-        { speaker: 'HANDSOME DEVIL', text: "Hello, Thorn. I see you're well..." },
-      ],
-      princess: [
-        { speaker: 'PRINCESS', text: 'He is cute.' },
-        { speaker: 'HANDSOME DEVIL', text: 'Naturally.' },
-      ],
-      gelleh: [
-        { speaker: 'GELLEH', text: 'Sinner.' },
-        { speaker: 'HANDSOME DEVIL', text: 'Then cast the first stone.' },
-      ],
-      mooggy: [
-        { speaker: 'MOOGGY', text: 'Uncle.' },
-        { speaker: 'HANDSOME DEVIL', text: 'Family is complicated.' },
-      ],
-    };
-    const dialogue = dialogueByCharacter[character];
-    if (!dialogue) return false;
-
-    return startBossCutscene(enemy, dialogue, () => { Neo.handsomeDevilCutscenePlayed = true; });
+    return tryPlaySharedBossIntro(enemy, enemyType);
   }
 
   function tryPlayAntonyBlemmyeCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'antony_blemmye' || !Neo.player) return false;
-    if (Neo.antonyBlemmyeCutscenePlayed) return false;
-
-    return startBossCutscene(enemy, [
-      { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
-    ], () => { Neo.antonyBlemmyeCutscenePlayed = true; });
+    return tryPlaySharedBossIntro(enemy, enemyType, 'antony_blemmye');
   }
 
   function tryPlayGenericBossOpening(enemy, enemyType) {
-    if (!enemy || !enemyType || enemy.genericIntroPlayed) return false;
-    const text = Neo.BOSS_OPENING_DIALOGUE[enemyType];
-    if (!text) return false;
-
-    return startBossCutscene(enemy, [
-      { speaker: Neo.getBossLabel(enemyType), text },
-    ], () => { enemy.genericIntroPlayed = true; });
+    return tryPlaySharedBossIntro(enemy, enemyType, `generic_${enemyType}`);
   }
 
   function tryPlayBossIntroCutscene(enemy, enemyType) {
-    return tryPlayKnaveKnightCutscene(enemy, enemyType)
-      || tryPlayQueenMetaoCutscene(enemy, enemyType)
-      || tryPlayBulkGolemThornCutscene(enemy, enemyType)
-      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType)
-      || tryPlayAntonyBlemmyeCutscene(enemy, enemyType)
-      || tryPlayGenericBossOpening(enemy, enemyType);
+    return tryPlaySharedBossIntro(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -1800,69 +1649,26 @@
     }
   }
 
-  const CHALLENGE_CIRCUIT_SWITCHES = [
-    { x: 230, y: 245, color: '#ff667d', label: '1' },
-    { x: 670, y: 245, color: '#68a7ff', label: '2' },
-    { x: 230, y: 475, color: '#ffd45d', label: '3' },
-    { x: 670, y: 475, color: '#70e09a', label: '4' },
-  ];
-
-  function createChallengeCircuitSequence(length, random) {
-    const sequence = [];
-    const count = Math.max(3, Math.floor(Number(length || 4)));
-    for (let index = 0; index < count; index += 1) {
-      let switchIndex = Math.floor(random() * CHALLENGE_CIRCUIT_SWITCHES.length);
-      if (switchIndex === sequence[index - 1]) {
-        switchIndex = (switchIndex + 1) % CHALLENGE_CIRCUIT_SWITCHES.length;
-      }
-      sequence.push(switchIndex);
-    }
-    return sequence;
-  }
-
   function ensureChallengeCircuitData(room) {
     if (!room || room.type !== 'challenge') return false;
-    const tuning = getChallengeTrialTuning('circuit');
-    const existingSequence = Array.isArray(room.challengeData?.sequence)
-      ? room.challengeData.sequence.filter(index => Number.isInteger(index) && index >= 0 && index < CHALLENGE_CIRCUIT_SWITCHES.length)
-      : [];
-    const sequence = existingSequence.length >= 3
-      ? existingSequence
-      : createChallengeCircuitSequence(
-        tuning.sequenceLength,
-        Neo.createRoomRandom(room, 'challenge:circuit-sequence'),
-      );
-    const resetTimer = existingSequence.length < 3;
-    room.challengeType = 'circuit';
-    room.challengeTimer = resetTimer
-      ? Number(tuning.timer || Neo.scaleChallengeTimer(18))
-      : Math.max(0, Number(room.challengeTimer || tuning.timer || 0));
-    room.challengeData = {
-      ...(room.challengeData || {}),
-      phase: 'solve',
-      sequence,
-      progress: resetTimer ? 0 : Neo.clamp(Number(room.challengeData?.progress || 0), 0, sequence.length),
-      maxTimer: resetTimer
-        ? room.challengeTimer
-        : Math.max(room.challengeTimer, Number(room.challengeData?.maxTimer || room.challengeTimer)),
-      wrongPressPenalty: Number(tuning.wrongPressPenalty || 2),
-      targetClearRate: CHALLENGE_CLEAR_RATE_TARGETS.circuit,
-    };
-    return true;
+    const started = globalThis.NeoNyke?.simulation?.startCampaignCircuitChallenge?.(room, {
+      tuning: getChallengeTrialTuning('circuit'),
+      random: Neo.createRoomRandom(room, 'challenge:circuit-sequence'),
+    });
+    return !!started?.ok;
   }
 
   function spawnChallengeCircuitSwitches(room) {
     if (!room || room.type !== 'challenge') return;
-    ensureChallengeCircuitData(room);
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
-    CHALLENGE_CIRCUIT_SWITCHES.forEach((switchDef, switchIndex) => {
-      Neo.pickups.push({
-        ...switchDef,
-        type: 'challengeSwitch',
-        switchIndex,
-        armed: true,
-      });
+    const started = globalThis.NeoNyke?.simulation?.startCampaignCircuitChallenge?.(room, {
+      tuning: getChallengeTrialTuning('circuit'),
+      random: Neo.createRoomRandom(room, 'challenge:circuit-sequence'),
     });
+    if (!started?.ok) return;
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
+    // Shared descriptors retain type: 'challengeSwitch'; campaign only owns
+    // local pickup materialization and the renderer's normal presentation.
+    started.switches.forEach(switchDef => Neo.pickups.push({ ...switchDef }));
   }
 
   function pressChallengeCircuitSwitch(pickup) {
@@ -1883,23 +1689,20 @@
   }
 
   function spawnTrialEnemyWave(count = 1) {
-    const pool = Neo.floor >= 6
-      ? ['hunter', 'laser', 'charger', 'knave']
-      : ['hunter', 'laser', 'charger'];
     // In the Protect trial the adds prioritise the ward rune over the player, so
     // tag each spawn here when that trial is active.
     const seeksObelisk = Neo.currentRoom?.type === 'challenge'
       && Neo.currentRoom?.challengeType === 'survival'
       && !!Neo.currentRoom?.challengeData?.obelisk;
-    for (let index = 0; index < count; index += 1) {
-      const angle = Neo.nextRandom('encounter') * Math.PI * 2;
-      const radius = 170 + Neo.nextRandom('encounter') * 90;
-      const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2 + Math.cos(angle) * radius, Neo.ROOM_H / 2 + Math.sin(angle) * radius, 15);
-      if (!safeSpawn) continue;
-      const type = pool[Neo.irand(0, pool.length - 1, 'encounter')];
-      const enemy = spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
+    const plan = globalThis.NeoNyke.simulation.createCampaignTrialEnemyWavePlan(count, {
+      floorNumber: Neo.floor, width: Neo.ROOM_W, height: Neo.ROOM_H, random: () => Neo.nextRandom('encounter'),
+    });
+    plan.forEach(descriptor => {
+      const safeSpawn = findSafeEnemySpawnPoint(descriptor.x, descriptor.y, 15);
+      if (!safeSpawn) return;
+      const enemy = spawnEnemy(descriptor.type, safeSpawn.x, safeSpawn.y, false);
       if (enemy && seeksObelisk) enemy.obeliskSeeker = true;
-    }
+    });
   }
 
   function beginChallengeTrial(room) {
@@ -1940,23 +1743,9 @@
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm all blue bombs. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
       const tuning = getChallengeTrialTuning('survival');
-      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(20));
-      room.challengeTick = Number(tuning.tickStart || 2);
-      room.challengeData.maxTimer = room.challengeTimer;
-      room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
-      room.challengeData.tickStart = Number(tuning.tickStart || 2);
-      room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
-      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
-      const obeliskHp = getChallengeObeliskMaxHp();
-      room.challengeData.obelisk = {
-        x: Neo.ROOM_W / 2,
-        y: Neo.ROOM_H / 2,
-        r: 22,
-        hp: obeliskHp,
-        maxHp: obeliskHp,
-        hitFlash: 0,
-        guardRange: 96,
-      };
+      globalThis.NeoNyke.simulation.startCampaignSurvivalChallenge(room, {
+        tuning, floorNumber: Neo.floor, width: Neo.ROOM_W, height: Neo.ROOM_H,
+      });
       // First wave matches the trial's own spawnCount (used to be forced to a
       // minimum of 3, which meant floor 1-5 always opened with more adds than
       // the tuning intended). Floor 6+'s spawnCount of 6 already provides the
@@ -1965,35 +1754,19 @@
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central ward rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       const tuning = getChallengeTrialTuning('runes');
-      spawnChallengeRunes(room);
-      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(30));
-      room.challengeTick = Number(tuning.tick || 2.7);
-      room.challengeData.maxTimer = room.challengeTimer;
-      room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
-      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.runes;
+      const started = globalThis.NeoNyke.simulation.startCampaignRuneChallenge(room, {
+        tuning, width: Neo.ROOM_W, height: Neo.ROOM_H, random: () => Neo.nextRandom('world'),
+      });
+      started.runes.forEach(rune => Neo.pickups.push(rune));
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
-      const tuning = getChallengeTrialTuning('storm');
-      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(18));
-      room.challengeTick = Number(tuning.tick || 0.85);
-      room.challengeData.maxTimer = room.challengeTimer;
-      room.challengeData.burstCount = Number(tuning.burstCount || 3);
-      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.storm;
+      globalThis.NeoNyke.simulation.startCampaignStormChallenge(room, {
+        tuning: getChallengeTrialTuning('storm'),
+      });
       Neo.playSfxLoop?.('lightning_storm_loop');
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 46, life: 0.95, text: getChallengeTrialLabel(type), c: '#d7f6ff' });
-  }
-
-  function rollChallengeWeapon() {
-    const owned = new Set(Object.keys(Neo.player?.ownedWeapons || {}).filter(k => Neo.player?.ownedWeapons?.[k]));
-    const pool = [...Neo.WHITE_WEAPON_POOL];
-    if (Neo.floor >= 4) pool.push(...Neo.PURPLE_WEAPON_POOL);
-    if (Neo.floor >= 7) pool.push(...Neo.RED_WEAPON_POOL);
-    const available = pool.filter(k => !owned.has(k));
-    if (available.length === 0) return null;
-    const challengeRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:weapon-reward');
-    return available[Math.floor(challengeRandom() * available.length)];
   }
 
   function spawnChallengeReward(text = 'TRIAL CLEARED', authoredRewardKey = '') {
@@ -2001,18 +1774,25 @@
     Neo.currentRoom.challengeRewardSpawned = true;
     const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
     const scrollRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:scroll-reward');
-    const challengeData = Neo.currentRoom.challengeData || {};
-    const scrollReward = Neo.floor > 3 && scrollRandom() < 0.2 ? Neo.rollScrollOfControl?.(scrollRandom) : '';
-    const rewardKey = authoredRewardKey || challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
+    const weaponRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:weapon-reward');
+    const weaponPool = [...Neo.WHITE_WEAPON_POOL, ...(Neo.floor >= 4 ? Neo.PURPLE_WEAPON_POOL : []), ...(Neo.floor >= 7 ? Neo.RED_WEAPON_POOL : [])];
+    const plan = globalThis.NeoNyke.simulation.createCampaignChallengeRewardPlan({
+      floorNumber: Neo.floor, centerX: Neo.ROOM_W / 2, centerY: Neo.ROOM_H / 2,
+      authoredRewardKey: authoredRewardKey || Neo.currentRoom.challengeData?.rewardKey,
+      random: rewardRandom, scrollRandom, rollScroll: Neo.rollScrollOfControl,
+      rollEliteItem: random => Neo.rollItemDrop({ elite: true, random }),
+      weaponPool, ownedWeapons: Neo.player?.ownedWeapons || {}, weaponRandom,
+    });
+    if (!plan.ok) return;
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
-    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
-    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
-    Neo.dropCoins(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 4, 75 + Neo.floor * 15);
-    Neo.grantXp(28 + Neo.floor * 5);
-    const weaponKey = rollChallengeWeapon();
-    if (weaponKey && Neo.player) {
-      Neo.player.ownedWeapons[weaponKey] = true;
-      const wName = Neo.WEAPON_DEFS[weaponKey]?.name || weaponKey;
+    plan.pickups.forEach(pickup => {
+      if (pickup.type === 'coin') Neo.dropCoins(pickup.x, pickup.y, pickup.amount);
+      else Neo.pickups.push({ ...pickup });
+    });
+    Neo.grantXp(plan.xp);
+    if (plan.weaponKey && Neo.player) {
+      Neo.player.ownedWeapons[plan.weaponKey] = true;
+      const wName = Neo.WEAPON_DEFS[plan.weaponKey]?.name || plan.weaponKey;
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 68, life: 1.4, text: `+ ${wName}`, c: '#ffd700' });
     }
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#d7f6ff' });
@@ -4928,60 +4708,40 @@
       return;
     }
 
-    const laserMove = getMirrorMove(enemy, 'laser');
-    const smashMove = getMirrorMove(enemy, 'smash');
-    const desiredRange = enemy.mirrorSmashCd <= 0
-      ? (smashMove === 'kicky_kick' ? 126 : 118)
-      : enemy.mirrorLaserCd <= 0 && !['blade_justice'].includes(laserMove)
-        ? 230
-        : 112;
-    const preferred = distance > desiredRange + 24 ? 1 : distance < desiredRange - 26 ? -1 : 0.2;
-    const strafe = distance < 300 ? 0.34 : 0;
+    const tactics = globalThis.NeoNyke?.simulation?.planCampaignMirrorTactics?.({
+      distance, angle: angleToPlayer,
+      laserMove: getMirrorMove(enemy, 'laser'), smashMove: getMirrorMove(enemy, 'smash'), dashMove: getMirrorMove(enemy, 'dash'),
+      weaponKey: enemy.mirrorWeapon, weaponRange: enemy.mirrorWeaponStats?.range,
+      targetRadius: Neo.player.r, meleeRange: Neo.ATTACKS.melee.range,
+      attackCooldown: enemy.attackCd, laserCooldown: enemy.mirrorLaserCd,
+      smashCooldown: enemy.mirrorSmashCd, dashCooldown: enemy.mirrorDashCd,
+    });
+    if (!tactics) throw new Error('Shared mirror tactics policy is unavailable');
     steerEnemy(
       enemy,
-      dx / distance * preferred + -dy / distance * strafe,
-      dy / distance * preferred + dx / distance * strafe,
+      tactics.moveX,
+      tactics.moveY,
       enemy.speed,
       6.2,
       dt
     );
-
-    const mirrorWeapon = enemy.mirrorWeapon || '';
-    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'gelleh_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
-    const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
-
-    if (enemy.attackCd > 0) return;
-
-    // Skills (smash/laser/dash) take priority over basic weapon/melee swings so
-    // the champion actually deploys the player's full kit instead of just poking.
-    // Each skill gates on its own cooldown plus a distance window; the basic
-    // attack is the fallback when nothing else is ready.
-    const dashMove = getMirrorMove(enemy, 'dash');
-    if (enemy.mirrorSmashCd <= 0 && distance < 178) {
+    if (tactics.action === 'smash') {
       startMirrorSmash(enemy, angleToPlayer);
       return;
     }
-    if (enemy.mirrorLaserCd <= 0 && (distance > 96 || laserMove === 'blade_justice')) {
+    if (tactics.action === 'laser') {
       startMirrorLaser(enemy, angleToPlayer, distance);
       return;
     }
-    if (enemy.mirrorDashCd <= 0 && (distance > 170 || dashMove === 'warp')) {
+    if (tactics.action === 'dash') {
       startMirrorDash(enemy, angleToPlayer, distance);
       return;
     }
-
-    // Basic attack fallback: ranged weapons poke from afar, melee weapons/moves
-    // require closing in.
-    if (mirrorWeapon && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
+    if (tactics.action === 'weapon' || tactics.action === 'melee') {
       startMirrorMelee(enemy, angleToPlayer);
       return;
     }
-    if (distance < Neo.ATTACKS.melee.range + Neo.player.r + 6) {
-      startMirrorMelee(enemy, angleToPlayer);
-      return;
-    }
-
-    enemy.attackCd = 0.18;
+    if (tactics.action === 'recover') enemy.attackCd = 0.18;
   }
 
   // Mooggy claw swing: a single swingTime timer (like the player's own melee
@@ -5082,16 +4842,15 @@
       if (!Neo.currentRoom.challengeData || !Array.isArray(Neo.currentRoom.challengeData.sequence)) {
         ensureChallengeCircuitData(Neo.currentRoom);
       }
-      Neo.currentRoom.challengeTimer = Math.max(0, Number(Neo.currentRoom.challengeTimer || 0) - dt);
-      Neo.currentRoom.challengeData.flash = Math.max(0, Number(Neo.currentRoom.challengeData?.flash || 0) - dt);
-      Neo.currentRoom.challengeData.wrongFlash = Math.max(0, Number(Neo.currentRoom.challengeData?.wrongFlash || 0) - dt);
-      if (Neo.currentRoom.challengeTimer <= 0) failChallengeTrial('CIRCUIT TIMED OUT');
+      const circuit = globalThis.NeoNyke?.simulation?.advanceCampaignCircuitChallenge?.(Neo.currentRoom, dt);
+      if (circuit?.failed) failChallengeTrial('CIRCUIT TIMED OUT');
       return;
     }
 
     if (type === 'bomb') {
-      Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
+      const bomb = globalThis.NeoNyke.simulation.advanceCampaignBombChallenge(Neo.currentRoom, dt, {
+        tuning: getChallengeTrialTuning('bomb'), floorNumber: Neo.floor,
+      });
       // Drift each bomb through the shared world-entity operation so authority
       // snapshots and local campaign use identical boundary reflection.
       for (const pickup of Neo.pickups) {
@@ -5121,11 +4880,8 @@
           }
         }
       }
-      if (Neo.currentRoom.challengeTick <= 0) {
-        Neo.currentRoom.challengeTick = Math.max(1.1, Number(getChallengeTrialTuning('bomb').tick || 1.8));
-        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
-      }
-      if (Neo.currentRoom.challengeTimer <= 0) {
+      if (bomb.spawnCount > 0) spawnTrialEnemyWave(bomb.spawnCount);
+      if (bomb.failed) {
         spawnBombFailAoe();
         failChallengeTrial('BOMB DETONATED');
       }
@@ -5133,61 +4889,19 @@
     }
 
     if (type === 'survival') {
-      const maxTimer = Math.max(1, Number(Neo.currentRoom.challengeData?.maxTimer || Neo.currentRoom.challengeTimer || 1));
-      Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
-      if (Neo.currentRoom.challengeTick <= 0) {
-        const timeRatio = Neo.clamp(Neo.currentRoom.challengeTimer / maxTimer, 0, 1);
-        const tickStart = Number(Neo.currentRoom.challengeData?.tickStart || 2.2);
-        const tickEnd = Number(Neo.currentRoom.challengeData?.tickEnd || 1.35);
-        Neo.currentRoom.challengeTick = tickEnd + (tickStart - tickEnd) * timeRatio;
-        // Cap simultaneous seekers so a player who can't clear a wave in time
-        // doesn't get buried under an ever-growing swarm — pressure plateaus
-        // instead of compounding once this many adds are alive at once.
-        const liveSeekers = Neo.enemies.reduce((total, enemy) => total + (enemy && !enemy.dead && enemy.obeliskSeeker ? 1 : 0), 0);
-        const maxLiveSeekers = 8;
-        if (liveSeekers < maxLiveSeekers) {
-          const spawnCount = Math.min(
-            Number(Neo.currentRoom.challengeData?.spawnCount || 1),
-            maxLiveSeekers - liveSeekers,
-          );
-          spawnTrialEnemyWave(Math.max(1, spawnCount));
-        }
-      }
-
-      // Enemies that crowd the ward rune drain its hp. The player must clear adds to keep it standing.
-      const obelisk = Neo.currentRoom.challengeData?.obelisk;
-      if (obelisk) {
-        obelisk.hitFlash = Math.max(0, (obelisk.hitFlash || 0) - dt);
-        let attackers = 0;
-        for (let index = 0; index < Neo.enemies.length; index += 1) {
-          const enemy = Neo.enemies[index];
-          if (!enemy || enemy.dead) continue;
-          if (Neo.dist(enemy.x, enemy.y, obelisk.x, obelisk.y) < obelisk.guardRange + (enemy.r || 12)) {
-            attackers += 1;
-          }
-        }
-        if (attackers > 0) {
-          // Adds now actively rush the obelisk and stack on it, so the raw
-          // per-attacker drain is lowered and the stack count is softened with a
-          // sqrt curve — a swarm still bleeds it fast, but not instantly.
-          const drain = Math.sqrt(attackers) * (5 + Neo.floor * 0.6) * dt;
-          obelisk.hp = Math.max(0, obelisk.hp - drain);
-          obelisk.hitFlash = 0.18;
-          if (Neo.nextRandom('world') < dt * attackers * 2) {
-            Neo.spawnParticle({ x: obelisk.x + (Neo.nextRandom('world') - 0.5) * 30, y: obelisk.y - 6, life: 0.3, c: '#ff8b98', ring: 8 });
-          }
-        }
-        if (obelisk.hp <= 0) {
+      const survival = globalThis.NeoNyke.simulation.advanceCampaignSurvivalChallenge(Neo.currentRoom, dt, {
+        tuning: getChallengeTrialTuning('survival'), floorNumber: Neo.floor, enemies: Neo.enemies,
+      });
+      if (survival.spawnCount > 0) spawnTrialEnemyWave(survival.spawnCount);
+      if (survival.failed) {
+        const obelisk = survival.obelisk;
           Neo.ringBurst(obelisk.x, obelisk.y, 40, '#ff5566', 0.6);
           Neo.shake = Math.max(Neo.shake || 0, 14);
           Neo.shakeT = Math.max(Neo.shakeT || 0, 0.3);
           failChallengeTrial('RUNE DESTROYED');
           return;
-        }
       }
-
-      if (Neo.currentRoom.challengeTimer <= 0) {
+      if (survival.complete) {
         Neo.enemies.splice(0, Neo.enemies.length);
         completeChallengeTrial('SURVIVED');
       }
@@ -5195,26 +4909,20 @@
     }
 
     if (type === 'runes') {
-      Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
-      if (Neo.currentRoom.challengeTick <= 0) {
-        Neo.currentRoom.challengeTick = Math.max(1.45, Number(getChallengeTrialTuning('runes').tick || 2.5));
-        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
-      }
-      if (Neo.currentRoom.challengeTimer <= 0) {
+      const runes = globalThis.NeoNyke.simulation.advanceCampaignRuneChallenge(Neo.currentRoom, dt, { tuning: getChallengeTrialTuning('runes') });
+      if (runes.spawnCount > 0) spawnTrialEnemyWave(runes.spawnCount);
+      if (runes.failed) {
         failChallengeTrial('RUNES FADING');
       }
       return;
     }
 
     if (type === 'storm') {
-      Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
-      if (Neo.currentRoom.challengeTick <= 0) {
-        Neo.currentRoom.challengeTick = Math.max(0.64, Number(getChallengeTrialTuning('storm').tick || 0.85));
-        const burstCount = Math.max(2, Number(Neo.currentRoom.challengeData?.burstCount || 3));
-        for (let index = 0; index < burstCount; index += 1) {
-          const strike = getStormChallengeStrikePoint(index);
+      const storm = globalThis.NeoNyke.simulation.advanceCampaignStormChallenge(Neo.currentRoom, dt, {
+        tuning: getChallengeTrialTuning('storm'), target: Neo.player,
+        width: Neo.ROOM_W, height: Neo.ROOM_H, random: () => Neo.nextRandom('world'),
+      });
+      storm.strikes.forEach(strike => {
           Neo.hazards.push({
             kind: 'lightning_column',
             x: strike.x,
@@ -5229,9 +4937,8 @@
             source: 'storm',
           });
           Neo.ringBurst(strike.x, strike.y, 18, '#8dd4ff', 0.35);
-        }
-      }
-      if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('STORM ENDED');
+      });
+      if (storm.complete) completeChallengeTrial('STORM ENDED');
     }
   }
 
@@ -5514,21 +5221,9 @@
   // the central obelisk. Called from the enemy update loop AFTER the type AI has
   // set velocity toward the player, so this pull overrides it and wins out.
   function applyObeliskSeekerSteering(enemy, dt) {
-    if (!enemy || !enemy.obeliskSeeker || enemy.dead) return;
-    if (enemy.stun > 0 || enemy.airborne) return;
-    const obelisk = Neo.currentRoom?.challengeData?.obelisk;
-    if (!obelisk) return;
-    const dx = obelisk.x - enemy.x;
-    const dy = obelisk.y - enemy.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const holdRange = (obelisk.guardRange || 96) - 8;
-    if (dist > holdRange) {
-      steerEnemy(enemy, dx / dist, dy / dist, enemy.speed || 90, 5.2, dt);
-    } else {
-      // Loiter on the obelisk and keep draining instead of orbiting past it.
-      enemy.vx *= 0.82;
-      enemy.vy *= 0.82;
-    }
+    return globalThis.NeoNyke.simulation.applyCampaignObeliskSeekerSteering(
+      enemy, Neo.currentRoom?.challengeData?.obelisk, dt, { speed: enemy?.speed || 90 },
+    );
   }
 
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
@@ -5644,7 +5339,6 @@
   Neo.rollEliteInventory = rollEliteInventory;
   Neo.rollBlessedEliteInventory = rollBlessedEliteInventory;
   Neo.rollEliteTypes = rollEliteTypes;
-  Neo.applyEliteInventory = applyEliteInventory;
   Neo.applyEliteTypes = applyEliteTypes;
   Neo.getEnemyLevelStatMultipliers = getEnemyLevelStatMultipliers;
   Neo.scaleEnemyStats = scaleEnemyStats;
@@ -5665,13 +5359,11 @@
   Neo.spawnChallengeBombs = spawnChallengeBombs;
   Neo.spawnBombFailAoe = spawnBombFailAoe;
   Neo.spawnChallengeRunes = spawnChallengeRunes;
-  Neo.createChallengeCircuitSequence = createChallengeCircuitSequence;
   Neo.spawnChallengeCircuitSwitches = spawnChallengeCircuitSwitches;
   Neo.pressChallengeCircuitSwitch = pressChallengeCircuitSwitch;
   Neo.getChallengeObeliskMaxHp = getChallengeObeliskMaxHp;
   Neo.spawnTrialEnemyWave = spawnTrialEnemyWave;
   Neo.beginChallengeTrial = beginChallengeTrial;
-  Neo.rollChallengeWeapon = rollChallengeWeapon;
   Neo.spawnChallengeReward = spawnChallengeReward;
   Neo.completeChallengeTrial = completeChallengeTrial;
   Neo.failChallengeTrial = failChallengeTrial;

@@ -62,6 +62,7 @@ describe('Crit roll-back system', () => {
 
 describe('Enemy time-based crit aggression', () => {
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+  const { resolveCampaignEnemyTimeAggression } = require('../js/simulation/SharedEliteSystem');
 
   test('combat.js defines and exposes getEnemyTimeAggression', () => {
     expect(combatSource).toContain('function getEnemyTimeAggression()');
@@ -70,10 +71,14 @@ describe('Enemy time-based crit aggression', () => {
 
   test('aggression ramps every 5 minutes by 5% per axis', () => {
     const fn = extractFunction(combatSource, 'getEnemyTimeAggression');
-    expect(fn).toContain('minutes / 5');
-    expect(fn).toContain('0.05 * (1 - aggressionCut)'); // base +5%/step, trimmed by Overclocked Watch
-    expect(fn).toContain('steps * perStep');
-    expect(fn).toContain('1.5 + steps * perStep'); // base crit damage 1.5×, +5%/step
-    expect(fn).toContain('applyCritRollback');
+    expect(fn).toContain('resolveCampaignEnemyTimeAggression');
+    expect(resolveCampaignEnemyTimeAggression({ elapsedSeconds: 300 })).toEqual({
+      steps: 1, critChance: 0.05, critMultiplier: 1.55, damageMultiplier: 1.05,
+    });
+    const reduced = resolveCampaignEnemyTimeAggression({ elapsedSeconds: 300, overclockedWatchAggressionCut: 0.3 });
+    expect(reduced).toEqual(expect.objectContaining({ steps: 1 }));
+    expect(reduced.critChance).toBeCloseTo(0.035);
+    expect(reduced.critMultiplier).toBeCloseTo(1.535);
+    expect(reduced.damageMultiplier).toBeCloseTo(1.035);
   });
 });

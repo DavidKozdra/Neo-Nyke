@@ -48,7 +48,24 @@
       floorNumber: options.floorNumber || 1,
       generationVersion: options.generationVersion || 1,
       contentVersion: options.contentVersion || CAMPAIGN_CONTENT_VERSION,
+      gameMode: options.gameMode || options.matchRules?.gameMode || options.matchRules?.mode,
     });
+    // Endless and Boss Rush are the campaign's sealed, single-arena runs rather
+    // than normal dungeons with a mode flag. Keep the layout canonical here so
+    // every authority entry point (including deferred floor generation) receives
+    // the same topology as their campaign start routines.
+    const gameMode = String(options.gameMode || options.matchRules?.gameMode || options.matchRules?.mode || '');
+    if (gameMode === 'endless' || gameMode === 'boss_rush' || gameMode === 'rival_rumble') {
+      const arena = layout.rooms.find(room => room.id === layout.startRoomId) || layout.rooms[0];
+      if (arena) {
+        arena.type = 'combat';
+        arena.doors = { n: false, s: false, e: false, w: false };
+        arena.cleared = false;
+        layout.rooms = [arena];
+        layout.startRoomId = arena.id;
+        layout.exitRoomId = arena.id;
+      }
+    }
     if (typeof decorateSharedRoomInterior === 'function') {
       layout.rooms.forEach(room => decorateSharedRoomInterior(room, {
         matchSeed: options.matchSeed,

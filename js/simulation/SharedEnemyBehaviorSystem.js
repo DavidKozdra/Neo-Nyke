@@ -36,6 +36,19 @@
 
   const { clamp, turnAngleToward, lineIntersectsRect, segmentHitsCircle } = geometryApi;
 
+  // Bulk Golem's death is a transformation, not merely a boss removal. World
+  // placement remains an adapter concern because campaign asks its safe-spawn
+  // query while authority clamps room state, but the children and their scales
+  // must be identical in both runtimes.
+  function createCampaignBulkGolemSplitPlan(enemy, options = {}) {
+    if (!enemy || enemy.type !== 'bulk_golem' || !enemy.splitReady) return [];
+    const elite = !!options.elite;
+    return [-70, 70].map(xOffset => ({
+      type: 'golem', x: Number(enemy.x || 0) + xOffset, y: Number(enemy.y || 0),
+      elite, spawnedFromBulk: true, healthMultiplier: 1.6, damageMultiplier: 1.35,
+    }));
+  }
+
   function createCampaignEnemyBehaviors(ctx) {
     const tuningOf = () => ctx.getTuning?.() || { reaction: 1, rangedCadence: 1, supportPower: 1 };
     const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -1024,8 +1037,9 @@
       enemy.eliteLaserCd = Math.max(0, Number(enemy.eliteLaserCd || 0) - dt);
       if (enemy.eliteLaserCd > 0 || !player || distanceToPlayer > 520) return false;
 
-      // Elite lasers cycle authored player moves. lightning_columns is skipped
-      // when the runtime has no hazard hook for it.
+      // Elite lasers cycle the authored player moves. Runtimes without a
+      // hazard adapter preserve the cooldown/cycle but simply cannot
+      // materialize the lightning-column presentation.
       const modes = ['blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns', 'god_sweep'];
       const mode = modes[Number(enemy.eliteLaserModeIndex || 0) % modes.length];
       enemy.eliteLaserModeIndex = Number(enemy.eliteLaserModeIndex || 0) + 1;
@@ -2788,6 +2802,7 @@
   return {
     SHARED_BEHAVIOR_TYPES,
     createCampaignEnemyBehaviors,
+    createCampaignBulkGolemSplitPlan,
     lineIntersectsRect,
     segmentHitsCircle,
     turnAngleToward,

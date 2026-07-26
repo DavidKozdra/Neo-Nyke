@@ -172,6 +172,14 @@ describe('drain balance', () => {
   });
 
   test('Nail Shot carries Tooth of Thorn drain bonus on every nail', () => {
+    const previousNeoNyke = globalThis.NeoNyke;
+    globalThis.NeoNyke = {
+      ...(previousNeoNyke || {}),
+      simulation: {
+        ...(previousNeoNyke?.simulation || {}),
+        planCampaignNailShot: require('../js/simulation/SharedMoveEffectSystem').planCampaignNailShot,
+      },
+    };
     const spawned = [];
     const Neo = {
       player: { character: 'mooggy', x: 20, y: 30, equippedMoves: { laser: 'nail_shot' } },
@@ -190,12 +198,16 @@ describe('drain balance', () => {
       `${getEquippedMoveDecl}\n${extractFunction(combatSource, 'castNailShot')}; return castNailShot;`,
     )(Neo);
 
-    castNailShot();
+    try {
+      castNailShot();
 
-    expect(spawned).toHaveLength(12);
-    spawned.forEach(projectile => {
-      expect(projectile.kind).toBe('nail');
-      expect(projectile.hitOptions).toMatchObject({ bleedChance: 0.08, drainChanceBonus: 0.05 });
-    });
+      expect(spawned).toHaveLength(12);
+      spawned.forEach(projectile => {
+        expect(projectile.kind).toBe('nail');
+        expect(projectile.hitOptions).toMatchObject({ bleedChance: 0.08, drainChanceBonus: 0.05 });
+      });
+    } finally {
+      globalThis.NeoNyke = previousNeoNyke;
+    }
   });
 });

@@ -103,8 +103,8 @@ describe('rival full-kit tactical AI', () => {
 
   test('Gelleh uses the same three orbiting Blade Justice sword render', () => {
     expect(roomsSource).toContain('function startRivalJusticeBlades');
-    expect(roomsSource).toContain('enemy.rivalJusticeBlades = Array.from({ length: 3 }');
-    expect(roomsSource).toContain('blade.swingPhase += dt * 7.5');
+    expect(roomsSource).toContain('planCampaignBladeJustice');
+    expect(roomsSource).toContain('advanceCampaignBladeJustice');
     expect(propsSource).toContain('enemy?.rivalJusticeBlades');
   });
 

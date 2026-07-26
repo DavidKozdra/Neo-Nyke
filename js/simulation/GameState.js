@@ -43,7 +43,7 @@
   function normalizeRecord(source = {}) {
     const status = VALID_MATCH_STATUSES.has(source.status) ? source.status : 'waiting';
     const requestedMode = String(source.matchRules?.mode || 'coop');
-    const mode = requestedMode === 'rival' ? 'rival' : 'coop';
+    const mode = ['rival', 'boss_rush'].includes(requestedMode) ? requestedMode : 'coop';
     return {
       protocolVersion: PROTOCOL_VERSION,
       stateVersion: GAME_STATE_VERSION,
@@ -55,6 +55,7 @@
       generationVersion: Math.max(1, Math.trunc(Number(source.generationVersion) || 1)),
       contentVersion: String(source.contentVersion || 'development'),
       floorNumber: Math.max(1, Math.trunc(Number(source.floorNumber) || 1)),
+      runLoopIndex: Math.max(0, Math.trunc(Number(source.runLoopIndex) || 0)),
       floorSkipPending: Math.max(0, Math.trunc(Number(source.floorSkipPending) || 0)),
       gameMode: String(source.gameMode || source.matchRules?.gameMode || 'normal'),
       status,
@@ -64,8 +65,8 @@
         // Security-sensitive rule values are derived from the validated mode.
         mode,
         friendlyFire: mode === 'rival',
-        reviveEnabled: mode === 'coop',
-        floorAdvance: mode === 'coop' ? 'all-living' : 'first',
+        reviveEnabled: mode !== 'rival',
+        floorAdvance: mode === 'rival' ? 'first' : 'all-living',
       },
       runStats: cloneSerializable(plainObject(source.runStats, { killsByPlayer: {}, playerKills: {}, deathsByPlayer: {} })),
       runServices: cloneSerializable(plainObject(source.runServices, {

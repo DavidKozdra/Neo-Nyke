@@ -87,9 +87,22 @@
       Math.round(Number(entity.x || 0) * 8), Math.round(Number(entity.y || 0) * 8),
       Math.round(Number(entity.vx || 0) * 8), Math.round(Number(entity.vy || 0) * 8),
       Math.round(Number(entity.radius || entity.r || 0) * 8),
-      Math.round(Number(entity.hp || 0)), Math.round(Number(entity.maxHp || entity.max || 0)),
+      // Authority enemies use health/maxHealth; the compact client record uses
+      // hp/maxHp. Preserve both spellings here so packed snapshots cannot turn
+      // a living enemy into a 0 / 0 render proxy.
+      Math.round(Number(entity.hp ?? entity.health ?? 0)), Math.round(Number(entity.maxHp ?? entity.maxHealth ?? entity.max ?? 0)),
       Math.round(Number(entity.expiresTick || 0)), indexOf(dictionaries.actions, entity.action),
       entity.hostile ? 1 : 0,
+      Math.round(Number(entity.angle || 0) * 10000),
+      Math.round(Math.max(0, Number(entity.swinging || 0)) * 1000),
+      Math.max(0, Math.trunc(Number(entity.swingCooldownUntilTick || 0))),
+      Math.max(0, Math.trunc(Number(entity.swingsLeft || 0))),
+      // Death is dynamic state, not static bootstrap data. Without these fields
+      // a packed delta left the client holding the old `dead: false` record,
+      // so no multiplayer corpse could ever be created.
+      entity.dead ? 1 : 0,
+      Math.max(0, Math.trunc(Number(entity.deathTick || 0))),
+      Math.round(Number(entity._lastHitAngle ?? entity.lastHitAngle ?? 0) * 10000),
     ];
     const packed = {};
     PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
@@ -109,7 +122,8 @@
       const target = state[collection] || (state[collection] = {});
       (wire.packed?.[collection] || []).forEach(record => {
         if (!Array.isArray(record)) return;
-        const [idIndex, roomIndex, kindIndex, x, y, vx, vy, radius, hp, maxHp, expiresTick, actionIndex, hostile] = record;
+        const [idIndex, roomIndex, kindIndex, x, y, vx, vy, radius, hp, maxHp, expiresTick, actionIndex, hostile,
+          angle, swinging, swingCooldownUntilTick, swingsLeft, dead, deathTick, lastHitAngle] = record;
         const id = ids[idIndex];
         if (!id) return;
         const kind = kinds[kindIndex] || '';
@@ -121,8 +135,18 @@
           x: Number(x || 0) / 8, y: Number(y || 0) / 8,
           vx: Number(vx || 0) / 8, vy: Number(vy || 0) / 8,
           radius: Number(radius || 0) / 8,
-          hp: Number(hp || 0), maxHp: Number(maxHp || 0), max: Number(maxHp || 0),
+          // Keep every public health spelling coherent after a compact update.
+          // A full bootstrap can carry health/maxHealth while later deltas carry
+          // hp/maxHp; leaving the old aliases behind makes renderers read stale
+          // health even though the packed record arrived correctly.
+          hp: Number(hp || 0), health: Number(hp || 0),
+          maxHp: Number(maxHp || 0), maxHealth: Number(maxHp || 0), max: Number(maxHp || 0),
           expiresTick: Number(expiresTick || 0), action: actions[actionIndex] || 'idle', hostile: hostile === 1,
+          angle: Number(angle || 0) / 10000, swinging: Number(swinging || 0) / 1000,
+          swingCooldownUntilTick: Number(swingCooldownUntilTick || 0), swingsLeft: Number(swingsLeft || 0),
+          dead: dead === 1,
+          deathTick: Number(deathTick || 0),
+          _lastHitAngle: Number(lastHitAngle || 0) / 10000,
         };
       });
     });
@@ -181,7 +205,7 @@
       this.contentVersion = String(options.contentVersion || LOCAL_CONTENT_VERSION);
       this.matchSeed = options.matchSeed ?? 'local-match-seed';
       this.baseMatchId = String(options.matchId || 'local-match');
-      this.mode = options.mode === 'rival' ? 'rival' : 'coop';
+      this.mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
       this.deferFloorGeneration = options.deferFloorGeneration === true;
       this.rematchSerial = 0;
       this.chatSequence = 0;
@@ -270,7 +294,7 @@
       this.lastResyncTickByPeer = new Map(Array.isArray(runtime.lastResyncTickByPeer) ? runtime.lastResyncTickByPeer : []);
       this.rematchSerial = Math.max(0, Math.trunc(Number(runtime.rematchSerial) || 0));
       this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
-      this.mode = runtime.mode === 'rival' ? 'rival' : 'coop';
+      this.mode = ['rival', 'boss_rush'].includes(runtime.mode) ? runtime.mode : 'coop';
       this.minPlayers = Math.max(1, Math.min(4, Math.trunc(Number(runtime.minPlayers) || this.minPlayers)));
       this.maxPlayers = Math.max(this.minPlayers, Math.min(4, Math.trunc(Number(runtime.maxPlayers) || this.maxPlayers)));
       this.peerRecords = new Map(Array.isArray(runtime.peerRecords) ? runtime.peerRecords : []);
@@ -339,6 +363,7 @@
           floorNumber: 1,
           generationVersion: this.generationVersion,
           contentVersion: this.contentVersion,
+          gameMode: this.mode,
         });
       const state = new GameState({
         matchId,
@@ -347,7 +372,7 @@
         generationVersion: this.generationVersion,
         contentVersion: this.contentVersion,
         status: 'waiting',
-        matchRules: { mode: this.mode },
+        matchRules: { mode: this.mode, gameMode: this.mode },
         floorState,
       });
       if (typeof createCampaignSimulation !== 'function') throw new Error('Campaign authority is unavailable');
@@ -365,6 +390,7 @@
         floorNumber: this.simulation.state.floorNumber,
         generationVersion: this.generationVersion,
         contentVersion: this.contentVersion,
+        gameMode: this.mode,
       }));
       Object.values(this.simulation.state.players || {}).forEach(player => {
         player.roomId = this.simulation.state.floorState.currentRoomId;
@@ -682,6 +708,8 @@
         moveY,
         aimDirection: payload.aimDirection,
         buttons: payload.buttons || 0,
+        targetX: payload.targetX,
+        targetY: payload.targetY,
       };
       this.lastProcessedInput[playerId] = payload.inputSequence;
       this.metrics.acceptedInputs += 1;
@@ -702,6 +730,8 @@
         abilityId: payload.abilityId,
         dashMoveX: payload.dashMoveX,
         dashMoveY: payload.dashMoveY,
+        targetX: payload.targetX,
+        targetY: payload.targetY,
         inputSequence: payload.inputSequence,
         predictionId: payload.predictionId,
         // This is deliberately only a bounded hint. Simulation state remains
@@ -1335,6 +1365,8 @@
         moveY: Math.max(-1, Math.min(1, Number(input.moveY) || 0)),
         aimDirection: Number(input.aimDirection) || 0,
         buttons: Math.max(0, Math.min(0xffff, Math.trunc(Number(input.buttons) || 0))),
+        ...(Number.isFinite(Number(input.targetX)) ? { targetX: Math.max(-1024, Math.min(2048, Number(input.targetX))) } : {}),
+        ...(Number.isFinite(Number(input.targetY)) ? { targetY: Math.max(-1024, Math.min(2048, Number(input.targetY))) } : {}),
       });
       return inputSequence;
     }
@@ -1350,6 +1382,8 @@
         ...(options.predictionId ? { predictionId: String(options.predictionId).slice(0, 96) } : {}),
         ...(Number.isFinite(Number(options.dashMoveX)) ? { dashMoveX: Math.max(-1, Math.min(1, Number(options.dashMoveX))) } : {}),
         ...(Number.isFinite(Number(options.dashMoveY)) ? { dashMoveY: Math.max(-1, Math.min(1, Number(options.dashMoveY))) } : {}),
+        ...(Number.isFinite(Number(options.targetX)) ? { targetX: Math.max(-1024, Math.min(2048, Number(options.targetX))) } : {}),
+        ...(Number.isFinite(Number(options.targetY)) ? { targetY: Math.max(-1024, Math.min(2048, Number(options.targetY))) } : {}),
         originServerTick: Math.max(0, Math.trunc(Number(options.originServerTick ?? this.state?.tick) || 0)),
       });
       return inputSequence;

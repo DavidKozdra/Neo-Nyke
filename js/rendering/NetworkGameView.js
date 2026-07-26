@@ -26,6 +26,18 @@
   const combatSystem = typeof require === 'function'
     ? require('../simulation/NetworkCombatSystem.js')
     : (root.NeoNyke?.simulation || {});
+  const projectilePolicies = typeof require === 'function'
+    ? require('../simulation/SharedProjectileSystem.js')
+    : (root.NeoNyke?.simulation || {});
+  const dashPolicies = typeof require === 'function'
+    ? require('../simulation/SharedDashSystem.js')
+    : (root.NeoNyke?.simulation || {});
+  const moveEffects = typeof require === 'function'
+    ? require('../simulation/SharedMoveEffectSystem.js')
+    : (root.NeoNyke?.simulation || {});
+  const forgePolicies = typeof require === 'function'
+    ? require('../simulation/SharedForgeSystem.js')
+    : (root.NeoNyke?.content || {});
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
@@ -117,6 +129,7 @@
   const BUTTON_LASER_HELD = 1;
   const BUTTON_SMASH_HELD = 2;
   const BUTTON_DASH_HELD = 4;
+  const BUTTON_MELEE_HELD = 8;
   // Combat is authority-owned, but waiting a full round trip before showing an
   // accepted button press makes even a healthy connection feel broken. Keep a
   // short client-only presentation record until its authoritative event arrives
@@ -131,6 +144,181 @@
     Object.fromEntries(Object.entries(HOLD_TO_CHARGE_MOVES)
       .map(([moveKey, profile]) => [moveKey, profile.button])),
   );
+
+  // This is intentionally an adapter, not another balance table.  The client
+  // only uses it for the short provisional visual before an authority snapshot
+  // arrives; the campaign/authority projectile policy remains the source of
+  // every charge-dependent number.
+  function planChargedProjectilePreview(moveKey, player, data, chargeRatio) {
+    const itemStats = player?.itemStats || {};
+    const stats = MOVE_BASE_STATS[moveKey] || {};
+    if (moveKey === 'death_ball') {
+      if (typeof projectilePolicies.planCampaignDeathBall !== 'function') throw new Error('Shared Death Ball policy is unavailable');
+      return projectilePolicies.planCampaignDeathBall({
+        chargeRatio,
+        baseDamage: Number(stats.damage || 40),
+        damageMultiplier: itemStats.damageMultiplier,
+        aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
+      });
+    }
+    if (moveKey === 'love_bomb_laser') {
+      if (typeof projectilePolicies.planCampaignLoveBomb !== 'function') throw new Error('Shared Love Bomb policy is unavailable');
+      return projectilePolicies.planCampaignLoveBomb({
+        chargeRatio,
+        baseDamage: Number(stats.damage || 34),
+        damageMultiplier: itemStats.damageMultiplier,
+        beamDamageMultiplier: itemStats.beamDamageMultiplier,
+        aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
+        projectileSpeedMultiplier: itemStats.projectileSpeedMultiplier,
+        originX: data.originX,
+        originY: data.originY,
+        targetX: data.targetX,
+        targetY: data.targetY,
+        range: Number(stats.range || 420),
+      });
+    }
+    if (moveKey === 'ghost_ball') {
+      if (typeof projectilePolicies.planCampaignGhostBall !== 'function') throw new Error('Shared Ghost Ball policy is unavailable');
+      return projectilePolicies.planCampaignGhostBall({
+        chargeRatio,
+        baseDamage: Number(stats.damage || 34),
+        beamDamageMultiplier: itemStats.beamDamageMultiplier,
+        aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
+      });
+    }
+    return null;
+  }
+
+  function previewAnvilMoveBonus(player, moveKey, statKey) {
+    const steps = Math.max(0, Math.trunc(Number(player?.anvilUpgrades?.move?.[moveKey]?.[statKey]) || 0));
+    return steps * Number(forgePolicies.MOVE_UPGRADEABLE_STATS?.[statKey]?.step || 0);
+  }
+
+  function planAreaMovePreview(moveKey, player, state = null, aimDirection = 0) {
+    if (moveKey === 'mooggy_hairball') {
+      if (typeof moveEffects.resolveCampaignMooggyHairball !== 'function') throw new Error('Shared Mooggy Hairball policy is unavailable');
+      return moveEffects.resolveCampaignMooggyHairball({
+        aoeRadiusMultiplier: player?.itemStats?.aoeRadiusMultiplier,
+        aoeDamageMultiplier: player?.itemStats?.aoeDamageMultiplier,
+      });
+    }
+    if (moveKey === 'crimson_smash' || moveKey === 'hammer_smash') {
+      if (typeof moveEffects.planCampaignGroundSmash !== 'function') throw new Error('Shared ground-smash policy is unavailable');
+      return moveEffects.planCampaignGroundSmash({
+        moveKey,
+        godMode: Number(state?.tick || 0) < Number(player?.godUntilTick || 0),
+        anvilDamage: previewAnvilMoveBonus(player, moveKey, 'damage'),
+        anvilRange: previewAnvilMoveBonus(player, moveKey, 'range'),
+        aoeRadiusMultiplier: player?.itemStats?.aoeRadiusMultiplier,
+        level: player?.level,
+        aimDirection,
+      });
+    }
+    return null;
+  }
+
+  function previewRoomForPlayer(state, player) {
+    return state?.floorState?.layout?.rooms?.find(room => room.id === player?.roomId) || null;
+  }
+
+  function previewRoomBlocked(room, x, y, radius) {
+    const intersects = roomInterior.circleIntersectsRoomObstacle;
+    if (typeof intersects !== 'function') return false;
+    return [...(room?.structures || []), ...(room?.destructibles || [])]
+      .some(obstacle => !obstacle?.broken && !obstacle?.hidden && intersects(x, y, radius, obstacle));
+  }
+
+  // The network view only predicts transform/presentation data. It nevertheless
+  // resolves that data through the authored movement policies and snapshot room
+  // geometry, so an accepted dash does not visibly take a path the campaign
+  // runtime would reject.
+  function planPredictedDashPreview(options = {}) {
+    const abilityId = String(options.abilityId || '');
+    const player = options.player || {};
+    const state = options.state || {};
+    const floor = state.floorState || options.floor || {};
+    const room = previewRoomForPlayer(state, player);
+    const originX = Number(options.originX ?? player.x ?? 0);
+    const originY = Number(options.originY ?? player.y ?? 0);
+    const radius = Math.max(1, Number(player.radius || 18));
+    const aimDirection = Number(options.aimDirection || 0);
+    const moveX = Number(options.moveX || 0);
+    const moveY = Number(options.moveY || 0);
+    const targetX = Number.isFinite(Number(options.targetX)) ? Number(options.targetX) : undefined;
+    const targetY = Number.isFinite(Number(options.targetY)) ? Number(options.targetY) : undefined;
+    const chargeRatio = clamp(Number(options.chargeRatio || 0), 0, 1);
+    const width = Number(floor.width || 900);
+    const height = Number(floor.height || 700);
+    const wall = Number(floor.wallThickness || 28);
+    const safeLanding = (point, landingOptions = {}) => {
+      if (typeof movementRules.resolveCampaignBlinkDestination !== 'function') throw new Error('Shared blink landing policy is unavailable');
+      return movementRules.resolveCampaignBlinkDestination({
+        originX, originY, targetX: point.x, targetY: point.y, radius, width, height, wall,
+        maxSearchRadius: landingOptions.maxSearchRadius,
+        searchStep: landingOptions.searchStep,
+        isBlocked: (x, y, clearRadius) => previewRoomBlocked(room, x, y, clearRadius),
+      });
+    };
+    if (abilityId === 'dash') {
+      if (typeof movementRules.resolveCampaignDashBurst !== 'function') throw new Error('Shared dash-burst policy is unavailable');
+      const tick = Number(state.tick || 0);
+      const attackSpeed = Math.max(0.2, Number(player.attackSpeed || 1))
+        * Math.max(0, Number(player.itemStats?.attackSpeedMultiplier || 1))
+        * Math.max(0, Number(moveEffects.getCampaignTurtlePowerUpMultiplier?.(player, tick) ?? 1));
+      const dash = movementRules.resolveCampaignDashBurst({
+        moveX, moveY, aimDirection, attackSpeed,
+        godMode: tick < Number(player.godUntilTick || 0),
+      });
+      return { kind: 'glide', destinationX: originX, destinationY: originY, ...dash };
+    }
+    if (abilityId === 'nimrod_stomp') {
+      if (typeof movementRules.resolveCampaignNimrodStomp !== 'function') throw new Error('Shared Nimrod Stomp policy is unavailable');
+      const stomp = movementRules.resolveCampaignNimrodStomp({
+        chargeRatio, width, height, rangeMultiplier: player.itemStats?.aoeRadiusMultiplier,
+      });
+      const landing = safeLanding({
+        x: originX + Math.cos(aimDirection) * stomp.leapDistance,
+        y: originY + Math.sin(aimDirection) * stomp.leapDistance,
+      }, { maxSearchRadius: 140, searchStep: 20 });
+      return landing && { kind: 'blink', destinationX: landing.x, destinationY: landing.y, effectRadius: stomp.radius, stomp };
+    }
+    if (abilityId === 'warp') {
+      const landing = safeLanding({
+        x: targetX ?? originX + Math.cos(aimDirection) * 300,
+        y: targetY ?? originY + Math.sin(aimDirection) * 300,
+      });
+      return landing && { kind: 'blink', destinationX: landing.x, destinationY: landing.y };
+    }
+    const entities = Object.values(state.enemies || {}).filter(enemy => (
+      enemy && !enemy.dead && Number(enemy.health ?? enemy.hp ?? 1) > 0 && enemy.roomId === player.roomId
+    ));
+    if (abilityId === 'zip_lightning') {
+      if (typeof dashPolicies.planCampaignZipLightning !== 'function') throw new Error('Shared Zip Lightning policy is unavailable');
+      const plan = dashPolicies.planCampaignZipLightning({
+        entities, originX, originY,
+        targetX: targetX ?? originX + Math.cos(aimDirection) * 280,
+        targetY: targetY ?? originY + Math.sin(aimDirection) * 280,
+        fallbackAngle: aimDirection, playerRadius: radius, level: player.level,
+        resolveLanding: point => safeLanding(point, { maxSearchRadius: 90, searchStep: 14 }),
+      });
+      const destination = plan.hops.at(-1) || plan.fallback;
+      return destination && { kind: 'blink', destinationX: destination.x, destinationY: destination.y, plan };
+    }
+    if (abilityId === 'knight_slash_dash') {
+      if (typeof dashPolicies.planCampaignKnightSlashDash !== 'function') throw new Error('Shared Knight Slash Dash policy is unavailable');
+      const plan = dashPolicies.planCampaignKnightSlashDash({
+        entities, originX, originY,
+        targetX: targetX ?? originX + Math.cos(aimDirection) * 300,
+        targetY: targetY ?? originY + Math.sin(aimDirection) * 300,
+        fallbackAngle: aimDirection, playerRadius: radius,
+        resolveLanding: (point, context) => safeLanding(point, { maxSearchRadius: 90, searchStep: 14 })
+          || (context?.alternate && safeLanding(context.alternate, { maxSearchRadius: 90, searchStep: 14 })),
+      });
+      const destination = plan.hops.at(-1) || plan.fallback;
+      return destination && { kind: 'blink', destinationX: destination.x, destinationY: destination.y, plan };
+    }
+    return null;
+  }
 
   function beamChannelLaserMode(moveKey) {
     return moveKey === 'turtle_wave' || moveKey === 'holy_eye_beams'
@@ -342,6 +530,8 @@
       this.presentationBodies = new Map();
       this.presentationInteractables = new Map();
       this.gamepadAttackPressed = false;
+      this.gamepadMeleeHeld = false;
+      this.touchMeleeHeld = false;
       this.camera = { x: 0, y: 0, roomId: null };
       this.lastPresentationFrameAt = 0;
       this.lastWorldTransform = null;
@@ -942,6 +1132,21 @@
       if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
       if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       try {
+        const player = this.localPredictedPlayer;
+        // Mooggy Swipe is campaign's bare-hands primary attack. It starts on
+        // press but has no strike until release, so predicting an ordinary M1
+        // here produced a false, instant melee swing online.
+        if (!player?.equippedWeapon && player?.equippedMoves?.melee === 'mooggy_swipe') {
+          if (this.pendingHeldCharge?.abilityId === 'mooggy_swipe') return;
+          const predictionId = `predicted:${++this.predictedCombatSequence}`;
+          this._startPredictedHeldCharge('mooggy_swipe', 'melee', BUTTON_MELEE_HELD, predictionId);
+          const movement = this._readMovement();
+          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: BUTTON_MELEE_HELD });
+          const options = { predictionId, originServerTick: this.currentSample?.tick };
+          if (this.session.combatPredictionCorrelation) this.session.sendAction('ATTACK', this.aimDirection, options);
+          else this.session.sendAction('ATTACK', this.aimDirection);
+          return;
+        }
         const prediction = this._predictLocalAttack();
         const options = {
           predictionId: prediction?.event?.eventId,
@@ -963,6 +1168,9 @@
       const player = this.localPredictedPlayer;
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
+      const cursorTarget = Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))
+        ? { targetX: Number(this.neo.mouse.worldX), targetY: Number(this.neo.mouse.worldY) }
+        : {};
       if (this._hasPendingCombatPrediction('PLAYER_ABILITY_USED', abilityId)
         || this.pendingHeldCharge?.abilityId === abilityId) return;
       try {
@@ -974,12 +1182,16 @@
           // order as the action, so the authority cannot start a charge from an
           // old button-up snapshot and immediately release a tiny version.
           const movement = this._readMovement();
-          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton });
+          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton, ...cursorTarget });
         } else {
           const dashInput = slot === 'dash' ? this._readMovement() : null;
           const dashOptions = dashInput
             ? { dashMoveX: dashInput.moveX, dashMoveY: dashInput.moveY }
             : {};
+          if (['warp', 'zip_lightning', 'knight_slash_dash'].includes(abilityId) && Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))) {
+            dashOptions.targetX = Number(this.neo.mouse.worldX);
+            dashOptions.targetY = Number(this.neo.mouse.worldY);
+          }
           const prediction = this._predictLocalAbility(abilityId, slot, dashOptions);
           const actionOptions = {
             predictionId: prediction?.event?.eventId,
@@ -996,9 +1208,14 @@
         if (slot === 'dash') {
           const dashInput = this._readMovement();
           const dashOptions = { dashMoveX: dashInput.moveX, dashMoveY: dashInput.moveY };
+          if (['warp', 'zip_lightning', 'knight_slash_dash'].includes(abilityId) && Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))) {
+            dashOptions.targetX = Number(this.neo.mouse.worldX);
+            dashOptions.targetY = Number(this.neo.mouse.worldY);
+          }
           if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick, ...dashOptions });
           else this.session.sendDash(abilityId, this.aimDirection, dashOptions);
-        } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick });
+        } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, { originServerTick: this.currentSample?.tick, ...cursorTarget });
+        else if (Object.keys(cursorTarget).length) this.session.sendAbility(abilityId, this.aimDirection, cursorTarget);
         else this.session.sendAbility(abilityId, this.aimDirection);
       } catch {
         return;
@@ -1268,6 +1485,7 @@
 
     _rejectPredictedCombatEvent(predictionId) {
       if (!predictionId) return;
+      if (this.pendingHeldCharge?.predictionId === predictionId) this.pendingHeldCharge = null;
       const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => prediction.event.eventId === predictionId);
       if (predictionIndex < 0) return;
       const [prediction] = this.pendingCombatPredictions.splice(predictionIndex, 1);
@@ -1275,10 +1493,10 @@
       this.predictedProjectiles = this.predictedProjectiles.filter(projectile => projectile.predictionId !== prediction.event.eventId);
     }
 
-    _predictCombatEvent(eventType, data) {
+    _predictCombatEvent(eventType, data, eventId = null) {
       const now = root.performance?.now?.() || Date.now();
       const event = {
-        eventId: `predicted:${++this.predictedCombatSequence}`,
+        eventId: eventId || `predicted:${++this.predictedCombatSequence}`,
         eventType,
         data,
       };
@@ -1330,12 +1548,19 @@
         ? Math.atan2(dashMoveY, dashMoveX)
         : this.aimDirection;
       const chargeRatio = clamp(Number(options.chargeRatio || 0), 0, 1);
-      const radius = abilityId === 'death_ball' ? 16 + chargeRatio * 34
-        : abilityId === 'healing_zone' ? 62 * (1 + chargeRatio)
-          : abilityId === 'nimrod_stomp' ? 108 + chargeRatio * 54
-            : Number(stats.range || (slot === 'smash' ? 140 : 34));
       const originX = Number(player.x || 0);
       const originY = Number(player.y || 0);
+      const targetX = Number.isFinite(Number(options.targetX)) ? Number(options.targetX)
+        : Number.isFinite(Number(this.neo.mouse?.worldX)) ? Number(this.neo.mouse.worldX) : undefined;
+      const targetY = Number.isFinite(Number(options.targetY)) ? Number(options.targetY)
+        : Number.isFinite(Number(this.neo.mouse?.worldY)) ? Number(this.neo.mouse.worldY) : undefined;
+      const chargedProjectile = planChargedProjectilePreview(abilityId, player, {
+        originX, originY, targetX, targetY,
+      }, chargeRatio);
+      const areaMove = planAreaMovePreview(abilityId, player, this.currentSample?.state, actionAimDirection);
+      const radius = chargedProjectile?.radius ?? areaMove?.radius ?? (abilityId === 'healing_zone' ? 62 * (1 + chargeRatio)
+          : abilityId === 'nimrod_stomp' ? 108 + chargeRatio * 54
+            : Number(stats.range || (slot === 'smash' ? 140 : 34)));
       const data = {
         playerId: player.id,
         roomId: player.roomId,
@@ -1346,29 +1571,26 @@
         aimDirection: actionAimDirection,
         originX,
         originY,
+        targetX,
+        targetY,
         destinationX: originX,
         destinationY: originY,
         effectRadius: radius,
       };
       const floor = this.currentSample?.state?.floorState || {};
-      const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
-      const clampDestination = distance => ({
-        x: clamp(originX + Math.cos(actionAimDirection) * distance, minimum, Number(floor.width || 900) - minimum),
-        y: clamp(originY + Math.sin(actionAimDirection) * distance, minimum, Number(floor.height || 700) - minimum),
+      const dash = planPredictedDashPreview({
+        abilityId, player, state: this.currentSample?.state, floor,
+        originX, originY, aimDirection: actionAimDirection, moveX: dashMoveX, moveY: dashMoveY,
+        targetX, targetY, chargeRatio,
       });
-      if (abilityId === 'dash') {
-        const speed = 520 + Number(player.attackSpeed || 0) * 28;
-        data.dashVx = Math.cos(actionAimDirection) * speed;
-        data.dashVy = Math.sin(actionAimDirection) * speed;
-      } else if (abilityId === 'nimrod_stomp') {
-        const distance = 108 + (Math.max(Number(floor.width || 900), Number(floor.height || 700)) - 108) * chargeRatio;
-        const destination = clampDestination(distance);
-        data.destinationX = destination.x;
-        data.destinationY = destination.y;
-      } else if (['warp', 'zip_lightning', 'knight_slash_dash'].includes(abilityId)) {
-        const destination = clampDestination(abilityId === 'warp' ? 300 : abilityId === 'zip_lightning' ? 230 : 170);
-        data.destinationX = destination.x;
-        data.destinationY = destination.y;
+      if (dash) {
+        data.destinationX = dash.destinationX;
+        data.destinationY = dash.destinationY;
+        if (Number.isFinite(Number(dash.effectRadius))) data.effectRadius = Number(dash.effectRadius);
+        if (dash.kind === 'glide') {
+          data.dashVx = dash.vx;
+          data.dashVy = dash.vy;
+        }
       }
       const prediction = this._predictCombatEvent('PLAYER_ABILITY_USED', data);
       if (presentation.kind === 'projectile') this._predictAbilityProjectile(prediction, data, chargeRatio);
@@ -1376,14 +1598,14 @@
       return prediction;
     }
 
-    _startPredictedHeldCharge(abilityId, slot, button) {
+    _startPredictedHeldCharge(abilityId, slot, button, predictionId = null) {
       if (this.pendingHeldCharge?.abilityId === abilityId) return;
       const profile = HOLD_TO_CHARGE_MOVES[abilityId];
       const player = this.localPredictedPlayer;
       if (!player || !profile) return;
       this.pendingHeldCharge = {
         abilityId, moveKey: abilityId, slot, button, startAt: root.performance?.now?.() || Date.now(),
-        maxChargeTicks: profile.maxChargeTicks,
+        maxChargeTicks: profile.maxChargeTicks, predictionId,
       };
     }
 
@@ -1393,7 +1615,37 @@
       this.pendingHeldCharge = null;
       const now = root.performance?.now?.() || Date.now();
       const ratio = clamp((now - charge.startAt) / (charge.maxChargeTicks * INPUT_INTERVAL_MS), 0, 1);
+      if (charge.slot === 'melee' && charge.abilityId === 'mooggy_swipe') {
+        this._predictLocalMooggySwipe(charge, ratio);
+        return;
+      }
       this._predictLocalAbility(charge.abilityId, charge.slot, { chargeRatio: ratio });
+    }
+
+    _predictLocalMooggySwipe(charge, chargeRatio) {
+      const player = this.localPredictedPlayer;
+      if (!player) return;
+      const swipe = moveEffects.resolveCampaignMooggySwipe?.({
+        chargeRatio,
+        godMode: !!player.godMode,
+        baseKnockback: 140,
+        itemBleedChance: player.itemStats?.bleedChance,
+      });
+      if (!swipe) throw new Error('Shared Mooggy Swipe policy is unavailable');
+      return this._predictCombatEvent('PLAYER_ATTACKED', {
+        playerId: player.id,
+        roomId: player.roomId,
+        characterKey: player.characterKey,
+        weaponKey: 'mooggy_swipe',
+        attackKind: 'mooggy_swipe',
+        attackMode: 'charged_sweep',
+        aimDirection: this.aimDirection,
+        originX: Number(player.x || 0),
+        originY: Number(player.y || 0),
+        range: swipe.range,
+        arc: swipe.arc,
+        chargeRatio: swipe.chargeRatio,
+      }, charge.predictionId);
     }
 
     _startPredictedBeamPresentation(moveKey) {
@@ -1406,18 +1658,21 @@
     _predictAbilityProjectile(prediction, data, chargeRatio) {
       const moveKey = data.abilityId;
       const stats = MOVE_BASE_STATS[moveKey] || {};
-      const radius = moveKey === 'death_ball' ? 16 + chargeRatio * 34
-        : moveKey === 'love_bomb_laser' ? 10 + chargeRatio * 6
-          : moveKey === 'ghost_ball' ? 18 + chargeRatio * 22 : 7;
-      const speed = moveKey === 'death_ball' ? 520 - chargeRatio * 200
-        : moveKey === 'love_bomb_laser' ? 340 + chargeRatio * 120
-          : moveKey === 'ghost_ball' ? 300 : 520;
+      const descriptor = planChargedProjectilePreview(moveKey, this.localPredictedPlayer, data, chargeRatio);
+      const radius = descriptor?.radius ?? 7;
+      const speed = descriptor?.speed ?? 520;
       const now = root.performance?.now?.() || Date.now();
-      const lifetimeMs = Math.max(360, Number(stats.range || 320) / Math.max(1, speed) * 1000);
+      const lifetimeMs = Number.isFinite(Number(descriptor?.lifeSeconds))
+        ? Number(descriptor.lifeSeconds) * 1000
+        // Ghost Ball's actual expiry is contact-dependent. This only caps the
+        // provisional visual while it waits for the real authority snapshot.
+        : descriptor?.kind === 'ghost_ball'
+          ? PREDICTED_COMBAT_CONFIRMATION_MS
+        : Math.max(360, Number(stats.range || 320) / Math.max(1, speed) * 1000);
       const angle = Number(data.aimDirection || 0);
       this.predictedProjectiles.push({
         id: `${prediction.event.eventId}:projectile`, predictionId: prediction.event.eventId,
-        kind: moveKey, ownerId: data.playerId, roomId: data.roomId,
+        kind: descriptor?.kind || moveKey, ownerId: data.playerId, roomId: data.roomId,
         x: Number(data.originX || 0) + Math.cos(angle) * (18 + radius * 0.4),
         y: Number(data.originY || 0) + Math.sin(angle) * (18 + radius * 0.4),
         vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
@@ -1484,7 +1739,17 @@
       const data = event.data || {};
       const entity = state?.enemies?.[data.enemyId] || state?.players?.[data.playerId];
       if (!entity) return;
-      if (event.eventType === 'ENEMY_HIT' || event.eventType === 'PLAYER_HIT') {
+      if (event.eventType === 'BOSS_INTRO') {
+        // The authority selected the campaign's character-aware script. Reuse
+        // the normal typewriter dialogue instead of inventing a network overlay.
+        const lines = Array.isArray(data.lines) ? data.lines.filter(line => line?.speaker && line?.text) : [];
+        if (lines.length && !this.neo.uiController?.isDialogueOpen?.()) {
+          this.neo.setShopPanelOpen?.(false);
+          this.neo.setInventoryPanelOpen?.(false);
+          this.neo.clearGameplayInput?.();
+          this.neo.uiController?.playDialogue?.(lines, { returnState: 'play' });
+        }
+      } else if (event.eventType === 'ENEMY_HIT' || event.eventType === 'PLAYER_HIT') {
         const color = event.eventType === 'PLAYER_HIT' ? '#ff6b75'
           : data.attackKind === 'bleed' ? '#ff536d' : '#ffffff';
         this.neo.spawnDamagePopup?.(entity.x, entity.y - Number(entity.radius || 18) - 12, Number(data.damage || 0), { color, size: 18 });
@@ -1648,6 +1913,7 @@
         this.gamepadLaserHeld = false;
         this.gamepadSmashHeld = false;
         this.gamepadDashHeld = false;
+        this.gamepadMeleeHeld = false;
         this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
         return;
       }
@@ -1678,6 +1944,7 @@
       this.gamepadLaserHeld = current.laser;
       this.gamepadSmashHeld = current.smash;
       this.gamepadDashHeld = current.dash;
+      this.gamepadMeleeHeld = current.slash;
       this.previousGamepadActions = current;
     }
 
@@ -1707,6 +1974,7 @@
       this.touchLaserHeld = current.laser;
       this.touchSmashHeld = current.smash;
       this.touchDashHeld = current.dash;
+      this.touchMeleeHeld = current.slash;
       this.previousTouchActions = current;
     }
 
@@ -1730,6 +1998,7 @@
       const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
       const smashHeld = this.keyboardSmashHeld || this.gamepadSmashHeld || this.touchSmashHeld;
       const dashHeld = this.keyboardDashHeld || this.gamepadDashHeld || this.touchDashHeld;
+      const meleeHeld = !!this.neo.isMouseActionHeld?.('slash') || this.gamepadMeleeHeld || this.touchMeleeHeld;
       if (!beamHeld) {
         this.pendingBeamPresentation = null;
         this.localBeamReleaseRequested = true;
@@ -1737,9 +2006,12 @@
       const input = {
         ...movement,
         aimDirection: this.aimDirection,
+        ...(Number.isFinite(Number(this.neo.mouse?.worldX)) ? { targetX: Number(this.neo.mouse.worldX) } : {}),
+        ...(Number.isFinite(Number(this.neo.mouse?.worldY)) ? { targetY: Number(this.neo.mouse.worldY) } : {}),
         buttons: (beamHeld ? BUTTON_LASER_HELD : 0)
           | (smashHeld ? BUTTON_SMASH_HELD : 0)
-          | (dashHeld ? BUTTON_DASH_HELD : 0),
+          | (dashHeld ? BUTTON_DASH_HELD : 0)
+          | (meleeHeld ? BUTTON_MELEE_HELD : 0),
       };
       if (this.pendingHeldCharge && !(input.buttons & this.pendingHeldCharge.button)) {
         this._releasePredictedHeldCharge();
@@ -1751,9 +2023,12 @@
         || Math.abs(input.moveY - previous.moveY) > INPUT_VECTOR_EPSILON
         || input.buttons !== previous.buttons;
       const aimChanged = !previous || angularDistance(input.aimDirection, previous.aimDirection) > INPUT_AIM_EPSILON;
+      const targetChanged = !previous
+        || Math.hypot(Number(input.targetX || 0) - Number(previous.targetX || 0), Number(input.targetY || 0) - Number(previous.targetY || 0)) > 4;
       const sinceLastSend = Math.max(0, now - this.lastInputSentAt);
       const shouldTransmit = movementOrButtonChanged
         || (aimChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
+        || (targetChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || sinceLastSend >= INPUT_HEARTBEAT_MS;
       if (shouldTransmit) {
         try {
@@ -1942,6 +2217,11 @@
           xp: Math.max(0, Number(player.xp || 0)),
           xpToNext: Math.max(1, Number(player.xpToNext || 20)),
           weaponCooldown: Math.max(0, Number(player.attackCooldownUntilTick || 0) - serverTick) / 20,
+          // Lazer Glasses is an equipped-weapon channel. Project the authority
+          // channel into the same campaign renderer fields used by combat.js,
+          // so it never needs a multiplayer-only beam drawing path.
+          weaponBeamTime: Math.max(0, Number(player.weaponBeamChannel?.untilTick || 0) - serverTick) / 20,
+          weaponBeamTick: Math.max(0, Number(player.weaponBeamChannel?.nextTick || serverTick) - serverTick) / 20,
           stun: Math.max(0, Number(player.stunnedUntilTick || 0) - serverTick) / 20,
           inv: serverTick < Number(player.invulnerableUntilTick || 0) ? 1 : 0,
           swing: attacking ? Math.max(0.001, activeSeconds - elapsed) : 0,
@@ -2129,6 +2409,10 @@
     _syncSpecialMovePresentation(now = root.performance?.now?.() || Date.now()) {
       const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
       const abilityEffects = this.combatEffects.filter(effect => effect.eventType === 'PLAYER_ABILITY_USED');
+      const liveJusticeBlades = Object.values(this.currentSample?.state?.abilityEntities || {})
+        .filter(entity => entity?.kind === 'blade_justice');
+      const liveExcaliburSwords = Object.values(this.currentSample?.state?.abilityEntities || {})
+        .filter(entity => entity?.kind === 'excalibur_strike');
       this.neo.justiceBlades = [];
       this.neo.titanHammer = null;
       this.neo.skySwords = [];
@@ -2139,7 +2423,7 @@
         if (!actor) return;
         const age = Math.max(0, now - Number(effect.startedAt || now)) / 1000;
         const aim = Number(data.aimDirection || actor.aimDirection || 0);
-        if (data.abilityId === 'blade_justice' && age < 2.1) {
+        if (data.abilityId === 'blade_justice' && age < 2.1 && !liveJusticeBlades.some(blade => blade.ownerId === actor.id)) {
           for (let index = 0; index < 3; index += 1) {
             const fanOffset = (index - 1) * 0.5;
             const swingPhase = age * 7.5 + index * 0.7;
@@ -2169,7 +2453,7 @@
             swingCooldown: 0,
             swingsLeft: 0,
           };
-        } else if (data.abilityId === 'excalibur_strike' && age < 1.34) {
+        } else if (data.abilityId === 'excalibur_strike' && age < 1.34 && !liveExcaliburSwords.some(sword => sword.ownerId === actor.id)) {
           const centerX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(actor.x);
           const centerY = Number.isFinite(Number(data.originY)) ? Number(data.originY) : Number(actor.y);
           const seed = stableNumericId(effect.eventId || `${data.playerId}:${effect.tick || 0}`);
@@ -2198,6 +2482,60 @@
           }
         }
       });
+      // Blade Justice has authoritative live transforms and contact state. The
+      // cast event only remains as a short compatibility fallback before the
+      // first snapshot arrives; never recreate a sword path from its cast aim.
+      liveJusticeBlades.forEach(blade => {
+        const owner = slotsById.get(blade.ownerId)?.getEntity?.();
+        if (!owner) return;
+        this.neo.justiceBlades.push({
+          id: blade.id, ownerId: blade.ownerId,
+          x: Number(blade.x), y: Number(blade.y), angle: Number(blade.angle || 0),
+          radius: Number(blade.radius || 16),
+          life: Math.max(0, Number(blade.expiresTick || 0) - Number(this.currentSample?.state?.tick || 0)) / 20,
+          maxLife: Number(blade.justiceEffect?.durationSeconds || 2.1),
+        });
+      });
+      // Excalibur's stagger, impact phase and spin are live authority state.
+      // The cast event remains only as a fallback until its first snapshot.
+      const serverTick = Number(this.currentSample?.state?.tick || 0);
+      liveExcaliburSwords.forEach(sword => {
+        const phase = sword.phase || (serverTick < Number(sword.impactTick || 0)
+          ? 'falling'
+          : serverTick < Number(sword.hoverUntilTick || 0) ? 'hover' : 'fade');
+        this.neo.skySwords.push({
+          id: sword.id,
+          x: Number(sword.x), y: Number(sword.y), radius: Number(sword.radius || 76),
+          delay: Math.max(0, Number(sword.delayUntilTick || 0) - serverTick) / 20,
+          phase,
+          fall: phase === 'falling' ? Math.max(0, Number(sword.impactTick || 0) - serverTick) / 20 : 0,
+          hoverTime: phase === 'hover' ? Math.max(0, Number(sword.hoverUntilTick || 0) - serverTick) / 20 : 0,
+          fadeT: phase === 'fade' ? Math.max(0, Number(sword.fadeUntilTick || sword.expiresTick || 0) - serverTick) / 20 : 0.3,
+          angle: Number(sword.angle || 0), spin: Number(sword.spin || 0),
+        });
+      });
+      // The cast event is only a compatibility fallback. A live Titan Hammer
+      // is authoritative state, so its current transform and swing are never
+      // guessed from the original cursor direction on the rendering client.
+      const liveHammer = Object.values(this.currentSample?.state?.abilityEntities || {})
+        .filter(entity => entity?.kind === 'titan_hammer')
+        .sort((first, second) => Number(second.spawnTick || 0) - Number(first.spawnTick || 0))[0];
+      if (liveHammer) {
+        const owner = slotsById.get(liveHammer.ownerId)?.getEntity?.();
+        if (owner) {
+          this.neo.titanHammer = {
+            id: liveHammer.id,
+            ownerId: liveHammer.ownerId,
+            x: Number(liveHammer.x), y: Number(liveHammer.y),
+            angle: Number(liveHammer.angle || 0),
+            life: Math.max(0, Number(liveHammer.expiresTick || 0) - Number(this.currentSample?.tick || 0)) / 20,
+            radius: Number(liveHammer.radius || liveHammer.r || 32),
+            swinging: Math.max(0, Number(liveHammer.swinging || 0)),
+            swingCooldown: Math.max(0, Number(liveHammer.swingCooldownUntilTick || 0) - Number(this.currentSample?.tick || 0)) / 20,
+            swingsLeft: Math.max(0, Number(liveHammer.swingsLeft || 0)),
+          };
+        }
+      }
       this.neo.ghostBalls = this.neo.projectiles.filter(projectile => projectile.kind === 'ghost_ball');
       this.neo.projectiles = this.neo.projectiles.filter(projectile => projectile.kind !== 'ghost_ball');
     }
@@ -2331,6 +2669,10 @@
       this.neo.showFloorTransition = floorTransitionAge <= 1.25;
       this.neo.floorTransitionTime = floorTransitionAge;
       this.neo.lavaAnimTime = Number(this.neo.lavaAnimTime || 0) + frameDelta;
+      // Core simulation stops while NetworkGameView is active, but corpses are
+      // presentation-only shared campaign entities. Advance them here with the
+      // solo updater so they launch, tumble, and settle between snapshots.
+      this.neo.updateDeadBodies?.(frameDelta);
       this.neo.updateParticles?.(frameDelta);
       this._updateHud(state, players);
       return true;
@@ -2405,8 +2747,12 @@
           const adapted = {
             ...enemy,
             r: Number(enemy.radius || 20),
-            hp: Number(enemy.health || 0),
-            max: Math.max(1, Number(enemy.maxHealth || 1)),
+            // Prefer the compact dynamic state when present. A full bootstrap
+            // has health/maxHealth, while later multiplayer frames update
+            // hp/maxHp; this is the exact hp/max pair the shared 2D and 3D
+            // enemy renderers consume.
+            hp: Number(enemy.hp ?? enemy.health ?? 0),
+            max: Math.max(1, Number(enemy.maxHp ?? enemy.maxHealth ?? enemy.max ?? 1)),
             speed: Number(enemy.moveSpeed || 0),
             spawnT: Math.max(0, 0.72 - (Number(state?.tick || 0) - Number(enemy.spawnTick || 0)) / 20),
             stun: Math.max(0, Number(enemy.stunnedUntilTick || 0) - Number(state?.tick || 0)) / 20,
@@ -2436,25 +2782,61 @@
           return adapted;
         },
       );
-      this.neo.deadBodies = this._stablePresentationEntities(
-        this.presentationBodies,
-        Object.values(enemies || {}).filter(enemy => enemy.dead && enemy.roomId === floorState.currentRoomId),
-        enemy => ({
-          id: stableNumericId(enemy.id),
-          x: Number(enemy.x || 0),
-          y: Number(enemy.y || 0),
-          r: Number(enemy.radius || 20),
-          size: Math.max(30, Number(enemy.radius || 20) * 2.4),
-          type: enemy.type || 'hunter',
-          spriteKey: this.neo.getEnemySpriteKey?.(enemy) || enemy.type || 'hunter',
-          face: Number(enemy.vx || 0) < 0 ? -1 : 1,
-          age: Math.max(0, Number(state?.tick || 0) - Number(enemy.deathTick || state?.tick || 0)) / 20,
-          life: Number(this.neo.CORPSE_LIFETIME || 11),
-          fadeStart: Number(this.neo.CORPSE_FADE_START || 8),
-          fallTime: Number(this.neo.CORPSE_FALL_TIME || 0.45),
-          leavesBloodPool: true,
-        }),
-      );
+      // A dead authority enemy is a *source* for one campaign corpse, not a
+      // static render proxy. Reapplying its frozen death position and age on
+      // every snapshot used to cancel updateDeadBodies() before it could launch
+      // or tumble, leaving the live sprite visibly sitting in place.
+      const deadEnemies = Object.values(enemies || {})
+        .filter(enemy => enemy.dead && enemy.roomId === floorState.currentRoomId);
+      const liveBodyIds = new Set(deadEnemies.map(enemy => String(enemy.id)));
+      this.presentationBodies.forEach((_body, id) => {
+        if (!liveBodyIds.has(id)) this.presentationBodies.delete(id);
+      });
+      this.neo.deadBodies = deadEnemies.map(enemy => {
+        const id = String(enemy.id);
+        let body = this.presentationBodies.get(id);
+        const authorityAge = Math.max(0, Number(state?.tick || 0) - Number(enemy.deathTick || state?.tick || 0)) / 20;
+        if (!body) {
+          const vx = Number(enemy.vx || 0);
+          const vy = Number(enemy.vy || 0);
+          const speed = Math.min(150, Math.hypot(vx, vy));
+          const fallbackAngle = Number.isFinite(Number(enemy._lastHitAngle))
+            ? Number(enemy._lastHitAngle)
+            : Math.atan2(vy, vx || 1);
+          const direction = speed > 8 ? Math.atan2(vy, vx) : fallbackAngle;
+          const type = enemy.type || 'hunter';
+          const boss = !!enemy.boss || type === 'god';
+          const elite = !!enemy.elite;
+          const launchScale = boss ? 1.45 : elite ? 1.22 : 1;
+          body = {
+            id: stableNumericId(enemy.id),
+            x: Number(enemy.x || 0), y: Number(enemy.y || 0),
+            vx: speed > 8 ? vx : Math.cos(direction) * 42 * launchScale,
+            vy: speed > 8 ? vy : Math.sin(direction) * 42 * launchScale,
+            r: Number(enemy.radius || 20), size: Math.max(30, Number(enemy.radius || 20) * 2.4),
+            type, spriteKey: this.neo.getEnemySpriteKey?.(enemy) || type,
+            face: Number(enemy.facing || (vx < 0 ? -1 : 1)),
+            age: authorityAge,
+            life: Number(this.neo.CORPSE_LIFETIME || 11),
+            fadeStart: Number(this.neo.CORPSE_FADE_START || 8),
+            fallTime: boss ? Number(this.neo.CORPSE_FALL_TIME || 0.45) * 1.35 : Number(this.neo.CORPSE_FALL_TIME || 0.45),
+            angle: direction + Math.PI / 2, fallAngle: elite ? 0.25 : 0,
+            angularOffset: 0, angularV: (elite ? 8.4 : 7.2) * (Math.sin(stableNumericId(enemy.id)) >= 0 ? 1 : -1),
+            angularDrag: boss ? 1.6 : 2.3,
+            z: 0, vz: (150 + speed * 0.4 + (boss ? 55 : elite ? 24 : 0)) * launchScale,
+            gravity: boss ? 500 : 560, bounce: boss ? 0.36 : elite ? 0.3 : 0.24,
+            slideDrag: boss ? 4.2 : 5.8, airDrag: boss ? 1.2 : 1.9,
+            elite, leavesBloodPool: type !== 'golem' && type !== 'bulk_golem',
+            bloodColor: ['golem', 'bulk_golem'].includes(type) ? '' : type === 'god' ? '#f2ecff' : elite ? '#c04a14' : '#8d0018',
+          };
+          this.presentationBodies.set(id, body);
+        } else {
+          // A late snapshot can only advance the authoritative corpse clock;
+          // never rewind its local ragdoll position, rotation, or velocity.
+          body.age = Math.max(Number(body.age || 0), authorityAge);
+        }
+        return body;
+      });
       const roomInteractables = Object.values(state?.interactables || {});
       const presentationChests = this._stablePresentationEntities(
         this.presentationInteractables,
@@ -2536,6 +2918,8 @@
     deriveProjectileColor,
     ABILITY_PRESENTATIONS,
     deriveAbilityPresentation,
+    planChargedProjectilePreview,
+    planPredictedDashPreview,
     NetworkGameView,
     CampaignPresentationAdapter,
   };

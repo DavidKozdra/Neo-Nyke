@@ -1678,6 +1678,15 @@ export function resumeGame() {
   }
 
   function getPotionHealAmount() {
+    const resolve = globalThis.NeoNyke?.simulation?.resolveCampaignPotionBaseHeal;
+    if (typeof resolve === 'function') {
+      return resolve({
+        baseHeal: 40,
+        difficultyPotionHealMultiplier: getRunDifficultyScalars().potionHealMultiplier,
+        healingMultiplier: getPlayerHealingMultiplier(),
+        minimumAmount: 24,
+      });
+    }
     return scalePotionHealing(40, 24);
   }
 

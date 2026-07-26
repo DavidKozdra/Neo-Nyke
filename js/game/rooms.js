@@ -882,48 +882,15 @@
   }
 
   function prepareBowmanBaneEscape(room) {
-    if (!room?.secret || room.secretKind !== 'bowman_bane' || Neo.player?.character !== 'thorn_knight') return null;
-    if (room.baneEscapeDirection && room.secretPassages?.[room.baneEscapeDirection]) {
-      return room.baneEscapeDirection;
-    }
-
-    const entrance = Object.entries(room.secretPassages || {})
-      .find(([, passage]) => passage && !passage.baneEscape);
-    if (!entrance) return null;
-    const [entranceDirection, target] = entrance;
-    const preferredDirections = [
-      Neo.OPPOSITE_DIRECTION[entranceDirection],
-      ...Neo.DIRECTIONS.filter(direction => direction !== entranceDirection),
-    ];
-    const escapeDirection = preferredDirections.find(direction =>
-      direction && direction !== entranceDirection && !room.doors?.[direction] && !room.secretPassages?.[direction]);
-    if (!escapeDirection) return null;
-
-    room.baneEntranceDirection = entranceDirection;
-    room.baneEscapeDirection = escapeDirection;
-    room.baneEscapeRevealed = false;
-    room.secretPassages[escapeDirection] = {
-      targetGx: target.targetGx,
-      targetGy: target.targetGy,
-      open: false,
-      baneEscape: true,
-    };
-    return escapeDirection;
+    const result = globalThis.NeoNyke.simulation.prepareCampaignBowmanBaneEscape(room, Neo.player?.character);
+    return result.ok ? result.direction : null;
   }
 
   function revealBowmanBaneEscape(room = Neo.currentRoom) {
     if (!room?.secret || room.secretKind !== 'bowman_bane' || Neo.player?.character !== 'thorn_knight') return false;
-    const direction = prepareBowmanBaneEscape(room);
-    const passage = direction ? room.secretPassages?.[direction] : null;
-    if (!passage) return false;
-
-    Object.entries(room.secretPassages || {}).forEach(([otherDirection, otherPassage]) => {
-      if (otherDirection !== direction && otherPassage?.open) {
-        setSecretPassageOpen(room, otherDirection, false);
-      }
-    });
-    passage.open = true;
-    room.baneEscapeRevealed = true;
+    const result = globalThis.NeoNyke.simulation.revealCampaignBowmanBaneEscape(room, Neo.player?.character);
+    if (!result.ok) return false;
+    const direction = result.direction;
 
     const marker = {
       n: { x: Neo.ROOM_W / 2, y: Neo.WALL + 34 },
@@ -1283,19 +1250,8 @@
 
   function clearPlayerTransientDefense() {
     if (!Neo.player) return;
-    Neo.player.inv = 0;
-    Neo.player.stun = 0;
-    Neo.player.vx = 0;
-    Neo.player.vy = 0;
-    Neo.player.dashTime = 0;
-    Neo.player.dashX = 0;
-    Neo.player.dashY = 0;
-    Neo.player.cowardsWayTime = 0;
-    Neo.player.mooggyZoomiesTime = 0;
-    Neo.player.princessFlightTime = 0;
+    globalThis.NeoNyke?.simulation?.applyCampaignRoomEntryReset?.(Neo.player);
     Neo.loveBeamCasting = false;
-    Neo.player.blockActive = false;
-    Neo.player.blockTimer = 0;
   }
 
   function tickPlayerTransientDefenseTimers(dt) {
@@ -1329,26 +1285,6 @@
     Neo.laserSweepSpeed = 0;
     Neo.turtleWaveHpTimer = 0;
 
-    const pendantCount = Neo.getItemCount?.('veggys_pendant') || 0;
-    if (pendantCount > 0 && Neo.player) {
-      Neo.player.veggysRoomCounter = (Neo.player.veggysRoomCounter || 0) + 1;
-      if (Neo.player.veggysRoomCounter >= 3) {
-        Neo.player.veggysRoomCounter = 0;
-        const gain = pendantCount * 0.10;
-        const oldMax = Neo.player.maxHp;
-        Neo.player.maxHp = Math.round(Neo.player.maxHp * (1 + gain));
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + (Neo.player.maxHp - oldMax) * 0.5);
-        Neo.markInventoryPanelDirty?.();
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.2, text: `MAX HP +${Math.round(gain * 100)}%`, c: '#a0e87a' });
-      }
-    }
-    const bagCap = Neo.getPotionCarryCap?.() || 0;
-    if (bagCap > 0 && room?.type === 'shop' && Number(Neo.player?.storedPotions || 0) <= 0 && Neo.player.mateosBagRefillFloor !== Neo.floor) {
-      Neo.player.storedPotions = 1;
-      Neo.player.mateosBagRefillFloor = Neo.floor;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${bagCap})`, c: '#a0e8ff' });
-      Neo.updateHud?.();
-    }
   });
 
   Neo.gameEvents.on('floor:enter', ({ floor: newFloor }) => {
@@ -1393,17 +1329,25 @@
     const firstReveal = !room.visited;
     room.explored = true;
     room.visited = true;
-    // Naked King's Last Penny (GREEN, lies in its tooltip): really pays out gold the
-    // first time you reveal a room — +7 for the first stack, +20% per extra stack.
-    if (firstReveal) {
-      const pennyStacks = Neo.getItemCount?.('naked_kings_last_penny') || 0;
-      if (pennyStacks > 0) {
-        const reward = Math.round(7 * (1 + (pennyStacks - 1) * 0.2));
-        Neo.addCoins?.(reward);
+    const roomEntry = globalThis.NeoNyke?.simulation?.resolveCampaignRoomEntryItemEffects?.(Neo.player, room, {
+      firstReveal,
+      floorNumber: Neo.floor,
+      getItemCount: (_player, itemKey) => Neo.getItemCount?.(itemKey) || 0,
+      getPotionCarryCap: () => Neo.getPotionCarryCap?.() || 0,
+      awardCoins: amount => Neo.addCoins?.(amount),
+    }) || { intents: [] };
+    roomEntry.intents.forEach(intent => {
+      if (intent.kind === 'coins') {
         Neo.playSfx?.('coin');
-        Neo.spawnParticle?.({ x: Neo.player?.x ?? Neo.ROOM_W / 2, y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 30, life: 0.9, text: `+${reward}`, c: '#ffe07a' });
+        Neo.spawnParticle?.({ x: Neo.player?.x ?? Neo.ROOM_W / 2, y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 30, life: 0.9, text: `+${intent.amount}`, c: '#ffe07a' });
+      } else if (intent.kind === 'max_hp') {
+        Neo.markInventoryPanelDirty?.();
+        Neo.spawnParticle?.({ x: Neo.player?.x ?? Neo.ROOM_W / 2, y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 28, life: 1.2, text: `MAX HP +${Math.round(intent.gain * 100)}%`, c: '#a0e87a' });
+      } else if (intent.kind === 'stored_potion') {
+        Neo.spawnParticle?.({ x: Neo.player?.x ?? Neo.ROOM_W / 2, y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 20, life: 0.7, text: `POTION STORED (${intent.storedPotions}/${intent.potionCap})`, c: '#a0e8ff' });
+        Neo.updateHud?.();
       }
-    }
+    });
     Neo.enemies = room.enemies || [];
     Neo.deadBodies = room.deadBodies || [];
     room.deadBodies = Neo.deadBodies;
@@ -1559,18 +1503,21 @@
 
     // Moggy's Coat: a kill made while hidden primes the coat (see onEnemyDie);
     // the next combat then opens with a 2-second Dark Drain on every enemy.
-    if (Neo.player?.moggysCoatPrimed && !room.cleared && Neo.enemies.length > 0) {
-      const coatStacks = Math.max(0, Neo.getItemCount?.('moggys_coat') || 0);
-      if (coatStacks > 0) {
+    const moggysCoatOpening = globalThis.NeoNyke.simulation.resolveCampaignMoggysCoatOpening(
+      Neo.player,
+      !room.cleared ? Neo.enemies : [],
+      {
+        getItemCount: () => Neo.getItemCount?.('moggys_coat') || 0,
+        isEligibleEnemy: enemy => !enemy?.dead && !enemy?.tutorialDummy && !(enemy.type === 'rival' && enemy.rivalData?.friend),
+      },
+    );
+    if (moggysCoatOpening.consumePrime) {
+      if (moggysCoatOpening.stacks > 0) {
         Neo.player.moggysCoatPrimed = false;
-        let drained = 0;
-        Neo.enemies.forEach(enemy => {
-          if (!enemy || enemy.dead || enemy.tutorialDummy) return;
-          if (enemy.type === 'rival' && enemy.rivalData?.friend) return;
-          Neo.applyDarkDrain?.(enemy, coatStacks, 2);
-          drained += 1;
+        moggysCoatOpening.targets.forEach(enemy => {
+          Neo.applyDarkDrain?.(enemy, moggysCoatOpening.stacks, moggysCoatOpening.duration);
         });
-        if (drained > 0) {
+        if (moggysCoatOpening.targets.length > 0) {
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 20, life: 0.9, text: "MOGGY'S COAT", c: '#5a78d6' });
         }
       } else {
@@ -1773,10 +1720,9 @@
   }
 
   function getBossRewardPickCount(floorValue = Neo.floor, room = Neo.currentRoom) {
-    const floorPickBonus = Math.floor(Math.max(0, Number(floorValue || 1) - 1) / 4);
-    const bossBonus = room?.type === 'god' ? 1 : 0;
-    const difficultyBonus = { easy: 0, normal: 0, hard: 1, nightmare: 1 }[String(Neo.selectedDifficulty || '').toLowerCase()] || 0;
-    return Neo.clamp(1 + floorPickBonus + bossBonus + difficultyBonus, 1, 3);
+    return globalThis.NeoNyke?.simulation?.getCampaignBossRewardPickCount?.(floorValue, room, {
+      difficultyKey: Neo.selectedDifficulty,
+    }) || 1;
   }
 
   // ── Rival Adventurer System ──────────────────────────────────────────────
@@ -1946,6 +1892,16 @@
 
   function getRivalPersonality(rivalOrKey) {
     const key = typeof rivalOrKey === 'string' ? rivalOrKey : rivalOrKey?.characterKey;
+    const sharedPersonality = globalThis.NeoNyke?.simulation?.getCampaignRivalPersonality?.(key);
+    if (sharedPersonality) {
+      const presentation = Neo.RIVAL_DEFS?.[key]?.personality || {};
+      return {
+        ...sharedPersonality,
+        // Barks/combo hints remain UI content. Every behavior-affecting scalar
+        // comes from SharedRivalSystem so the authority cannot drift.
+        objectiveWeights: presentation.objectiveWeights || {}, combos: presentation.combos || [], barks: presentation.barks || {},
+      };
+    }
     return Neo.RIVAL_DEFS?.[key]?.personality || {
       archetype: 'wanderer', initialStance: 'guarded', aggression: 0.35,
       reactionDelay: 0.3, prediction: 0.15, retreatHp: 0.2,
@@ -1955,6 +1911,8 @@
   }
 
   function createDefaultRivalBrain(characterKey = '') {
+    const sharedBrain = globalThis.NeoNyke?.simulation?.createCampaignRivalBrain?.(characterKey);
+    if (sharedBrain) return sharedBrain;
     const personality = getRivalPersonality(characterKey);
     return {
       stance: personality.initialStance === 'aggressive' ? 'hostile' : 'neutral',
@@ -2226,6 +2184,10 @@
   // swapped for one of that character's alternatives, so rivals aren't always
   // identical. Returned weapons are deep-copied so per-enemy state stays local.
   function buildRivalLoadout(charKey) {
+    const sharedLoadout = globalThis.NeoNyke?.simulation?.getCampaignRivalLoadout?.(charKey, {
+      random: () => Neo.nextRandom('world'), defaultChance: Neo.RIVAL_DEFAULT_KIT_CHANCE,
+    });
+    if (sharedLoadout?.length) return sharedLoadout;
     const base = (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon }));
     const alternatives = Neo.RIVAL_LOADOUT_ALTERNATIVES[charKey] || [];
     const defaultChance = Number(Neo.RIVAL_DEFAULT_KIT_CHANCE ?? 0.8);
@@ -3010,9 +2972,9 @@
     return true;
   }
 
-  function setRivalHostile(rival, enemy, reason = 'provoked') {
+  function setRivalHostile(rival, enemy, reason = 'provoked', options = {}) {
     if (!rival || rival.friend) return false;
-    const wasHostile = rival.brain?.stance === 'hostile';
+    const wasHostile = options.wasHostile ?? rival.brain?.stance === 'hostile';
     rival.brain.stance = 'hostile';
     rival.brain.intention = 'engage';
     rival.brain.warningUntil = 0;
@@ -3200,68 +3162,69 @@
   function updateRivalDisposition(enemy, perception) {
     const rival = enemy.rivalData;
     const brain = rival.brain;
-    const personality = getRivalPersonality(rival);
-    const now = Number(Neo.gameElapsedTime || 0);
-    if (rival.friend) return Object.assign(brain, { stance: 'friendly', intention: 'travel' }).intention;
-    if (rival.vendetta) return Object.assign(brain, { stance: 'hostile', intention: 'engage' }).intention;
-    if (brain.stance === 'retreating') return Object.assign(brain, { intention: 'retreat' }).intention;
-
-    const retreatAllowed = rival.rivalRumbleStage == null
-      && Number(personality.retreatHp || 0) > 0
-      && Number(brain.retreatFloor) !== Number(Neo.floor)
-      && perception.hpRatio <= Number(personality.retreatHp || 0);
-    if (brain.stance === 'hostile' && retreatAllowed) {
-      brain.stance = 'retreating';
-      brain.intention = 'retreat';
-      setRivalOutcome(rival, 'Attempting to retreat');
+    const previousStance = brain.stance;
+    const resolution = globalThis.NeoNyke?.simulation?.resolveCampaignRivalDisposition?.({
+      characterKey: rival.characterKey, brain, friend: rival.friend, vendetta: rival.vendetta,
+      rivalRumbleStage: rival.rivalRumbleStage, floorNumber: Neo.floor,
+      elapsedSeconds: Neo.gameElapsedTime, perception,
+      hasHealingWeapon: (rival.weapons || []).some(weapon => weapon.class === 'heal'),
+      claimedPickupPresent: !!enemy.rivalClaimedPickup && Neo.pickups.includes(enemy.rivalClaimedPickup),
+    });
+    // Kept only for isolated legacy save/test harnesses that load rooms.js
+    // without the shared simulation foundation. Production always takes the
+    // shared resolver above.
+    if (!resolution) {
+      const personality = getRivalPersonality(rival);
+      const now = Number(Neo.gameElapsedTime || 0);
+      if (rival.friend) return Object.assign(brain, { stance: 'friendly', intention: 'travel' }).intention;
+      if (rival.vendetta) return Object.assign(brain, { stance: 'hostile', intention: 'engage' }).intention;
+      if (brain.stance === 'retreating') return Object.assign(brain, { intention: 'retreat' }).intention;
+      const retreatAllowed = rival.rivalRumbleStage == null && Number(personality.retreatHp || 0) > 0
+        && Number(brain.retreatFloor) !== Number(Neo.floor) && perception.hpRatio <= Number(personality.retreatHp || 0);
+      if (brain.stance === 'hostile' && retreatAllowed) {
+        brain.stance = 'retreating'; brain.intention = 'retreat'; setRivalOutcome(rival, 'Attempting to retreat'); return brain.intention;
+      }
+      if (brain.stance === 'hostile') {
+        brain.intention = perception.hpRatio < 0.72 && (rival.weapons || []).some(weapon => weapon.class === 'heal') ? 'recover' : 'engage';
+        return brain.intention;
+      }
+      const claimedPickup = enemy.rivalClaimedPickup;
+      if (claimedPickup && !Neo.pickups.includes(claimedPickup)) {
+        enemy.rivalClaimedPickup = null; brain.claimedLoot = null; setRivalHostile(rival, enemy, 'claimed_loot'); return brain.intention;
+      }
+      if (personality.archetype === 'opportunist' && perception.hasLineOfSight && perception.distance < 290
+        && (perception.playerHpRatio < 0.5 || perception.playerItemCount >= 12)) {
+        setRivalHostile(rival, enemy, 'opportunity'); return brain.intention;
+      }
+      const warningDistance = Number(personality.warningDistance || 0);
+      const triggerDistance = Number(personality.triggerDistance || warningDistance * 0.7);
+      if (brain.stance === 'neutral' && warningDistance > 0 && perception.hasLineOfSight && perception.distance <= warningDistance) {
+        brain.stance = 'warning'; brain.intention = 'observe'; brain.warningUntil = now + 2.2; brain.warnedRoomKey = getRivalRoomKey();
+        rival.memory.warningsGiven += 1; setRivalOutcome(rival, 'Warned the player away'); emitRivalBark(rival, enemy, 'warning', { force: true, minGap: 1.5 });
+        return brain.intention;
+      }
+      if (brain.stance === 'warning') {
+        if (perception.distance > warningDistance + 70) {
+          brain.stance = 'neutral'; brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe'; setRivalOutcome(rival, 'Player respected the warning');
+        } else if (now >= brain.warningUntil && perception.distance <= triggerDistance) setRivalHostile(rival, enemy, 'ignored_warning');
+        return brain.intention;
+      }
+      brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
       return brain.intention;
     }
-
-    if (brain.stance === 'hostile' || brain.stance === 'retreating') {
-      brain.intention = perception.hpRatio < 0.72
-        && (rival.weapons || []).some(weapon => weapon.class === 'heal')
-        ? 'recover'
-        : 'engage';
-      return brain.intention;
-    }
-
-    const claimedPickup = enemy.rivalClaimedPickup;
-    if (claimedPickup && !Neo.pickups.includes(claimedPickup)) {
-      enemy.rivalClaimedPickup = null;
-      brain.claimedLoot = null;
-      setRivalHostile(rival, enemy, 'claimed_loot');
-      return brain.intention;
-    }
-
-    if (personality.archetype === 'opportunist' && perception.hasLineOfSight
-      && perception.distance < 290 && (perception.playerHpRatio < 0.5 || perception.playerItemCount >= 12)) {
-      setRivalHostile(rival, enemy, 'opportunity');
-      return brain.intention;
-    }
-
-    const warningDistance = Number(personality.warningDistance || 0);
-    const triggerDistance = Number(personality.triggerDistance || warningDistance * 0.7);
-    if (brain.stance === 'neutral' && warningDistance > 0 && perception.hasLineOfSight && perception.distance <= warningDistance) {
-      brain.stance = 'warning';
-      brain.intention = 'observe';
-      brain.warningUntil = now + 2.2;
+    if (resolution.transition === 'hostile') {
+      if (resolution.reason === 'claimed_loot') enemy.rivalClaimedPickup = null;
+      setRivalHostile(rival, enemy, resolution.reason, { wasHostile: previousStance === 'hostile' });
+    } else if (resolution.transition === 'warning') {
       brain.warnedRoomKey = getRivalRoomKey();
       rival.memory.warningsGiven += 1;
       setRivalOutcome(rival, 'Warned the player away');
       emitRivalBark(rival, enemy, 'warning', { force: true, minGap: 1.5 });
-      return brain.intention;
+    } else if (resolution.transition === 'neutral' && resolution.reason === 'warning_respected') {
+      setRivalOutcome(rival, 'Player respected the warning');
+    } else if (resolution.transition === 'retreat') {
+      setRivalOutcome(rival, 'Attempting to retreat');
     }
-    if (brain.stance === 'warning') {
-      if (perception.distance > warningDistance + 70) {
-        brain.stance = 'neutral';
-        brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
-        setRivalOutcome(rival, 'Player respected the warning');
-      } else if (now >= brain.warningUntil && perception.distance <= triggerDistance) {
-        setRivalHostile(rival, enemy, 'ignored_warning');
-      }
-      return brain.intention;
-    }
-    brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
     return brain.intention;
   }
 
@@ -3436,19 +3399,14 @@
   }
 
   function startRivalJusticeBlades(enemy, rival, weapon, aimAngle) {
-    enemy.rivalJusticeBlades = Array.from({ length: 3 }, (_, index) => ({
-      index,
-      fanOffset: (index - 1) * 0.5,
-      aim: aimAngle,
-      swingPhase: index * 0.7,
-      life: 2.1,
-      maxLife: 2.1,
-      radius: 16,
-      reach: 120,
-      hitCooldown: 0,
-      x: enemy.x,
-      y: enemy.y,
-      angle: aimAngle,
+    const justice = globalThis.NeoNyke?.simulation?.planCampaignBladeJustice?.({
+      aimDirection: aimAngle, baseDamage: Math.max(1, Math.round(enemy.dmg * 0.72)),
+    });
+    const effect = justice || { durationSeconds: 2.1, radius: 16, reach: 120, damage: Math.max(1, Math.round(enemy.dmg * 0.72)), blades: Array.from({ length: 3 }, (_, index) => ({ index, fanOffset: (index - 1) * 0.5, aim: aimAngle, swingPhase: index * 0.7 })) };
+    enemy.rivalJusticeEffect = effect;
+    enemy.rivalJusticeBlades = effect.blades.map(blade => ({
+      ...blade, life: effect.durationSeconds, maxLife: effect.durationSeconds, radius: effect.radius,
+      reach: effect.reach, hitCooldown: 0, x: enemy.x, y: enemy.y, angle: aimAngle,
     }));
     commitRivalWeaponUse(enemy, rival, weapon, 0.35);
     Neo.ringBurst?.(enemy.x, enemy.y, 30, '#fff6a3', 0.4);
@@ -3457,24 +3415,34 @@
   function updateRivalJusticeBlades(enemy, rival, dt) {
     const blades = enemy.rivalJusticeBlades;
     if (!Array.isArray(blades) || blades.length === 0) return;
+    const effect = enemy.rivalJusticeEffect || globalThis.NeoNyke?.simulation?.planCampaignBladeJustice?.({
+      aimDirection: enemy.beamAngle, baseDamage: Math.max(1, Math.round(enemy.dmg * 0.72)),
+    });
     const targetAim = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     let write = 0;
     for (let read = 0; read < blades.length; read += 1) {
       const blade = blades[read];
-      blade.life -= dt;
-      if (blade.life <= 0) continue;
+      const step = globalThis.NeoNyke?.simulation?.advanceCampaignBladeJustice?.(blade, {
+        effect, delta: dt, aimDirection: targetAim, playerX: enemy.x, playerY: enemy.y,
+      });
+      if (step && !step.active) continue;
+      if (!step) {
+        blade.life -= dt;
+        if (blade.life <= 0) continue;
+        const delta = Math.atan2(Math.sin(targetAim - blade.aim), Math.cos(targetAim - blade.aim));
+        blade.aim += Neo.clamp(delta, -9 * dt, 9 * dt);
+        blade.swingPhase += dt * 7.5;
+        const direction = blade.aim + blade.fanOffset + Math.sin(blade.swingPhase) * 0.7;
+        const orbit = blade.reach * (0.82 + 0.18 * Math.cos(blade.swingPhase));
+        blade.x = enemy.x + Math.cos(direction) * orbit;
+        blade.y = enemy.y + Math.sin(direction) * orbit;
+        blade.angle = direction + Math.sign(Math.cos(blade.swingPhase)) * 0.5;
+      }
       blade.hitCooldown = Math.max(0, Number(blade.hitCooldown || 0) - dt);
-      const delta = Math.atan2(Math.sin(targetAim - blade.aim), Math.cos(targetAim - blade.aim));
-      blade.aim += Neo.clamp(delta, -9 * dt, 9 * dt);
-      blade.swingPhase += dt * 7.5;
-      const direction = blade.aim + blade.fanOffset + Math.sin(blade.swingPhase) * 0.7;
-      const orbit = blade.reach * (0.82 + 0.18 * Math.cos(blade.swingPhase));
-      blade.x = enemy.x + Math.cos(direction) * orbit;
-      blade.y = enemy.y + Math.sin(direction) * orbit;
-      blade.angle = direction + Math.sign(Math.cos(blade.swingPhase)) * 0.5;
+      const direction = Number(blade.angle || targetAim);
       if (blade.hitCooldown <= 0 && Neo.dist(blade.x, blade.y, Neo.player.x, Neo.player.y) <= blade.radius + Neo.player.r) {
         blade.hitCooldown = 0.22;
-        Neo.damagePlayer(Math.max(1, Math.round(enemy.dmg * 0.72)), direction, 180, rival.characterKey, {
+        Neo.damagePlayer(Math.max(1, Number(effect?.damage || Math.round(enemy.dmg * 0.72))), direction, Number(effect?.knockback || 180), rival.characterKey, {
           sourceKey: rival.characterKey,
           sourceLabel: `${rival.name} Blade Justice`,
           attacker: enemy,
@@ -3525,7 +3493,9 @@
       splash: options.splash,
       splashDamage: options.splashDamage,
       fireStacks: options.fireStacks,
+      splashFireStacks: options.splashFireStacks,
       fireDuration: options.fireDuration,
+      enemyBlast: options.enemyBlast,
       subSpawn: options.subSpawn,
     });
   }
@@ -3537,86 +3507,106 @@
     const key = weapon?.key;
     const damage = Math.max(1, Math.round(enemy.dmg * Number(weapon.damageMult || 1)));
     if (key === 'kicky_kick') {
-      const radius = 138;
+      const kick = globalThis.NeoNyke?.simulation?.resolveCampaignKickyKick?.({ rival: true, baseDamage: damage }) || {
+        radius: 138, damage, blastKnockback: 680, playerRecoil: 260,
+      };
+      const radius = kick.radius;
       Neo.ringBurst(enemy.x, enemy.y, radius * 0.85, '#ff7fc2', 0.42);
       Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff7fc2', 'heavy');
-      damagePlayerInRivalRadius(enemy, rival, radius, damage, 680, key);
-      enemy.vx -= Math.cos(angle) * 260;
-      enemy.vy -= Math.sin(angle) * 260;
+      damagePlayerInRivalRadius(enemy, rival, radius, kick.damage, kick.blastKnockback, key);
+      enemy.vx -= Math.cos(angle) * kick.playerRecoil;
+      enemy.vy -= Math.sin(angle) * kick.playerRecoil;
     } else if (key === 'crimson_smash') {
-      const radius = 140;
+      const smash = globalThis.NeoNyke?.simulation?.planCampaignGroundSmash?.({
+        rival: true, moveKey: key, baseDamage: damage, aimDirection: angle, random: () => Neo.nextRandom('fx'),
+      }) || { radius: 140, damage, knockback: 320, projectileDescriptors: [] };
+      const radius = smash.radius;
       Neo.ringBurst(enemy.x, enemy.y, radius - 30, '#ff3048', 0.4);
       Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff3048', 'heavy');
-      damagePlayerInRivalRadius(enemy, rival, radius, damage, 320, key);
-      for (let index = 0; index < 8; index += 1) {
-        const rockAngle = angle + index * (Math.PI * 2 / 8);
-        const speed = 460 + Neo.nextRandom('fx') * 120;
+      damagePlayerInRivalRadius(enemy, rival, radius, smash.damage, smash.knockback, key);
+      (smash.projectileDescriptors || []).forEach(rock => {
         spawnRivalMoveProjectile(enemy, rival, {
-          x: enemy.x + Math.cos(rockAngle) * radius * 0.4,
-          y: enemy.y + Math.sin(rockAngle) * radius * 0.4,
-          vx: Math.cos(rockAngle) * speed, vy: Math.sin(rockAngle) * speed,
+          x: enemy.x + Math.cos(rock.angle) * rock.spawnDistance,
+          y: enemy.y + Math.sin(rock.angle) * rock.spawnDistance,
+          vx: Math.cos(rock.angle) * rock.speed, vy: Math.sin(rock.angle) * rock.speed,
           r: 7, life: 0.62, kind: 'rock', color: '#8a5a3c',
-          damage: Math.round(damage * 0.45), knockback: 200, pierceCount: 1,
-          statusEffects: [{ key: 'bleed', chance: 0.2, stacks: 1, duration: 4 }],
+          damage: rock.damage, knockback: rock.knockback, pierceCount: rock.pierce,
+          statusEffects: rock.hitOptions?.bleedChance ? [{ key: 'bleed', chance: rock.hitOptions.bleedChance, stacks: rock.hitOptions.bleedStacks, duration: rock.hitOptions.bleedDuration }] : [],
         });
-      }
+      });
     } else if (key === 'chaos_burst') {
+      const chaos = globalThis.NeoNyke?.simulation?.resolveCampaignChaosBurst?.({ baseDamage: damage * 0.62 }) || {
+        fieldRadius: 180, durationSeconds: 1.8, intervalSeconds: 0.22, burstDamage: Math.max(1, Math.round(damage * 0.62)),
+      };
       for (let index = 0; index < 4; index += 1) {
         const blastAngle = angle + (index - 1.5) * 0.38;
         const px = Neo.player.x + Math.cos(blastAngle) * (Neo.nextRandom('encounter') - 0.5) * 92;
         const py = Neo.player.y + Math.sin(blastAngle) * (Neo.nextRandom('encounter') - 0.5) * 92;
         Neo.ringBurst(px, py, 36, '#c971ff', 0.38);
         if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) {
-          Neo.damagePlayer(Math.max(1, Math.round(damage * 0.62)), blastAngle, 120, rival.characterKey, {
+          Neo.damagePlayer(chaos.burstDamage, blastAngle, 120, rival.characterKey, {
             sourceKey: rival.characterKey, sourceLabel: `${rival.name} Chaos Burst`, attacker: enemy,
           });
         }
       }
       Neo.hazards.push({
         kind: 'chaos_burst', enemy: true, ownerEnemy: enemy, followEnemy: true,
-        source: rival.characterKey, x: enemy.x, y: enemy.y, r: 180,
-        ttl: 1.8, tick: 0, interval: 0.22, damage: Math.max(1, Math.round(damage * 0.62)),
+        source: rival.characterKey, x: enemy.x, y: enemy.y, r: chaos.fieldRadius,
+        ttl: chaos.durationSeconds, tick: 0, interval: chaos.intervalSeconds, damage: chaos.burstDamage,
+        poisonDurationSeconds: chaos.poisonDurationSeconds,
       });
     } else if (key === 'random_pounce') {
-      const radius = 160;
+      const pounce = globalThis.NeoNyke?.simulation?.planCampaignRandomPounce?.({
+        originX: enemy.x, originY: enemy.y, burstBaseDamage: damage, fangBaseDamage: Math.round(damage * 0.5),
+        entities: [Neo.player], random: () => Neo.nextRandom('encounter'),
+      }) || { radius: 160, burstDamage: damage, fangs: [] };
+      const radius = pounce.radius;
       Neo.ringBurst(enemy.x, enemy.y, radius - 24, '#ff3070', 0.5);
       Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff3070', 'heavy');
-      damagePlayerInRivalRadius(enemy, rival, radius, damage, 260, key);
-      for (let index = 0; index < 8; index += 1) {
-        const fangAngle = angle + (index - 3.5) * 0.12;
+      damagePlayerInRivalRadius(enemy, rival, radius, pounce.burstDamage, 260, key);
+      pounce.fangs.forEach(fang => {
         spawnRivalMoveProjectile(enemy, rival, {
-          vx: Math.cos(fangAngle) * 620, vy: Math.sin(fangAngle) * 620,
-          r: 5, life: 1.1, kind: 'fang', color: '#ff5090',
-          damage: Math.round(damage * 0.5), knockback: 180,
-          homing: true, homingSpeed: 680, homingAccel: 4.2, homingTurnRate: 3.8, homingRadius: 380,
-          statusEffects: [{ key: 'bleed', chance: 0.55, stacks: 2, duration: 5 }],
+          vx: Math.cos(fang.angle) * fang.speed, vy: Math.sin(fang.angle) * fang.speed,
+          r: fang.radius, life: fang.lifeSeconds, kind: 'fang', color: '#ff5090', damage: fang.damage, knockback: fang.knockback,
+          homing: fang.homing, homingSpeed: fang.homingSpeed, homingAccel: fang.homingAccel, homingTurnRate: fang.homingTurnRate, homingRadius: fang.homingRadius,
+          statusEffects: [{ key: 'bleed', chance: fang.hitOptions?.bleedChance, stacks: fang.hitOptions?.bleedStacks, duration: fang.hitOptions?.bleedDuration }],
         });
-      }
+      });
     } else if (key === 'power_disks') {
-      for (let index = 0; index < 8; index += 1) {
-        const diskAngle = index * (Math.PI * 2 / 8);
+      const disks = globalThis.NeoNyke?.content?.createPowerDiskBurstDescriptors?.({
+        characterKey: rival.characterKey, baseDamage: damage,
+      });
+      (Array.isArray(disks) && disks.length ? disks : Array.from({ length: 8 }, (_, index) => ({
+        kind: 'disk', angle: index * (Math.PI * 2 / 8), speed: 440, radius: 7, lifeSeconds: 1.8,
+        damage, hitOptions: {}, subSpawn: { kind: 'disk_shard', intervalSeconds: 0.18, speed: 620, radius: 4, lifeSeconds: 0.7, damage: Math.max(1, Math.round(damage * 0.4)), count: 2 },
+      }))).forEach(disk => {
         spawnRivalMoveProjectile(enemy, rival, {
-          vx: Math.cos(diskAngle) * 440, vy: Math.sin(diskAngle) * 440,
-          r: 7, life: 1.8, kind: 'disk', color: '#d7f6ff', damage, knockback: 110,
-          statusEffects: [{ key: 'fire', chance: 0.4, stacks: 1, duration: 3 }],
-          subSpawn: {
-            kind: 'disk_shard', interval: 0.18, timer: 0.18, speed: 620,
-            r: 4, life: 0.7, damage: Math.max(1, Math.round(damage * 0.4)), count: 2,
+          vx: Math.cos(disk.angle) * disk.speed, vy: Math.sin(disk.angle) * disk.speed,
+          r: disk.radius, life: disk.lifeSeconds, kind: disk.kind, color: '#d7f6ff', damage: disk.damage, knockback: 110,
+          statusEffects: disk.hitOptions?.fireChance ? [{ key: 'fire', chance: disk.hitOptions.fireChance, stacks: disk.hitOptions.fireStacks, duration: disk.hitOptions.fireDuration }] : [],
+          subSpawn: disk.subSpawn ? {
+            kind: disk.subSpawn.kind, interval: disk.subSpawn.intervalSeconds, timer: disk.subSpawn.intervalSeconds,
+            speed: disk.subSpawn.speed, r: disk.subSpawn.radius, life: disk.subSpawn.lifeSeconds, damage: disk.subSpawn.damage, count: disk.subSpawn.count,
+          } : null,
+        });
+      });
+    } else if (key === 'metao_fire_staff') {
+      const volley = globalThis.NeoNyke?.simulation?.planCampaignFireballVolley?.({ baseDamage: damage }) || { recoil: 150, projectiles: [-1, 0, 1].map(index => ({ angleOffset: index * 0.18, kind: 'fireball', damage, speed: 560, radius: 8, lifeSeconds: 1.6, splash: 48, splashDamage: Math.round(damage * 0.64), fireStacks: 2, fireDurationSeconds: 3.4 })) };
+      volley.projectiles.forEach(fireball => {
+        spawnRivalMoveProjectile(enemy, rival, {
+          vx: Math.cos(angle + fireball.angleOffset) * fireball.speed, vy: Math.sin(angle + fireball.angleOffset) * fireball.speed,
+          r: fireball.radius, life: fireball.lifeSeconds, kind: fireball.kind, color: '#ff7b32', damage: fireball.damage,
+          knockback: 110, splash: fireball.splash, splashDamage: fireball.splashDamage, fireStacks: fireball.fireStacks, fireDuration: fireball.fireDurationSeconds,
+          splashFireStacks: fireball.splashFireStacks,
+          statusEffects: [{ key: 'fire', chance: 1, stacks: fireball.fireStacks, duration: fireball.fireDurationSeconds }],
+          enemyBlast: {
+            radius: fireball.splash, damage: fireball.splashDamage, color: '#ff8844', knockback: 110,
+            statusKey: 'fire', statusStacks: fireball.splashFireStacks, statusDuration: fireball.fireDurationSeconds,
           },
         });
-      }
-    } else if (key === 'metao_fire_staff') {
-      for (let index = -1; index <= 1; index += 1) {
-        const fireAngle = angle + index * 0.18;
-        spawnRivalMoveProjectile(enemy, rival, {
-          vx: Math.cos(fireAngle) * 560, vy: Math.sin(fireAngle) * 560,
-          r: 8, life: 1.6, kind: 'fireball', color: '#ff7b32', damage,
-          knockback: 110, splash: 48, splashDamage: Math.round(damage * 0.64), fireStacks: 2, fireDuration: 3.4,
-          statusEffects: [{ key: 'fire', chance: 1, stacks: 2, duration: 3.4 }],
-        });
-      }
-      enemy.vx -= Math.cos(angle) * 150;
-      enemy.vy -= Math.sin(angle) * 150;
+      });
+      enemy.vx -= Math.cos(angle) * volley.recoil;
+      enemy.vy -= Math.sin(angle) * volley.recoil;
     } else if (key === 'gelleh_lightning_spear') {
       spawnRivalMoveProjectile(enemy, rival, {
         x: enemy.x + Math.cos(angle) * 24, y: enemy.y + Math.sin(angle) * 24,
@@ -3626,99 +3616,154 @@
         statusEffects: [{ key: 'static', chance: 0.35, stacks: 1, duration: 3 }],
       });
     } else if (key === 'nail_shot') {
-      for (let index = 0; index < 12; index += 1) {
-        const nailAngle = index * (Math.PI * 2 / 12) + Neo.nextRandom('encounter') * 0.22;
+      const nails = globalThis.NeoNyke?.simulation?.planCampaignNailShot?.({
+        baseDamage: damage, random: () => Neo.nextRandom('encounter'),
+      });
+      (Array.isArray(nails) && nails.length ? nails : Array.from({ length: 12 }, (_, index) => ({
+        angle: index * (Math.PI * 2 / 12) + Neo.nextRandom('encounter') * 0.22,
+        damage, speed: 480, radius: 3, lifeSeconds: 1.8, knockback: 80, bouncesRemaining: 3,
+        hitOptions: { bleedChance: 0.08 },
+      }))).forEach(nail => {
         spawnRivalMoveProjectile(enemy, rival, {
-          vx: Math.cos(nailAngle) * 480, vy: Math.sin(nailAngle) * 480,
-          r: 3, life: 1.8, kind: 'nail', color: '#c0d8ff', damage, knockback: 80, bouncesRemaining: 3,
-          statusEffects: [{ key: 'bleed', chance: 0.08, stacks: 1, duration: 3.2 }],
+          vx: Math.cos(nail.angle) * nail.speed, vy: Math.sin(nail.angle) * nail.speed,
+          r: nail.radius, life: nail.lifeSeconds, kind: 'nail', color: '#c0d8ff', damage: nail.damage, knockback: nail.knockback,
+          bouncesRemaining: nail.bouncesRemaining,
+          statusEffects: nail.hitOptions?.bleedChance ? [{ key: 'bleed', chance: nail.hitOptions.bleedChance, stacks: 1, duration: 3.2 }] : [],
         });
-      }
+      });
       Neo.ringBurst(enemy.x, enemy.y, 22, '#c0d8ff', 0.3);
     } else if (key === 'death_ball') {
-      const radius = 42;
+      // Rivals throw the same substantially charged Death Ball policy as the
+      // playable Turtle Boy: a large, slow, piercing projectile rather than a
+      // generic smash approximation.
+      const ball = globalThis.NeoNyke?.simulation?.planCampaignDeathBall?.({
+        chargeRatio: 0.75, baseDamage: damage,
+      }) || {
+        kind: 'death_ball', radius: 42, speed: 370, lifeSeconds: 2.2,
+        damage: Math.round(damage * 2.1), knockback: 415, pierce: 10, recoil: 150,
+      };
       spawnRivalMoveProjectile(enemy, rival, {
-        x: enemy.x + Math.cos(angle) * (enemy.r + radius * 0.4),
-        y: enemy.y + Math.sin(angle) * (enemy.r + radius * 0.4),
-        vx: Math.cos(angle) * 360, vy: Math.sin(angle) * 360,
-        r: radius, life: 2.2, kind: 'death_ball', color: '#5aa0ff',
-        damage: Math.round(damage * 1.8), knockback: 400, pierceCount: 10,
+        x: enemy.x + Math.cos(angle) * (enemy.r + ball.radius * 0.4),
+        y: enemy.y + Math.sin(angle) * (enemy.r + ball.radius * 0.4),
+        vx: Math.cos(angle) * ball.speed, vy: Math.sin(angle) * ball.speed,
+        r: ball.radius, life: ball.lifeSeconds, kind: ball.kind, color: '#5aa0ff',
+        damage: ball.damage, knockback: ball.knockback, pierceCount: ball.pierce,
       });
-      Neo.ringBurst(enemy.x, enemy.y, radius * 0.8, '#5aa0ff', 0.6);
-      enemy.vx -= Math.cos(angle) * 140;
-      enemy.vy -= Math.sin(angle) * 140;
+      Neo.ringBurst(enemy.x, enemy.y, ball.radius * 0.8, '#5aa0ff', 0.6);
+      enemy.vx -= Math.cos(angle) * ball.recoil;
+      enemy.vy -= Math.sin(angle) * ball.recoil;
     } else if (key === 'love_bomb_laser') {
+      const bomb = globalThis.NeoNyke?.simulation?.planCampaignLoveBomb?.({
+        rival: true, baseDamage: damage, originX: enemy.x, originY: enemy.y,
+        targetX: Neo.player.x, targetY: Neo.player.y, range: 420,
+      }) || {
+        kind: 'love_bomb', damage: Math.round(damage * 1.6), speed: 420, radius: 16,
+        lifeSeconds: Math.max(0.25, Math.min(1, Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) / 420)),
+        aoeRadius: 90, sparkleChance: 0.8, knockback: 180,
+      };
       spawnRivalMoveProjectile(enemy, rival, {
-        x: enemy.x + Math.cos(angle) * (enemy.r + 18),
-        y: enemy.y + Math.sin(angle) * (enemy.r + 18),
-        vx: Math.cos(angle) * 420, vy: Math.sin(angle) * 420,
-        r: 16, life: Math.max(0.25, Math.min(1, Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) / 420)),
-        kind: 'love_bomb', color: '#ff6fa8', damage: Math.round(damage * 1.6), knockback: 180,
-        aoeRadius: 90, sparkleChance: 0.8,
+        x: enemy.x + Math.cos(angle) * (enemy.r + bomb.radius),
+        y: enemy.y + Math.sin(angle) * (enemy.r + bomb.radius),
+        vx: Math.cos(angle) * bomb.speed, vy: Math.sin(angle) * bomb.speed,
+        r: bomb.radius, life: bomb.lifeSeconds, kind: bomb.kind, color: '#ff6fa8', damage: bomb.damage, knockback: bomb.knockback,
+        aoeRadius: bomb.aoeRadius, sparkleChance: bomb.sparkleChance,
       });
       Neo.ringBurst(enemy.x, enemy.y, 30, '#ff9cc9', 0.4);
     } else if (key === 'healing_zone') {
-      const radius = 100;
+      const zone = globalThis.NeoNyke?.simulation?.resolveCampaignHealingZone?.({ rival: true }) || {
+        radius: 100, durationSeconds: 7.2, healPerSecond: 7.36 * 1.7, damagePerSecond: 20, pulseIntervalSeconds: 0.2,
+      };
       Neo.hazards.push({
         kind: 'healing_zone', enemy: true, ownerEnemy: enemy, source: rival.characterKey,
-        x: enemy.x, y: enemy.y, r: radius, ttl: 7.2,
-        healTick: 0.24, healAccum: 0, plusTick: 0.08, healMult: 1.7, damageMult: 1.8,
+        x: enemy.x, y: enemy.y, r: zone.radius, ttl: zone.durationSeconds,
+        healTick: 0.24, healAccum: 0, plusTick: 0.08,
+        healPerSecond: zone.healPerSecond, damagePerSecond: zone.damagePerSecond, damageInterval: zone.pulseIntervalSeconds,
       });
-      Neo.ringBurst(enemy.x, enemy.y, radius * 0.5, '#35ff6f', 0.7);
+      Neo.ringBurst(enemy.x, enemy.y, zone.radius * 0.5, '#35ff6f', 0.7);
     } else if (key === 'mooggy_hairball') {
-      const radius = 132;
+      const hairball = globalThis.NeoNyke?.simulation?.resolveCampaignMooggyHairball?.({ rival: true, baseDamage: damage }) || {
+        radius: 132, damage, knockback: 170, poisonStacks: 3, poisonDurationSeconds: 6, slowStacks: 1, slowDurationSeconds: 1.2,
+      };
+      const radius = hairball.radius;
       Neo.ringBurst(enemy.x, enemy.y, radius - 24, '#85df63', 0.45);
       Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#85df63', 'heavy');
-      if (damagePlayerInRivalRadius(enemy, rival, radius, damage, 170, key)) {
-        Neo.applyStatus?.(Neo.player, 'poison', 3, 6, rival.characterKey);
-        Neo.applyStatus?.(Neo.player, 'slow', 1, 1.2, rival.characterKey);
+      if (damagePlayerInRivalRadius(enemy, rival, radius, hairball.damage, hairball.knockback, key)) {
+        Neo.applyStatus?.(Neo.player, 'poison', hairball.poisonStacks, hairball.poisonDurationSeconds, rival.characterKey);
+        Neo.applyStatus?.(Neo.player, 'slow', hairball.slowStacks, hairball.slowDurationSeconds, rival.characterKey);
       }
     } else if (key === 'holy_turrets') {
-      for (let index = 0; index < 3; index += 1) {
+      const turrets = globalThis.NeoNyke?.simulation?.planCampaignHolyTurrets?.({
+        originX: enemy.x, originY: enemy.y, angle, wall: Neo.WALL, roomWidth: Neo.ROOM_W, roomHeight: Neo.ROOM_H,
+        baseDamage: damage,
+      }) || Array.from({ length: 3 }, (_, index) => {
         const turretAngle = angle + (index - 1) * 0.7;
-        const tx = Neo.clamp(enemy.x + Math.cos(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_W - Neo.WALL - 16);
-        const ty = Neo.clamp(enemy.y + Math.sin(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_H - Neo.WALL - 16);
+        return {
+          aimAngle: turretAngle,
+          x: Neo.clamp(enemy.x + Math.cos(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_W - Neo.WALL - 16),
+          y: Neo.clamp(enemy.y + Math.sin(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_H - Neo.WALL - 16),
+          radius: 26, durationSeconds: 6, intervalSeconds: 0.6, range: 360, burstRadius: 56, damage,
+        };
+      });
+      turrets.forEach(turret => {
         Neo.hazards.push({
           kind: 'holy_turret', enemy: true, source: rival.characterKey,
-          x: tx, y: ty, r: 26, ttl: 6, tick: 0, interval: 0.6,
-          range: 360, burstRadius: 56, damage, aimAngle: turretAngle, recoil: 0,
+          x: turret.x, y: turret.y, r: turret.radius, ttl: turret.durationSeconds, tick: 0, interval: turret.intervalSeconds,
+          range: turret.range, burstRadius: turret.burstRadius, damage: turret.damage, aimAngle: turret.aimAngle, recoil: 0,
         });
-        Neo.ringBurst(tx, ty, 22, '#fff1b0', 0.5);
-      }
+        Neo.ringBurst(turret.x, turret.y, 22, '#fff1b0', 0.5);
+      });
     } else if (key === 'excalibur_strike') {
       if (!Array.isArray(Neo.skySwords)) Neo.skySwords = [];
-      for (let index = 0; index < 5; index += 1) {
+      const swords = globalThis.NeoNyke?.simulation?.planCampaignExcaliburStrike?.({
+        targetX: Neo.player.x, targetY: Neo.player.y, wall: Neo.WALL, roomWidth: Neo.ROOM_W, roomHeight: Neo.ROOM_H,
+        baseDamage: damage, random: () => Neo.nextRandom('fx'),
+      }) || Array.from({ length: 5 }, (_, index) => {
         const offAngle = Neo.nextRandom('fx') * Math.PI * 2;
         const offDist = index === 0 ? 0 : 28 + Neo.nextRandom('fx') * 122;
-        Neo.skySwords.push({
+        return {
           x: Neo.clamp(Neo.player.x + Math.cos(offAngle) * offDist, Neo.WALL + 24, Neo.ROOM_W - Neo.WALL - 24),
           y: Neo.clamp(Neo.player.y + Math.sin(offAngle) * offDist, Neo.WALL + 24, Neo.ROOM_H - Neo.WALL - 24),
-          phase: 'falling', delay: index * 0.07, fall: 0.34, radius: 76,
-          damage, hoverTime: 0.7, angle: Neo.nextRandom('fx') * Math.PI * 2,
+          phase: 'falling', delaySeconds: index * 0.07, fallSeconds: 0.34, radius: 76, damage,
+          hoverSeconds: 0.7, angle: Neo.nextRandom('fx') * Math.PI * 2,
           spin: (Neo.nextRandom('fx') < 0.5 ? -1 : 1) * (5 + Neo.nextRandom('fx') * 3),
+        };
+      });
+      swords.forEach(sword => {
+        Neo.skySwords.push({
+          x: sword.x, y: sword.y, phase: sword.phase, delay: sword.delaySeconds, fall: sword.fallSeconds, radius: sword.radius,
+          damage: sword.damage, hoverTime: sword.hoverSeconds, angle: sword.angle, spin: sword.spin,
           enemy: true, source: rival.characterKey, sourceLabel: rival.name,
         });
-      }
+      });
       Neo.ringBurst(Neo.player.x, Neo.player.y, 36, '#ffd980', 0.5);
     } else if (key === 'potion_bath') {
-      enemy.hp = Math.min(enemy.max, enemy.hp + enemy.max * 0.2);
+      const bath = globalThis.NeoNyke?.simulation?.planCampaignPotionBath?.({
+        rival: true, maxHp: enemy.max, baseDamage: damage,
+        randomAngle: () => Neo.nextRandom('fx'), randomDistance: () => Neo.nextRandom('fx'),
+      }) || {
+        immediateHeal: Math.round(enemy.max * 0.2), invulnerabilitySeconds: 5,
+        bursts: Array.from({ length: 7 }, (_, index) => ({
+          angle: index * (Math.PI * 2 / 7) + Neo.nextRandom('fx') * 0.4,
+          distance: 40 + Neo.nextRandom('fx') * 110, radius: 56, damage, visualRadius: 22, knockback: 100,
+        })),
+      };
+      enemy.hp = Math.min(enemy.max, enemy.hp + bath.immediateHeal);
       rival.hp = enemy.hp;
       rival.hpSnapshot = enemy.hp;
-      enemy.inv = Math.max(Number(enemy.inv || 0), 5);
+      enemy.inv = Math.max(Number(enemy.inv || 0), bath.invulnerabilitySeconds);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 30, life: 0.8, text: 'POTION BATH', c: '#9af7d8' });
-      for (let index = 0; index < 7; index += 1) {
-        const burstAngle = index * (Math.PI * 2 / 7) + Neo.nextRandom('fx') * 0.4;
-        const dist = 40 + Neo.nextRandom('fx') * 110;
-        const px = enemy.x + Math.cos(burstAngle) * dist;
-        const py = enemy.y + Math.sin(burstAngle) * dist;
-        Neo.ringBurst(px, py, 22, '#b6f0ff', 0.5);
-        if (Neo.dist(px, py, Neo.player.x, Neo.player.y) <= 56 + Neo.player.r) {
-          Neo.damagePlayer(damage, burstAngle, 100, rival.characterKey, { sourceKey: rival.characterKey, sourceLabel: `${rival.name} Potion Bath` });
+      bath.bursts.forEach(burst => {
+        const px = enemy.x + Math.cos(burst.angle) * burst.distance;
+        const py = enemy.y + Math.sin(burst.angle) * burst.distance;
+        Neo.ringBurst(px, py, burst.visualRadius, '#b6f0ff', 0.5);
+        if (Neo.dist(px, py, Neo.player.x, Neo.player.y) <= burst.radius + Neo.player.r) {
+          Neo.damagePlayer(burst.damage, burst.angle, burst.knockback, rival.characterKey, { sourceKey: rival.characterKey, sourceLabel: `${rival.name} Potion Bath` });
         }
-      }
+      });
     } else if (key === 'turtle_powerup') {
-      const barrier = Math.round(enemy.max * 0.5);
-      enemy.barrier = Number(enemy.barrier || 0) + barrier;
+      const powerUp = globalThis.NeoNyke?.simulation?.resolveCampaignTurtlePowerUp?.({ rival: true, maxHealth: enemy.max, barrier: enemy.barrier })
+        || { barrier: Number(enemy.barrier || 0) + Math.round(enemy.max * 0.5) };
+      enemy.barrier = powerUp.barrier;
       enemy.rivalDeathBallPowerUp = true;
       Neo.ringBurst(enemy.x, enemy.y, 42, '#7dffb0', 0.5);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.8, text: 'SHELL POWER', c: '#7dffb0' });
@@ -3818,15 +3863,15 @@
       enemy.rivalClawFollowup -= dt;
       if (enemy.rivalClawFollowup <= 0) {
         enemy.rivalClawFollowup = 0;
-        const followupAngle = Math.atan2(dy, dx) + 0.18;
+        const followupAngle = Math.atan2(dy, dx) + Number(enemy.rivalClawFollowupAngleOffset || 0.18);
         enemy.swingA = followupAngle;
         enemy.swingTime = 0.22;
         enemy.rivalSwingMove = 'claw_gauntlets';
-        if (distance < enemy.r + Neo.player.r + 48) {
-          Neo.damagePlayer(Math.max(1, Math.round(enemy.dmg * 0.85)), followupAngle, 260, rival.characterKey, {
+        if (distance < enemy.r + Neo.player.r + Number(enemy.rivalClawRangePadding || 48)) {
+          Neo.damagePlayer(Math.max(1, Number(enemy.rivalClawFollowupDamage || Math.round(enemy.dmg * 0.85))), followupAngle, Number(enemy.rivalClawKnockback || 260), rival.characterKey, {
             sourceKey: rival.characterKey, sourceLabel: `${rival.name} Claw Gauntlets`, attacker: enemy,
           });
-          Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
+          Neo.applyStatus?.(Neo.player, 'bleed', Number(enemy.rivalClawBleedStacks || 1), Number(enemy.rivalClawBleedDuration || 5), rival.characterKey);
         }
       }
     }
@@ -4026,9 +4071,18 @@
         enemy.swingA = angle;
         enemy.rivalSwingMove = weapon.key;
         if (weapon.key === 'claw_gauntlets') {
-          enemy.swingA = angle - 0.18;
-          enemy.rivalClawFollowup = 0.12;
-          Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
+          const combo = globalThis.NeoNyke?.simulation?.planCampaignRivalClawGauntlets?.({
+            baseDamage: meleeDamage, knockback: Number(weapon.knockback || 260),
+          }) || { initialAngleOffset: -0.18, followupDelaySeconds: 0.12, followupDamage: Math.max(1, Math.round(meleeDamage * 0.85)), followupAngleOffset: 0.18, rangePadding: 48, knockback: Number(weapon.knockback || 260), bleedStacks: 1, bleedDurationSeconds: 5 };
+          enemy.swingA = angle + combo.initialAngleOffset;
+          enemy.rivalClawFollowup = combo.followupDelaySeconds;
+          enemy.rivalClawFollowupDamage = combo.followupDamage;
+          enemy.rivalClawFollowupAngleOffset = combo.followupAngleOffset;
+          enemy.rivalClawRangePadding = combo.rangePadding;
+          enemy.rivalClawKnockback = combo.knockback;
+          enemy.rivalClawBleedStacks = combo.bleedStacks;
+          enemy.rivalClawBleedDuration = combo.bleedDurationSeconds;
+          Neo.applyStatus?.(Neo.player, 'bleed', combo.bleedStacks, combo.bleedDurationSeconds, rival.characterKey);
         } else if (weapon.key === 'thorns_bleed_blade') {
           Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
         }

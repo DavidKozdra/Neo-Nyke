@@ -35,4 +35,29 @@ describe('shared Neo Nyke combat content', () => {
     expect(projectileTypes).toContain('sharedCombatContent.PROJECTILE_TYPE_DEFS');
     expect(player).toContain('NeoNyke?.content?.getCharacterDefaultWeapon');
   });
+
+  test('builds configured projectiles through one campaign-safe override policy', () => {
+    expect(content.buildCampaignWeaponProjectileConfig('void_piercer', {
+      angle: 1.25,
+      damage: 71,
+      knockback: 210,
+      life: 0.75,
+      hitOptions: { fireChance: 0.4 },
+    })).toEqual(expect.objectContaining({
+      angle: 1.25,
+      kind: 'void_piercer',
+      speed: 760,
+      damage: 71,
+      knockback: 210,
+      r: 6,
+      life: 0.75,
+      pierceCount: 4,
+      hitOptions: { ignoreBarrier: true, critBonus: 0.2, fireChance: 0.4 },
+    }));
+    expect(content.buildCampaignWeaponProjectileConfig('sarges_hammer', {
+      projectileType: 'sarges_hammer', damage: 64, knockback: 520,
+    })).toEqual(expect.objectContaining({
+      kind: 'sarges_hammer', speed: 720, r: 11, life: 0.75, damage: 64, knockback: 520,
+    }));
+  });
 });

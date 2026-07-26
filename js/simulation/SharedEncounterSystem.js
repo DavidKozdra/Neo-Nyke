@@ -80,6 +80,56 @@
     return CAMPAIGN_BOSS_POOL[Math.floor(next(random) * CAMPAIGN_BOSS_POOL.length)] || CAMPAIGN_BOSS_POOL[0];
   }
 
+  function getCampaignEndlessWaveSize(waveNumber) {
+    const wave = Math.max(1, Math.floor(Number(waveNumber) || 1));
+    // The campaign opens on five enemies (4 + floor one), then grows from the
+    // completed-wave counter: 5, 6, 8, 9, 10… capped at 18.
+    return Math.min(18, Math.max(5, 3 + wave + Math.floor((wave - 1) / 3)));
+  }
+
+  function createCampaignEndlessWavePlan(waveNumber, options = {}) {
+    const wave = Math.max(1, Math.floor(Number(waveNumber) || 1));
+    const random = options.random || Math.random;
+    if (wave % 10 === 0) {
+      const addCount = Math.min(2 + Math.floor(wave / 10), 6);
+      return [getCampaignFloorBossType(options.floorNumber, random), ...buildCampaignWavePlan(addCount, { ...options, roomType: 'combat' })];
+    }
+    return buildCampaignWavePlan(getCampaignEndlessWaveSize(wave), { ...options, roomType: 'combat' });
+  }
+
+  function getCampaignBossRewardPickCount(floorNumber = 1, room = null, options = {}) {
+    const floorPickBonus = Math.floor(Math.max(0, Number(floorNumber || 1) - 1) / 4);
+    const bossBonus = room?.type === 'god' ? 1 : 0;
+    const difficultyBonus = { easy: 0, normal: 0, hard: 1, nightmare: 1 }[String(options.difficultyKey || '').toLowerCase()] || 0;
+    return Math.max(1, Math.min(3, 1 + floorPickBonus + bossBonus + difficultyBonus));
+  }
+
+  // Item choice generation is injected from SharedItemContent, while the
+  // campaign and authority share the persisted choices, pick count, group ID
+  // and spatial layout.
+  function createCampaignBossRewardPlan(room, options = {}) {
+    if (!room || room.bossRewardSpawned) return { ok: false, reason: 'REWARD_ALREADY_SPAWNED', pickups: [] };
+    const createChoices = typeof options.createChoices === 'function' ? options.createChoices : () => [];
+    const choices = Array.isArray(room.bossRewardChoices) && room.bossRewardChoices.length >= 5
+      ? room.bossRewardChoices.slice(0, 5)
+      : Array.from(createChoices(5) || []).slice(0, 5);
+    room.bossRewardSpawned = true;
+    room.bossRewardChoices = choices;
+    const picksRemaining = getCampaignBossRewardPickCount(options.floorNumber, room, options);
+    const groupId = room.bossRewardGroupId || `boss:${room.gx ?? 0}:${room.gy ?? 0}:${Math.max(1, Number(options.floorNumber || 1))}`;
+    room.bossRewardGroupId = groupId;
+    const centerX = Number(options.centerX ?? 450);
+    const centerY = Number(options.centerY ?? 418);
+    const offsets = [-144, -72, 0, 72, 144];
+    return {
+      ok: true, choices, picksRemaining, groupId,
+      pickups: choices.map((key, index) => ({
+        x: centerX + offsets[index], y: centerY, type: 'rewardChoice', key, groupId,
+        picksRemaining, label: `${picksRemaining}/5`, source: 'boss_reward',
+      })),
+    };
+  }
+
   function getCampaignEncounterPlan(room, options = {}) {
     if (!room) return [];
     if (room.type === 'god') return ['god'];
@@ -101,6 +151,10 @@
     rollCampaignEnemyType,
     buildCampaignWavePlan,
     getCampaignFloorBossType,
+    getCampaignEndlessWaveSize,
+    createCampaignEndlessWavePlan,
+    getCampaignBossRewardPickCount,
+    createCampaignBossRewardPlan,
     getCampaignEncounterPlan,
   };
 });

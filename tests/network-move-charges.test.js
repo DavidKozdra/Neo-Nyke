@@ -1,6 +1,7 @@
 const { FIXED_DELTA_SECONDS } = require('../js/simulation/GameSimulation');
 const { createCampaignSimulation, createCampaignPlayer } = require('../js/simulation/CampaignSimulation');
 const { readMoveChargeState } = require('../js/simulation/NetworkCombatSystem');
+const { planCampaignDeathBall } = require('../js/simulation/SharedProjectileSystem');
 
 // The authority used to model every move as one binary cooldown
 // (moveCooldownUntilTick[moveKey]), so multi-charge moves collapsed to a single
@@ -55,6 +56,14 @@ describe('authority move charges', () => {
     expect(ball).toEqual(expect.objectContaining({ radius: expect.any(Number), damage: expect.any(Number) }));
     expect(ball.radius).toBeGreaterThan(16);
     expect(ball.damage).toBeGreaterThan(40);
+    const expected = planCampaignDeathBall({ chargeRatio: 0.51, baseDamage: 40 });
+    expect(ball).toEqual(expect.objectContaining({
+      radius: expected.radius, damage: expected.damage, knockback: expected.knockback,
+      // The encounter target is directly ahead of the test player, so the
+      // newly-created ball spends one of its shared-policy pierces that frame.
+      remainingPierces: expected.pierce - 1, vx: expected.speed,
+    }));
+    expect(player.vx).toBeCloseTo(-expected.recoil);
     expect(player.heldCharge).toBeNull();
   });
 

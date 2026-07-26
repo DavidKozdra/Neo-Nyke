@@ -553,9 +553,10 @@ export function getActiveBuildTags(playerData = Neo.player, minimumStacks = 3) {
   }
 
 export function getPotionCarryCap() {
+    const shared = globalThis.NeoNyke?.simulation?.getCampaignPotionCarryCap;
+    if (typeof shared === 'function') return shared(Neo.player);
     const stacks = getItemCount('mateos_bag');
-    if (stacks <= 0) return 0;
-    return 3 + (stacks - 1);
+    return stacks > 0 ? 3 + (stacks - 1) : 0;
   }
 
 export function getChargeRequirement(baseRequirement) {
