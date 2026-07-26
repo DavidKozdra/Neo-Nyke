@@ -2669,10 +2669,6 @@
       this.neo.showFloorTransition = floorTransitionAge <= 1.25;
       this.neo.floorTransitionTime = floorTransitionAge;
       this.neo.lavaAnimTime = Number(this.neo.lavaAnimTime || 0) + frameDelta;
-      // Core simulation stops while NetworkGameView is active, but corpses are
-      // presentation-only shared campaign entities. Advance them here with the
-      // solo updater so they launch, tumble, and settle between snapshots.
-      this.neo.updateDeadBodies?.(frameDelta);
       this.neo.updateParticles?.(frameDelta);
       this._updateHud(state, players);
       return true;

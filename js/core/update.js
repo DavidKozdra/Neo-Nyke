@@ -160,6 +160,13 @@ export function loop(timestamp) {
       legacyFixedTickRunner?.discardAccumulatedTime();
       Neo.simulationInterpolationAlpha = 0;
     }
+    // Multiplayer replaces authority simulation with snapshots, but corpses
+    // are already-created campaign presentation entities. Keep their existing
+    // campaign physics in the core loop rather than reimplementing it in the
+    // network adapter.
+    if (Neo.gameState === 'play' && Neo.multiplayerGameView?.active) {
+      Neo.updateDeadBodies(dt);
+    }
     if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);
