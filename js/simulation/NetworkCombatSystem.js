@@ -8255,16 +8255,12 @@
         pickups: Object.values(state.pickups || {}).filter(pickup => pickup.roomId === owner.roomId),
       });
       owner.hp = result.health;
-      (result.pickupImpulses || []).forEach(intent => {
-        const pickup = state.pickups?.[intent.id];
-        if (!pickup) return;
-        pickup.vx = Number(pickup.vx || 0) + Number(intent.vx || 0);
-        pickup.vy = Number(pickup.vy || 0) + Number(intent.vy || 0);
-        pickup.magnetized = !!intent.magnetized;
-      });
+      // Loot remains an authoritative, fixed collection target in multiplayer.
+      // The campaign helper also supplies single-player-only visual pull impulses;
+      // applying them here makes replicated pickups slide between snapshots.
       emitEvent('SARGES_HAMMER_RETURNED', {
         projectileId: projectile.id, playerId: owner.id, healedAmount: result.healedAmount,
-        pickupIds: (result.pickupImpulses || []).map(intent => intent.id),
+        pickupIds: [],
       });
     };
     const detonateLoveBomb = (projectile, x = projectile.x, y = projectile.y) => {
@@ -9010,6 +9006,15 @@
           width: state.floorState?.width, height: state.floorState?.height,
           wallThickness: state.floorState?.wallThickness, radius: 16, playerMoveSpeed: target.moveSpeed || 228,
         });
+        return;
+      }
+      // Standard loot must never inherit a velocity from an older snapshot or
+      // an accidental gameplay mutation. Challenge bombs are authored moving
+      // challenge objects and intentionally retain their velocity.
+      if (pickup.type !== 'challengeBomb') {
+        pickup.vx = 0;
+        pickup.vy = 0;
+        delete pickup.magnetized;
         return;
       }
       if (!(Number(pickup.vx || 0) || Number(pickup.vy || 0))) return;

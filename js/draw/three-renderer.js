@@ -494,7 +494,12 @@ function initRenderer() {
     renderer = null;
     glCanvas?.remove();
     glCanvas = null;
-    document.body.classList.remove('render3d');
+    // A failed context creation (as opposed to a lost live context) cannot
+    // render 3D at all. Persist the 2D fallback so a saved 3D preference does
+    // not retry WebGL every few seconds and fill the console with errors. A
+    // player can explicitly choose 3D again after enabling WebGL.
+    setRender3D(false);
+    window.dispatchEvent(new CustomEvent('neo-view-mode-changed', { detail: '2d' }));
   }
   return ready;
 }
@@ -4806,6 +4811,12 @@ function render() {
 }
 
 function setRender3D(on) {
+  // Treat an explicit 3D selection as a deliberate retry after a prior
+  // context-creation failure; automatic frames never retry after fallback.
+  if (on && !Neo.render3D) {
+    failed = false;
+    failedAt = 0;
+  }
   Neo.render3D = !!on;
   try { localStorage.setItem(RENDER3D_STORE_KEY, Neo.render3D ? '1' : '0'); } catch { /* private mode */ }
   document.body.classList.toggle('render3d', Neo.render3D);

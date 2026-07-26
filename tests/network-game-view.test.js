@@ -1237,6 +1237,23 @@ describe('network multiplayer game view', () => {
     expect(sounds).toEqual(['aoe']);
   });
 
+  test('drops stale remote combat cues and bounds the remaining decode delay', () => {
+    const sounds = [];
+    const session = { snapshot: () => ({ status: 'running', playerId: 'p1' }) };
+    const view = new NetworkGameView({ session, neo: { playSfx: (...args) => sounds.push(args) } });
+
+    view._consumeGameplayEvents([{
+      eventId: 'late-remote-attack', eventType: 'PLAYER_ATTACKED',
+      data: { playerId: 'p2', weaponKey: 'sword', tick: 10 },
+    }], 20);
+    view._consumeGameplayEvents([{
+      eventId: 'fresh-remote-attack', eventType: 'PLAYER_ATTACKED',
+      data: { playerId: 'p2', weaponKey: 'sword', tick: 20 },
+    }], 20);
+
+    expect(sounds).toEqual([['sword_swing', { maxStartDelayMs: 120 }]]);
+  });
+
   test('does not stack speculative casts while one local action awaits authority', () => {
     const sent = [];
     const session = {

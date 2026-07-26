@@ -297,7 +297,25 @@
     return promise;
   }
 
-  function playSfx(id) {
+  function nowMs() {
+    return window.performance?.now?.() || Date.now();
+  }
+
+  // Decode a focused set of effects ahead of a latency-sensitive activity
+  // (such as multiplayer combat). Loading remains best-effort: unavailable
+  // optional/offline media must never prevent a match from starting.
+  function preloadSfx(ids) {
+    const ctx = getContext();
+    if (!ctx) return Promise.resolve([]);
+    const requested = Array.from(new Set(Array.isArray(ids) ? ids : [ids]));
+    const loads = requested.flatMap((id) => {
+      const def = soundDefs.get(String(id || ''));
+      return def?.paths?.map(path => loadBuffer(ctx, path)) || [];
+    });
+    return Promise.allSettled(loads);
+  }
+
+  function playSfx(id, options = {}) {
     try {
       const def = soundDefs.get(id);
       if (!def || !def.paths.length) return;
@@ -307,8 +325,16 @@
       if (!ctx) return;
       const path = def.paths[Math.floor(Math.random() * def.paths.length)];
       if (!path) return;
+      const requestedAt = nowMs();
+      const maxStartDelayMs = Number(options?.maxStartDelayMs);
       loadBuffer(ctx, path)
         .then((buffer) => {
+          // Do not play a sound long after the visual/input it belonged to.
+          // This prevents first-use decode from turning a burst of remote
+          // combat events into a delayed audio burst.
+          if (Number.isFinite(maxStartDelayMs)
+            && maxStartDelayMs >= 0
+            && nowMs() - requestedAt > maxStartDelayMs) return;
           const allocation = voicePool?.acquire({
             soundId: id,
             priority: def.priority,
@@ -423,6 +449,7 @@
   }
 
   Neo.playSfx = playSfx;
+  Neo.preloadSfx = preloadSfx;
   Neo.playSfxLoop = playSfxLoop;
   Neo.stopSfxLoop = stopSfxLoop;
 
