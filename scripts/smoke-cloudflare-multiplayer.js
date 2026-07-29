@@ -572,9 +572,52 @@ async function main() {
     const movementStart = await host.evaluate(() => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const player = snapshot.gameState.players[snapshot.playerId];
+      globalThis.__networkMovementSamples = [];
+      globalThis.__networkCaptureMovement = true;
+      const sampleMovement = at => {
+        if (!globalThis.__networkCaptureMovement) return;
+        const actor = globalThis.Neo?.player;
+        if (actor) {
+          globalThis.__networkMovementSamples.push({
+            at,
+            x: Number(actor.x || 0),
+            y: Number(actor.y || 0),
+          });
+        }
+        requestAnimationFrame(sampleMovement);
+      };
+      requestAnimationFrame(sampleMovement);
       return { x: player.x, y: player.y, cameraYaw: globalThis.Neo?.getFirstPersonYaw?.() };
     });
-    await holdKey(host, 'd', 750);
+    await host.keyboard.down('d');
+    await host.waitForTimeout(750);
+    await host.keyboard.up('d');
+    const localMovementSmoothness = await host.evaluate(() => {
+      globalThis.__networkCaptureMovement = false;
+      const samples = globalThis.__networkMovementSamples || [];
+      const steps = samples.slice(1).map((sample, index) => ({
+        distance: Math.hypot(
+          sample.x - samples[index].x,
+          sample.y - samples[index].y,
+        ),
+        elapsedMs: Math.max(0.01, sample.at - samples[index].at),
+      }));
+      const firstMoving = steps.findIndex(step => step.distance > 0.25);
+      const movingSteps = firstMoving >= 0 ? steps.slice(firstMoving) : [];
+      const stalled = movingSteps.filter(step => step.distance < 0.25).length;
+      return {
+        samples: samples.length,
+        movingFrames: movingSteps.length,
+        stalledFrames: stalled,
+        stallRatio: movingSteps.length ? stalled / movingSteps.length : 1,
+        maximumStep: movingSteps.length ? Math.max(...movingSteps.map(step => step.distance)) : 0,
+        maximumFrameIntervalMs: movingSteps.length ? Math.max(...movingSteps.map(step => step.elapsedMs)) : 0,
+        maximumSpeed: movingSteps.length
+          ? Math.max(...movingSteps.map(step => step.distance / step.elapsedMs * 1000))
+          : 0,
+      };
+    });
+    await host.waitForTimeout(180);
     await host.waitForFunction(start => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const player = snapshot.gameState?.players?.[snapshot.playerId];
@@ -654,6 +697,7 @@ async function main() {
       beamProof,
       bladeJusticeProof,
       cameraRelativeMovementProof,
+      localMovementSmoothness,
       hostCanvasRendered,
       guestCanvasRendered,
       hostRenderedPlayerCount,
@@ -741,6 +785,9 @@ async function main() {
     report.resultsProof = resultsProof;
     console.log(JSON.stringify(report, null, 2));
     if (!converged || !moved || report.gameViewActive !== true
+      || report.localMovementSmoothness.movingFrames < 20
+      || report.localMovementSmoothness.stallRatio >= 0.1
+      || report.localMovementSmoothness.maximumSpeed >= 500
       || hostRenderedPlayerCount < 2 || guestRenderedPlayerCount < 2
       || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'gelleh'
       || hostPlayers['player-1']?.items?.princes_glasses !== 1

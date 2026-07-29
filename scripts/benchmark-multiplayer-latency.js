@@ -104,6 +104,57 @@ function runRemoteSmoothness(snapshotIntervalMs, durationMs = 4_000) {
   };
 }
 
+function runLocalSmoothness(durationMs = 1_000) {
+  const speed = 228;
+  const frameMs = 1000 / 60;
+  const startedAt = 1_000;
+  const player = {
+    id: 'local-player',
+    roomId: 'room-a',
+    x: 450,
+    y: 350,
+    vx: 0,
+    vy: 0,
+    radius: 18,
+    moveSpeed: speed,
+  };
+  const view = new NetworkGameView({
+    session: { playerId: 'local-player', status: 'running' },
+    neo: {},
+  });
+  view.currentSample = {
+    tick: 20,
+    receivedAt: startedAt,
+    state: {
+      players: { 'local-player': player },
+      floorState: { width: 900, height: 700, wallThickness: 28 },
+    },
+  };
+  view.previousSample = view.currentSample;
+  view.localPredictedPlayer = { ...player };
+  view.localPredictedPlayerId = player.id;
+  view.localPredictionTick = 20;
+  view.lastLocalPredictionAt = startedAt;
+  view.keys.add('KeyD');
+  let previousX = player.x;
+  let movingFrames = 0;
+  let stalledFrames = 0;
+  let maximumStep = 0;
+  for (let elapsed = frameMs; elapsed <= durationMs; elapsed += frameMs) {
+    const x = view._renderedPlayers(startedAt + elapsed)[player.id].x;
+    const step = Math.abs(x - previousX);
+    movingFrames += 1;
+    if (step < speed * frameMs / 1000 * 0.1) stalledFrames += 1;
+    maximumStep = Math.max(maximumStep, step);
+    previousX = x;
+  }
+  return {
+    stallRatio: movingFrames ? stalledFrames / movingFrames : 0,
+    maximumStep,
+    expectedStep: speed * frameMs / 1000,
+  };
+}
+
 function addBusyRoomState(authority, roomIds) {
   const state = authority.simulation.state;
   for (let index = 0; index < 90; index += 1) {
@@ -346,6 +397,7 @@ async function main() {
   });
   const remoteAt5Hz = runRemoteSmoothness(200);
   const remoteAt2_5Hz = runRemoteSmoothness(400);
+  const localAt60Fps = runLocalSmoothness();
 
   process.stdout.write('Multiplayer latency/correction benchmark (synthetic 3-room combat: 90 enemies, 180 projectiles)\n');
   process.stdout.write('Movement is predicted with NetworkGameView; snapshots are server-authoritative. Delay is one-way.\n\n');
@@ -356,6 +408,8 @@ async function main() {
   process.stdout.write('Remote presentation continuity (60 fps, steady 228 px/s actor)\n');
   process.stdout.write(`  5 Hz: ${(remoteAt5Hz.stallRatio * 100).toFixed(1)}% stalled frames | max step ${metric(remoteAt5Hz.maximumStep)} px\n`);
   process.stdout.write(`  2.5 Hz: ${(remoteAt2_5Hz.stallRatio * 100).toFixed(1)}% stalled frames | max step ${metric(remoteAt2_5Hz.maximumStep)} px\n`);
+  process.stdout.write('Local presentation continuity (60 fps, 20 Hz input/authority)\n');
+  process.stdout.write(`  ${(localAt60Fps.stallRatio * 100).toFixed(1)}% stalled frames | max step ${metric(localAt60Fps.maximumStep)} px\n`);
   const gates = {
     normalSnapshotP95Under180Ms: packed.snapshotAge.p95 < 180,
     normalCorrectionP95Under28Px: packed.correction.p95 < 28,
@@ -372,6 +426,8 @@ async function main() {
     remote5HzStallFramesUnder1Percent: remoteAt5Hz.stallRatio < 0.01,
     remote2_5HzStallFramesUnder1Percent: remoteAt2_5Hz.stallRatio < 0.01,
     remote2_5HzStepUnder8Px: remoteAt2_5Hz.maximumStep < 8,
+    localStallFramesUnder1Percent: localAt60Fps.stallRatio < 0.01,
+    localStepUnder6Px: localAt60Fps.maximumStep < 6,
   };
   process.stdout.write(`\nAcceptance: ${JSON.stringify(gates)}\n`);
   if (process.argv.includes('--enforce') && Object.values(gates).includes(false)) process.exitCode = 1;
@@ -384,4 +440,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { percentile, summary, runRemoteSmoothness, runScenario };
+module.exports = { percentile, summary, runRemoteSmoothness, runLocalSmoothness, runScenario };

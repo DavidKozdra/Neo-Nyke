@@ -54,6 +54,7 @@
   // continuous across that entire interval instead of freezing and jumping.
   const MAX_REMOTE_EXTRAPOLATION_MS = 300;
   const MAX_SMOOTH_RECONCILIATION_PX = 96;
+  const MAX_LOCAL_PREDICTION_FRAME_MS = 50;
   const CAMPAIGN_HUD_LAYER_IDS = Object.freeze([
     'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
     'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
@@ -578,6 +579,8 @@
       this.pendingInputHistory = [];
       this.lastPredictedInputSequence = -1;
       this.localPredictionTick = 0;
+      this.lastLocalPredictionAt = 0;
+      this.lastLocalPredictionInput = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.reconciliationOffset = null;
       this.diagnosticsVisible = false;
       this.diagnosticsElement = null;
@@ -942,6 +945,11 @@
       this.currentSample = null;
       this.localPredictedPlayer = null;
       this.localPredictedPlayerId = null;
+      this.lastLocalPredictionAt = 0;
+      this.lastLocalPredictionInput = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
+      this.pendingInputHistory = [];
+      this.localPredictionTick = 0;
+      this.reconciliationOffset = null;
       this.lastFloorNumber = 0;
       this.floorTransitionStartedAt = 0;
       this.lastTransitionSequence = 0;
@@ -1151,6 +1159,10 @@
       if (transitionChanged || receivedFloorNumber !== Number(this.localPredictedPlayer?.floorNumber || receivedFloorNumber)) {
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer, floorNumber: receivedFloorNumber };
+        this.pendingInputHistory = [];
+        this.localPredictionTick = Number(state.tick || 0);
+        this.lastLocalPredictionAt = receivedAt;
+        this.reconciliationOffset = null;
         return;
       }
       // A reconnect (or a session handoff) can change playerId while this
@@ -1159,14 +1171,32 @@
       if (this.localPredictedPlayerId !== snapshot.playerId) {
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer };
+        this.pendingInputHistory = [];
+        this.localPredictionTick = Number(state.tick || 0);
+        this.lastLocalPredictionAt = receivedAt;
+        this.reconciliationOffset = null;
         return;
       }
       if (!this.localPredictedPlayer) {
         this.localPredictedPlayer = { ...authorityPlayer };
+        this.localPredictionTick = Number(state.tick || 0);
+        this.lastLocalPredictionAt = receivedAt;
         return;
       }
       const acknowledgedInput = Number(snapshot.lastAcknowledgedInput ?? -1);
+      // A snapshot can arrive between presentation frames. Bring the local
+      // predictor up to its receive timestamp before comparing it with the
+      // authoritative base.
+      this._advanceLocalPrediction(receivedAt);
       const previousPredicted = this.localPredictedPlayer;
+      let previousPresentedX = Number(previousPredicted?.x || 0);
+      let previousPresentedY = Number(previousPredicted?.y || 0);
+      if (this.reconciliationOffset) {
+        const elapsed = Math.max(0, receivedAt - this.reconciliationOffset.startedAt);
+        const remaining = clamp(1 - elapsed / this.reconciliationOffset.durationMs, 0, 1);
+        previousPresentedX += this.reconciliationOffset.x * remaining;
+        previousPresentedY += this.reconciliationOffset.y * remaining;
+      }
       this.pendingInputHistory = this.pendingInputHistory
         .filter(entry => entry.predictionTick > Number(state.tick || 0))
         .slice(-64);
@@ -1178,8 +1208,8 @@
         entry.predictionTick,
       ), { ...authorityPlayer });
       const correctionDistance = previousPredicted
-        ? Math.hypot(Number(previousPredicted.x || 0) - Number(reconciled.x || 0),
-          Number(previousPredicted.y || 0) - Number(reconciled.y || 0))
+        ? Math.hypot(previousPresentedX - Number(reconciled.x || 0),
+          previousPresentedY - Number(reconciled.y || 0))
         : 0;
       if (correctionDistance > 0.01) {
         const diagnostics = this.session.client?.diagnostics;
@@ -1197,8 +1227,8 @@
         }
         if (correctionDistance < MAX_SMOOTH_RECONCILIATION_PX) {
           this.reconciliationOffset = {
-            x: Number(previousPredicted.x || 0) - Number(reconciled.x || 0),
-            y: Number(previousPredicted.y || 0) - Number(reconciled.y || 0),
+            x: previousPresentedX - Number(reconciled.x || 0),
+            y: previousPresentedY - Number(reconciled.y || 0),
             startedAt: receivedAt,
             durationMs: clamp(correctionDistance * 3, 120, 240),
           };
@@ -1208,6 +1238,7 @@
       }
       this.localPredictedPlayer = reconciled;
       this.localPredictionTick = Math.max(this.localPredictionTick, Number(state.tick || 0));
+      this.lastLocalPredictionAt = receivedAt;
       this.lastAcknowledgedInput = acknowledgedInput;
     }
 
@@ -2238,6 +2269,10 @@
         this._releasePredictedHeldCharge();
       }
       const now = root.performance?.now?.() || Date.now();
+      // Keep prediction current even if a frame was delayed. In normal play
+      // requestAnimationFrame advances it more frequently; this is the bounded
+      // 20 Hz fallback for throttled/minimal presentation hosts.
+      this._advanceLocalPrediction(now);
       const previous = this.lastTransmittedInput;
       const movementOrButtonChanged = !previous
         || Math.abs(input.moveX - previous.moveX) > INPUT_VECTOR_EPSILON
@@ -2261,17 +2296,12 @@
         }
       }
       if (this.localPredictedPlayer) {
-        this.localPredictedPlayer = predictPosition(
-          this.localPredictedPlayer,
-          input,
-          INPUT_INTERVAL_MS / 1000,
-          this.currentSample?.state?.floorState,
-          this.currentSample?.tick,
-        );
         this.localPredictionTick = Math.max(
           Number(this.currentSample?.tick || 0),
           Number(this.localPredictionTick || 0),
         ) + 1;
+        this.lastLocalPredictionInput = { ...input };
+        if (!this.lastLocalPredictionAt) this.lastLocalPredictionAt = now;
         this.pendingInputHistory.push({
           sequence: this.lastPredictedInputSequence,
           predictionTick: this.localPredictionTick,
@@ -2304,6 +2334,33 @@
         || !!this.neo.uiController?.isDialogueOpen?.();
     }
 
+    _advanceLocalPrediction(now) {
+      if (!this.localPredictedPlayer) return;
+      const frameAt = Number(now || 0);
+      if (!this.lastLocalPredictionAt) {
+        this.lastLocalPredictionAt = frameAt;
+        return;
+      }
+      const elapsedMs = clamp(frameAt - this.lastLocalPredictionAt, 0, MAX_LOCAL_PREDICTION_FRAME_MS);
+      this.lastLocalPredictionAt = frameAt;
+      if (elapsedMs <= 0) return;
+      const movement = this._isInputBlocked() || this.localPredictedPlayer.downed
+        ? { moveX: 0, moveY: 0 }
+        : this._readMovement();
+      const input = {
+        ...this.lastLocalPredictionInput,
+        ...movement,
+        aimDirection: this.aimDirection,
+      };
+      this.localPredictedPlayer = predictPosition(
+        this.localPredictedPlayer,
+        input,
+        elapsedMs / 1000,
+        this.currentSample?.state?.floorState,
+        this.localPredictionTick + elapsedMs / INPUT_INTERVAL_MS,
+      );
+    }
+
     _renderedPlayers(now) {
       if (!this.currentSample) return {};
       const currentPlayers = this.currentSample.state.players || {};
@@ -2319,6 +2376,10 @@
       const players = interpolatePlayers(previousPlayers, currentPlayers, alpha, { extrapolationSeconds });
       const localPlayerId = this._sessionPlayerId();
       if (localPlayerId && this.localPredictedPlayer) {
+        // Authority and input sampling remain at 20 Hz, but local presentation
+        // advances every frame. Without this, even localhost movement is
+        // quantized into visible 50 ms / ~11 px steps.
+        this._advanceLocalPrediction(now);
         const local = { ...this.localPredictedPlayer };
         if (this.reconciliationOffset) {
           const elapsed = Math.max(0, now - this.reconciliationOffset.startedAt);
@@ -3146,6 +3207,7 @@
     INTERPOLATION_DELAY_MS,
     MAX_REMOTE_EXTRAPOLATION_MS,
     MAX_SMOOTH_RECONCILIATION_PX,
+    MAX_LOCAL_PREDICTION_FRAME_MS,
     normalizeMovement,
     computeWorldTransform,
     computeCameraTransform,
