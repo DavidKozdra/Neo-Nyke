@@ -78,6 +78,17 @@ describe('gameplay protocol v1 runtime validation', () => {
     expect(getDeliveryIntent('SNAPSHOT_ACK')).toEqual({ reliability: 'reliable', channel: 'control', replaceable: false });
   });
 
+  test('accepts only bounded opt-in diagnostic correlation markers', () => {
+    const marker = createEnvelope('DIAGNOSTIC_MARKER', 16, 30, {
+      diagnosticSessionId: 'diag-session-1234',
+      enabled: true,
+    });
+    expect(validateEnvelope(marker, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(getDeliveryIntent('DIAGNOSTIC_MARKER')).toEqual({
+      reliability: 'reliable', channel: 'control', replaceable: false,
+    });
+  });
+
   test('validates authority-controlled multiplayer character choices', () => {
     const selection = createEnvelope('PLAYER_CHARACTER', 3, 0, { characterKey: 'sarge' });
     expect(validateEnvelope(selection, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
@@ -129,6 +140,7 @@ describe('gameplay protocol v1 runtime validation', () => {
   test('requires snapshots to state whether nullable boss state changed', () => {
     const snapshot = createEnvelope('WORLD_SNAPSHOT', 9, 40, {
       snapshotSequence: 3,
+      baselineSequence: 2,
       serverTick: 40,
       full: false,
       lastProcessedInput: {},

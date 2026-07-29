@@ -14,6 +14,7 @@
   const { MultiplayerRoomClient, LocalMultiplayerClient } = clientApi;
   const Client = MultiplayerRoomClient || LocalMultiplayerClient;
   const HEARTBEAT_INTERVAL_MS = 20_000;
+  const DIAGNOSTIC_PING_INTERVAL_MS = 1_000;
   const INTENTIONAL_DISPOSE_REASONS = new Set(['left', 'leave', 'disposed', 'quit', 'menu', 'changed-session']);
   const resumeApi = typeof require === 'function'
     ? require('../../Koz_Engine_Lib/Multiplayer/resumeStore.js')
@@ -72,6 +73,7 @@
       this.reconnectInFlight = false;
       this.reconnectPausedUntilWake = false;
       this.heartbeatTimer = null;
+      this.diagnosticPingTimer = null;
       this.notifyQueued = false;
       this.unsubscribeMessage = this.transport.onMessage((_peerId, message) => {
         if (message?.type === 'JOIN_ACCEPTED') this._persistResumeDescriptor(message.payload);
@@ -211,6 +213,64 @@
       return this.client.status;
     }
 
+    get playerId() {
+      return this.client.playerId;
+    }
+
+    readState() {
+      return this.client.state || null;
+    }
+
+    metadata() {
+      return {
+        roomCode: this.roomCode,
+        status: this.client.status,
+        playerId: this.client.playerId,
+        lastAcknowledgedInput: this.client.lastAcknowledgedInput,
+      };
+    }
+
+    enableDiagnostics(enabled = true) {
+      const active = enabled === true;
+      const id = this.client.diagnostics?.diagnosticSessionId
+        || root.crypto?.randomUUID?.()
+        || `diag-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const result = this.client.setDiagnostics(active, id);
+      if (this.diagnosticPingTimer !== null) root.clearInterval?.(this.diagnosticPingTimer);
+      this.diagnosticPingTimer = active
+        ? root.setInterval?.(() => {
+          if (this.client.status === 'running' && root.document?.hidden !== true) {
+            try { this.client.ping(`diag-${Date.now()}`); } catch { /* reconnect path owns failures */ }
+          }
+        }, DIAGNOSTIC_PING_INTERVAL_MS) ?? null
+        : null;
+      return result;
+    }
+
+    exportDiagnostics(extra = {}) {
+      const diagnostics = this.client.getDiagnostics?.() || {};
+      return {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        diagnosticSessionId: diagnostics.diagnosticSessionId || null,
+        buildVersion: this.client.buildVersion,
+        generationVersion: this.client.generationVersion,
+        contentHash: this.client.contentHash,
+        status: this.client.status,
+        metrics: diagnostics,
+        platform: {
+          userAgent: String(root.navigator?.userAgent || '').slice(0, 256),
+          language: String(root.navigator?.language || '').slice(0, 32),
+          viewport: {
+            width: Math.max(0, Math.trunc(Number(root.innerWidth) || 0)),
+            height: Math.max(0, Math.trunc(Number(root.innerHeight) || 0)),
+            devicePixelRatio: Number(root.devicePixelRatio || 1),
+          },
+        },
+        ...extra,
+      };
+    }
+
     requestRematch(ready = true) {
       return this.client.requestRematch(ready);
     }
@@ -321,6 +381,8 @@
       this.reconnectTimer = null;
       if (this.heartbeatTimer !== null) root.clearInterval?.(this.heartbeatTimer);
       this.heartbeatTimer = null;
+      if (this.diagnosticPingTimer !== null) root.clearInterval?.(this.diagnosticPingTimer);
+      this.diagnosticPingTimer = null;
       root.document?.removeEventListener?.('visibilitychange', this.boundConnectionWake);
       root.removeEventListener?.('focus', this.boundConnectionWake);
       this.unsubscribeMessage?.();
@@ -341,5 +403,5 @@
     return resumeApi.createResumeStore({ storage, key: options.resumeStorageKey }).load(options.requirements);
   };
 
-  return { HEARTBEAT_INTERVAL_MS, BrowserMultiplayerSession };
+  return { HEARTBEAT_INTERVAL_MS, DIAGNOSTIC_PING_INTERVAL_MS, BrowserMultiplayerSession };
 });

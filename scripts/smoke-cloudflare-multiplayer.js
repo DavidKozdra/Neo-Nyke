@@ -371,9 +371,13 @@ async function main() {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const enemy = snapshot.gameState?.enemies?.[target.id];
       const actor = globalThis.Neo.enemies?.find(candidate => candidate.id === target.id);
-      return !!enemy && !enemy.dead
-        && Number(enemy.health ?? enemy.hp) < target.health
-        && Number(actor?.hp) < target.health
+      // A low-health target can die between two browser polls. Death is
+      // stronger proof of authority damage and must not turn that success into
+      // an eight-second false timeout merely because its live actor was already
+      // replaced by the corpse presentation.
+      return !!enemy
+        && (enemy.dead || Number(enemy.health ?? enemy.hp) < target.health)
+        && (enemy.dead || Number(actor?.hp) < target.health)
         && (globalThis.Neo.__networkEnemyDrawSmokeCalls || 0) > 0;
     }, corpseTarget, { timeout: 8_000 });
     await host.waitForFunction(target => globalThis.Neo.gameSession.snapshot().gameState?.enemies?.[target.id]?.dead === true,
@@ -425,13 +429,51 @@ async function main() {
     await host.locator('#settingsModal').waitFor({ state: 'visible' });
     await host.locator('[data-tab="gameplay"]').click();
     await host.locator('[data-view-mode="fp"]').click();
+    // The default 2D path lazy-loads Three.js only after this click. Attach the
+    // probe to the loaded renderer (the early probe above intentionally cannot
+    // see it), then exercise the same render entry point once while Settings
+    // has the animation loop paused.
+    await host.waitForFunction(() => typeof globalThis.Neo?.threeRenderer?.render === 'function',
+      undefined, { timeout: 10_000 });
+    await host.evaluate(() => {
+      const renderer = globalThis.Neo.threeRenderer;
+      if (!renderer.__networkFpsSmokeWrapped) {
+        const originalRender = renderer.render.bind(renderer);
+        renderer.__networkFpsSmokeCalls = 0;
+        renderer.__networkFpsSmokeWrapped = true;
+        renderer.render = (...args) => {
+          renderer.__networkFpsSmokeCalls += 1;
+          return originalRender(...args);
+        };
+      }
+      renderer.render();
+    });
     await host.waitForFunction(() => (
       globalThis.Neo?.getViewMode?.() === 'fp'
       && globalThis.Neo?.render3D === true
       && (globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0) > 0
       && globalThis.Neo?.threeRenderer?._debug?.().otherPlayers === 1
       && document.querySelector('#c3d')?.style.display === 'block'
-    ), undefined, { timeout: 10_000 });
+    ), undefined, { timeout: 10_000 }).catch(async error => {
+      const diagnostic = await host.evaluate(() => ({
+        mode: globalThis.Neo?.getViewMode?.(),
+        render3D: globalThis.Neo?.render3D,
+        rendererCalls: globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0,
+        renderer: globalThis.Neo?.threeRenderer?._debug?.(),
+        canvasDisplay: document.querySelector('#c3d')?.style.display,
+        activeSlots: globalThis.Neo?.getActivePlayerSlots?.().map(slot => ({
+          id: slot?.id,
+          actorId: slot?.getEntity?.()?.id,
+          local: slot?.getEntity?.() === globalThis.Neo?.player,
+        })),
+        projectedSlots: globalThis.Neo?.presentationPlayerSlots?.map(slot => ({
+          id: slot?.id,
+          actorId: slot?.getEntity?.()?.id,
+          local: slot?.getEntity?.() === globalThis.Neo?.player,
+        })),
+      }));
+      throw new Error(`First-person renderer did not become ready: ${JSON.stringify(diagnostic)} (${error.message})`);
+    });
     const fpsProof = await host.evaluate(() => ({
       mode: globalThis.Neo?.getViewMode?.(),
       render3D: globalThis.Neo?.render3D === true,

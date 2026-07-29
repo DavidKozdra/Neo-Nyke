@@ -8,6 +8,7 @@ const {
   predictPosition,
   deriveAbilityPresentation,
   INPUT_HEARTBEAT_MS,
+  MAX_REMOTE_EXTRAPOLATION_MS,
   NetworkGameView,
   planChargedProjectilePreview,
   planPredictedDashPreview,
@@ -21,7 +22,7 @@ describe('network multiplayer game view', () => {
   });
 
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v33');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v34');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v28');
   });
 
@@ -51,6 +52,22 @@ describe('network multiplayer game view', () => {
     const movement = normalizeMovement(1, 1);
     expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);
     expect(normalizeMovement(0.5, 0)).toEqual({ moveX: 0.5, moveY: 0 });
+  });
+
+  test('reads direct session metadata without cloning a game snapshot in render hot paths', () => {
+    const snapshot = jest.fn(() => ({ playerId: 'p1', status: 'running' }));
+    const session = { playerId: 'p1', status: 'running', snapshot };
+    const view = new NetworkGameView({ session, neo: {} });
+    view.currentSample = {
+      tick: 1,
+      receivedAt: 100,
+      state: { players: { p1: { id: 'p1', x: 10, y: 20 } } },
+    };
+    view.previousSample = view.currentSample;
+    view.localPredictedPlayer = { id: 'p1', x: 10, y: 20 };
+
+    expect(view._renderedPlayers(116).p1).toEqual(expect.objectContaining({ x: 10, y: 20 }));
+    expect(snapshot).not.toHaveBeenCalled();
   });
 
   test('predicts with the same status speed and responsive velocity used by authority', () => {
@@ -218,8 +235,8 @@ describe('network multiplayer game view', () => {
     expect(sent[1]).toEqual(expect.objectContaining({ moveX: 1, moveY: 0 }));
   });
 
-  test('uses a one-second unchanged-input refresh and sends nothing while hidden', () => {
-    expect(INPUT_HEARTBEAT_MS).toBe(1000);
+  test('refreshes unchanged input quickly and sends nothing while hidden', () => {
+    expect(INPUT_HEARTBEAT_MS).toBe(250);
     const sendInput = jest.fn();
     const view = new NetworkGameView({
       session: { status: 'running', sendInput },
@@ -566,6 +583,54 @@ describe('network multiplayer game view', () => {
     expect(predicted.x).toBe(46);
     expect(predicted.y).toBe(46);
     expect(predicted.aimDirection).toBe(1);
+  });
+
+  test('briefly extrapolates remote actors instead of freezing between sparse snapshots', () => {
+    expect(MAX_REMOTE_EXTRAPOLATION_MS).toBe(300);
+    const moving = interpolatePlayers(
+      { p2: { id: 'p2', x: 100, y: 200, vx: 200, vy: -40 } },
+      { p2: { id: 'p2', x: 140, y: 192, vx: 200, vy: -40 } },
+      1.75,
+      { extrapolationSeconds: 0.15 },
+    );
+    expect(moving.p2.x).toBeCloseTo(170);
+    expect(moving.p2.y).toBeCloseTo(186);
+
+    const capped = interpolatePlayers(
+      { p2: { id: 'p2', x: 100, y: 200, vx: 200, vy: 0 } },
+      { p2: { id: 'p2', x: 140, y: 200, vx: 200, vy: 0 } },
+      4,
+      { extrapolationSeconds: 1 },
+    );
+    expect(capped.p2.x).toBeCloseTo(200);
+
+    const transitioned = interpolatePlayers(
+      { p2: { id: 'p2', roomId: 'a', x: 850, y: 300, vx: 200, vy: 0 } },
+      { p2: { id: 'p2', roomId: 'b', x: 64, y: 300, vx: 200, vy: 0 } },
+      2,
+      { extrapolationSeconds: 0.2 },
+    );
+    expect(transitioned.p2.x).toBe(64);
+  });
+
+  test('keeps sparse remote presentation continuous when the first sample timestamp is zero', () => {
+    const view = new NetworkGameView({
+      session: { playerId: 'p1', status: 'running' },
+      neo: {},
+    });
+    view.previousSample = {
+      tick: 0,
+      receivedAt: 0,
+      state: { players: { p2: { id: 'p2', roomId: 'a', x: 0, y: 0, vx: 200, vy: 0 } } },
+    };
+    view.currentSample = {
+      tick: 4,
+      receivedAt: 200,
+      state: { players: { p2: { id: 'p2', roomId: 'a', x: 40, y: 0, vx: 200, vy: 0 } } },
+    };
+
+    expect(view._renderedPlayers(300).p2.x).toBeCloseTo(40);
+    expect(view._renderedPlayers(350).p2.x).toBeCloseTo(50);
   });
 
   test('adapts authoritative chests and stairs into the campaign render entities', () => {

@@ -172,11 +172,13 @@ Cost controls deliberately separate hot simulation from persistence and delivery
 - Match metadata includes `matchSeed`, `floorSeed`, `generationVersion`, and `contentVersion`.
 - Static geometry may be regenerated locally only after compatibility validation. Dynamic outcomes always come from authority.
 - Named RNG streams prevent a loot draw from changing floor topology or boss patterns.
-- Snapshot acknowledgements drive local prediction reconciliation.
-- Remote players and enemies render from a buffered interpolation window, initially about 80–120 ms.
-- Floor entry, respawn, spawn, movement-mode change, and large correction teleport rather than interpolate.
+- Snapshot acknowledgements drive local prediction reconciliation and a bounded client baseline history safely rebases concurrent deltas.
+- Remote players and enemies render from a 100 ms buffered interpolation window, followed by at most 300 ms of authority-velocity dead reckoning so sparse snapshots do not freeze and jump.
+- Floor entry, respawn, spawn, movement-mode change, and corrections beyond the bounded smoothing threshold teleport rather than interpolate.
 
-The implementation target is immediate local input response and low perceived latency, not literal zero latency. Debug UI will expose round-trip time, jitter, correction rate, snapshot rate/size, bandwidth, and authority tick overruns.
+The implementation target is immediate local input response and low perceived latency, not literal zero latency. During a network run, `F8` enables the opt-in diagnostics overlay. It exposes round-trip time, jitter, correction rate, snapshot rate/size, bandwidth, presentation cost, resyncs, and authority tick. Its export is a bounded privacy-safe JSON trace with an anonymous diagnostic session ID; it excludes room codes, identities, chat, credentials, and raw input.
+
+Normal publication targets 10 Hz. A peer whose oldest unacknowledged view becomes stale degrades independently to 5 Hz and then 2.5 Hz, while other peers remain unaffected. Recovery uses hysteresis and returns through 5 Hz before 10 Hz, preventing one ACK from immediately reflooding the same slow link. Deltas are calculated from that peer's acknowledged baseline, and clients retain enough baseline history to rebase concurrent views without a sequence-gap resync. Current regression gates require under 80 KiB/player/second in the 100-player profiler, under 180 ms packed snapshot-age p95 at 100 ms RTT/1 Mbps, under 300 ms at 160 ms RTT/250 kbps, and bounded snapshot gaps/correction blending with 60 ms jitter, 8% unreliable loss, and duplicate delivery. Continuous-motion presentation is also sampled at 60 fps under both degraded cadences.
 
 ## Co-op lifecycle and safety
 
@@ -186,7 +188,7 @@ When a player is downed, their camera follows a living teammate by default. The 
 
 Pressing T opens authority-routed party chat. Messages are sanitized, limited to 180 characters, rate-limited by the authority, and attributed from server-owned player identity rather than client-supplied names. Opening chat releases gameplay input and pointer lock until the form closes.
 
-The normal multiplayer screen uses the campaign HUD rather than a separate always-on debug HUD. Escape opens a local multiplayer menu (the authority keeps running) with Resume, Info, Settings, and Leave Server. Network diagnostics will return as an opt-in debug overlay rather than replacing gameplay presentation.
+The normal multiplayer screen uses the campaign HUD rather than a separate always-on debug HUD. Escape opens a local multiplayer menu (the authority keeps running) with Resume, Info, Settings, and Leave Server. `F8` opens the opt-in diagnostics overlay without replacing gameplay presentation.
 
 Upgrade choices never globally pause multiplayer. Treasure chests publish a personal authoritative choice in player state; the receiving player selects with 1–3 while every occupied room continues simulating. Offline single-player retains its current pause behavior.
 

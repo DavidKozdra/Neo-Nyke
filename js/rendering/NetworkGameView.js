@@ -42,10 +42,18 @@
 
   const INPUT_INTERVAL_MS = 50;
   const INPUT_AIM_SEND_INTERVAL_MS = 100;
-  const INPUT_HEARTBEAT_MS = 1000;
+  // Refresh unchanged intent often enough that a lost direction change or
+  // button release cannot leave the authority applying stale input for a full
+  // second. Four tiny samples per second are negligible beside snapshots.
+  const INPUT_HEARTBEAT_MS = 250;
   const INPUT_VECTOR_EPSILON = 0.01;
   const INPUT_AIM_EPSILON = 0.02;
   const INTERPOLATION_DELAY_MS = 100;
+  // The severe congestion cadence is 400 ms. With the 100 ms interpolation
+  // buffer, 300 ms of bounded dead reckoning keeps constant-velocity actors
+  // continuous across that entire interval instead of freezing and jumping.
+  const MAX_REMOTE_EXTRAPOLATION_MS = 300;
+  const MAX_SMOOTH_RECONCILIATION_PX = 96;
   const CAMPAIGN_HUD_LAYER_IDS = Object.freeze([
     'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
     'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
@@ -427,8 +435,12 @@
     return (Number(from) || 0) + delta * amount;
   }
 
-  function interpolatePlayers(previous = {}, current = {}, alpha = 1) {
+  function interpolatePlayers(previous = {}, current = {}, alpha = 1, options = {}) {
     const amount = clamp(Number(alpha) || 0, 0, 1);
+    const extrapolationSeconds = Math.max(0, Math.min(
+      MAX_REMOTE_EXTRAPOLATION_MS / 1000,
+      Number(options.extrapolationSeconds) || 0,
+    ));
     return Object.fromEntries(Object.entries(current).map(([playerId, player]) => {
       const before = previous[playerId] || player;
       const changedRoom = before.roomId && player.roomId && before.roomId !== player.roomId;
@@ -438,11 +450,21 @@
         && player.beamChannel.startTick === before.beamChannel.startTick
         ? { ...player.beamChannel, angle: lerpAngle(before.beamChannel.angle, player.beamChannel.angle, amount) }
         : player.beamChannel;
+      const baseX = changedRoom
+        ? Number(player.x || 0)
+        : Number(before.x || 0) + (Number(player.x || 0) - Number(before.x || 0)) * amount;
+      const baseY = changedRoom
+        ? Number(player.y || 0)
+        : Number(before.y || 0) + (Number(player.y || 0) - Number(before.y || 0)) * amount;
+      // Once interpolation reaches the newest sample, dead-reckon briefly from
+      // its authority velocity instead of freezing until a sparse next update.
+      // The strict cap prevents a stalled connection from running away.
+      const extrapolate = !changedRoom && Number(alpha) > 1 ? extrapolationSeconds : 0;
       return [playerId, {
         ...player,
         beamChannel,
-        x: changedRoom ? Number(player.x || 0) : Number(before.x || 0) + (Number(player.x || 0) - Number(before.x || 0)) * amount,
-        y: changedRoom ? Number(player.y || 0) : Number(before.y || 0) + (Number(player.y || 0) - Number(before.y || 0)) * amount,
+        x: baseX + Number(player.vx || 0) * extrapolate,
+        y: baseY + Number(player.vy || 0) * extrapolate,
       }];
     }));
   }
@@ -544,6 +566,8 @@
       this.camera = { x: 0, y: 0, roomId: null };
       this.lastPresentationFrameAt = 0;
       this.latestAuthorityTick = 0;
+      this.sessionPlayerId = null;
+      this.latestLobbyState = null;
       this.lastWorldTransform = null;
       this.paused = false;
       this.lastTransmittedInput = null;
@@ -553,6 +577,12 @@
       // local hero from authority state instead of repeatedly blending drift.
       this.pendingInputHistory = [];
       this.lastPredictedInputSequence = -1;
+      this.localPredictionTick = 0;
+      this.reconciliationOffset = null;
+      this.diagnosticsVisible = false;
+      this.diagnosticsElement = null;
+      this.lastDiagnosticsRenderAt = 0;
+      this.longTaskObserver = null;
       this.spectatorPlayerId = null;
       this.localWasDowned = false;
       this.spectatorRenderSignature = '';
@@ -580,7 +610,7 @@
         const button = event.target?.closest?.('[data-spectator-player-id]');
         if (!button) return;
         this.spectatorPlayerId = button.dataset.spectatorPlayerId || null;
-        this._renderSpectatorControls(this.currentSample?.state, this.session.snapshot().playerId, true);
+        this._renderSpectatorControls(this.currentSample?.state, this._sessionPlayerId(), true);
       };
       this.boundContextMenu = event => {
         if (this.active && event.target === this.canvas) event.preventDefault();
@@ -616,10 +646,126 @@
       };
       this.boundRenderFrame = () => {
         if (!this.active) return;
+        const frameStartedAt = root.performance?.now?.() || Date.now();
         this.syncPresentation();
         this.neo.draw?.();
+        this._recordFrameDiagnostic((root.performance?.now?.() || Date.now()) - frameStartedAt);
         this.animationFrame = root.requestAnimationFrame?.(this.boundRenderFrame) ?? null;
       };
+    }
+
+    _sessionPlayerId() {
+      if (this.sessionPlayerId || this.session.playerId || this.session.client?.playerId) {
+        return this.sessionPlayerId || this.session.playerId || this.session.client.playerId;
+      }
+      // Lightweight test/embedding sessions may expose only the legacy
+      // snapshot facade. BrowserMultiplayerSession has direct metadata getters,
+      // so production render frames never take this cloning fallback.
+      return this.session.snapshot?.().playerId || null;
+    }
+
+    _sessionStatus() {
+      if (typeof this.session.status === 'string') return this.session.status;
+      return this.session.snapshot?.().status || 'disconnected';
+    }
+
+    _recordFrameDiagnostic(frameMs) {
+      if (!this.session.client?.diagnostics?.enabled) return;
+      const diagnostics = this.session.client.diagnostics;
+      diagnostics.frameSamples = Number(diagnostics.frameSamples || 0) + 1;
+      diagnostics.frameTimeTotalMs = Number(diagnostics.frameTimeTotalMs || 0) + Math.max(0, Number(frameMs) || 0);
+      diagnostics.maxFrameTimeMs = Math.max(Number(diagnostics.maxFrameTimeMs || 0), Math.max(0, Number(frameMs) || 0));
+    }
+
+    _recordFrameInterval(frameMs) {
+      if (!this.session.client?.diagnostics?.enabled || !(frameMs > 0)) return;
+      const diagnostics = this.session.client.diagnostics;
+      diagnostics.frameIntervalSamples = Number(diagnostics.frameIntervalSamples || 0) + 1;
+      diagnostics.frameIntervalTotalMs = Number(diagnostics.frameIntervalTotalMs || 0) + frameMs;
+      diagnostics.maxFrameIntervalMs = Math.max(Number(diagnostics.maxFrameIntervalMs || 0), frameMs);
+      if (frameMs >= 50) diagnostics.longFrames = Number(diagnostics.longFrames || 0) + 1;
+    }
+
+    _toggleDiagnostics(visible = !this.diagnosticsVisible) {
+      this.diagnosticsVisible = visible === true;
+      this.session.enableDiagnostics?.(this.diagnosticsVisible);
+      if (this.diagnosticsVisible && !this.longTaskObserver && typeof root.PerformanceObserver === 'function') {
+        try {
+          this.longTaskObserver = new root.PerformanceObserver(list => {
+            list.getEntries().forEach(entry => {
+              const diagnostics = this.session.client?.diagnostics;
+              if (!diagnostics?.enabled) return;
+              diagnostics.longTasks = Number(diagnostics.longTasks || 0) + 1;
+              diagnostics.maxLongTaskMs = Math.max(Number(diagnostics.maxLongTaskMs || 0), Number(entry.duration || 0));
+              this.session.client._recordDiagnostic?.('long-task', {
+                durationMs: Number(Number(entry.duration || 0).toFixed(1)),
+              });
+            });
+          });
+          this.longTaskObserver.observe({ entryTypes: ['longtask'] });
+        } catch { this.longTaskObserver = null; }
+      } else if (!this.diagnosticsVisible && this.longTaskObserver) {
+        this.longTaskObserver.disconnect();
+        this.longTaskObserver = null;
+      }
+      if (!this.diagnosticsElement && this.document?.body) {
+        const element = this.document.createElement('section');
+        element.className = 'multiplayer-diagnostics';
+        element.setAttribute('aria-live', 'polite');
+        element.addEventListener('click', event => {
+          if (event.target?.closest?.('[data-diagnostics-export]')) this._downloadDiagnostics();
+        });
+        this.document.body.appendChild(element);
+        this.diagnosticsElement = element;
+      }
+      this.diagnosticsElement?.classList.toggle('hidden', !this.diagnosticsVisible);
+      this._renderDiagnostics(true);
+    }
+
+    _renderDiagnostics(force = false) {
+      if (!this.diagnosticsVisible || !this.diagnosticsElement) return;
+      const now = root.performance?.now?.() || Date.now();
+      if (!force && now - this.lastDiagnosticsRenderAt < 250) return;
+      this.lastDiagnosticsRenderAt = now;
+      const metrics = this.session.client?.diagnostics || {};
+      const elapsedSeconds = Math.max(1, (Date.now() - Number(metrics.startedAt || Date.now())) / 1000);
+      const snapshotRate = Number(metrics.snapshots || 0) / elapsedSeconds;
+      const bandwidth = Number(metrics.snapshotBytes || 0) / elapsedSeconds / 1024;
+      const averageFrame = Number(metrics.frameSamples || 0)
+        ? Number(metrics.frameTimeTotalMs || 0) / Number(metrics.frameSamples)
+        : 0;
+      const averageInterval = Number(metrics.frameIntervalSamples || 0)
+        ? Number(metrics.frameIntervalTotalMs || 0) / Number(metrics.frameIntervalSamples)
+        : 0;
+      this.diagnosticsElement.innerHTML = `
+        <div class="multiplayer-diagnostics__title">NETWORK DIAGNOSTICS <kbd>F8</kbd></div>
+        <div>RTT <strong>${Number(metrics.rttMs || 0).toFixed(0)} ms</strong> · Jitter <strong>${Number(metrics.jitterMs || 0).toFixed(0)} ms</strong></div>
+        <div>Snapshots <strong>${snapshotRate.toFixed(1)}/s</strong> · <strong>${bandwidth.toFixed(1)} KiB/s</strong> · max <strong>${Math.round(Number(metrics.maxSnapshotBytes || 0) / 1024)} KiB</strong></div>
+        <div>Corrections <strong>${Number(metrics.corrections || 0)}</strong> · large <strong>${Number(metrics.largeCorrections || 0)}</strong> · hard <strong>${Number(metrics.hardCorrections || 0)}</strong> · max <strong>${Number(metrics.maxCorrectionPx || 0).toFixed(1)} px</strong></div>
+        <div>Frame <strong>${averageInterval.toFixed(1)} ms</strong> avg · max <strong>${Number(metrics.maxFrameIntervalMs || 0).toFixed(1)} ms</strong> · long <strong>${Number(metrics.longTasks || metrics.longFrames || 0)}</strong></div>
+        <div>Presentation <strong>${averageFrame.toFixed(1)} ms</strong> avg · max <strong>${Number(metrics.maxFrameTimeMs || 0).toFixed(1)} ms</strong></div>
+        <div>Rebased <strong>${Number(metrics.rebasedSnapshots || 0)}</strong> · resyncs <strong>${Number(metrics.resyncRequests || 0)}</strong> · tick <strong>${Number(this.latestAuthorityTick || 0)}</strong></div>
+        <button type="button" data-diagnostics-export>EXPORT JSON</button>
+      `;
+    }
+
+    _downloadDiagnostics() {
+      const report = this.session.exportDiagnostics?.({
+        presentation: {
+          renderedPlayers: Number(this.lastRenderedPlayerCount || 0),
+          renderedEnemies: Number(this.lastRenderedEnemyCount || 0),
+          renderedProjectiles: Number(this.lastRenderedProjectileCount || 0),
+          renderedPickups: Number(this.lastRenderedPickupCount || 0),
+        },
+      });
+      if (!report || typeof root.Blob !== 'function' || !root.URL?.createObjectURL) return report;
+      const url = root.URL.createObjectURL(new root.Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+      const anchor = this.document.createElement('a');
+      anchor.href = url;
+      anchor.download = `neonyke-multiplayer-diagnostics-${report.diagnosticSessionId || 'session'}.json`;
+      anchor.click();
+      root.setTimeout?.(() => root.URL.revokeObjectURL(url), 0);
+      return report;
     }
 
     start() {
@@ -681,6 +827,11 @@
       this.animationFrame = null;
       this.unsubscribe?.();
       this.unsubscribe = null;
+      if (this.diagnosticsVisible) this.session.enableDiagnostics?.(false);
+      this.diagnosticsVisible = false;
+      this.diagnosticsElement?.classList.add('hidden');
+      this.longTaskObserver?.disconnect?.();
+      this.longTaskObserver = null;
       root.removeEventListener?.('keydown', this.boundKeyDown);
       root.removeEventListener?.('keyup', this.boundKeyUp);
       root.removeEventListener?.('pointermove', this.boundPointerMove);
@@ -957,7 +1108,7 @@
       if (!candidates.length) return;
       const currentIndex = candidates.findIndex(player => player.id === this.spectatorPlayerId);
       this.spectatorPlayerId = candidates[(currentIndex + 1 + candidates.length) % candidates.length].id;
-      this._renderSpectatorControls(this.currentSample?.state, this.session.snapshot().playerId, true);
+      this._renderSpectatorControls(this.currentSample?.state, this._sessionPlayerId(), true);
     }
 
     _viewpointPlayerId(state, localPlayerId) {
@@ -967,6 +1118,8 @@
 
     _onSnapshot(snapshot = {}) {
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
+      this.sessionPlayerId = snapshot.playerId || this.sessionPlayerId;
+      this.latestLobbyState = snapshot.lobbyState || this.latestLobbyState;
       this._renderChat(snapshot.chatMessages || []);
       const state = snapshot.gameState;
       this.latestAuthorityTick = Math.max(0, Number(state?.tick) || this.latestAuthorityTick || 0);
@@ -1013,23 +1166,57 @@
         return;
       }
       const acknowledgedInput = Number(snapshot.lastAcknowledgedInput ?? -1);
+      const previousPredicted = this.localPredictedPlayer;
       this.pendingInputHistory = this.pendingInputHistory
-        // An acknowledged input may be held over several authority ticks, so
-        // sequence alone cannot say which locally integrated frames are
-        // already in this snapshot. The locally estimated server tick does.
-        .filter(entry => entry.estimatedServerTick > Number(state.tick || 0))
+        .filter(entry => entry.predictionTick > Number(state.tick || 0))
         .slice(-64);
-      this.localPredictedPlayer = this.pendingInputHistory.reduce((predicted, entry, index) => predictPosition(
+      const reconciled = this.pendingInputHistory.reduce((predicted, entry) => predictPosition(
         predicted,
         entry.input,
         INPUT_INTERVAL_MS / 1000,
         state.floorState,
-        Number(state.tick || 0) + index + 1,
+        entry.predictionTick,
       ), { ...authorityPlayer });
+      const correctionDistance = previousPredicted
+        ? Math.hypot(Number(previousPredicted.x || 0) - Number(reconciled.x || 0),
+          Number(previousPredicted.y || 0) - Number(reconciled.y || 0))
+        : 0;
+      if (correctionDistance > 0.01) {
+        const diagnostics = this.session.client?.diagnostics;
+        if (diagnostics?.enabled) {
+          diagnostics.corrections = Number(diagnostics.corrections || 0) + 1;
+          diagnostics.maxCorrectionPx = Math.max(Number(diagnostics.maxCorrectionPx || 0), correctionDistance);
+          if (correctionDistance >= 32) diagnostics.largeCorrections = Number(diagnostics.largeCorrections || 0) + 1;
+          if (correctionDistance >= MAX_SMOOTH_RECONCILIATION_PX) {
+            diagnostics.hardCorrections = Number(diagnostics.hardCorrections || 0) + 1;
+          }
+          this.session.client._recordDiagnostic?.('correction', {
+            distancePx: Number(correctionDistance.toFixed(2)),
+            acknowledgedInput,
+          });
+        }
+        if (correctionDistance < MAX_SMOOTH_RECONCILIATION_PX) {
+          this.reconciliationOffset = {
+            x: Number(previousPredicted.x || 0) - Number(reconciled.x || 0),
+            y: Number(previousPredicted.y || 0) - Number(reconciled.y || 0),
+            startedAt: receivedAt,
+            durationMs: clamp(correctionDistance * 3, 120, 240),
+          };
+        } else {
+          this.reconciliationOffset = null;
+        }
+      }
+      this.localPredictedPlayer = reconciled;
+      this.localPredictionTick = Math.max(this.localPredictionTick, Number(state.tick || 0));
       this.lastAcknowledgedInput = acknowledgedInput;
     }
 
     _onKey(event, pressed) {
+      if (this.active && pressed && !event.repeat && event.code === 'F8') {
+        event.preventDefault();
+        this._toggleDiagnostics();
+        return;
+      }
       if (this.active && pressed && !event.repeat && event.code === 'KeyT'
         && !event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) {
         event.preventDefault();
@@ -1109,7 +1296,7 @@
     }
 
     _onPointerDown(event) {
-      const localPlayer = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      const localPlayer = this.currentSample?.state?.players?.[this._sessionPlayerId()];
       if (this.active && localPlayer?.downed && event.button === 0 && event.target === this.canvas) {
         event.preventDefault();
         this._cycleSpectatorTarget();
@@ -1135,8 +1322,8 @@
     }
 
     activateEquipmentSlot(index) {
-      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return false;
-      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return false;
+      const player = this.currentSample?.state?.players?.[this._sessionPlayerId()];
       const itemKey = player?.equipmentSlots?.[Number(index)];
       if (!itemKey) return false;
       this.session.sendGameCommand?.('ACTIVATE_EQUIPMENT', { itemKey });
@@ -1144,8 +1331,8 @@
     }
 
     activateAllEquipment() {
-      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return false;
-      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return false;
+      const player = this.currentSample?.state?.players?.[this._sessionPlayerId()];
       let activated = false;
       (player?.equipmentSlots || []).forEach((itemKey, index) => {
         if (!itemKey) return;
@@ -1155,7 +1342,7 @@
     }
 
     _attack() {
-      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
+      if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
       if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       try {
         const player = this.localPredictedPlayer;
@@ -1186,7 +1373,7 @@
     }
 
     _useSlot(slot) {
-      if (!this.active || this._isInputBlocked() || this.session.snapshot().status !== 'running') return;
+      if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
       if (slot === 'laser' && this.neo.beamStruggle?.active) {
         this.session.sendAction('BEAM_MASH', this.aimDirection);
         return;
@@ -1251,7 +1438,7 @@
     _interact() {
       if (!this.active || this._isInputBlocked()) return false;
       const state = this.currentSample?.state;
-      const player = state?.players?.[this.session.snapshot().playerId];
+      const player = state?.players?.[this._sessionPlayerId()];
       if (!player || player.downed || player.pendingUpgrade) return false;
       // Shop / anvil / special-room panels are toggled by the campaign's global
       // window keydown handler in panels.js, which already runs
@@ -1298,7 +1485,7 @@
     }
 
     _selectUpgrade(index) {
-      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      const player = this.currentSample?.state?.players?.[this._sessionPlayerId()];
       const pending = player?.pendingUpgrade;
       const optionId = pending?.optionIds?.[index];
       if (!optionId) return false;
@@ -1307,7 +1494,7 @@
     }
 
     _upgradePresentationPickups(state = this.currentSample?.state) {
-      const playerId = this.session.snapshot?.().playerId;
+      const playerId = this._sessionPlayerId();
       const pending = state?.players?.[playerId]?.pendingUpgrade;
       if (!pending?.options?.length) return [];
       const source = state.interactables?.[pending.sourceEntityId];
@@ -1366,7 +1553,7 @@
 
     _consumeGameplayEvents(events, authorityTick = this.latestAuthorityTick) {
       const now = root.performance?.now?.() || Date.now();
-      const localPlayerId = this.session.snapshot().playerId;
+      const localPlayerId = this._sessionPlayerId();
       events.forEach(event => {
         if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
         this.seenGameplayEvents.add(event.eventId);
@@ -1391,12 +1578,12 @@
         });
         if (event.eventType === 'PLAYER_DOWNED') {
           const player = this.currentSample?.state?.players?.[event.data?.playerId];
-          const member = this.session.snapshot()?.lobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
+          const member = this.latestLobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
           const name = event.data?.playerId === localPlayerId ? 'You are down' : `${player?.displayName || member?.displayName || 'A teammate'} is down`;
           this.neo.pushStatusToast?.({ text: name, label: 'DOWNED', accent: '#ff7082', holdMs: 3200 });
         } else if (event.eventType === 'PLAYER_REVIVED' || event.eventType === 'PLAYER_RESPAWNED') {
           const player = this.currentSample?.state?.players?.[event.data?.playerId];
-          const member = this.session.snapshot()?.lobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
+          const member = this.latestLobbyState?.members?.find(candidate => candidate.playerId === event.data?.playerId);
           const name = event.data?.playerId === localPlayerId ? 'You are back in the fight' : `${player?.displayName || member?.displayName || 'A teammate'} is back`;
           this.neo.pushStatusToast?.({ text: name, label: 'REVIVED', accent: '#72e69c', holdMs: 2400 });
         }
@@ -1497,7 +1684,7 @@
     }
 
     _acknowledgePredictedCombatEvent(event, now) {
-      const localPlayerId = this.session.snapshot?.()?.playerId;
+      const localPlayerId = this._sessionPlayerId();
       const data = event.data || {};
       if (data.playerId !== localPlayerId) return null;
       const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => (
@@ -1731,7 +1918,7 @@
     _isGameplayEventVisible(event) {
       const state = this.currentSample?.state;
       if (!state) return true;
-      const localPlayerId = this.session.snapshot().playerId;
+      const localPlayerId = this._sessionPlayerId();
       const viewpointPlayer = state.players?.[this._viewpointPlayerId(state, localPlayerId)];
       if (!viewpointPlayer) return true;
       const data = event.data || {};
@@ -1743,7 +1930,7 @@
     }
 
     _applyAuthoritativeAbilityMovement(data = {}) {
-      const isLocalCaster = data.playerId === this.session.snapshot?.()?.playerId && this.localPredictedPlayer;
+      const isLocalCaster = data.playerId === this._sessionPlayerId() && this.localPredictedPlayer;
       if (!isLocalCaster) return;
       const destinationX = Number.isFinite(Number(data.destinationX))
         ? Number(data.destinationX) : Number(this.localPredictedPlayer.x || 0);
@@ -1792,7 +1979,7 @@
         // driven off the authoritative ENEMY_HIT/PLAYER_HIT event (matches
         // applyHitFeel in combat.js). Chip/DoT ticks (no knockback, tiny damage)
         // are skipped so a held beam doesn't jitter the camera every frame.
-        const localPlayerId = this.session.snapshot?.()?.playerId;
+        const localPlayerId = this._sessionPlayerId();
         const maxHp = Math.max(1, Number(entity.maxHealth || entity.maxHp || Number(data.damage || 0) * 6));
         const ratio = clamp(Number(data.damage || 0) / maxHp, 0, 1);
         const isPlayerHit = event.eventType === 'PLAYER_HIT';
@@ -2015,7 +2202,7 @@
     _sendInput() {
       // Status is scalar session metadata; do not deep-clone the complete
       // authoritative GameState on every 20 Hz input sampling pass.
-      const sessionStatus = this.session.status ?? this.session.snapshot().status;
+      const sessionStatus = this._sessionStatus();
       // Background timers can still fire (typically throttled to 1 Hz). Sending
       // from them would keep an abandoned room awake and defeat idle cleanup.
       if (root.document?.hidden === true || root.document?.visibilityState === 'hidden') return;
@@ -2081,11 +2268,13 @@
           this.currentSample?.state?.floorState,
           this.currentSample?.tick,
         );
-        const sampleAgeMs = Math.max(0, now - Number(this.currentSample?.receivedAt || now));
-        const estimatedServerTick = Number(this.currentSample?.tick || 0) + Math.max(1, Math.round(sampleAgeMs / INPUT_INTERVAL_MS));
+        this.localPredictionTick = Math.max(
+          Number(this.currentSample?.tick || 0),
+          Number(this.localPredictionTick || 0),
+        ) + 1;
         this.pendingInputHistory.push({
           sequence: this.lastPredictedInputSequence,
-          estimatedServerTick,
+          predictionTick: this.localPredictionTick,
           input: { ...input },
         });
         if (this.pendingInputHistory.length > 96) this.pendingInputHistory.splice(0, this.pendingInputHistory.length - 96);
@@ -2119,13 +2308,25 @@
       if (!this.currentSample) return {};
       const currentPlayers = this.currentSample.state.players || {};
       const previousPlayers = this.previousSample?.state?.players || currentPlayers;
-      const duration = Math.max(1, this.currentSample.receivedAt - (this.previousSample?.receivedAt || this.currentSample.receivedAt));
+      const previousReceivedAt = Number(this.previousSample?.receivedAt ?? this.currentSample.receivedAt);
+      const duration = Math.max(1, this.currentSample.receivedAt - previousReceivedAt);
       const targetTime = now - INTERPOLATION_DELAY_MS;
-      const alpha = clamp((targetTime - (this.previousSample?.receivedAt || targetTime)) / duration, 0, 1);
-      const players = interpolatePlayers(previousPlayers, currentPlayers, alpha);
-      const localPlayerId = this.session.snapshot().playerId;
+      const alpha = (targetTime - previousReceivedAt) / duration;
+      const extrapolationSeconds = Math.min(
+        MAX_REMOTE_EXTRAPOLATION_MS,
+        Math.max(0, targetTime - this.currentSample.receivedAt),
+      ) / 1000;
+      const players = interpolatePlayers(previousPlayers, currentPlayers, alpha, { extrapolationSeconds });
+      const localPlayerId = this._sessionPlayerId();
       if (localPlayerId && this.localPredictedPlayer) {
         const local = { ...this.localPredictedPlayer };
+        if (this.reconciliationOffset) {
+          const elapsed = Math.max(0, now - this.reconciliationOffset.startedAt);
+          const remaining = clamp(1 - elapsed / this.reconciliationOffset.durationMs, 0, 1);
+          local.x += this.reconciliationOffset.x * remaining;
+          local.y += this.reconciliationOffset.y * remaining;
+          if (remaining <= 0) this.reconciliationOffset = null;
+        }
         if (this.pendingBeamPresentation && now >= this.pendingBeamPresentation.untilAt) this.pendingBeamPresentation = null;
         // The release latch only suppresses the *predicted* beam after the
         // button comes up. It must never blank an authoritative beamChannel:
@@ -2150,10 +2351,15 @@
       if (!this.currentSample) return {};
       const current = this.currentSample.state[kind] || {};
       const previous = this.previousSample?.state?.[kind] || current;
-      const duration = Math.max(1, this.currentSample.receivedAt - (this.previousSample?.receivedAt || this.currentSample.receivedAt));
+      const previousReceivedAt = Number(this.previousSample?.receivedAt ?? this.currentSample.receivedAt);
+      const duration = Math.max(1, this.currentSample.receivedAt - previousReceivedAt);
       const targetTime = now - INTERPOLATION_DELAY_MS;
-      const alpha = clamp((targetTime - (this.previousSample?.receivedAt || targetTime)) / duration, 0, 1);
-      return interpolatePlayers(previous, current, alpha);
+      const alpha = (targetTime - previousReceivedAt) / duration;
+      const extrapolationSeconds = Math.min(
+        MAX_REMOTE_EXTRAPOLATION_MS,
+        Math.max(0, targetTime - this.currentSample.receivedAt),
+      ) / 1000;
+      return interpolatePlayers(previous, current, alpha, { extrapolationSeconds });
     }
 
     _visibleCanvasBounds() {
@@ -2417,7 +2623,7 @@
     }
 
     _projectActivePlayerEffects() {
-      const localPlayerId = this.session.snapshot?.()?.playerId;
+      const localPlayerId = this._sessionPlayerId();
       const serverTick = Number(this.currentSample?.state?.tick || 0);
       return this.presentationPlayerSlots.flatMap(slot => {
         const actor = slot.getEntity?.();
@@ -2638,7 +2844,7 @@
       const authorityFloorState = state?.floorState || CAMPAIGN_ROOM_GEOMETRY;
       const visibleBounds = this._visibleCanvasBounds();
       const players = this._renderedPlayers(now);
-      const localPlayerId = this.session.snapshot().playerId;
+      const localPlayerId = this._sessionPlayerId();
       const viewpointPlayerId = this._viewpointPlayerId(state, localPlayerId);
       const viewpointPlayer = players[viewpointPlayerId] || players[localPlayerId];
       const visibleRoomId = viewpointPlayer?.roomId || authorityFloorState.currentRoomId;
@@ -2650,6 +2856,7 @@
       const frameDelta = this.lastPresentationFrameAt > 0
         ? clamp((now - this.lastPresentationFrameAt) / 1000, 0, 0.05)
         : 1 / 60;
+      if (this.lastPresentationFrameAt > 0) this._recordFrameInterval(now - this.lastPresentationFrameAt);
       this.lastPresentationFrameAt = now;
       this._updateCamera(viewpointPlayer, frameDelta);
       // Neo.draw reads Neo.camera in every local presentation mode. Keep that
@@ -2703,6 +2910,8 @@
       this.neo.showFloorTransition = floorTransitionAge <= 1.25;
       this.neo.floorTransitionTime = floorTransitionAge;
       this._updateHud(state, players);
+      this._recordFrameDiagnostic((root.performance?.now?.() || Date.now()) - now);
+      this._renderDiagnostics();
       return true;
     }
 
@@ -2917,7 +3126,7 @@
     }
 
     _updateHud(state, players) {
-      const localPlayer = players[this.session.snapshot().playerId];
+      const localPlayer = players[this._sessionPlayerId()];
       if (!localPlayer || !state) return;
       this._setCampaignHudVisible(true);
       this.neo.updateHud?.();
@@ -2935,6 +3144,8 @@
     INPUT_AIM_SEND_INTERVAL_MS,
     INPUT_HEARTBEAT_MS,
     INTERPOLATION_DELAY_MS,
+    MAX_REMOTE_EXTRAPOLATION_MS,
+    MAX_SMOOTH_RECONCILIATION_PX,
     normalizeMovement,
     computeWorldTransform,
     computeCameraTransform,

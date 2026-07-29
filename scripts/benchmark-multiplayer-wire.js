@@ -33,7 +33,9 @@ async function createRunningHarness() {
   const network = new LocalLoopbackNetwork({ clock, latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0 });
   const authorityTransport = transport(network, 'authority');
   const clientTransport = transport(network, 'client');
-  const authority = new LocalMultiplayerAuthority({ transport: authorityTransport, sessionId: 'WIRE-BENCH', matchSeed: 42 });
+  const authority = new LocalMultiplayerAuthority({
+    transport: authorityTransport, sessionId: 'WIRE-BENCH', matchSeed: 42, minPlayers: 1,
+  });
   const client = new LocalMultiplayerClient({ transport: clientTransport });
   await authority.start();
   await client.connect('WIRE-BENCH');
@@ -175,11 +177,20 @@ async function main() {
 
   process.stdout.write('Multiplayer wire benchmark (synthetic 3-room combat: 90 enemies, 180 projectiles)\n');
   process.stdout.write(`Player room: ${playerRoomId}; snapshot rate: 10 Hz\n\n`);
+  process.stdout.write(`Measured delta: full=${packedProjectileDelta.full}, entities=${bytes(packedProjectileDelta.entities)} B, packed=${bytes(packedProjectileDelta.packedDynamic || {})} B, floor=${bytes(packedProjectileDelta.floorState)} B\n\n`);
   const fullBaseline = scenarios[0][1];
   scenarios.slice(0, 3).forEach(([name, value]) => printRow(name, value, fullBaseline));
   process.stdout.write('\n');
   const deltaBaseline = scenarios[3][1];
   scenarios.slice(3).forEach(([name, value]) => printRow(name, value, deltaBaseline));
+  const packedDeltaBytes = scenarios[5][1];
+  const gates = {
+    scopedBootstrapSmallerThanLegacy: scenarios[1][1] < fullBaseline,
+    packedDeltaUnder8KiB: packedDeltaBytes < 8 * 1024,
+    packedDeltaSavesAtLeast80Percent: 1 - packedDeltaBytes / deltaBaseline >= 0.8,
+  };
+  process.stdout.write(`\nAcceptance: ${JSON.stringify(gates)}\n`);
+  if (process.argv.includes('--enforce') && Object.values(gates).includes(false)) process.exitCode = 1;
 }
 
 main().catch(error => {

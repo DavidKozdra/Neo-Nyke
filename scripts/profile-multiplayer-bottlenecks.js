@@ -147,8 +147,13 @@ async function main() {
   const recovery = instances.reduce((total, room) => {
     total.snapshotAcks += room.authority.metrics.snapshotAcks;
     total.snapshotResyncs += room.authority.metrics.snapshotResyncs;
+    total.snapshotBytes += room.authority.metrics.snapshotBytes;
+    total.maxSnapshotBytes = Math.max(total.maxSnapshotBytes, room.authority.metrics.maxSnapshotBytes);
+    total.degradedSnapshotSkips += room.authority.metrics.degradedSnapshotSkips;
     return total;
-  }, { snapshotAcks: 0, snapshotResyncs: 0 });
+  }, {
+    snapshotAcks: 0, snapshotResyncs: 0, snapshotBytes: 0, maxSnapshotBytes: 0, degradedSnapshotSkips: 0,
+  });
   const phases = Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, summarize(values)]));
   const logicalSeconds = ticks / 20;
   const slowestRooms = instances.map(room => ({ room: room.roomCode, authority: summarize(room.authoritySamples) }))
@@ -177,11 +182,12 @@ async function main() {
     slo: {
       authorityP95Under25Ms: phases.authority.p95Ms < 25,
       outboundP95Under25Ms: phases.outboundDelivery.p95Ms < 25,
+      bandwidthPerPlayerUnder80KiB: Math.round(network.bytes / logicalSeconds / (rooms * players)) < 80 * 1024,
       converged: true,
     },
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  if (enforce && (!report.slo.authorityP95Under25Ms || !report.slo.outboundP95Under25Ms)) process.exitCode = 1;
+  if (enforce && Object.values(report.slo).includes(false)) process.exitCode = 1;
 }
 
 if (require.main === module) {

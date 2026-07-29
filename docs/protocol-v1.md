@@ -70,6 +70,7 @@ The protocol's co-op match is entered from the separate `MULTIPLAYER` flow. Lega
 | `REMATCH_REQUEST` | reliable/control | Boolean post-run rematch readiness. A new run starts only after every connected member is ready. |
 | `LEAVE_MATCH` | reliable/control | Graceful leave reason code. Authority owns cleanup. |
 | `PING` | unreliable/control | Opaque bounded nonce and client send timestamp used only for diagnostics. |
+| `DIAGNOSTIC_MARKER` | reliable/control | Opt-in anonymous diagnostic session ID used to correlate a tester export with aggregated room telemetry. |
 
 No client message can directly specify damage, hit success, enemy death, pickup ownership, currency balance, shop inventory, random result, boss phase, or floor completion.
 
@@ -118,7 +119,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `LOBBY_STATE` | reliable/control | Members, ready flags, host marker, mode, capacity, joinability. |
 | `MATCH_STARTING` | reliable/gameplay | Start tick/time, match/floor seeds, generation/content versions. |
 | `INITIAL_STATE` | reliable/snapshot | Full serializable `GameState`, authority tick, per-player input acknowledgements. |
-| `WORLD_SNAPSHOT` | unreliable, replaceable/snapshot | Snapshot sequence, server tick, acknowledgements, changed entity state, additions/removals, optional full-correction marker. |
+| `WORLD_SNAPSHOT` | unreliable, replaceable/snapshot | Snapshot and acknowledged-baseline sequence, server tick/time, changed entity state, scoped additions/removals, optional full-correction marker. |
 | `ENTITY_SPAWNED` | reliable/gameplay | Stable ID, kind, authoritative initial data when spawn cannot wait for snapshot. |
 | `ENTITY_REMOVED` | reliable/gameplay | Stable ID and removal reason. |
 | `GAMEPLAY_EVENT` | reliable/gameplay | Event ID plus typed outcome such as hit, pickup, purchase, death, revive, or choice resolved. Clients deduplicate event IDs. |
@@ -127,7 +128,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `CHAT_MESSAGE` | reliable/chat | Authority-attributed player ID/name, sanitized text, message ID, and authority tick. |
 | `PLAYER_DISCONNECTED` | reliable/control | Player ID, reason, reconnect deadline if reserved. |
 | `ERROR` | reliable/control | Stable safe code, message, whether connection closes. Never includes secrets/internal stack. |
-| `PONG` | unreliable/control | Echoed nonce plus authority receive/send tick/time for diagnostics. |
+| `PONG` | unreliable/control | Echoed nonce plus authority tick/time for RTT and jitter diagnostics. |
 
 ## Snapshot shape
 
@@ -136,7 +137,9 @@ Initial shape (delta encoding may later use arrays/bitmasks without changing sem
 ```js
 {
   snapshotSequence: 55,
+  baselineSequence: 53,
   serverTick: 920,
+  serverSentAt: 1730000000000,
   full: false,
   lastProcessedInput: {
     "player-1": 412,
@@ -150,13 +153,27 @@ Initial shape (delta encoding may later use arrays/bitmasks without changing sem
     pickups: {},
     interactables: {}
   },
+  packedDynamic: {},
   removedEntityIds: [],
   floorState: null,
   bossState: null
 }
 ```
 
-Static floor geometry is sent once in `INITIAL_STATE` or generated from the validated floor seed/version. It is not repeated in ordinary snapshots. A periodic reliable or recoverable full correction prevents permanent drift after lost unreliable snapshots.
+Static floor geometry is sent once in `INITIAL_STATE` or generated from the validated floor seed/version. It is not repeated in ordinary snapshots. Lifecycle boundaries and explicit resynchronization use a reliable full correction; ordinary publication remains compact and replaceable.
+
+Dynamic player/enemy/projectile transforms use collection-specific compact
+records. Behavioral changes still carry complete records, so packing cannot
+leave health, statuses, telegraphs, cooldowns, or presentation state stale.
+Each peer owns an acknowledged delta baseline and room-interest set. A peer may
+therefore skip replaceable snapshots without creating a sequence hole: the next
+delta is built from its last acknowledged baseline, entities entering interest
+receive a complete record, and entities leaving interest receive a removal.
+Clients retain a bounded history of accepted baselines. When several in-flight
+deltas reference the same acknowledged sequence, a newer arrival is rebuilt
+from that exact cached state rather than layered over an incompatible newer
+view. A missing/expired baseline is the exceptional path that requests a full
+resynchronization.
 
 Player room location is dynamic entity state (`players[playerId].roomId`), not a party-global current room. `floorState.transitionsByPlayer[playerId]` records that player's latest authoritative doorway transition. Room-owned encounter/interactable/pickup state is keyed by room ID and persists while empty, allowing players to separate and later observe the same room outcome.
 
@@ -166,7 +183,7 @@ Persistent move state such as healing zones, fire circles, chaos fields, holy tu
 
 - Each sender increments its own message sequence. Sequence wrap is not supported in v1; reconnect starts a new connection sequence space.
 - Authority processes player inputs in order, ignores duplicates/old sequences, and bounds how far ahead a client may queue.
-- Snapshot sequence orders replaceable world views. Clients discard snapshots older than the newest accepted sequence.
+- Snapshot sequence orders replaceable world views. Clients discard snapshots older than the newest accepted sequence and rebase newer views against their declared `baselineSequence`.
 - `lastProcessedInput[playerId]` drives local reconciliation and removal of acknowledged inputs.
 - Reliable gameplay events carry an authority-generated `eventId`; clients keep a bounded recent-ID cache so sounds/effects/rewards play once.
 - Entity spawn/removal is idempotent by stable entity ID.

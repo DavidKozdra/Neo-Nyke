@@ -39,12 +39,20 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v33';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v34';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
+  // Cadence reacts to the age of the oldest unacknowledged snapshot instead of
+  // its sequence count: two in-flight updates are normal on a healthy high-RTT
+  // path, while one packet stuck for hundreds of milliseconds is congestion.
+  const SNAPSHOT_DEGRADE_AGE_MS = 200;
+  const SNAPSHOT_SEVERE_AGE_MS = 350;
+  const SNAPSHOT_DEGRADE_HOLD_MS = 800;
+  const SNAPSHOT_SEVERE_HOLD_MS = 1200;
+  const SNAPSHOT_BASELINE_HISTORY = 16;
   const RESYNC_MIN_TICKS = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
@@ -57,13 +65,34 @@
   const SNAPSHOT_ENTITY_COLLECTIONS = Object.freeze([
     'players', 'enemies', 'projectiles', 'abilityEntities', 'pickups', 'interactables',
   ]);
-  // Enemy records are the campaign render contract: health, death state,
-  // statuses, wind-ups, animation timers and authored behavior fields all live
-  // together. Packing only a handful of transform fields made clients retain
-  // stale bootstrap data and forced NetworkGameView to guess. Keep changed
-  // enemies complete; only small transient collections use the compact wire
-  // record.
-  const PACKED_DYNAMIC_COLLECTIONS = Object.freeze(['projectiles', 'abilityEntities']);
+  // Enemy behavior changes still send complete campaign render records. Only
+  // their high-frequency transform is split into the compact section, so
+  // movement no longer retransmits health/status/telegraph metadata unchanged.
+  const PACKED_DYNAMIC_COLLECTIONS = Object.freeze(['players', 'enemies', 'projectiles', 'abilityEntities']);
+  const PACKED_DYNAMIC_FIELDS = new Set([
+    'roomId', 'x', 'y', 'vx', 'vy', 'radius', 'r',
+    'hp', 'health', 'maxHp', 'maxHealth', 'max',
+    'expiresTick', 'action', 'hostile', 'angle', 'aimDirection',
+    'swinging', 'swingCooldownUntilTick', 'swingsLeft',
+    'dead', 'downed', 'deathTick', 'actionTick', '_lastHitAngle', 'lastHitAngle',
+  ]);
+
+  function snapshotEntitySignature(collection, entity) {
+    if (!PACKED_DYNAMIC_COLLECTIONS.includes(collection)) return JSON.stringify(entity);
+    const omitted = collection === 'enemies'
+      ? new Set(['x', 'y', 'vx', 'vy', 'angle'])
+      : PACKED_DYNAMIC_FIELDS;
+    return JSON.stringify(Object.fromEntries(Object.entries(entity)
+      .filter(([key]) => !omitted.has(key))));
+  }
+
+  function snapshotFloorState(floorState) {
+    const snapshot = cloneSerializable(floorState || null);
+    snapshot?.layout?.rooms?.forEach(room => {
+      room.hazards?.forEach(hazard => { delete hazard.statusTick; });
+    });
+    return snapshot;
+  }
 
   function scopedSnapshotEntities(source = {}, roomId) {
     return Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => {
@@ -109,11 +138,35 @@
       entity.dead ? 1 : 0,
       Math.max(0, Math.trunc(Number(entity.deathTick || 0))),
       Math.round(Number(entity._lastHitAngle ?? entity.lastHitAngle ?? 0) * 10000),
+      Math.round(Number(entity.aimDirection || 0) * 10000),
+      entity.downed ? 1 : 0,
+      Math.trunc(Number(entity.actionTick || 0)),
     ];
     const packed = {};
     PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
       const records = entities[collection] || {};
-      packed[collection] = Object.values(records).map(pack);
+      if (collection === 'enemies') {
+        packed[collection] = Object.values(records).map(entity => [
+          indexOf(dictionaries.ids, entity.id),
+          Math.round(Number(entity.x || 0) * 8), Math.round(Number(entity.y || 0) * 8),
+          Math.round(Number(entity.vx || 0) * 8), Math.round(Number(entity.vy || 0) * 8),
+          Math.round(Number(entity.angle || 0) * 10000),
+        ]);
+      } else if (collection === 'projectiles') {
+        packed[collection] = Object.values(records).map(entity => [
+          indexOf(dictionaries.ids, entity.id),
+          Math.round(Number(entity.x || 0) * 8), Math.round(Number(entity.y || 0) * 8),
+          Math.round(Number(entity.vx || 0) * 8), Math.round(Number(entity.vy || 0) * 8),
+          Math.round(Number(entity.radius || entity.r || 0) * 8),
+          Math.round(Number(entity.expiresTick || 0)),
+          Math.round(Number(entity.angle || 0) * 10000),
+          entity.dead ? 1 : 0,
+          Math.max(0, Math.trunc(Number(entity.deathTick || 0))),
+          Math.round(Number(entity._lastHitAngle ?? entity.lastHitAngle ?? 0) * 10000),
+        ]);
+      } else {
+        packed[collection] = Object.values(records).map(pack);
+      }
     });
     return { dictionaries, packed };
   }
@@ -128,8 +181,36 @@
       const target = state[collection] || (state[collection] = {});
       (wire.packed?.[collection] || []).forEach(record => {
         if (!Array.isArray(record)) return;
+        if (collection === 'enemies') {
+          const [idIndex, x, y, vx, vy, angle] = record;
+          const id = ids[idIndex];
+          if (!id || !target[id]) return;
+          Object.assign(target[id], {
+            x: Number(x || 0) / 8, y: Number(y || 0) / 8,
+            vx: Number(vx || 0) / 8, vy: Number(vy || 0) / 8,
+            angle: Number(angle || 0) / 10000,
+          });
+          return;
+        }
+        if (collection === 'projectiles') {
+          const [idIndex, x, y, vx, vy, radius, expiresTick, angle, dead, deathTick, lastHitAngle] = record;
+          const id = ids[idIndex];
+          if (!id || !target[id]) return;
+          Object.assign(target[id], {
+            x: Number(x || 0) / 8, y: Number(y || 0) / 8,
+            vx: Number(vx || 0) / 8, vy: Number(vy || 0) / 8,
+            radius: Number(radius || 0) / 8,
+            expiresTick: Number(expiresTick || 0),
+            angle: Number(angle || 0) / 10000,
+            dead: dead === 1,
+            deathTick: Number(deathTick || 0),
+            _lastHitAngle: Number(lastHitAngle || 0) / 10000,
+          });
+          return;
+        }
         const [idIndex, roomIndex, kindIndex, x, y, vx, vy, radius, hp, maxHp, expiresTick, actionIndex, hostile,
-          angle, swinging, swingCooldownUntilTick, swingsLeft, dead, deathTick, lastHitAngle] = record;
+          angle, swinging, swingCooldownUntilTick, swingsLeft, dead, deathTick, lastHitAngle,
+          aimDirection, downed, actionTick] = record;
         const id = ids[idIndex];
         if (!id) return;
         const kind = kinds[kindIndex] || '';
@@ -153,6 +234,9 @@
           dead: dead === 1,
           deathTick: Number(deathTick || 0),
           _lastHitAngle: Number(lastHitAngle || 0) / 10000,
+          aimDirection: Number(aimDirection || 0) / 10000,
+          downed: downed === 1,
+          actionTick: Number(actionTick || 0),
         };
       });
     });
@@ -220,7 +304,16 @@
       this.snapshotSequenceByPeer = new Map();
       this.lastSnapshotSentByPeer = new Map();
       this.lastSnapshotAckByPeer = new Map();
+      this.snapshotSentAtByPeer = new Map();
+      this.snapshotCadenceByPeer = new Map();
+      this.snapshotCadenceRecoveryAtByPeer = new Map();
       this.lastResyncTickByPeer = new Map();
+      this.snapshotEntitySignaturesByPeer = new Map();
+      this.snapshotFloorSignatureByPeer = new Map();
+      this.snapshotBossSignatureByPeer = new Map();
+      this.pendingSnapshotBaselinesByPeer = new Map();
+      this.lastDeliveryResultByPeer = new Map();
+      this.diagnosticSessionByPeer = new Map();
       this.peerRecords = new Map();
       this.playerIdByPeer = new Map();
       this.pendingInputs = {};
@@ -238,7 +331,6 @@
       this.pendingRunEnd = null;
       this.runEndedBroadcast = false;
       this.persistenceRevision = 0;
-      this.snapshotEntitySignatures = {};
       this.snapshotFloorSignature = '';
       this.snapshotBossSignature = '';
       this.lastSnapshotRoomByPlayer = {};
@@ -251,6 +343,10 @@
         snapshots: 0,
         snapshotAcks: 0,
         snapshotResyncs: 0,
+        snapshotBytes: 0,
+        maxSnapshotBytes: 0,
+        droppedSnapshots: 0,
+        degradedSnapshotSkips: 0,
         invalidMessages: 0,
       };
       this.simulation = this._createSimulation(this.matchSeed, this.baseMatchId);
@@ -266,6 +362,7 @@
         lastSnapshotSentByPeer: Array.from(this.lastSnapshotSentByPeer.entries()),
         lastSnapshotAckByPeer: Array.from(this.lastSnapshotAckByPeer.entries()),
         lastResyncTickByPeer: Array.from(this.lastResyncTickByPeer.entries()),
+        diagnosticSessionByPeer: Array.from(this.diagnosticSessionByPeer.entries()),
         rematchSerial: this.rematchSerial,
         chatSequence: this.chatSequence,
         mode: this.mode,
@@ -298,6 +395,7 @@
       this.lastSnapshotSentByPeer = new Map(Array.isArray(runtime.lastSnapshotSentByPeer) ? runtime.lastSnapshotSentByPeer : []);
       this.lastSnapshotAckByPeer = new Map(Array.isArray(runtime.lastSnapshotAckByPeer) ? runtime.lastSnapshotAckByPeer : []);
       this.lastResyncTickByPeer = new Map(Array.isArray(runtime.lastResyncTickByPeer) ? runtime.lastResyncTickByPeer : []);
+      this.diagnosticSessionByPeer = new Map(Array.isArray(runtime.diagnosticSessionByPeer) ? runtime.diagnosticSessionByPeer : []);
       this.rematchSerial = Math.max(0, Math.trunc(Number(runtime.rematchSerial) || 0));
       this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
       this.mode = ['rival', 'boss_rush'].includes(runtime.mode) ? runtime.mode : 'coop';
@@ -332,14 +430,13 @@
     }
 
     _primeSnapshotSignatures() {
-      this.snapshotEntitySignatures = Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [
-        collection,
-        Object.fromEntries(Object.entries(this.simulation.state[collection] || {})
-          .map(([entityId, entity]) => [entityId, JSON.stringify(entity)])),
-      ]));
-      this.snapshotFloorSignature = JSON.stringify(this.simulation.state.floorState || null);
+      this.snapshotFloorSignature = JSON.stringify(snapshotFloorState(this.simulation.state.floorState));
       this.snapshotBossSignature = JSON.stringify(this.simulation.state.bossState || null);
       this.lastSnapshotRoomByPlayer = {};
+      this.snapshotEntitySignaturesByPeer.clear();
+      this.snapshotFloorSignatureByPeer.clear();
+      this.snapshotBossSignatureByPeer.clear();
+      this.pendingSnapshotBaselinesByPeer.clear();
     }
 
     _createSimulation(matchSeed, matchId) {
@@ -449,7 +546,8 @@
 
     _send(peerId, type, payload, deliveryOverride = null) {
       const message = createEnvelope(type, this.outgoingSequence++, this.simulation.state.tick, payload);
-      this.transport.send(peerId, message, deliveryOverride || getDeliveryIntent(type));
+      const result = this.transport.send(peerId, message, deliveryOverride || getDeliveryIntent(type));
+      this.lastDeliveryResultByPeer.set(peerId, result || { queued: true, dropped: false });
       return message;
     }
 
@@ -493,10 +591,15 @@
         case 'REMATCH_REQUEST': this._handleRematchRequest(peerId, message.payload); break;
         case 'SNAPSHOT_ACK': this._handleSnapshotAck(peerId, message.payload); break;
         case 'SNAPSHOT_RESYNC_REQUEST': this._handleSnapshotResyncRequest(peerId, message.payload); break;
+        case 'DIAGNOSTIC_MARKER':
+          if (message.payload.enabled) this.diagnosticSessionByPeer.set(peerId, message.payload.diagnosticSessionId);
+          else this.diagnosticSessionByPeer.delete(peerId);
+          break;
         case 'PING': this._send(peerId, 'PONG', {
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
           serverTick: this.simulation.state.tick,
+          serverTime: Date.now(),
         }); break;
         case 'LEAVE_MATCH': this.transport.disconnectPeer?.(peerId, message.payload.reason || 'left'); break;
         default: this._rejectInvalidMessage(peerId, [`${message.type} is not implemented by the local test authority`]);
@@ -838,6 +941,20 @@
       const previous = this.lastSnapshotAckByPeer.get(peerId);
       if (previous !== undefined && acknowledged <= previous) return;
       this.lastSnapshotAckByPeer.set(peerId, acknowledged);
+      const sentTimes = this.snapshotSentAtByPeer.get(peerId);
+      sentTimes?.forEach((_sentAt, sequence) => {
+        if (sequence <= acknowledged) sentTimes.delete(sequence);
+      });
+      const pending = this.pendingSnapshotBaselinesByPeer.get(peerId);
+      const baseline = pending?.get(acknowledged);
+      if (baseline) {
+        this.snapshotEntitySignaturesByPeer.set(peerId, baseline.entitySignatures);
+        this.snapshotFloorSignatureByPeer.set(peerId, baseline.floorSignature);
+        this.snapshotBossSignatureByPeer.set(peerId, baseline.bossSignature);
+      }
+      pending?.forEach((_value, sequence) => {
+        if (sequence <= acknowledged) pending.delete(sequence);
+      });
       this.metrics.snapshotAcks += 1;
     }
 
@@ -867,8 +984,16 @@
       this.snapshotSequenceByPeer.clear();
       this.lastSnapshotSentByPeer.clear();
       this.lastSnapshotAckByPeer.clear();
+      this.snapshotSentAtByPeer.clear();
+      this.snapshotCadenceByPeer.clear();
+      this.snapshotCadenceRecoveryAtByPeer.clear();
       this.lastResyncTickByPeer.clear();
-      this.snapshotEntitySignatures = {};
+      this.snapshotEntitySignaturesByPeer.clear();
+      this.snapshotFloorSignatureByPeer.clear();
+      this.snapshotBossSignatureByPeer.clear();
+      this.pendingSnapshotBaselinesByPeer.clear();
+      this.lastDeliveryResultByPeer.clear();
+      this.diagnosticSessionByPeer.clear();
       this.snapshotFloorSignature = '';
       this.snapshotBossSignature = '';
       this.pendingInputs = {};
@@ -1026,7 +1151,16 @@
       cleaned = this.snapshotSequenceByPeer.delete(peerId) || cleaned;
       cleaned = this.lastSnapshotSentByPeer.delete(peerId) || cleaned;
       cleaned = this.lastSnapshotAckByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotSentAtByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotCadenceByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotCadenceRecoveryAtByPeer.delete(peerId) || cleaned;
       cleaned = this.lastResyncTickByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotEntitySignaturesByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotFloorSignatureByPeer.delete(peerId) || cleaned;
+      cleaned = this.snapshotBossSignatureByPeer.delete(peerId) || cleaned;
+      cleaned = this.pendingSnapshotBaselinesByPeer.delete(peerId) || cleaned;
+      cleaned = this.lastDeliveryResultByPeer.delete(peerId) || cleaned;
+      cleaned = this.diagnosticSessionByPeer.delete(peerId) || cleaned;
       const replaceablePrefix = `${peerId}|`;
       Array.from(this.lastReplaceableSequence.keys()).forEach(key => {
         if (!key.startsWith(replaceablePrefix)) return;
@@ -1188,76 +1322,95 @@
     }
 
     _publishSnapshot(full, recipientPeerIds = null) {
-      const actualFull = full || !SNAPSHOT_ENTITY_COLLECTIONS.every(collection => this.snapshotEntitySignatures[collection]);
-      const entities = {};
-      const removedEntityIds = [];
-      const newEntityIds = Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [collection, new Set()]));
-      SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
-        const current = this.simulation.state[collection] || {};
-        const previous = this.snapshotEntitySignatures[collection] || {};
-        const next = {};
-        const changed = {};
-        Object.entries(current).forEach(([entityId, entity]) => {
-          const signature = JSON.stringify(entity);
-          next[entityId] = signature;
-          // The signature is already a complete serialized copy. Parsing it is
-          // cheaper than stringifying the same entity again in cloneSerializable.
-          if (actualFull || previous[entityId] !== signature) {
-            changed[entityId] = JSON.parse(signature);
-            if (!previous[entityId]) newEntityIds[collection].add(entityId);
-          }
-        });
-        if (!actualFull) {
-          Object.keys(previous).forEach(entityId => {
-            if (!Object.prototype.hasOwnProperty.call(next, entityId)) removedEntityIds.push(entityId);
-          });
-        }
-        this.snapshotEntitySignatures[collection] = next;
-        entities[collection] = changed;
-      });
-      const floorSignature = JSON.stringify(this.simulation.state.floorState || null);
-      // Static layout is large and already arrives in INITIAL_STATE. Include floor
-      // state only when it actually changes, not on every full entity correction.
-      const floorChanged = floorSignature !== this.snapshotFloorSignature;
-      this.snapshotFloorSignature = floorSignature;
+      const floorSignature = JSON.stringify(snapshotFloorState(this.simulation.state.floorState));
       const bossSignature = JSON.stringify(this.simulation.state.bossState || null);
-      const bossStateChanged = bossSignature !== this.snapshotBossSignature;
-      this.snapshotBossSignature = bossSignature;
       const recipients = recipientPeerIds || Array.from(this.playerIdByPeer.keys());
-      // Snapshot recipients receive only their active room's world entities.
-      // Players remain global for party HUD/spectator state. A room transition
-      // sends a scoped full bootstrap, which safely discards entities from the
-      // previous room without tracking a second per-client world cache.
       recipients.forEach(peerId => {
         const playerId = this.playerIdByPeer.get(peerId);
         const player = this.simulation.state.players[playerId];
         if (!player) return;
-        const roomChanged = this.enableSnapshotPacking && this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
-        const clientFull = actualFull || roomChanged;
-        this.lastSnapshotRoomByPlayer[playerId] = player.roomId;
-        const source = clientFull
-          ? Object.fromEntries(SNAPSHOT_ENTITY_COLLECTIONS.map(collection => [collection, this.simulation.state[collection] || {}]))
-          : entities;
-        const scoped = this.enableSnapshotPacking
-          ? scopedSnapshotEntities(source, player.roomId)
-          : source;
-        const packedDynamic = this.enableSnapshotPacking && !clientFull ? packDynamicEntities(scoped) : undefined;
-        if (packedDynamic) {
-          // New dynamic entities have no static bootstrap on this client yet;
-          // send their complete record once, then use packed transforms only.
-          PACKED_DYNAMIC_COLLECTIONS.forEach(collection => {
-            scoped[collection] = Object.fromEntries(Object.entries(scoped[collection] || {})
-              .filter(([entityId]) => newEntityIds[collection].has(entityId)));
-          });
+        const networkNow = Math.max(0, Number(this.transport.network?.clock?.now?.() ?? Date.now()) || 0);
+        const oldestUnacknowledgedAt = this.snapshotSentAtByPeer.get(peerId)?.values?.().next?.().value;
+        const oldestUnacknowledgedAge = oldestUnacknowledgedAt == null
+          ? 0
+          : Math.max(0, networkNow - Number(oldestUnacknowledgedAt));
+        let degradedCadenceTicks = Number(this.snapshotCadenceByPeer.get(peerId) || 0);
+        let cadenceRecoveryAt = Number(this.snapshotCadenceRecoveryAtByPeer.get(peerId) || 0);
+        if (oldestUnacknowledgedAge >= SNAPSHOT_SEVERE_AGE_MS) {
+          degradedCadenceTicks = 8;
+          cadenceRecoveryAt = networkNow + SNAPSHOT_SEVERE_HOLD_MS;
+        } else if (oldestUnacknowledgedAge >= SNAPSHOT_DEGRADE_AGE_MS) {
+          degradedCadenceTicks = Math.max(4, degradedCadenceTicks);
+          cadenceRecoveryAt = Math.max(cadenceRecoveryAt, networkNow + SNAPSHOT_DEGRADE_HOLD_MS);
+        } else if (degradedCadenceTicks > 0 && networkNow >= cadenceRecoveryAt) {
+          // Recover one step at a time. This prevents a single ACK from jumping
+          // straight back to 10 Hz and immediately flooding the same slow link.
+          degradedCadenceTicks = degradedCadenceTicks >= 8 ? 4 : 0;
+          cadenceRecoveryAt = degradedCadenceTicks
+            ? networkNow + SNAPSHOT_DEGRADE_HOLD_MS
+            : 0;
         }
+        if (degradedCadenceTicks > 0) {
+          this.snapshotCadenceByPeer.set(peerId, degradedCadenceTicks);
+          this.snapshotCadenceRecoveryAtByPeer.set(peerId, cadenceRecoveryAt);
+        } else {
+          this.snapshotCadenceByPeer.delete(peerId);
+          this.snapshotCadenceRecoveryAtByPeer.delete(peerId);
+        }
+        if (!full && degradedCadenceTicks > 0
+          && this.simulation.state.tick % degradedCadenceTicks !== 0) {
+          this.metrics.degradedSnapshotSkips += 1;
+          return;
+        }
+        const roomChanged = this.enableSnapshotPacking && this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
+        const previousSignatures = this.snapshotEntitySignaturesByPeer.get(peerId);
+        const clientFull = full || roomChanged || !previousSignatures;
+        this.lastSnapshotRoomByPlayer[playerId] = player.roomId;
+        const nextSignatures = {};
+        const scoped = {};
+        const scopedRemovedEntityIds = new Set();
+        SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
+          const previous = previousSignatures?.[collection] || {};
+          const next = {};
+          const changed = {};
+          Object.entries(this.simulation.state[collection] || {}).forEach(([entityId, entity]) => {
+            if (this.enableSnapshotPacking && collection !== 'players' && entity?.roomId !== player.roomId) return;
+            const signature = this.enableSnapshotPacking
+              ? snapshotEntitySignature(collection, entity)
+              : JSON.stringify(entity);
+            next[entityId] = signature;
+            if (clientFull || previous[entityId] !== signature) changed[entityId] = cloneSerializable(entity);
+          });
+          if (!clientFull) Object.keys(previous).forEach(entityId => {
+            if (!Object.prototype.hasOwnProperty.call(next, entityId)) scopedRemovedEntityIds.add(entityId);
+          });
+          nextSignatures[collection] = next;
+          scoped[collection] = changed;
+        });
+        const packedDynamic = this.enableSnapshotPacking && !clientFull
+          ? packDynamicEntities(scopedSnapshotEntities(
+            Object.fromEntries(PACKED_DYNAMIC_COLLECTIONS.map(collection => [
+              collection, this.simulation.state[collection] || {},
+            ])),
+            player.roomId,
+          ))
+          : undefined;
+        const previousFloorSignature = this.snapshotFloorSignatureByPeer.get(peerId) ?? this.snapshotFloorSignature;
+        const previousBossSignature = this.snapshotBossSignatureByPeer.get(peerId) ?? this.snapshotBossSignature;
+        const floorChanged = floorSignature !== previousFloorSignature;
+        const bossStateChanged = bossSignature !== previousBossSignature;
         const payload = {
           snapshotSequence: this.snapshotSequenceByPeer.get(peerId) || 0,
+          baselineSequence: clientFull
+            ? -1
+            : Number(this.lastSnapshotAckByPeer.get(peerId) ?? -1),
           serverTick: this.simulation.state.tick,
+          serverSentAt: Date.now(),
           full: clientFull,
           lastProcessedInput: { [playerId]: this.lastProcessedInput[playerId] ?? -1 },
           entities: scoped,
           ...(packedDynamic ? { packedDynamic } : {}),
-          removedEntityIds,
+          removedEntityIds: Array.from(scopedRemovedEntityIds),
           floorState: floorChanged ? JSON.parse(floorSignature) : null,
           bossState: bossStateChanged ? JSON.parse(bossSignature) : null,
           bossStateChanged,
@@ -1266,8 +1419,33 @@
           ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }
           : getDeliveryIntent('WORLD_SNAPSHOT');
         this._send(peerId, 'WORLD_SNAPSHOT', payload, delivery);
-        this.snapshotSequenceByPeer.set(peerId, payload.snapshotSequence + 1);
-        this.lastSnapshotSentByPeer.set(peerId, payload.snapshotSequence);
+        const serializedPayload = JSON.stringify(payload);
+        const encodedBytes = typeof Buffer !== 'undefined'
+          ? Buffer.byteLength(serializedPayload, 'utf8')
+          : new TextEncoder().encode(serializedPayload).byteLength;
+        this.metrics.snapshotBytes += encodedBytes;
+        this.metrics.maxSnapshotBytes = Math.max(this.metrics.maxSnapshotBytes, encodedBytes);
+        const deliveryResult = this.lastDeliveryResultByPeer.get(peerId);
+        if (deliveryResult?.dropped) {
+          this.metrics.droppedSnapshots += 1;
+        } else {
+          const pending = this.pendingSnapshotBaselinesByPeer.get(peerId) || new Map();
+          pending.set(payload.snapshotSequence, {
+            entitySignatures: nextSignatures,
+            floorSignature,
+            bossSignature,
+          });
+          if (pending.size > SNAPSHOT_BASELINE_HISTORY) pending.delete(pending.keys().next().value);
+          this.pendingSnapshotBaselinesByPeer.set(peerId, pending);
+          const sentTimes = this.snapshotSentAtByPeer.get(peerId) || new Map();
+          sentTimes.set(payload.snapshotSequence, networkNow);
+          while (sentTimes.size > SNAPSHOT_BASELINE_HISTORY) {
+            sentTimes.delete(sentTimes.keys().next().value);
+          }
+          this.snapshotSentAtByPeer.set(peerId, sentTimes);
+          this.snapshotSequenceByPeer.set(peerId, payload.snapshotSequence + 1);
+          this.lastSnapshotSentByPeer.set(peerId, payload.snapshotSequence);
+        }
       });
       this.snapshotSequence += 1;
       this.metrics.snapshots += 1;
@@ -1304,6 +1482,7 @@
       this.lobbyState = null;
       this.latestSnapshotSequence = -1;
       this.pendingSnapshotResync = false;
+      this.snapshotStateHistory = new Map();
       this.lastAcknowledgedInput = -1;
       this.seenReliableSequences = new Set();
       this.receivedTypes = [];
@@ -1312,6 +1491,19 @@
       this.connectionNotices = [];
       this.runEnd = null;
       this.errors = [];
+      this.diagnostics = {
+        enabled: false,
+        diagnosticSessionId: null,
+        startedAt: 0,
+        rttMs: 0,
+        jitterMs: 0,
+        snapshots: 0,
+        snapshotBytes: 0,
+        maxSnapshotBytes: 0,
+        resyncRequests: 0,
+        lastSnapshotAt: 0,
+        trace: [],
+      };
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected((identity, reason) => {
         if (identity?.id === this.authorityPeerId) {
@@ -1337,6 +1529,12 @@
         sessionId: this.sessionId,
         ...(this.reconnectToken ? { reconnectToken: this.reconnectToken } : {}),
       });
+      if (this.diagnostics.enabled && this.diagnostics.diagnosticSessionId) {
+        this._send('DIAGNOSTIC_MARKER', {
+          diagnosticSessionId: this.diagnostics.diagnosticSessionId,
+          enabled: true,
+        });
+      }
       return joined;
     }
 
@@ -1451,6 +1649,31 @@
       this._send('PING', { nonce, clientTime: Math.max(0, this.transport.network?.clock?.now?.() || Date.now()) });
     }
 
+    setDiagnostics(enabled, diagnosticSessionId) {
+      const active = enabled === true;
+      const id = String(diagnosticSessionId || this.diagnostics.diagnosticSessionId || '').slice(0, 64);
+      if (active && id.length < 8) throw new RangeError('Diagnostic session ID is too short');
+      this.diagnostics.enabled = active;
+      this.diagnostics.diagnosticSessionId = active ? id : null;
+      this.diagnostics.startedAt = active ? Date.now() : 0;
+      if (this.authorityPeerId) {
+        this._send('DIAGNOSTIC_MARKER', { diagnosticSessionId: id || 'disabled', enabled: active });
+      }
+      return this.getDiagnostics();
+    }
+
+    _recordDiagnostic(kind, data = {}) {
+      if (!this.diagnostics.enabled) return;
+      this.diagnostics.trace.push({ at: Date.now(), tick: Number(this.state?.tick || 0), kind, ...data });
+      if (this.diagnostics.trace.length > 600) {
+        this.diagnostics.trace.splice(0, this.diagnostics.trace.length - 600);
+      }
+    }
+
+    getDiagnostics() {
+      return cloneSerializable(this.diagnostics);
+    }
+
     _onMessage(peerId, message, delivery) {
       if (peerId !== this.authorityPeerId) return;
       const validation = validateEnvelope(message, { direction: AUTHORITY_TO_CLIENT });
@@ -1480,15 +1703,37 @@
           this.runEnd = null;
           this.latestSnapshotSequence = -1;
           this.pendingSnapshotResync = false;
+          this.snapshotStateHistory.clear();
           if (this.status !== 'running') this.status = 'starting';
           break;
         case 'INITIAL_STATE':
           this.state = new GameState(message.payload.state);
           this.lastAcknowledgedInput = message.payload.lastProcessedInput[this.playerId] ?? -1;
           this.pendingSnapshotResync = false;
+          this.snapshotStateHistory.clear();
           this.status = 'running';
           break;
         case 'WORLD_SNAPSHOT': this._applySnapshot(message.payload); break;
+        case 'PONG': {
+          const now = Math.max(0, this.transport.network?.clock?.now?.() || Date.now());
+          const rtt = Math.max(0, now - Number(message.payload.clientTime || now));
+          const previousRtt = Number(this.diagnostics.rttMs || rtt);
+          this.diagnostics.rttMs = rtt;
+          this.diagnostics.jitterMs = this.diagnostics.jitterMs * 0.8 + Math.abs(rtt - previousRtt) * 0.2;
+          const offsetSample = Number(message.payload.serverTime || 0) > 0
+            ? Number(message.payload.serverTime) - (Number(message.payload.clientTime) + rtt / 2)
+            : Number(this.diagnostics.clockOffsetMs || 0);
+          this.diagnostics.clockOffsetMs = this.diagnostics.clockOffsetSamples
+            ? Number(this.diagnostics.clockOffsetMs || 0) * 0.8 + offsetSample * 0.2
+            : offsetSample;
+          this.diagnostics.clockOffsetSamples = Number(this.diagnostics.clockOffsetSamples || 0) + 1;
+          this._recordDiagnostic('pong', {
+            rttMs: Number(rtt.toFixed(1)),
+            jitterMs: Number(this.diagnostics.jitterMs.toFixed(1)),
+            serverTick: message.payload.serverTick,
+          });
+          break;
+        }
         case 'GAMEPLAY_EVENT':
           this.gameplayEvents.push(cloneSerializable(message.payload));
           if (this.gameplayEvents.length > 128) this.gameplayEvents.splice(0, this.gameplayEvents.length - 128);
@@ -1559,9 +1804,18 @@
     _applySnapshot(snapshot) {
       if (snapshot.snapshotSequence <= this.latestSnapshotSequence) return;
       const expectedSequence = this.latestSnapshotSequence + 1;
-      if (!snapshot.full && snapshot.snapshotSequence !== expectedSequence) {
+      const rebasedSnapshot = !snapshot.full && snapshot.baselineSequence !== this.latestSnapshotSequence;
+      const baselineState = rebasedSnapshot
+        ? this.snapshotStateHistory.get(snapshot.baselineSequence)
+        : null;
+      if (rebasedSnapshot && !baselineState) {
         if (!this.pendingSnapshotResync) {
           this.pendingSnapshotResync = true;
+          this.diagnostics.resyncRequests += 1;
+          this._recordDiagnostic('snapshot-gap', {
+            expectedSequence,
+            receivedSequence: snapshot.snapshotSequence,
+          });
           this._send('SNAPSHOT_RESYNC_REQUEST', {
             expectedSequence,
             receivedSequence: snapshot.snapshotSequence,
@@ -1569,8 +1823,38 @@
         }
         return;
       }
-      this.latestSnapshotSequence = snapshot.snapshotSequence;
       if (!this.state) return;
+      // Several replaceable deltas may be in flight from the same acknowledged
+      // baseline. Reconstruct a newer arrival from that exact cached state.
+      // Applying it over the latest state is unsafe when a field changed and
+      // then reverted to its baseline value, because that reversion is omitted
+      // from the delta by design.
+      if (rebasedSnapshot) this.state = new GameState(cloneSerializable(baselineState));
+      const receivedAt = Date.now();
+      const snapshotBytes = typeof Buffer !== 'undefined'
+        ? Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
+        : new TextEncoder().encode(JSON.stringify(snapshot)).byteLength;
+      const intervalMs = this.diagnostics.lastSnapshotAt
+        ? Math.max(0, receivedAt - this.diagnostics.lastSnapshotAt)
+        : 0;
+      this.diagnostics.lastSnapshotAt = receivedAt;
+      this.diagnostics.snapshots += 1;
+      if (rebasedSnapshot) {
+        this.diagnostics.rebasedSnapshots = Number(this.diagnostics.rebasedSnapshots || 0) + 1;
+      }
+      this.diagnostics.snapshotBytes += snapshotBytes;
+      this.diagnostics.maxSnapshotBytes = Math.max(this.diagnostics.maxSnapshotBytes, snapshotBytes);
+      this._recordDiagnostic('snapshot', {
+        sequence: snapshot.snapshotSequence,
+        serverTick: snapshot.serverTick,
+        full: snapshot.full,
+        rebased: rebasedSnapshot,
+        bytes: snapshotBytes,
+        intervalMs,
+        transitMs: Math.max(0, receivedAt - (
+          Number(snapshot.serverSentAt || receivedAt) - Number(this.diagnostics.clockOffsetMs || 0)
+        )),
+      });
       this.state.tick = snapshot.serverTick;
       SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => {
         const changed = cloneSerializable(snapshot.entities[collection] || {});
@@ -1584,7 +1868,13 @@
       this.state.floorState = cloneSerializable(snapshot.floorState || this.state.floorState);
       if (snapshot.bossStateChanged) this.state.bossState = snapshot.bossState == null ? null : cloneSerializable(snapshot.bossState);
       this.lastAcknowledgedInput = snapshot.lastProcessedInput[this.playerId] ?? this.lastAcknowledgedInput;
-      if (snapshot.full) this.pendingSnapshotResync = false;
+      this.latestSnapshotSequence = snapshot.snapshotSequence;
+      if (snapshot.full) this.snapshotStateHistory.clear();
+      this.snapshotStateHistory.set(snapshot.snapshotSequence, this.state.snapshot());
+      while (this.snapshotStateHistory.size > SNAPSHOT_BASELINE_HISTORY) {
+        this.snapshotStateHistory.delete(this.snapshotStateHistory.keys().next().value);
+      }
+      if (snapshot.full || rebasedSnapshot) this.pendingSnapshotResync = false;
       this._send('SNAPSHOT_ACK', {
         snapshotSequence: snapshot.snapshotSequence,
         serverTick: snapshot.serverTick,
