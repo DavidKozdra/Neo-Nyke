@@ -70,6 +70,88 @@ describe('network multiplayer game view', () => {
     expect(snapshot).not.toHaveBeenCalled();
   });
 
+  test('advances the local hero every presentation frame between 20 Hz input samples', () => {
+    const view = new NetworkGameView({
+      session: { playerId: 'p1', status: 'running' },
+      neo: {},
+    });
+    const player = {
+      id: 'p1', roomId: 'r1', x: 450, y: 350, vx: 0, vy: 0,
+      radius: 18, moveSpeed: 228,
+    };
+    view.currentSample = {
+      tick: 20,
+      receivedAt: 1_000,
+      state: {
+        players: { p1: player },
+        floorState: { width: 900, height: 700, wallThickness: 28 },
+      },
+    };
+    view.previousSample = view.currentSample;
+    view.localPredictedPlayer = { ...player };
+    view.localPredictedPlayerId = 'p1';
+    view.localPredictionTick = 20;
+    view.lastLocalPredictionAt = 1_000;
+    view.keys.add('KeyD');
+
+    const positions = [1_016, 1_032, 1_048].map(now => view._renderedPlayers(now).p1.x);
+
+    expect(positions[0]).toBeGreaterThan(450);
+    expect(positions[1]).toBeGreaterThan(positions[0]);
+    expect(positions[2]).toBeGreaterThan(positions[1]);
+    expect(Math.max(
+      positions[0] - 450,
+      positions[1] - positions[0],
+      positions[2] - positions[1],
+    )).toBeLessThan(6);
+  });
+
+  test('preserves the displayed local position when correction blends overlap', () => {
+    const originalPerformance = globalThis.performance;
+    globalThis.performance = { now: () => 1_000 };
+    try {
+      const view = new NetworkGameView({
+        session: { playerId: 'p1', status: 'running' },
+        neo: {},
+      });
+      view.currentSample = {
+        tick: 9,
+        receivedAt: 900,
+        state: {
+          tick: 9,
+          players: { p1: { id: 'p1', roomId: 'r1', x: 120, y: 350, vx: 0, vy: 0, radius: 18 } },
+          floorState: { width: 900, height: 700, wallThickness: 28, transitionsByPlayer: {} },
+        },
+      };
+      view.previousSample = view.currentSample;
+      view.localPredictedPlayer = { id: 'p1', roomId: 'r1', x: 120, y: 350, vx: 0, vy: 0, radius: 18 };
+      view.localPredictedPlayerId = 'p1';
+      view.localPredictionTick = 9;
+      view.lastLocalPredictionAt = 1_000;
+      view.reconciliationOffset = {
+        x: 20,
+        y: 0,
+        startedAt: 900,
+        durationMs: 200,
+      };
+
+      view._onSnapshot({
+        playerId: 'p1',
+        lastAcknowledgedInput: -1,
+        gameState: {
+          tick: 10,
+          floorNumber: 1,
+          players: { p1: { id: 'p1', roomId: 'r1', x: 100, y: 350, vx: 0, vy: 0, radius: 18 } },
+          floorState: { width: 900, height: 700, wallThickness: 28, transitionsByPlayer: {} },
+        },
+      });
+
+      expect(view._renderedPlayers(1_000).p1.x).toBeCloseTo(130);
+    } finally {
+      globalThis.performance = originalPerformance;
+    }
+  });
+
   test('predicts with the same status speed and responsive velocity used by authority', () => {
     const base = { id: 'p1', x: 450, y: 350, vx: 0, vy: 0, radius: 18, moveSpeed: 200, statuses: { slow: { stacks: 2 } } };
     const predicted = predictPosition(base, { moveX: 1, moveY: 0 }, 0.05, { width: 900, height: 700 }, 10);
