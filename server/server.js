@@ -195,7 +195,14 @@ class DurableObjectRoomTransport extends NetworkTransport {
 
   sendSerialized(peerId, serialized, delivery = {}) {
     const peer = this.peers.get(String(peerId));
-    if (!peer || peer.socket.readyState !== 1) throw new Error(`Room peer is unavailable: ${peerId}`);
+    // Socket close delivery and the 20 Hz room timer can race by one turn.
+    // Treat that ordinary stale-recipient window as a dropped delivery so one
+    // departing browser can never abort the authoritative tick for its room.
+    // The WebSocket close/error handler remains responsible for detach and the
+    // reconnect reservation.
+    if (!peer || peer.socket.readyState !== 1) {
+      return { queued: false, dropped: true, reason: 'peer-unavailable' };
+    }
     const bufferedAmount = Math.max(0, Number(peer.socket.bufferedAmount) || 0);
     this.metrics.maxBufferedBytes = Math.max(this.metrics.maxBufferedBytes, bufferedAmount);
     if (bufferedAmount >= SLOW_CLIENT_BUFFER_CLOSE_BYTES) {

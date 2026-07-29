@@ -62,6 +62,12 @@ describe('Durable Object daily usage controls', () => {
     expect(server).toContain('this.pendingReplaceable.set(pendingKey, serialized)');
   });
 
+  test('drops a stale socket delivery without aborting the room tick', () => {
+    expect(server).toContain("reason: 'peer-unavailable'");
+    expect(server).toContain('if (!peer || peer.socket.readyState !== 1)');
+    expect(server).not.toContain('throw new Error(`Room peer is unavailable: ${peerId}`)');
+  });
+
   test('places new rooms from a validated host region and records aggregate telemetry', () => {
     expect(server).toContain('const DURABLE_OBJECT_REGION_HINTS = new Set([');
     expect(server).toContain('get(env.MULTIPLAYER_ROOMS.idFromName(roomCode), { locationHint })');

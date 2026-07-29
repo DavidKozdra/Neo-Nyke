@@ -124,25 +124,52 @@ async function main() {
     ), undefined, { timeout: 45_000 }));
 
     const starts = await inBatches(players, 20, async player => snapshotPosition(player.page));
-    await Promise.all(players.map(async player => {
-      await player.page.locator('#c').click({ position: { x: 480, y: 360 }, force: true });
-      await player.page.keyboard.down('d');
-      await player.page.waitForTimeout(700);
-      await player.page.keyboard.up('d');
-    }));
+    // Chromium marks most pages hidden when forty contexts share one browser.
+    // NetworkGameView correctly suppresses hidden-tab keyboard sampling, so
+    // synthetic key presses would measure browser focus scheduling instead of
+    // multiplayer capacity. Drive the same BrowserMultiplayerSession/WebSocket
+    // input seam directly for this swarm; the two-browser smoke test separately
+    // covers active-page keyboard sampling and prediction.
+    await Promise.all(players.map((player, playerIndex) => player.page.evaluate(index => {
+      const view = globalThis.Neo?.multiplayerGameView;
+      if (view?.inputTimer != null) {
+        clearInterval(view.inputTimer);
+        view.inputTimer = null;
+      }
+      const directions = [
+        { moveX: 1, moveY: 0 },
+        { moveX: -1, moveY: 0 },
+        { moveX: 0, moveY: 1 },
+        { moveX: 0, moveY: -1 },
+      ];
+      const direction = directions[index % directions.length];
+      globalThis.Neo?.gameSession?.sendInput?.({
+        ...direction, aimDirection: 0, buttons: 0,
+      });
+    }, playerIndex)));
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await Promise.all(players.map(player => player.page.evaluate(() => {
+      globalThis.Neo?.gameSession?.sendInput?.({
+        moveX: 0, moveY: 0, aimDirection: 0, buttons: 0,
+      });
+    })));
     await new Promise(resolve => setTimeout(resolve, 1_000));
-    const results = await inBatches(players, 20, async (player, index) => player.page.evaluate(start => {
+    const results = await inBatches(players, 20, async (player, index) => player.page.evaluate(({ start, label, roomIndex }) => {
       const snapshot = globalThis.Neo?.gameSession?.snapshot?.();
       const local = snapshot?.gameState?.players?.[snapshot.playerId];
       const allPlayers = snapshot?.gameState?.players || {};
+      const distance = Math.hypot(Number(local?.x || 0) - start.x, Number(local?.y || 0) - start.y);
       return {
+        label,
+        roomIndex,
         status: snapshot?.status,
         tick: Number(snapshot?.gameState?.tick || 0),
         members: Object.keys(allPlayers).length,
         viewActive: globalThis.Neo?.multiplayerGameView?.active === true,
-        moved: Math.hypot(Number(local?.x || 0) - start.x, Number(local?.y || 0) - start.y) > 12,
+        distance: Number(distance.toFixed(2)),
+        moved: distance > 12,
       };
-    }, starts[index]));
+    }, { start: starts[index], label: player.label, roomIndex: player.roomIndex }));
     const failures = results.filter(result => result.status !== 'running' || result.members !== 4
       || !result.viewActive || !result.moved || result.tick < 10);
     const report = {
@@ -152,6 +179,7 @@ async function main() {
       durationMs: Number((performance.now() - startedAt).toFixed(1)),
       playing: results.length - failures.length,
       failures: failures.length,
+      failureDetails: failures,
       minTick: Math.min(...results.map(result => result.tick)),
       maxTick: Math.max(...results.map(result => result.tick)),
       pageErrors: errors,
