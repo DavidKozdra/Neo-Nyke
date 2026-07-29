@@ -73,6 +73,14 @@ async function main() {
   process.stdout.write(`Authority action acceptance: ${result.format(result.acceptance)}\n`);
   process.stdout.write(`Authoritative confirmation: ${result.format(result.confirmation)}\n`);
   process.stdout.write(`Actions issued: ${result.count}\n`);
+  const gates = {
+    allActionsAccepted: result.acceptance.length === result.count,
+    allActionsConfirmed: result.confirmation.length === result.count,
+    authorityAcceptanceP95Under125Ms: percentile(result.acceptance, 0.95) < 125,
+    authoritativeConfirmationP95Under250Ms: percentile(result.confirmation, 0.95) < 250,
+  };
+  process.stdout.write(`Acceptance: ${JSON.stringify(gates)}\n`);
+  if (process.argv.includes('--enforce') && Object.values(gates).includes(false)) process.exitCode = 1;
 }
 
 main().catch(error => {

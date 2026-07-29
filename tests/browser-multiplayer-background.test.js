@@ -130,6 +130,34 @@ describe('browser multiplayer background connection recovery', () => {
     session.dispose();
   });
 
+  test('opts into correlated diagnostics and exports a privacy-safe trace', async () => {
+    const { transport, session } = await connectedSession();
+    session.client.status = 'running';
+    transport.sent.length = 0;
+
+    const enabled = session.enableDiagnostics(true);
+    expect(enabled.diagnosticSessionId).toEqual(expect.any(String));
+    expect(transport.sent.at(-1).message).toEqual(expect.objectContaining({
+      type: 'DIAGNOSTIC_MARKER',
+      payload: expect.objectContaining({ enabled: true }),
+    }));
+
+    transport.emitAuthority('PONG', 20, {
+      nonce: 'diag-ping',
+      clientTime: Date.now() - 42,
+      serverTick: 8,
+      serverTime: Date.now(),
+    });
+    const report = session.exportDiagnostics();
+    expect(report).toEqual(expect.objectContaining({
+      schemaVersion: 1,
+      diagnosticSessionId: enabled.diagnosticSessionId,
+      metrics: expect.objectContaining({ enabled: true, rttMs: expect.any(Number) }),
+    }));
+    expect(report.roomCode).toBeUndefined();
+    session.dispose();
+  });
+
   test('survives a document handoff with a persisted and rotated resume credential', async () => {
     const storage = createMemoryStorage();
     const firstTransport = new FakeCloudflareTransport();

@@ -17,7 +17,7 @@
   const CLIENT_MESSAGE_TYPES = Object.freeze([
     'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
     'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND',
-    'CHAT_SEND', 'REMATCH_REQUEST', 'SNAPSHOT_ACK', 'SNAPSHOT_RESYNC_REQUEST', 'LEAVE_MATCH', 'PING',
+    'CHAT_SEND', 'REMATCH_REQUEST', 'SNAPSHOT_ACK', 'SNAPSHOT_RESYNC_REQUEST', 'DIAGNOSTIC_MARKER', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
     'SERVER_HELLO', 'JOIN_ACCEPTED', 'JOIN_REJECTED', 'LOBBY_STATE', 'MATCH_STARTING',
@@ -179,6 +179,14 @@
         receivedSequence: field('integer', { required: true, min: 0, max: Number.MAX_SAFE_INTEGER }),
       },
     },
+    DIAGNOSTIC_MARKER: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        diagnosticSessionId: field('string', { required: true, minLength: 8, maxLength: 64 }),
+        enabled: field('boolean', { required: true }),
+      },
+    },
     LEAVE_MATCH: {
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
@@ -258,7 +266,9 @@
       delivery: { reliability: 'unreliable', channel: 'snapshot', replaceable: true },
       fields: {
         snapshotSequence: field('integer', { required: true, min: 0 }),
+        baselineSequence: field('integer', { required: true, min: -1 }),
         serverTick: field('integer', { required: true, min: 0 }),
+        serverSentAt: field('number', { min: 0 }),
         full: field('boolean', { required: true }),
         lastProcessedInput: field('object', { required: true }),
         entities: field('object', { required: true }),
@@ -359,6 +369,7 @@
         nonce: field('string', { required: true, minLength: 1, maxLength: 64 }),
         clientTime: field('number', { required: true, min: 0 }),
         serverTick: field('integer', { required: true, min: 0 }),
+        serverTime: field('number', { min: 0 }),
       },
     },
   });

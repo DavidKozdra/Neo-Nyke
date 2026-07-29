@@ -263,6 +263,9 @@ export class MultiplayerRoom {
       catchUpTicks: 0,
       overruns: 0,
       maxDriftMs: 0,
+      tickWorkMs: 0,
+      maxTickWorkMs: 0,
+      tickWorkSamples: 0,
       checkpointFailures: 0,
     };
     this.lastTelemetryAt = 0;
@@ -581,7 +584,12 @@ export class MultiplayerRoom {
       this.nextTickAt = Math.max(now, this.nextTickAt || now) + ROOM_TICK_INTERVAL_MS;
       const previousFloor = Number(this.authority.simulation.state.floorNumber || 1);
       const previousRevision = Number(this.authority.simulation.state.runServices?.saveRevision || 0);
+      const workStartedAt = performance.now();
       this.authority.step(tickCount);
+      const tickWorkMs = performance.now() - workStartedAt;
+      this.tickMetrics.tickWorkMs += tickWorkMs;
+      this.tickMetrics.maxTickWorkMs = Math.max(this.tickMetrics.maxTickWorkMs, tickWorkMs);
+      this.tickMetrics.tickWorkSamples += 1;
       const crossedBoundary = Number(this.authority.simulation.state.floorNumber || 1) !== previousFloor
         || Number(this.authority.simulation.state.runServices?.saveRevision || 0) !== previousRevision
         || this.authority.simulation.state.status !== 'running';
@@ -615,10 +623,19 @@ export class MultiplayerRoom {
     if (!force && now - this.lastTelemetryAt < MULTIPLAYER_TELEMETRY_INTERVAL_MS) return false;
     this.lastTelemetryAt = now;
     const state = this.authority?.simulation.state;
+    const authorityMetrics = this.authority?.metrics || {};
+    const maximumAckLag = Math.max(0, ...Array.from(this.authority?.lastSnapshotSentByPeer || [])
+      .map(([peerId, sent]) => Math.max(0, Number(sent) - Number(this.authority.lastSnapshotAckByPeer.get(peerId) ?? -1))));
+    const diagnosticId = Array.from(this.authority?.diagnosticSessionByPeer?.values?.() || [])[0];
     try {
       this.env.MULTIPLAYER_ANALYTICS?.writeDataPoint?.({
         // blobs: region, mode, status. doubles: scheduler/network health.
-        blobs: [this.region, String(this.authority?.mode || 'coop'), String(state?.status || 'waiting')],
+        blobs: [
+          this.region,
+          String(this.authority?.mode || 'coop'),
+          String(state?.status || 'waiting'),
+          diagnosticId ? telemetryIndex(diagnosticId) : 'diagnostics-off',
+        ],
         doubles: [
           this.tickMetrics.maxDriftMs,
           this.tickMetrics.catchUpTicks,
@@ -628,16 +645,35 @@ export class MultiplayerRoom {
           this.transport.metrics.slowClientDisconnects,
           this.transport.metrics.maxBufferedBytes,
           this.authority?.playerIdByPeer.size || 0,
+          this.tickMetrics.tickWorkSamples ? this.tickMetrics.tickWorkMs / this.tickMetrics.tickWorkSamples : 0,
+          this.tickMetrics.maxTickWorkMs,
+          Number(authorityMetrics.snapshotBytes || 0),
+          Number(authorityMetrics.maxSnapshotBytes || 0),
+          Number(authorityMetrics.droppedSnapshots || 0),
+          Number(authorityMetrics.degradedSnapshotSkips || 0),
+          Number(authorityMetrics.snapshotResyncs || 0),
+          maximumAckLag,
+          Object.keys(state?.enemies || {}).length,
+          Object.keys(state?.projectiles || {}).length,
+          Object.keys(state?.abilityEntities || {}).length,
         ],
         indexes: [telemetryIndex(this.roomCode)],
       });
       this.tickMetrics.maxDriftMs = 0;
       this.tickMetrics.catchUpTicks = 0;
       this.tickMetrics.overruns = 0;
+      this.tickMetrics.tickWorkMs = 0;
+      this.tickMetrics.maxTickWorkMs = 0;
+      this.tickMetrics.tickWorkSamples = 0;
       this.tickMetrics.checkpointFailures = 0;
       this.transport.metrics.coalescedSnapshots = 0;
       this.transport.metrics.slowClientDisconnects = 0;
       this.transport.metrics.maxBufferedBytes = 0;
+      authorityMetrics.snapshotBytes = 0;
+      authorityMetrics.maxSnapshotBytes = 0;
+      authorityMetrics.droppedSnapshots = 0;
+      authorityMetrics.degradedSnapshotSkips = 0;
+      authorityMetrics.snapshotResyncs = 0;
       return true;
     } catch { return false; }
   }

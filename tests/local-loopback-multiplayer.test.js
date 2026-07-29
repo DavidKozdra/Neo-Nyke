@@ -440,7 +440,8 @@ describe('protocol-driven local multiplayer session', () => {
 
     const delta = snapshots.at(-1);
     expect(delta.full).toBe(false);
-    expect(Object.keys(delta.entities.players)).toEqual([clientA.playerId]);
+    expect(delta.entities.players).toEqual({});
+    expect(delta.packedDynamic.packed.players).toHaveLength(2);
     expect(delta.entities.enemies).toEqual({});
     expect(delta.floorState).toBeNull();
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
@@ -467,6 +468,7 @@ describe('protocol-driven local multiplayer session', () => {
     // must not force client B through a full correction or reset its sequence.
     clientA._onMessage('authority', createEnvelope('WORLD_SNAPSHOT', 900, authority.simulation.state.tick, {
       snapshotSequence: 2,
+      baselineSequence: 1,
       serverTick: authority.simulation.state.tick,
       full: false,
       lastProcessedInput: {},
@@ -484,6 +486,48 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.players).toEqual(authority.simulation.state.snapshot().players);
     expect(clientASnapshots.at(-1)).toEqual(expect.objectContaining({ full: true, snapshotSequence: 1 }));
     expect(clientBSnapshots.map(snapshot => snapshot.snapshotSequence)).toEqual([0]);
+  });
+
+  test('rebases concurrent deltas onto their acknowledged snapshot without a full resync', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    authority.sendFullCorrection();
+    clock.runAll();
+    const playerId = clientA.playerId;
+    const baselineX = clientA.state.players[playerId].x;
+    const delta = (snapshotSequence, entities) => createEnvelope(
+      'WORLD_SNAPSHOT',
+      900 + snapshotSequence,
+      authority.simulation.state.tick,
+      {
+        snapshotSequence,
+        baselineSequence: 0,
+        serverTick: authority.simulation.state.tick + snapshotSequence,
+        full: false,
+        lastProcessedInput: { [playerId]: clientA.lastAcknowledgedInput },
+        entities,
+        removedEntityIds: [],
+        floorState: null,
+        bossState: null,
+        bossStateChanged: false,
+      },
+    );
+
+    clientA._onMessage('authority', delta(1, {
+      players: { [playerId]: { ...clientA.state.players[playerId], x: baselineX + 10 } },
+    }), getDeliveryIntent('WORLD_SNAPSHOT'));
+    expect(clientA.state.players[playerId].x).toBe(baselineX + 10);
+
+    // Sequence 2 was also authored from sequence 0. An empty delta therefore
+    // means the position reverted to the baseline; layering it over sequence 1
+    // would incorrectly leave the +10 movement behind.
+    clientA._onMessage('authority', delta(2, {}), getDeliveryIntent('WORLD_SNAPSHOT'));
+
+    expect(clientA.latestSnapshotSequence).toBe(2);
+    expect(clientA.state.players[playerId].x).toBe(baselineX);
+    expect(clientA.pendingSnapshotResync).toBe(false);
+    expect(clientA.diagnostics.resyncRequests).toBe(0);
   });
 
   test('packs steady-state local-room projectile transforms and restores them on the client', async () => {
@@ -546,7 +590,7 @@ describe('protocol-driven local multiplayer session', () => {
     expect(killDelta.entities.enemies[enemy.id]).toEqual(expect.objectContaining({
       health: 0, maxHealth: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
     }));
-    expect(killDelta.packedDynamic.packed.enemies).toBeUndefined();
+    expect(killDelta.packedDynamic.packed.enemies.length).toBeGreaterThan(0);
 
     expect(clientA.state.enemies[enemy.id]).toEqual(expect.objectContaining({
       health: 0, maxHealth: 80, dead: true, deathTick: enemy.deathTick, _lastHitAngle: 0,
@@ -617,6 +661,44 @@ describe('protocol-driven local multiplayer session', () => {
     expect(delta.entities.projectiles).toEqual({});
     expect(delta.packedDynamic.packed.projectiles).toEqual([]);
     expect(clientA.state.projectiles.remote).toBeUndefined();
+  });
+
+  test('bootstraps entities entering room interest and removes them when they leave', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    const otherRoom = authority.simulation.state.floorState.layout.rooms
+      .find(room => room.id !== player.roomId).id;
+    const projectile = {
+      id: 'interest-crossing', roomId: otherRoom, kind: 'death_ball',
+      x: 240, y: 260, vx: 100, vy: 0, radius: 22, damage: 30,
+      hostile: true, expiresTick: authority.simulation.state.tick + 100,
+    };
+    authority.simulation.state.projectiles[projectile.id] = projectile;
+    authority._publishSnapshot(false);
+    clock.runAll();
+    expect(clientA.state.projectiles[projectile.id]).toBeUndefined();
+
+    projectile.roomId = player.roomId;
+    authority._publishSnapshot(false);
+    clock.runAll();
+    expect(snapshots.at(-1).entities.projectiles[projectile.id]).toEqual(expect.objectContaining({
+      kind: 'death_ball', damage: 30, roomId: player.roomId,
+    }));
+    expect(clientA.state.projectiles[projectile.id]).toEqual(expect.objectContaining({
+      kind: 'death_ball', damage: 30,
+    }));
+
+    projectile.roomId = otherRoom;
+    authority._publishSnapshot(false);
+    clock.runAll();
+    expect(snapshots.at(-1).removedEntityIds).toContain(projectile.id);
+    expect(clientA.state.projectiles[projectile.id]).toBeUndefined();
   });
 
   test('cleans protocol bookkeeping when a handshake-only peer disconnects', async () => {
