@@ -135,6 +135,12 @@
     return getFacingDirection(actor, aimAngle);
   }
 
+  function shouldHideActorAimArm(spriteKey, action) {
+    // Metao's authored beam frames already contain the complete firing pose.
+    // Adding the detached aim arm on top produces a duplicate arm.
+    return !!action && (action !== 'beam' || spriteKey === 'metao');
+  }
+
   function getActorAnimSeed(actor, fallbackKey = '') {
     // A fixed per-actor phase offset so identical actors desync. Prefer a stable
     // source (an assigned animSeed, or a caller-supplied key like 'player') and
@@ -162,6 +168,7 @@
     return {
       stepRate: sheet?.stepRate ?? def?.stepRate,
       idleRate: sheet?.idleRate ?? def?.idleRate,
+      actionRate: sheet?.actionRate ?? def?.actionRate,
     };
   }
 
@@ -215,7 +222,7 @@
         const progress = Neo.clamp(Number(actionState.progress), 0, 0.999);
         return resolve(actionFrames[Math.floor(progress * actionFrames.length)]);
       }
-      const actionRate = Number(options.actionRate || 12);
+      const actionRate = Number(speedOverride.actionRate ?? options.actionRate ?? 12);
       const index = wrap(Number(Neo.gameElapsedTime || 0) * actionRate, actionFrames.length);
       return resolve(actionFrames[index]);
     }
@@ -1756,7 +1763,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
     drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
-      hidden: !!playerActionState.action && playerActionState.action !== 'beam',
+      hidden: shouldHideActorAimArm(getPlayerSpriteKey(), playerActionState.action),
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
     });
@@ -1932,7 +1939,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
     drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
-      hidden: !!slotActionState.action && slotActionState.action !== 'beam',
+      hidden: shouldHideActorAimArm(spriteKey, slotActionState.action),
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
@@ -2288,6 +2295,7 @@
   Neo.getPortraitSpriteKey = getPortraitSpriteKey;
   Neo.getFacingDirection = getFacingDirection;
   Neo.getActorActionFacingDirection = getActorActionFacingDirection;
+  Neo.shouldHideActorAimArm = shouldHideActorAimArm;
   Neo.getActorSpriteActionState = getActorSpriteActionState;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;

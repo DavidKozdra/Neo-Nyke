@@ -1593,12 +1593,12 @@
     });
   }
 
-  function startPlayerSpriteAction(action, duration = 0.5) {
+  function startPlayerSpriteAction(action, duration = 0.6) {
     if (!Neo.player) return;
     const startedAt = Number(Neo.gameElapsedTime || 0);
     Neo.player.spriteAction = action;
     Neo.player.spriteActionStartedAt = startedAt;
-    Neo.player.spriteActionUntil = startedAt + Math.max(0.1, Number(duration) || 0.5);
+    Neo.player.spriteActionUntil = startedAt + Math.max(0.1, Number(duration) || 0.6);
   }
 
   function getChargeSpeedAttackBonus() {
@@ -1639,7 +1639,14 @@
       return;
     }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
-    startPlayerSpriteAction('smash');
+    const characterKey = Neo.player?.character || Neo.chosenCharacter;
+    // Sarge's authored hammer-smash sequence should hit with a snappier cadence:
+    // six frames over 0.3s instead of the standard six over 0.6s. This changes
+    // presentation only; damage, cooldown, and impact timing remain untouched.
+    const smashSpriteDuration = characterKey === 'sarge' && smashMoveKey === 'hammer_smash'
+      ? 0.3
+      : 0.6;
+    startPlayerSpriteAction('smash', smashSpriteDuration);
     Neo.tutorialController?.signal?.('attack', { action: 'smash' });
     if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
       const base = Neo.angleToMouse();
