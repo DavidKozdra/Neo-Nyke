@@ -1,6 +1,7 @@
 const {
   resolveCampaignProjectileStatusApplications,
   resolveCampaignProjectileDrain,
+  resolveCampaignProjectileDestructibleImpact,
   planCampaignHammerThrow,
   planCampaignLoveBomb,
   planCampaignGhostBall,
@@ -11,6 +12,8 @@ const {
   findCampaignProjectileEntitySweepHit,
   findCampaignProjectileObstacleSweepHit,
 } = require('../js/simulation/SharedProjectileSystem');
+const fs = require('node:fs');
+const path = require('node:path');
 
 describe('shared campaign projectile impact policy', () => {
   test('selects the first entity crossed by a fast projectile, with stable tie ordering', () => {
@@ -37,6 +40,27 @@ describe('shared campaign projectile impact policy', () => {
     ]);
     expect(hit).toEqual(expect.objectContaining({ id: 'wall', t: expect.any(Number) }));
     expect(hit.t).toBeCloseTo(0.26);
+  });
+
+  test('single-player resolves Metao fireball pot damage before the generic solid blocker', () => {
+    const impact = resolveCampaignProjectileDestructibleImpact({
+      kind: 'fireball', damage: 22, splash: 48, blockedSplashDamage: 14,
+    }, {
+      kind: 'pot', hp: 1, maxHp: 1, broken: false,
+    });
+    expect(impact).toEqual({
+      directDamage: 22,
+      blast: { radius: 48, damage: 14, knockback: 180, destructibleForce: 1.6 },
+    });
+
+    const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
+    const updateStart = worldSource.indexOf('function updateProjectiles(dt)');
+    const updateEnd = worldSource.indexOf('\n  function updateWorldProps', updateStart);
+    const updateProjectiles = worldSource.slice(updateStart, updateEnd);
+    const destructibleImpact = updateProjectiles.indexOf('if (!projectile.enemy && hitProp)');
+    const genericBlocker = updateProjectiles.indexOf('if (Neo.isBlocked(projectile.x, projectile.y, projectile.r))');
+    expect(destructibleImpact).toBeGreaterThan(0);
+    expect(genericBlocker).toBeGreaterThan(destructibleImpact);
   });
 
   test('resolves ordered status payloads with one deterministic roll per effect', () => {

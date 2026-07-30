@@ -431,8 +431,9 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
     expect(snapshots.at(-1)).toEqual(expect.objectContaining({
       full: true,
-      floorState: null,
+      floorState: expect.objectContaining({ layout: expect.objectContaining({ rooms: expect.any(Array) }) }),
       bossState: null,
+      bossStateChanged: true,
     }));
     authority.simulation.state.players[clientA.playerId].x += 1;
     authority._publishSnapshot(false);
@@ -445,6 +446,41 @@ describe('protocol-driven local multiplayer session', () => {
     expect(delta.entities.enemies).toEqual({});
     expect(delta.floorState).toBeNull();
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
+  });
+
+  test('full correction repairs divergent floor-owned pot state', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+    const roomId = authority.simulation.state.players[clientA.playerId].roomId;
+    const authorityRoom = authority.simulation.state.floorState.layout.rooms
+      .find(room => room.id === roomId);
+    const clientRoom = clientA.state.floorState.layout.rooms
+      .find(room => room.id === roomId);
+    authorityRoom.destructibles = [{
+      id: 'desynced-pot', kind: 'pot', x: 380, y: 350,
+      r: 12, hp: 0, maxHp: 1, broken: true,
+    }];
+    clientRoom.destructibles = [{
+      id: 'desynced-pot', kind: 'pot', x: 380, y: 350,
+      r: 12, hp: 1, maxHp: 1, broken: false,
+    }];
+
+    authority.sendFullCorrection();
+    clock.runAll();
+
+    expect(snapshots.at(-1)).toEqual(expect.objectContaining({
+      full: true,
+      floorState: expect.objectContaining({ layout: expect.any(Object) }),
+    }));
+    expect(clientA.state.floorState.layout.rooms
+      .find(room => room.id === roomId).destructibles[0]).toEqual(expect.objectContaining({
+      id: 'desynced-pot', hp: 0, broken: true,
+    }));
   });
 
   test('acknowledges snapshots and repairs a coalesced delta with a scoped full resync', async () => {

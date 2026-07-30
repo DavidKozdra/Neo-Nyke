@@ -2049,17 +2049,12 @@
         removeProjectileAt(index);
         continue;
       }
-      if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
-        if (tryBounceProjectile(projectile, prevX, prevY)) continue;
-        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
-        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
-        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        removeProjectileAt(index);
-        continue;
-      }
       // The authority resolves static blockers and lifetime before a
       // destructible impact. Keep campaign in that same order so a shot cannot
-      // break a prop through a wall or after it has already expired.
+      // break a prop through a wall or after it has already expired. Resolve the
+      // prop before the generic point blocker, though: isBlocked deliberately
+      // treats intact pots as solid, so checking it first discarded Metao's
+      // fireball without ever applying the already-detected pot impact.
       if (!projectile.enemy && hitProp) {
         const resolvePropImpact = globalThis.NeoNyke?.simulation?.resolveCampaignProjectileDestructibleImpact;
         if (typeof resolvePropImpact !== 'function') throw new Error('Shared projectile destructible impact policy is unavailable');
@@ -2072,6 +2067,14 @@
           force: projectile.kind === 'fireball' ? 1.35 : 1,
         });
         if (impact.blast) blastRadius(projectile.x, projectile.y, impact.blast.radius, impact.blast.damage, '#ff8844');
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
+        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
+        removeProjectileAt(index);
+        continue;
+      }
+      if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
+        if (tryBounceProjectile(projectile, prevX, prevY)) continue;
+        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
