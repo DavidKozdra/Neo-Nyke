@@ -2,7 +2,7 @@
   let _lineParticlePointScratch = new Float32Array(64);
   const CANVAS_PIXEL_FONT = '"VT323", "Courier New", ui-monospace, monospace';
 
-  function drawParticles() {
+  function drawParticles(layer = 'all') {
     // Per-particle shadowBlur is the dominant draw cost. In performance mode,
     // once the screen is busy (e.g. holding a laser) drop the glow entirely —
     // the particles stay, they just don't each trigger an expensive blur pass.
@@ -22,6 +22,8 @@
       Neo.ctx.shadowBlur = blur;
     };
     Neo.particles.forEach(particle => {
+      const groundFx = !!particle.groundFx;
+      if ((layer === 'ground' && !groundFx) || (layer === 'foreground' && groundFx)) return;
       if (particle.line) {
         const line = particle.line;
         const dx = line.x2 - line.x1;

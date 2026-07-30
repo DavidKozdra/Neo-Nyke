@@ -1811,10 +1811,18 @@ function syncPlayer() {
     : swingActive && Number.isFinite(Number(p.swingA)) ? Number(p.swingA)
       : armRecoilRemaining > 0 && Number.isFinite(Number(p.armRecoilA)) ? Number(p.armRecoilA)
         : currentAim;
+  const spriteActionState = Neo.getActorSpriteActionState?.(p, {
+    action: Neo.nimrodStompCharging ? 'dash' : null,
+    beamActive: Neo.laserActive || p.weaponBeamTime > 0,
+  }) || { action: null, progress: null };
+  const beamFacingAngle = Neo.laserActive && Number.isFinite(Number(Neo.laserAngle))
+    ? Number(Neo.laserAngle)
+    : aim;
   const flip = anim ? Number(anim.facing || 1) < 0
     : swingActive && Number(p.swingFacing || 0) ? Number(p.swingFacing) < 0
       : armRecoilRemaining > 0 && Number(p.armRecoilFacing || 0) ? Number(p.armRecoilFacing) < 0
-        : facingOf(p, currentAim) < 0;
+        : (Neo.getActorActionFacingDirection?.(p, spriteActionState.action, beamFacingAngle)
+          ?? facingOf(p, currentAim)) < 0;
   const baseKey = playerSpriteKey();
   const swingTotal = Neo.ATTACKS?.melee?.active || 0.32;
   const frameKey = !anim
@@ -1822,6 +1830,9 @@ function syncPlayer() {
       maxSpeed: p.mooggyZoomiesTime > 0 ? 640 : p.princessFlightTime > 0 ? 420 : 260,
       stepRate: p.mooggyZoomiesTime > 0 ? 11 : 7.5,
       attackProgress: Math.max(0, 1 - Number(p.swing || 0) / swingTotal),
+      beamActive: Neo.laserActive || p.weaponBeamTime > 0,
+      action: spriteActionState.action,
+      actionProgress: spriteActionState.progress,
       seedKey: 'player',
     }) || baseKey)
     : baseKey;
@@ -1851,6 +1862,7 @@ function syncPlayer() {
   updateActorSprite(playerSprite, frameKey, (p.r || 14) * actorScale, flip, { ...bob, alpha, tint });
   const body = playerSprite.getObjectByName('body');
   if (body) {
+    body.renderOrder = 6;
     body.material.rotation = anim
       ? (anim.facing < 0 ? -1 : 1) * (Math.PI / 2) * fallEase
       : networkDowned ? (flip ? -1 : 1) * Math.PI / 2 : 0;
@@ -1859,7 +1871,7 @@ function syncPlayer() {
   }
   const recoil = armRecoilRemaining / armRecoilDuration;
   syncPlayerArm(playerSprite, baseKey, p, aim, flip, {
-    hidden: !!anim || networkDowned || isFirstPersonActive(),
+    hidden: !!anim || networkDowned || isFirstPersonActive() || !!spriteActionState.action,
     recoil,
     attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
     alpha,
@@ -1900,17 +1912,25 @@ function syncOtherPlayers() {
       const baseKey = actorPlayerSpriteKey(actor);
       const slot = slotByActor.get(actor);
       const downed = !!actor.networkDowned || !!slot?.getDead?.();
+      const spriteActionState = Neo.getActorSpriteActionState?.(actor)
+        || { action: null, progress: null };
       const aim = Number.isFinite(Number(actor.swingA))
         ? Number(actor.swingA)
         : Number(actor.aimDirection || 0);
+      const beamFacingAngle = Number.isFinite(Number(actor.beamChannel?.angle))
+        ? Number(actor.beamChannel.angle)
+        : aim;
       const flip = Number(actor.swingFacing || 0)
         ? Number(actor.swingFacing) < 0
-        : facingOf(actor, aim) < 0;
+        : (Neo.getActorActionFacingDirection?.(actor, spriteActionState.action, beamFacingAngle)
+          ?? facingOf(actor, aim)) < 0;
       const swingTotal = Neo.ATTACKS?.melee?.active || 0.32;
       const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, actor, {
         maxSpeed: actor.mooggyZoomiesTime > 0 ? 640 : actor.princessFlightTime > 0 ? 420 : 260,
         stepRate: actor.mooggyZoomiesTime > 0 ? 11 : 7.5,
         attackProgress: Math.max(0, 1 - Number(actor.swing || 0) / swingTotal),
+        action: spriteActionState.action,
+        actionProgress: spriteActionState.progress,
         seedKey: `player:${actor.id || actor.displayName || 'remote'}`,
       }) || baseKey;
       let bob = downed
@@ -1935,11 +1955,12 @@ function syncOtherPlayers() {
       });
       const body = group.getObjectByName('body');
       if (body) {
+        body.renderOrder = 6;
         body.material.rotation = downed ? (flip ? -1 : 1) * Math.PI / 2 : 0;
         body.center.set(0.5, downed ? 0.5 : 0);
       }
       syncPlayerArm(group, baseKey, actor, aim, flip, {
-        hidden: downed,
+        hidden: downed || !!spriteActionState.action,
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
@@ -3359,6 +3380,7 @@ function syncParticles() {
     },
     (particle, sprite) => {
       const life = Math.max(0, Number(particle.life || 0));
+      sprite.renderOrder = particle.groundFx ? 1 : particle.text ? 12 : 5;
       if (particle.line && sprite.isLine) {
         const line = particle.line;
         const positions = sprite.geometry.getAttribute('position');

@@ -2502,6 +2502,12 @@
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
         const actor = this.presentationPlayerActors.get(player.id) || {};
+        const spriteAction = player.action === 'dash'
+          ? 'dash'
+          : player.action === 'ability'
+            ? (player.actionMode === 'laser' ? 'beam' : player.actionMode)
+            : null;
+        const spriteActionStartedAt = Number(this.neo.gameElapsedTime || 0) - elapsed;
         // Read the previous position before Object.assign overwrites it.
         const derived = this._deriveActorVelocity(actor, player, frameDelta);
         Object.assign(actor, {
@@ -2528,6 +2534,11 @@
           swing: attacking ? Math.max(0.001, activeSeconds - elapsed) : 0,
           swingA: Number(player.aimDirection || 0),
           swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
+          ...(spriteAction && ['beam', 'smash', 'dash'].includes(spriteAction) ? {
+            spriteAction,
+            spriteActionStartedAt,
+            spriteActionUntil: spriteActionStartedAt + 0.5,
+          } : {}),
           // Arm recoil is drawn by the shared drawPlayer path, but it reads a
           // countdown (armRecoilUntil vs gameElapsedTime) that combat.js sets
           // locally on fire. Nothing writes it here, so network heroes shot with

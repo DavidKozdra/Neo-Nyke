@@ -22,9 +22,13 @@ function extractCharacterSheetDefs() {
 function countOpaquePixels(image, frameIndex, frameWidth, frameHeight) {
   const canvas = createCanvas(frameWidth, frameHeight);
   const ctx = canvas.getContext('2d');
+  const columns = Math.floor(image.naturalWidth / frameWidth);
   ctx.drawImage(
     image,
-    frameIndex * frameWidth, 0, frameWidth, frameHeight,
+    (frameIndex % columns) * frameWidth,
+    Math.floor(frameIndex / columns) * frameHeight,
+    frameWidth,
+    frameHeight,
     0, 0, frameWidth, frameHeight,
   );
   const data = ctx.getImageData(0, 0, frameWidth, frameHeight).data;
@@ -36,6 +40,45 @@ function countOpaquePixels(image, frameIndex, frameWidth, frameHeight) {
 }
 
 describe('character sprite sheet assets', () => {
+  test.each([
+    ['thorn_knight', 'assets/sprites/chars/Thorn Knight.png'],
+    ['metao', 'assets/sprites/chars/Metao.png'],
+    ['sarge', 'assets/sprites/chars/Sarge.png'],
+  ])('%s exposes the complete row-major action atlas', async (key, src) => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs[key];
+    expect(def).toEqual(expect.objectContaining({
+      src,
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 32,
+      portraitFrame: 0,
+      armFrame: 1,
+      idleFrames: [2],
+      walkFrames: [2, 3, 4, 5, 6, 7],
+      dashFrames: [10, 11, 12, 13, 14, 15],
+      smashFrames: [18, 19, 20, 21, 22, 23],
+      beamFrames: [26, 27, 28, 29, 30, 31],
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const columns = Math.floor(image.naturalWidth / def.frameWidth);
+    const rows = Math.floor(image.naturalHeight / def.frameHeight);
+    expect(columns * rows).toBe(def.frameCount);
+    expect(columns).toBe(8);
+    expect(rows).toBe(4);
+
+    const animationFrames = [
+      ...def.walkFrames,
+      ...def.dashFrames,
+      ...def.smashFrames,
+      ...def.beamFrames,
+    ];
+    animationFrames.forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
   test('princess keeps dedicated portrait and arm frames before animation frames', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.princess;
@@ -51,7 +94,8 @@ describe('character sprite sheet assets', () => {
     }));
 
     const image = await loadImage(path.join(__dirname, '..', def.src));
-    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth);
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
     expect(availableFrames).toBe(def.frameCount);
     expect(image.naturalHeight).toBe(def.frameHeight);
 

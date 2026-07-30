@@ -64,6 +64,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawStoryActors?.();
     Neo.perfEnd('draw.entities', sectionPerfStart);
     drawRoomCeilingMask();
+    // Ground-origin AOE effects (Crimson Smash and other shockwaves) belong
+    // beneath actors. Foreground particles such as damage text and sparks are
+    // drawn in the later pass so they remain readable.
+    Neo.drawParticles('ground');
     if (!isDying) {
       const presentationSlots = Neo.presentationPlayerSlots;
       if (Array.isArray(presentationSlots)) {
@@ -107,7 +111,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     if (!isDying) Neo.drawGhostBallChargeBar?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     sectionPerfStart = Neo.perfStart();
-    Neo.drawParticles();
+    Neo.drawParticles('foreground');
     Neo.perfEnd('draw.particles', sectionPerfStart);
     sectionPerfStart = Neo.perfStart();
     if (!isDying) Neo.drawLadderPrompt();
