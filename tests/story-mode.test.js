@@ -88,7 +88,7 @@ describe('Story Mode integration', () => {
 
   test('makes Story Mode permanent and moves Tutorial to Settings', () => {
     expect(html).toContain('id="storyModeBtn"');
-    expect(html).toContain('STORY MODE');
+    expect(html).toContain('CAMPAIGN');
     expect(html).toContain('id="settingsPlayTutorial"');
     expect(html).not.toContain('id="tutorialMenuBtn"');
     expect(html).not.toContain('id="infoTutorialBtn"');
@@ -109,7 +109,7 @@ describe('Story Mode integration', () => {
   });
 
   test('keeps Story single-player while preserving difficulty selection', () => {
-    expect(gameState).toContain("if (mode === 'story') return 'Story'");
+    expect(gameState).toContain("if (mode === 'story') return 'Campaign'");
     expect(gameState).toContain('const storyUnlocked = isStory');
     expect(gameState).toContain('updateCharacterSelection(isCompetitive ? competitiveUnlocked : storyUnlocked');
     expect(gameState).toContain("challengeToggleEl.style.display = isCompetitive || isStory ? 'none' : ''");

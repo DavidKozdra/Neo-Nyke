@@ -1383,7 +1383,7 @@ export function resumeGame() {
   }
 
   function getRunModeLabel(mode) {
-    if (mode === 'story') return 'Story';
+    if (mode === 'story') return 'Campaign';
     if (mode === 'coop') return 'Co-op';
     if (mode === 'pvp') return 'PVP';
     if (mode === 'endless') return 'Endless';
@@ -2671,11 +2671,11 @@ export function resumeGame() {
         if (subtitleEl) subtitleEl.textContent = 'Weekly seed speed run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'RUN SEED';
       } else if (isStory) {
-        if (titleEl) titleEl.textContent = 'CHOOSE YOUR STORY';
+        if (titleEl) titleEl.textContent = 'CHOOSE YOUR CAMPAIGN';
         if (subtitleEl) subtitleEl.textContent = skipStoryTutorial
           ? 'Begin on Floor 2 with the complete tutorial reward package.'
           : 'A deterministic single-player campaign. Floor 1 is Sarge\'s tutorial.';
-        if (goBtn) goBtn.textContent = 'BEGIN STORY';
+        if (goBtn) goBtn.textContent = 'BEGIN CAMPAIGN';
       } else {
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
