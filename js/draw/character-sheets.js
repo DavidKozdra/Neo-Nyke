@@ -5,11 +5,15 @@ const CHARACTER_SHEET_DEFS = {
     src: 'assets/sprites/chars/Thorn Knight.png',
     frameWidth: 24,
     frameHeight: 24,
-    frameCount: 7,
+    frameCount: 32,
     renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
+    idleFrames: [2],
+    walkFrames: [2, 3, 4, 5, 6, 7],
+    dashFrames: [10, 11, 12, 13, 14, 15],
+    smashFrames: [18, 19, 20, 21, 22, 23],
+    beamFrames: [26, 27, 28, 29, 30, 31],
+    armFrame: 1,
+    portraitFrame: 0,
     armBaseAngle: -Math.PI / 2,
     armPivot: { x: 10, y: 17 },
     armOffset: { x: 1, y: 3 },
@@ -31,10 +35,13 @@ const CHARACTER_SHEET_DEFS = {
     src: 'assets/sprites/chars/Sarge.png',
     frameWidth: 24,
     frameHeight: 24,
-    frameCount: 7,
+    frameCount: 32,
     renderScale: 1.5,
-    idleFrames: [2, 3],
-    walkFrames: [4, 5, 6],
+    idleFrames: [2],
+    walkFrames: [2, 3, 4, 5, 6, 7],
+    dashFrames: [10, 11, 12, 13, 14, 15],
+    smashFrames: [18, 19, 20, 21, 22, 23],
+    beamFrames: [26, 27, 28, 29, 30, 31],
     armFrame: 1,
     portraitFrame: 0,
   },
@@ -65,10 +72,13 @@ const CHARACTER_SHEET_DEFS = {
     src: 'assets/sprites/chars/Metao.png',
     frameWidth: 24,
     frameHeight: 24,
-    frameCount: 8,
+    frameCount: 32,
     renderScale: 1.5,
-    idleFrames: [2, 3],
-    walkFrames: [4, 5, 6, 7],
+    idleFrames: [2],
+    walkFrames: [2, 3, 4, 5, 6, 7],
+    dashFrames: [10, 11, 12, 13, 14, 15],
+    smashFrames: [18, 19, 20, 21, 22, 23],
+    beamFrames: [26, 27, 28, 29, 30, 31],
     armFrame: 1,
     portraitFrame: 0,
   },
@@ -101,6 +111,7 @@ const CHARACTER_SHEET_DEFS = {
 // in sheet order" when a def doesn't specify — but sheets aren't always laid
 // out that way (e.g. an arm/weapon reference frame sitting at index 0), so
 // both are overridable per-def and editable from the developer sprite editor.
+// Explicit lists may overlap, allowing the neutral walk pose to double as idle.
 // `idleFrame` (singular) is kept as a legacy input for older defs/downloads.
 function resolveFrameRoles(def, frameCount) {
   const inRange = i => Number.isInteger(i) && i >= 0 && i < frameCount;
@@ -117,10 +128,11 @@ function resolveFrameRoles(def, frameCount) {
     const fallback = Array.from({ length: frameCount }, (_, i) => i).find(i => i !== armFrame);
     if (fallback != null) idleFrames = [fallback];
   }
-  const walkFrames = (Array.isArray(def.walkFrames) && def.walkFrames.length
+  const hasConfiguredWalkFrames = Array.isArray(def.walkFrames) && def.walkFrames.length;
+  const walkFrames = (hasConfiguredWalkFrames
     ? def.walkFrames
-    : Array.from({ length: frameCount }, (_, i) => i))
-    .filter(i => inRange(i) && !idleFrames.includes(i) && i !== armFrame);
+    : Array.from({ length: frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i)))
+    .filter(i => inRange(i) && i !== armFrame);
   // The portrait frame is what chat dialogue and the character-select screen
   // draw as the character's face — independent of idle/walk/arm, so it can be
   // a dedicated close-up pose. Defaults to the first idle frame (the old,
@@ -133,25 +145,42 @@ function loadCharacterSheet(key, def) {
   return new Promise(resolve => {
     const image = new Image();
     image.onload = () => {
-      const availableFrames = Math.floor(image.naturalWidth / def.frameWidth);
+      const columns = Math.floor(image.naturalWidth / def.frameWidth);
+      const rows = Math.floor(image.naturalHeight / def.frameHeight);
+      const availableFrames = columns * rows;
       const frameCount = Math.min(def.frameCount, availableFrames);
-      if (frameCount < 1 || image.naturalHeight < def.frameHeight) {
+      if (frameCount < 1 || columns < 1 || rows < 1) {
         console.warn(`[CharacterSprites] Invalid sprite sheet dimensions for "${key}".`);
         resolve(null);
         return;
       }
       const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
+      const animationFrames = {};
+      ['dash', 'smash', 'beam'].forEach(action => {
+        const indices = Array.isArray(def[`${action}Frames`])
+          ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
+          : [];
+        if (indices.length) animationFrames[action] = indices;
+      });
       resolve({
         ...def,
         image,
+        columns,
+        rows,
         frameCount,
         idleFrames,
         walkFrames,
+        animationFrames,
         armFrame,
         portraitFrame,
         animations: {
           idle: idleFrames.map((_, index) => `idle${index}`),
           walk: walkFrames.map((_, index) => `walk${index}`),
+          ...Object.fromEntries(
+            Object.entries(animationFrames).map(([action, indices]) => (
+              [action, indices.map((_, index) => `${action}${index}`)]
+            )),
+          ),
         },
       });
     };

@@ -1201,6 +1201,7 @@
           size: Neo.rand(explosive ? 13 : 10, 6, 'fx'),
           grow: Neo.rand(20, 10, 'fx'),
           drag: 2.8,
+          groundFx: true,
         });
       }
     }
@@ -1214,6 +1215,7 @@
       radius: safeRadius,
       c: color,
       style,
+      groundFx: true,
     });
 
     if (heavy) {
@@ -1228,6 +1230,7 @@
         radius: safeRadius * (explosive ? 0.74 : 0.62),
         c: explosive ? '#fff0c2' : '#ffffff',
         style: 'pressure',
+        groundFx: true,
       });
 
       // A single procedural core is much cheaper than faking the flash with
@@ -1242,6 +1245,7 @@
         radius: Math.min(safeRadius * (explosive ? 0.64 : 0.46), explosive ? 104 : 68),
         c: color,
         reducedFlash,
+        groundFx: true,
       });
     }
 
@@ -1276,6 +1280,7 @@
         rotation: angle + Neo.rand(0.7, -0.7, 'fx'),
         spin: Neo.rand(13, -13, 'fx') * motionScale,
         drag: heavy ? Neo.rand(5.2, 3.4, 'fx') : 0,
+        groundFx: true,
       });
     }
 
@@ -1301,6 +1306,7 @@
           rotation: angle,
           spin: Neo.rand(9, -9, 'fx') * motionScale,
           drag: 4.6,
+          groundFx: true,
         });
       }
     }
@@ -3913,6 +3919,7 @@
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
       rotation: 0, spin: 0, drag: 0, grow: 0, reducedFlash: false,
+      groundFx: false,
       silhouette: null,
       _active: false, _particleList: null, _dmgOwner: null, _dmgTotal: 0, _dmgCrit: false,
     });
@@ -3928,6 +3935,7 @@
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
       rotation: 0, spin: 0, drag: 0, grow: 0, reducedFlash: false,
+      groundFx: false,
       silhouette: null,
       _active: false, _particleList: null, _dmgOwner: null, _dmgTotal: 0, _dmgCrit: false,
     };
@@ -3968,6 +3976,7 @@
     p.drag = props.drag ?? 0;
     p.grow = props.grow ?? 0;
     p.reducedFlash = props.reducedFlash ?? false;
+    p.groundFx = props.groundFx ?? false;
     p.silhouette = props.silhouette ?? null;
     p._active = true;
     p._particleList = Neo.particles;

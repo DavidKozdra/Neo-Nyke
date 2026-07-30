@@ -965,6 +965,7 @@
     // trigger the sound once at cast time, not every damage tick.
     const spendLaserCharge = (opts) => {
       if (!Neo.spendSkillCharge('laser', rechargeTime, opts)) return false;
+      startPlayerSpriteAction('beam');
       Neo.tutorialController?.signal?.('attack', { action: 'laser' });
       // Lightning Columns plays its own electric one-shot at the call site.
       if (move !== 'lightning_columns') Neo.playSfx?.('lazer_blast');
@@ -1592,6 +1593,14 @@
     });
   }
 
+  function startPlayerSpriteAction(action, duration = 0.5) {
+    if (!Neo.player) return;
+    const startedAt = Number(Neo.gameElapsedTime || 0);
+    Neo.player.spriteAction = action;
+    Neo.player.spriteActionStartedAt = startedAt;
+    Neo.player.spriteActionUntil = startedAt + Math.max(0.1, Number(duration) || 0.5);
+  }
+
   function getChargeSpeedAttackBonus() {
     const attackSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
     return 1 + (attackSpeed - 1) * CHARGE_SPEED_ATTACK_SPEED_DAMPING;
@@ -1606,6 +1615,7 @@
     if (getEquippedMove('smash') === 'healing_zone') {
       if (Neo.healingZoneCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      startPlayerSpriteAction('smash');
       Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.healingZoneCharging = true;
       Neo.healingZoneChargeTime = 0;
@@ -1620,6 +1630,7 @@
     if (smashMoveKey === 'death_ball' || smashMoveKey === 'turtle_powerup') {
       if (Neo.deathBallCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      startPlayerSpriteAction('smash');
       Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.deathBallCharging = true;
       Neo.deathBallChargeTime = 0;
@@ -1628,6 +1639,7 @@
       return;
     }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
+    startPlayerSpriteAction('smash');
     Neo.tutorialController?.signal?.('attack', { action: 'smash' });
     if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
       const base = Neo.angleToMouse();
@@ -1813,6 +1825,7 @@
     if (move === 'nimrod_stomp') {
       if (Neo.nimrodStompCharging) return; // already winding up
       if (!Neo.spendSkillCharge('dash', rechargeTime, { deferTimer: true })) return;
+      startPlayerSpriteAction('dash');
       Neo.tutorialController?.signal?.('dash');
       Neo.nimrodStompCharging = true;
       Neo.nimrodStompChargeTime = 0;
@@ -1820,6 +1833,7 @@
       return;
     }
     if (!Neo.spendSkillCharge('dash', rechargeTime)) return;
+    startPlayerSpriteAction('dash');
     Neo.tutorialController?.signal?.('dash');
     if (move === 'flying_unhitable') {
       castFlyingUntouchable();
@@ -2494,6 +2508,7 @@
     const targetY = Neo.clamp(Neo.player.y + Math.sin(angle) * leapRange, edgePad, Neo.ROOM_H - edgePad);
     const landingPoint = findSafePointNearTarget(targetX, targetY, Neo.player.r, 140, 20);
     if (!landingPoint) return;
+    startPlayerSpriteAction('dash');
     teleportPlayerTo(landingPoint.x, landingPoint.y, '#fff06a');
     // Tap: 108px/46dmg baseline (unchanged feel). Full charge: ~1.5x radius, ~1.7x damage.
     const aoeRadius = stomp.radius;

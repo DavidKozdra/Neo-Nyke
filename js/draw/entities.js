@@ -26,12 +26,13 @@
       const walkFrames = Array.isArray(sheet.walkFrames) && sheet.walkFrames.length
         ? sheet.walkFrames
         : Array.from({ length: sheet.frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i));
+      const columns = Math.max(1, Number(sheet.columns) || Math.floor(sheet.image.naturalWidth / sheet.frameWidth));
       const pushFrame = (sourceIndex, entryKey) => {
         entries.push({
           key: entryKey,
           image: sheet.image,
-          sourceX: sourceIndex * sheet.frameWidth,
-          sourceY: 0,
+          sourceX: (sourceIndex % columns) * sheet.frameWidth,
+          sourceY: Math.floor(sourceIndex / columns) * sheet.frameHeight,
           width: sheet.frameWidth,
           height: sheet.frameHeight,
           renderScale: sheet.renderScale,
@@ -40,6 +41,9 @@
       pushFrame(idleFrames[0], key);
       idleFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:idle${position}`));
       walkFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:walk${position}`));
+      Object.entries(sheet.animationFrames || {}).forEach(([action, sourceIndices]) => {
+        sourceIndices.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:${action}${position}`));
+      });
       if (Number.isInteger(sheet.armFrame)) pushFrame(sheet.armFrame, `${key}:arm`);
       pushFrame(Number.isInteger(sheet.portraitFrame) ? sheet.portraitFrame : idleFrames[0], `${key}:portrait`);
     });
@@ -123,6 +127,14 @@
     return Math.cos(fallbackAngle) < 0 ? -1 : 1;
   }
 
+  function getActorActionFacingDirection(actor, action, aimAngle = 0) {
+    // Beam art must point along the beam even while the player strafes in the
+    // opposite direction. Movement remains the facing source for locomotion
+    // and non-directional actions.
+    if (action === 'beam') return Math.cos(aimAngle) < 0 ? -1 : 1;
+    return getFacingDirection(actor, aimAngle);
+  }
+
   function getActorAnimSeed(actor, fallbackKey = '') {
     // A fixed per-actor phase offset so identical actors desync. Prefer a stable
     // source (an assigned animSeed, or a caller-supplied key like 'player') and
@@ -153,6 +165,33 @@
     };
   }
 
+  function getActorSpriteActionState(actor, options = {}) {
+    if (options.action) {
+      return { action: options.action, progress: options.actionProgress ?? null };
+    }
+    const clock = Number(Neo.gameElapsedTime || 0);
+    const startedAt = Number(actor?.spriteActionStartedAt);
+    const until = Number(actor?.spriteActionUntil);
+    if (actor?.spriteAction && Number.isFinite(until) && until > clock) {
+      const duration = Math.max(0.001, until - (Number.isFinite(startedAt) ? startedAt : clock));
+      return {
+        action: actor.spriteAction,
+        progress: Neo.clamp((clock - (Number.isFinite(startedAt) ? startedAt : clock)) / duration, 0, 0.999),
+      };
+    }
+
+    const actionMode = actor?.action === 'dash' ? 'dash' : actor?.action === 'ability' ? actor?.actionMode : null;
+    if (actionMode === 'dash' || Number(actor?.dashTime || 0) > 0) {
+      return { action: 'dash', progress: null };
+    }
+    if (actionMode === 'smash') return { action: 'smash', progress: null };
+    if (actionMode === 'laser') return { action: 'beam', progress: null };
+    if (options.beamActive || actor?.beamChannel || actor?.pvpBeamActive) {
+      return { action: 'beam', progress: null };
+    }
+    return { action: null, progress: null };
+  }
+
   function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
     const access = window.NeoSettings?.getAccess?.() || {};
     const def = Neo.SPRITE_DEFS[spriteKey];
@@ -166,6 +205,20 @@
       const key = `${spriteKey}:${variant}`;
       return atlasFrames[key] ? key : spriteKey;
     };
+
+    const actionState = options.action
+      ? { action: options.action, progress: options.actionProgress }
+      : getActorSpriteActionState(actor, options);
+    const actionFrames = animations[actionState.action] || [];
+    if (actionFrames.length) {
+      if (actionState.progress != null && Number.isFinite(Number(actionState.progress))) {
+        const progress = Neo.clamp(Number(actionState.progress), 0, 0.999);
+        return resolve(actionFrames[Math.floor(progress * actionFrames.length)]);
+      }
+      const actionRate = Number(options.actionRate || 12);
+      const index = wrap(Number(Neo.gameElapsedTime || 0) * actionRate, actionFrames.length);
+      return resolve(actionFrames[index]);
+    }
 
     const attackFrames = animations.attack || [];
     if (attackFrames.length && Number(options.attackProgress || 0) > 0) {
@@ -183,7 +236,9 @@
     const clock = Number(Neo.gameElapsedTime || 0);
     // Non-negative modulo — Math.floor(...) % n keeps the dividend's sign in JS, so
     // guard against a negative index (which would read undefined and hitch).
-    const wrap = (value, length) => ((Math.floor(value) % length) + length) % length;
+    function wrap(value, length) {
+      return ((Math.floor(value) % length) + length) % length;
+    }
     if (walkFrames.length && speed > 10) {
       const stepRate = Number(speedOverride.stepRate ?? options.stepRate ?? 10);
       const index = Math.floor(Date.now() / 1000 * stepRate + seed) % walkFrames.length;
@@ -342,6 +397,7 @@
   }
 
   function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1, options = {}) {
+    if (options.hidden) return;
     const atlas = Neo.SPRITE_ATLAS;
     const armFrame = atlas?.frames?.[`${spriteKey}:arm`];
     if (armFrame) {
@@ -1375,6 +1431,14 @@
     if (Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]) {
       anim.scaleX = 1;
       anim.scaleY = 1;
+      if (getActorSpriteActionState(actor, animation).action) {
+        // Authored action frames already contain their own pose and motion.
+        // Applying the legacy procedural lean/bob on top made Metao's beam
+        // body appear to rotate while the atlas was playing.
+        anim.spriteOffsetX = 0;
+        anim.spriteOffsetY = 0;
+        anim.rotation = 0;
+      }
     }
     const frameKey = getActorSpriteFrameKey(spriteKey, actor, animation);
     drawSpriteFrame(frameKey, x, y, size, {
@@ -1645,11 +1709,18 @@
       : armRecoilRemaining > 0
         ? (Number.isFinite(recoilAngle) ? recoilAngle : currentAimAngle)
         : currentAimAngle;
+    const playerActionState = getActorSpriteActionState(Neo.player, {
+      action: Neo.nimrodStompCharging ? 'dash' : null,
+      beamActive: Neo.laserActive || Neo.player.weaponBeamTime > 0,
+    });
+    const beamFacingAngle = Neo.laserActive && Number.isFinite(Number(Neo.laserAngle))
+      ? Number(Neo.laserAngle)
+      : aimAngle;
     const facing = swingActive && Number(Neo.player.swingFacing || 0)
       ? (Neo.player.swingFacing < 0 ? -1 : 1)
       : armRecoilRemaining > 0 && Number(Neo.player.armRecoilFacing || 0)
         ? (Neo.player.armRecoilFacing < 0 ? -1 : 1)
-        : getFacingDirection(Neo.player, currentAimAngle);
+        : getActorActionFacingDirection(Neo.player, playerActionState.action, beamFacingAngle);
     const godTime = getActorGodTime(Neo.player);
     const shadowColor = godTime > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
@@ -1674,6 +1745,9 @@
         actionPulse: getAttackPulse(Neo.player.swing, Neo.ATTACKS.melee.active),
         attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
         castPulse: Neo.laserActive || Neo.player.weaponBeamTime > 0 ? 0.32 : 0,
+        beamActive: Neo.laserActive || Neo.player.weaponBeamTime > 0,
+        action: playerActionState.action,
+        actionProgress: playerActionState.progress,
         seedKey: 'player',
       },
     });
@@ -1682,6 +1756,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
     drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
+      hidden: !!playerActionState.action,
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
     });
@@ -1793,9 +1868,13 @@
     const aimAngle = Number.isFinite(Number(pn.aimDirection))
       ? Number(pn.aimDirection)
       : Math.atan2(pn.vy || 0, pn.vx || 1);
-    const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
     const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
+    const slotActionState = getActorSpriteActionState(pn);
+    const beamFacingAngle = Number.isFinite(Number(pn.beamChannel?.angle))
+      ? Number(pn.beamChannel.angle)
+      : aimAngle;
+    const facing = getActorActionFacingDirection(pn, slotActionState.action, beamFacingAngle);
     if (pn.networkDowned || slot.getDead?.()) {
       drawSpriteFrame(spriteKey, pn.x, pn.y + slotSize * 0.14, slotSize, {
         alpha: 0.64,
@@ -1843,6 +1922,8 @@
         dashPulse: pn.dashTime > 0 ? 1 : 0,
         actionPulse: getAttackPulse(pn.swing, Neo.ATTACKS.melee.active),
         attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
+        action: slotActionState.action,
+        actionProgress: slotActionState.progress,
         seedKey: label || charKey,
       },
     });
@@ -1851,6 +1932,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
     drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
+      hidden: !!slotActionState.action,
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
@@ -2196,6 +2278,8 @@
   Neo.getPlayerSpriteKey = getPlayerSpriteKey;
   Neo.getPortraitSpriteKey = getPortraitSpriteKey;
   Neo.getFacingDirection = getFacingDirection;
+  Neo.getActorActionFacingDirection = getActorActionFacingDirection;
+  Neo.getActorSpriteActionState = getActorSpriteActionState;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;
   Neo.getActorSpriteScale = getActorSpriteScale;
