@@ -1411,9 +1411,14 @@
           entities: scoped,
           ...(packedDynamic ? { packedDynamic } : {}),
           removedEntityIds: Array.from(scopedRemovedEntityIds),
-          floorState: floorChanged ? JSON.parse(floorSignature) : null,
-          bossState: bossStateChanged ? JSON.parse(bossSignature) : null,
-          bossStateChanged,
+          // A full correction must repair every authoritative state domain, not
+          // only entity collections. Room-owned mutations (broken pots,
+          // hazards, doors, rewards, etc.) live inside floorState; omitting it
+          // preserves exactly the client divergence this snapshot is meant to
+          // recover from.
+          floorState: clientFull || floorChanged ? JSON.parse(floorSignature) : null,
+          bossState: clientFull || bossStateChanged ? JSON.parse(bossSignature) : null,
+          bossStateChanged: clientFull || bossStateChanged,
         };
         const delivery = clientFull
           ? { reliability: 'reliable', channel: 'snapshot', replaceable: false }

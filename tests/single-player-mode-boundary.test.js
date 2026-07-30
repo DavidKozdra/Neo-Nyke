@@ -8,7 +8,7 @@ describe('single-player mode boundary', () => {
     const html = read('index.html');
     const featureSource = read('js/config/FeatureFlags.js');
 
-    expect(html).toMatch(/id="newRunBtn"[^>]*>CLASSIC RUN<\/button>/);
+    expect(html).toMatch(/id="newRunBtn"[^>]*>NEW RUN<\/button>/);
     // Networked play lives in the Alt Modes "MULTIPLAYER" tab, not the main nav.
     expect(html).toMatch(/class="altmodes-tab" data-tab="online"[^>]*>MULTIPLAYER<\/button>/);
     expect(html).toMatch(/data-panel="online"[\s\S]*?id="multiplayerBtn"/);
