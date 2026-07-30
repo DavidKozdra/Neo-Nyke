@@ -52,6 +52,8 @@ describe('character sprite sheet assets', () => {
       frameWidth: 24,
       frameHeight: 24,
       frameCount: 32,
+      stepRate: 10,
+      actionRate: 10,
       portraitFrame: 0,
       armFrame: 1,
       idleFrames: [2],

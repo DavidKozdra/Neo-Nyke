@@ -1872,7 +1872,7 @@ function syncPlayer() {
   const recoil = armRecoilRemaining / armRecoilDuration;
   syncPlayerArm(playerSprite, baseKey, p, aim, flip, {
     hidden: !!anim || networkDowned || isFirstPersonActive()
-      || (!!spriteActionState.action && spriteActionState.action !== 'beam'),
+      || !!Neo.shouldHideActorAimArm?.(baseKey, spriteActionState.action),
     recoil,
     attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
     alpha,
@@ -1961,7 +1961,7 @@ function syncOtherPlayers() {
         body.center.set(0.5, downed ? 0.5 : 0);
       }
       syncPlayerArm(group, baseKey, actor, aim, flip, {
-        hidden: downed || (!!spriteActionState.action && spriteActionState.action !== 'beam'),
+        hidden: downed || !!Neo.shouldHideActorAimArm?.(baseKey, spriteActionState.action),
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
