@@ -68,6 +68,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // beneath actors. Foreground particles such as damage text and sparks are
     // drawn in the later pass so they remain readable.
     Neo.drawParticles('ground');
+    // Player beams originate at torso height but belong behind the authored
+    // body/hand sprites. Drawing them here keeps the caster readable while the
+    // beam-struggle clash and foreground particles can still render above.
+    if (!isDying) Neo.drawActivePlayerEffects?.();
     if (!isDying) {
       const presentationSlots = Neo.presentationPlayerSlots;
       if (Array.isArray(presentationSlots)) {
@@ -98,7 +102,6 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // occlude the player. Columns the player is in front of were already drawn
     // in drawRoomDecor (before the player).
     Neo.drawStructuresOverPlayer?.();
-    if (!isDying) Neo.drawActivePlayerEffects?.();
     if (!isDying) Neo.drawBeamStruggleClash?.();
     Neo.drawJusticeBlades?.();
     Neo.drawTitanHammer?.();

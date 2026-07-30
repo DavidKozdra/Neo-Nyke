@@ -15,12 +15,11 @@ describe('character action presentation', () => {
     expect(entities).toMatch(/anim\.spriteOffsetX = 0;\s+anim\.spriteOffsetY = 0;\s+anim\.rotation = 0;/);
   });
 
-  test('the detached aim arm is hidden while full-body action frames play', () => {
+  test('the aim arm remains above beams but is suppressed for other full-body actions', () => {
     expect(entities).toContain('if (options.hidden) return;');
-    expect(entities).toContain('hidden: !!playerActionState.action');
-    expect(entities).toContain('hidden: !!slotActionState.action');
-    expect(threeRenderer).toContain('isFirstPersonActive() || !!spriteActionState.action');
-    expect(threeRenderer).toContain('hidden: downed || !!spriteActionState.action');
+    expect(entities).toContain("hidden: !!playerActionState.action && playerActionState.action !== 'beam'");
+    expect(entities).toContain("hidden: !!slotActionState.action && slotActionState.action !== 'beam'");
+    expect(threeRenderer).toContain("spriteActionState.action !== 'beam'");
   });
 
   test('beam action facing follows aim instead of opposite strafe movement', () => {
@@ -34,9 +33,12 @@ describe('character action presentation', () => {
 
   test('AOE particles render below players while readable foreground particles remain above', () => {
     const groundPass = viewport.indexOf("Neo.drawParticles('ground')");
+    const beamPass = viewport.indexOf('Neo.drawActivePlayerEffects?.()', groundPass);
     const localPlayer = viewport.indexOf('Neo.drawPlayer();', groundPass);
     const foregroundPass = viewport.indexOf("Neo.drawParticles('foreground')");
     expect(groundPass).toBeGreaterThan(-1);
+    expect(beamPass).toBeGreaterThan(groundPass);
+    expect(localPlayer).toBeGreaterThan(beamPass);
     expect(localPlayer).toBeGreaterThan(groundPass);
     expect(foregroundPass).toBeGreaterThan(localPlayer);
     expect(particles).toContain("layer === 'ground'");

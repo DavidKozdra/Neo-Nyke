@@ -1756,7 +1756,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
     drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
-      hidden: !!playerActionState.action,
+      hidden: !!playerActionState.action && playerActionState.action !== 'beam',
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
     });
@@ -1932,24 +1932,11 @@
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
     drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
-      hidden: !!slotActionState.action,
+      hidden: !!slotActionState.action && slotActionState.action !== 'beam',
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
     Neo.ctx.restore();
-    if (pn.pvpBeamActive && Array.isArray(pn.pvpBeamPath)) {
-      Neo.drawTaperedBeamPaths?.([pn.pvpBeamPath], {
-        color: pn.pvpBeamMode === 'turtle_wave' ? '#74f5ff' : tintColor,
-        glow: pn.pvpBeamMode === 'turtle_wave' ? '#b8ffff' : tintColor,
-        maxWidth: pn.pvpBeamMode === 'turtle_wave' ? 18 : 8,
-        coreColor: '#ffffff',
-      });
-    }
-    if (Number(pn.auxLaserFxTime || 0) > 0 && Array.isArray(pn.auxLaserPath)) {
-      Neo.drawTaperedBeamPaths?.([pn.auxLaserPath], {
-        color: tintColor, glow: tintColor, maxWidth: 8, coreColor: '#ffffff',
-      });
-    }
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;
     Neo.ctx.font = 'bold 11px monospace';
@@ -2236,40 +2223,62 @@
     const effects = Neo.activePlayerEffects;
     if (!Array.isArray(effects)) {
       drawPlayerLaser();
-      return;
+    } else {
+      const saved = {
+        player: Neo.player,
+        laserActive: Neo.laserActive,
+        laserTime: Neo.laserTime,
+        laserTick: Neo.laserTick,
+        laserMode: Neo.laserMode,
+        laserAngle: Neo.laserAngle,
+        laserSweepSpeed: Neo.laserSweepSpeed,
+        loveBeamCasting: Neo.loveBeamCasting,
+        activeBeamPaths: Neo.activeBeamPaths,
+        rng: Neo.rng,
+      };
+      try {
+        effects.forEach(effect => {
+          if (!effect?.player || !effect.laserActive) return;
+          Neo.player = effect.player;
+          Neo.laserActive = true;
+          Neo.laserTime = Number(effect.laserTime || 0);
+          Neo.laserTick = Number(effect.laserTick || 0);
+          Neo.laserMode = effect.laserMode || 'beam';
+          Neo.laserAngle = Number(effect.laserAngle || 0);
+          Neo.laserSweepSpeed = Number(effect.laserSweepSpeed || 0);
+          Neo.loveBeamCasting = !!effect.loveBeamCasting;
+          Neo.activeBeamPaths = effect.activeBeamPaths || null;
+          Neo.rng = typeof saved.rng === 'function'
+            ? saved.rng
+            : () => Neo.nextRandom?.('fx') ?? Math.random();
+          drawPlayerLaser();
+        });
+      } finally {
+        Object.assign(Neo, saved);
+      }
     }
-    const saved = {
-      player: Neo.player,
-      laserActive: Neo.laserActive,
-      laserTime: Neo.laserTime,
-      laserTick: Neo.laserTick,
-      laserMode: Neo.laserMode,
-      laserAngle: Neo.laserAngle,
-      laserSweepSpeed: Neo.laserSweepSpeed,
-      loveBeamCasting: Neo.loveBeamCasting,
-      activeBeamPaths: Neo.activeBeamPaths,
-      rng: Neo.rng,
-    };
-    try {
-      effects.forEach(effect => {
-        if (!effect?.player || !effect.laserActive) return;
-        Neo.player = effect.player;
-        Neo.laserActive = true;
-        Neo.laserTime = Number(effect.laserTime || 0);
-        Neo.laserTick = Number(effect.laserTick || 0);
-        Neo.laserMode = effect.laserMode || 'beam';
-        Neo.laserAngle = Number(effect.laserAngle || 0);
-        Neo.laserSweepSpeed = Number(effect.laserSweepSpeed || 0);
-        Neo.loveBeamCasting = !!effect.loveBeamCasting;
-        Neo.activeBeamPaths = effect.activeBeamPaths || null;
-        Neo.rng = typeof saved.rng === 'function'
-          ? saved.rng
-          : () => Neo.nextRandom?.('fx') ?? Math.random();
-        drawPlayerLaser();
-      });
-    } finally {
-      Object.assign(Neo, saved);
-    }
+
+    // Legacy local-coop/PVP beams use actor-owned paths instead of the
+    // projected activePlayerEffects list. Keep them in this same pre-player
+    // layer so remote hands and bodies also remain above their beams.
+    (Neo.getActivePlayerSlots?.() || []).forEach(slot => {
+      const actor = slot?.getEntity?.();
+      if (!actor) return;
+      const color = slot.color || '#a8d8ff';
+      if (actor.pvpBeamActive && Array.isArray(actor.pvpBeamPath)) {
+        Neo.drawTaperedBeamPaths?.([actor.pvpBeamPath], {
+          color: actor.pvpBeamMode === 'turtle_wave' ? '#74f5ff' : color,
+          glow: actor.pvpBeamMode === 'turtle_wave' ? '#b8ffff' : color,
+          maxWidth: actor.pvpBeamMode === 'turtle_wave' ? 18 : 8,
+          coreColor: '#ffffff',
+        });
+      }
+      if (Number(actor.auxLaserFxTime || 0) > 0 && Array.isArray(actor.auxLaserPath)) {
+        Neo.drawTaperedBeamPaths?.([actor.auxLaserPath], {
+          color, glow: color, maxWidth: 8, coreColor: '#ffffff',
+        });
+      }
+    });
   }
 
   // Expose on Neo
