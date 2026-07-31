@@ -2398,6 +2398,10 @@ const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion']);
 const BAKED_PICKUP_FLOOR_LIFT = {
   challengeRune: 16,
   challengeBomb: 24,
+  // The intermission continue plinths include a label 43 units below their
+  // simulation origin. Lift both variants so that label clears the 3D floor.
+  endlessNextWave: 46,
+  bossRushNextBoss: 46,
   // Secret warp rooms use an upright portal glyph and destination label. Its
   // authored art is centered on the simulation point, so lift it clear of the
   // 3D floor instead of burying the lower half of the ring.
@@ -2451,6 +2455,7 @@ const BAKED_PICKUP_WORLD_SIZE = {
   // Endless intermission exit: a 54-unit plinth (-26..+28) plus the 'NEXT WAVE'
   // label at y=43, with headroom for its pulsing glow.
   endlessNextWave: 110,
+  bossRushNextBoss: 110,
 };
 // Fallback for a type with no measured entry -- deliberately roomy, since
 // clipping authored art is worse than a slightly soft bake.

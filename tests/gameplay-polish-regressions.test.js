@@ -53,6 +53,11 @@ describe('gameplay polish regressions', () => {
     expect(renderer3d).toContain(': BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;');
   });
 
+  test('3D Endless and Boss Rush continue plinths clear the shop floor', () => {
+    expect(renderer3d).toContain('endlessNextWave: 46');
+    expect(renderer3d).toContain('bossRushNextBoss: 46');
+  });
+
   test('3D secret warp rooms are raised above the floor', () => {
     expect(renderer3d).toContain('secretWarp: 24');
   });

@@ -2731,11 +2731,11 @@
               getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
                 const actor = slot.getEntity();
                 if (Neo.dist(actor.x, actor.y, target.x, target.y) <= burstR + actor.r) {
-                  damagePlayerSlot(slot, hazard.damage || 26, aimAngle, 120, hazard.source || 'rival_holy_turret');
+                  damagePlayerSlot(slot, hazard.damage || 17, aimAngle, 120, hazard.source || 'rival_holy_turret');
                 }
               });
             } else {
-              Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
+              Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 17, '#ffe6a3');
             }
           }
         }
@@ -3096,7 +3096,9 @@
       // In an endless intermission the room is already cleared by the wave kill,
       // and its chests are optional purchases — leaving one sealed must not
       // un-clear the room and re-arm the combat path.
-      if (!Neo.endlessIntermission) Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
+      if (!Neo.endlessIntermission && !Neo.bossRushIntermission) {
+        Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
+      }
       if (result.revealExit && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
         Neo.pickups.push({ x: chest.x, y: chest.y + 76, type: 'ladder' });
         Neo.spawnParticle({ x: chest.x, y: chest.y + 42, life: 1.2, text: 'LADDER REVEALED', c: '#7dff9e' });
@@ -3108,13 +3110,17 @@
 
   const ENDLESS_CHEST_INTERACT_RADIUS = 52;
 
+  function isIntermissionShopChest(chest) {
+    return !!(chest?.intermissionShopChest || chest?.endlessShopChest || chest?.bossRushShopChest);
+  }
+
   // Nearest sealed intermission chest within reach of `actor`, or null.
   function findEndlessChestInReach(actor = Neo.player) {
     if (!actor || !Array.isArray(Neo.chests)) return null;
     let best = null;
     let bestDistance = ENDLESS_CHEST_INTERACT_RADIUS;
     Neo.chests.forEach(chest => {
-      if (!chest?.endlessShopChest || chest.open || !chest.locked) return;
+      if (!isIntermissionShopChest(chest) || chest.open || !chest.locked) return;
       const distance = Neo.dist(actor.x, actor.y, chest.x, chest.y);
       if (distance > bestDistance) return;
       best = chest;
@@ -3139,6 +3145,9 @@
   function tryEndlessChestPurchase(actor = Neo.player) {
     const chest = findEndlessChestInReach(actor);
     if (!chest) return false;
+    // The authoritative network view sends the INTERACT command for this chest.
+    // Returning true here only prevents the same keypress from opening the shop.
+    if (Neo.multiplayerGameView?.active) return true;
     const purchase = globalThis.NeoNyke?.simulation?.purchaseEndlessChest;
     if (typeof purchase !== 'function') return false;
     const result = purchase(Neo.player, chest, {
@@ -3269,7 +3278,9 @@
   function isShopRoomActive(room = Neo.currentRoom) {
     if (!room) return false;
     if (room.type === 'shop') return true;
-    return Neo.gameMode === 'endless' && !!Neo.endlessIntermission && !!room.shopStocked;
+    if (!room.shopStocked) return false;
+    return (Neo.gameMode === 'endless' && !!Neo.endlessIntermission)
+      || (Neo.gameMode === 'boss_rush' && !!Neo.bossRushIntermission);
   }
 
   function isAtLadder(actor = Neo.player) {
@@ -3652,6 +3663,20 @@
           c: '#8dffcf',
         });
         Neo.spawnNextEndlessWave?.();
+        return;
+      }
+
+      if (pickup.type === 'bossRushNextBoss') {
+        removePickupAt(index);
+        const bossType = Neo.BOSS_RUSH_ORDER?.[Neo.bossRushStage];
+        Neo.spawnParticle({
+          x: pickup.x,
+          y: pickup.y - 30,
+          life: 1,
+          text: bossType ? `NEXT: ${Neo.getBossDisplayName(bossType).toUpperCase()}` : 'NEXT BOSS',
+          c: '#8dffcf',
+        });
+        Neo.startNextBossRushBoss?.();
         return;
       }
 

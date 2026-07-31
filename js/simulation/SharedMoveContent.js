@@ -66,7 +66,7 @@
     mooggy_hairball: Object.freeze({ damage: 34, cooldown: 4.80, range: 132 }),
     potion_bath: Object.freeze({ cooldown: 14.00, duration: 5.0, range: 150 }),
     excalibur_strike: Object.freeze({ damage: 78, cooldown: 10.00, range: 150 }),
-    holy_turrets: Object.freeze({ damage: 26, cooldown: 6.50, duration: 6.0, range: 360 }),
+    holy_turrets: Object.freeze({ damage: 17, cooldown: 6.50, duration: 6.0, range: 360 }),
     knight_slash_dash: Object.freeze({ damage: 42, cooldown: 2.40, range: 240 }),
     hammer_throw: Object.freeze({ damage: 46, cooldown: 2.20, range: 320 }),
     lightning_cross: Object.freeze({ damage: 30, cooldown: 5.50 }),

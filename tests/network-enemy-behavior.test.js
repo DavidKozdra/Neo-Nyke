@@ -436,11 +436,32 @@ describe('authored campaign enemy behaviors on the authority', () => {
     expect(Object.values(state.pickups).some(pickup => pickup.source === 'boss_rush_stage' && pickup.type === 'item')).toBe(true);
     expect(Object.values(state.pickups).some(pickup => pickup.source === 'boss_rush_stage' && pickup.type === 'potion')).toBe(true);
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'BOSS_RUSH_STAGE_CLEARED', data: expect.objectContaining({ nextBossType: 'bulk_golem' }) }));
+    expect(arena.bossRushIntermission).toBe(true);
+    expect(arena.shopStocked).toBe(true);
+    expect(arena.shopOffers.length).toBeGreaterThan(0);
+    const intermissionChest = Object.values(state.interactables).find(item => item.kind === 'intermission_chest');
+    const nextBossExit = Object.values(state.pickups).find(pickup => pickup.type === 'bossRushNextBoss');
+    expect(intermissionChest).toBeTruthy();
+    expect(nextBossExit).toBeTruthy();
 
-    state.tick = state.bossRush.nextSpawnTick;
+    player.coins = intermissionChest.price + 10;
+    player.x = intermissionChest.x;
+    player.y = intermissionChest.y;
+    simulation.updateGame({ p1: { actions: [{ action: 'INTERACT', targetEntityId: intermissionChest.id }] } }, 0.05);
+    expect(intermissionChest.opened).toBe(true);
+    expect(player.coins).toBe(10);
+
+    player.x = nextBossExit.x;
+    player.y = nextBossExit.y;
+    simulation.updateGame({}, 0.05);
+    expect(arena.bossRushIntermission).toBe(false);
+    expect(state.bossRush).toEqual(expect.objectContaining({ stage: 1, active: true, intermission: false }));
     simulation.updateGame({}, 0.05);
     expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('bulk_golem');
 
+    // Move beyond the first attack's cooldown before exercising the final-clear
+    // branch; the old timer-based intermission advanced this clock implicitly.
+    state.tick += 80;
     state.bossRush.stage = 5;
     state.bossRush.active = true;
     state.enemies = {};

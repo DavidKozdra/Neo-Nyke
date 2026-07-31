@@ -1003,11 +1003,12 @@
     });
   }
 
-  // Price tag over a sealed endless-intermission chest. Drawn inside the chest's
+  // Price tag over a sealed combat-intermission chest. Drawn inside the chest's
   // own translate, so coordinates are chest-relative. Red when unaffordable so
   // the player can price the room at a glance instead of walking each chest.
   function drawEndlessChestPrice(chest) {
-    if (!chest?.endlessShopChest || chest.open || !chest.locked) return;
+    if (!(chest?.intermissionShopChest || chest?.endlessShopChest || chest?.bossRushShopChest)
+      || chest.open || !chest.locked) return;
     const price = Math.max(0, Number(chest.price || 0));
     const affordable = Number(Neo.player?.coins || 0) >= price;
     Neo.ctx.shadowBlur = 0;

@@ -3394,6 +3394,7 @@ export function resumeGame() {
     Neo.resetRunUnlocks?.();
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    Neo.bossRushIntermission = false;
     clearBossRushNextSpawn();
     resetTutorialState(false);
     resetMultiplayerState();
@@ -3437,6 +3438,7 @@ export function resumeGame() {
       return;
     }
     Neo.bossRushActive = true;
+    Neo.bossRushIntermission = false;
     Neo.currentRoom.cleared = false;
     clearBossRushNextSpawn();
     let boss;
@@ -3542,7 +3544,7 @@ export function resumeGame() {
       if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
     }, 1500);
-    scheduleBossRushNextSpawn(4);
+    Neo.openBossRushIntermission?.();
   }
 
   function scheduleBossRushNextSpawn(delaySeconds = 4) {
@@ -3981,6 +3983,7 @@ export function resumeGame() {
     Neo.endlessIntermission = false;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    Neo.bossRushIntermission = false;
     Neo.rivalRumbleOrder = [];
     Neo.rivalRumbleStage = 0;
     Neo.rivalRumbleActive = false;
@@ -4202,6 +4205,9 @@ export function resumeGame() {
     Neo.endlessWaveActive = !!snapshot.endlessWaveActive;
     Neo.endlessRespawnTimer = Math.max(0, Number(snapshot.endlessRespawnTimer || 0));
     Neo.endlessIntermission = !!snapshot.endlessIntermission;
+    Neo.bossRushStage = Math.max(0, Number(snapshot.bossRushStage || 0));
+    Neo.bossRushActive = !!snapshot.bossRushActive;
+    Neo.bossRushIntermission = !!snapshot.bossRushIntermission;
     Neo.camera = snapshot.camera || { x: 0, y: 0 };
     Neo.shake = 0;
     Neo.shakeT = 0;

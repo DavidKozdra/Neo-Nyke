@@ -346,7 +346,7 @@
     random_pounce:    { base: 52, mult: 'aoeDamageMultiplier' },
     mooggy_hairball:  { base: 34, mult: 'aoeDamageMultiplier' },
     excalibur_strike: { base: 46, mult: 'aoeDamageMultiplier', hits: 5 },
-    holy_turrets:     { base: 26, mult: 'aoeDamageMultiplier' },
+    holy_turrets:     { base: 17, mult: 'aoeDamageMultiplier' },
     death_ball:       { base: 40, charge: [0.6, 2.6] },
     turtle_powerup:   { base: 18, charge: [1, 44 / 18] },
     // dash moves that hit
@@ -5369,6 +5369,94 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     Neo.updateObjective?.();
   }
 
+  // Boss Rush uses the same between-fight economy as Endless: fresh shop stock,
+  // three paid chests, and a player-controlled exit. The stage counter replaces
+  // the wave counter for deterministic stock and price growth.
+  function openBossRushIntermission() {
+    const room = Neo.currentRoom;
+    if (Neo.gameMode !== 'boss_rush' || !room || Neo.bossRushStage >= Neo.BOSS_RUSH_ORDER.length) return;
+    Neo.bossRushIntermission = true;
+    room.cleared = true;
+    room.shopStocked = false;
+    room.shopOffers = [];
+    room.shopMoveOffers = [];
+    room.shopWeaponOffers = [];
+    room.shopTradeOffer = null;
+    const stage = Math.max(1, Number(Neo.bossRushStage || 1));
+    const stockCampaignShop = globalThis.NeoNyke?.simulation?.stockCampaignShop;
+    if (typeof stockCampaignShop === 'function') {
+      const depth = 1 + Math.floor(stage / 2);
+      const stocked = { ...room, type: 'shop' };
+      stockCampaignShop({
+        floorNumber: depth,
+        elapsedSeconds: Neo.gameElapsedTime || 0,
+        matchRules: {
+          shopItemOffers: Neo.getDifficultyDef?.()?.shopItemOffers ?? 3,
+          shopPriceMultiplier: Number(Neo.getDifficultyDef?.()?.shopPriceMultiplier || 1),
+          cursedShops: false,
+          godSweepUnlocked: Number(Neo.metaProgress?.godsKilled || 0) > 0
+            && Number(Neo.metaProgress?.loopCrystals || 0) >= 5,
+        },
+      }, stocked, Neo.player, { next: Neo.createScopedRandom(`boss-rush:intermission:${stage}:shop`) });
+      room.shopOffers = stocked.shopOffers || [];
+      room.shopMoveOffers = stocked.shopMoveOffers || [];
+      room.shopWeaponOffers = stocked.shopWeaponOffers || [];
+      room.shopTradeOffer = stocked.shopTradeOffer || null;
+      room.shopStocked = true;
+      Neo.shopOffers = room.shopOffers;
+    }
+
+    const createChests = globalThis.NeoNyke?.simulation?.createEndlessIntermissionChests;
+    if (typeof createChests === 'function') {
+      createChests({
+        waveNumber: stage,
+        modeKey: 'boss-rush',
+        geometry: { width: Neo.ROOM_W, height: Neo.ROOM_H },
+      }, { next: Neo.createScopedRandom(`boss-rush:intermission:${stage}:chests`) })
+        .forEach(chest => Neo.chests.push(chest));
+      room.chests = Neo.chests;
+    }
+
+    Neo.pickups.push({
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H / 2 - 132,
+      type: 'bossRushNextBoss',
+      stage,
+    });
+    room.pickups = Neo.pickups;
+    Neo.spawnParticle({
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H / 2 - 168,
+      life: 1.6,
+      text: 'INTERMISSION',
+      c: '#8dffcf',
+    });
+    Neo.minimapLegendDirty = true;
+    Neo.updateObjective?.();
+    Neo.scheduleRunSave?.();
+  }
+
+  function startNextBossRushBoss() {
+    Neo.bossRushIntermission = false;
+    Neo.chests = Neo.chests.filter(chest => !(chest?.intermissionShopChest || chest?.bossRushShopChest));
+    Neo.pickups = Neo.pickups.filter(pickup => pickup?.type !== 'bossRushNextBoss');
+    if (Neo.currentRoom) {
+      Neo.currentRoom.chests = Neo.chests;
+      Neo.currentRoom.pickups = Neo.pickups;
+      Neo.currentRoom.shopStocked = false;
+      Neo.currentRoom.shopOffers = [];
+      Neo.currentRoom.shopMoveOffers = [];
+      Neo.currentRoom.shopWeaponOffers = [];
+      Neo.currentRoom.shopTradeOffer = null;
+    }
+    Neo.shopOffers = [];
+    Neo.setShopPanelOpen?.(false);
+    if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play' || !Neo.currentRoom) return;
+    Neo.currentRoom.cleared = false;
+    Neo.spawnBossRushBoss?.();
+    Neo.scheduleRunSave?.();
+  }
+
   // Ends the intermission and spawns the next wave. Driven by the exit pickup
   // (see updatePickups); the old auto-countdown path calls through here too so a
   // save written mid-countdown by an older build still resolves.
@@ -5980,6 +6068,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   Neo.onEndlessWaveCleared = onEndlessWaveCleared;
   Neo.openEndlessIntermission = openEndlessIntermission;
   Neo.spawnNextEndlessWave = spawnNextEndlessWave;
+  Neo.openBossRushIntermission = openBossRushIntermission;
+  Neo.startNextBossRushBoss = startNextBossRushBoss;
   Neo.dropCoins = dropCoins;
   Neo.rollItemDrop = rollItemDrop;
   Neo.grantXp = grantXp;

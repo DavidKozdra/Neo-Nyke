@@ -1952,7 +1952,7 @@ describe('authoritative network combat system', () => {
 
     expect(turrets).toHaveLength(3);
     expect(turrets.every(turret => turret.x >= 44 && turret.y >= 44)).toBe(true);
-    expect(turrets.every(turret => turret.radius === 26 && turret.burstRadius === 56 && turret.damage === 26)).toBe(true);
+    expect(turrets.every(turret => turret.radius === 26 && turret.burstRadius === 56 && turret.damage === 17)).toBe(true);
     expect(turrets.every(turret => turret.pulseIntervalTicks === 12 && turret.expiresTick - state.tick >= 119)).toBe(true);
   });
 

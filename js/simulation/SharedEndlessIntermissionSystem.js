@@ -47,6 +47,7 @@
   // interact handler charges.
   function createEndlessIntermissionChests(state = {}, random) {
     const wave = Math.max(1, Number(state.waveNumber) || 1);
+    const modeKey = String(state.modeKey || 'endless').replace(/[^a-z0-9_-]+/gi, '-') || 'endless';
     const count = Math.max(1, Math.floor(Number(state.chestCount ?? INTERMISSION_CHEST_COUNT)));
     const width = Number(state.geometry?.width || 900);
     const height = Number(state.geometry?.height || 700);
@@ -55,12 +56,14 @@
     for (let index = 0; index < count; index += 1) {
       const price = rollChestPrice(wave, random);
       chests.push({
-        id: `endless:${wave}:chest:${index}`,
+        id: `${modeKey}:${wave}:chest:${index}`,
         x: width / 2 + (index - (count - 1) / 2) * spacing,
         y: height / 2 + 96,
         open: false,
         locked: true,
-        endlessShopChest: true,
+        intermissionShopChest: true,
+        endlessShopChest: modeKey === 'endless',
+        bossRushShopChest: modeKey === 'boss-rush' || modeKey === 'boss_rush',
         price,
         rewardType: 'item',
         eliteChance: chestEliteChance(price, wave),
@@ -74,7 +77,9 @@
   // pickup through the ordinary chest-open path.
   function purchaseEndlessChest(player, chest, options = {}) {
     if (!player) return { ok: false, reason: 'NO_PLAYER' };
-    if (!chest || !chest.endlessShopChest) return { ok: false, reason: 'NOT_A_SHOP_CHEST' };
+    if (!chest || !(chest.intermissionShopChest || chest.endlessShopChest || chest.bossRushShopChest)) {
+      return { ok: false, reason: 'NOT_A_SHOP_CHEST' };
+    }
     if (chest.open || !chest.locked) return { ok: false, reason: 'CHEST_UNAVAILABLE' };
     const price = Math.max(0, Number(chest.price || 0));
     if (Number(player.coins || 0) < price) return { ok: false, reason: 'INSUFFICIENT_FUNDS', price };
