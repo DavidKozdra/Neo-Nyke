@@ -1328,8 +1328,8 @@
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText('EXIT', 0, 43);
-      } else if (pickup.type === 'endlessNextWave') {
-        // Endless intermission exit. Deliberately reads as a "go" gate rather
+      } else if (pickup.type === 'endlessNextWave' || pickup.type === 'bossRushNextBoss') {
+        // Combat intermission exit. Deliberately reads as a "go" gate rather
         // than loot — teal plinth with a forward chevron, so it never gets
         // mistaken for one of the paid chests sharing the room.
         const pulse = 0.5 + Math.sin(Date.now() / 320) * 0.5;
@@ -1357,7 +1357,7 @@
         Neo.ctx.fillStyle = '#c6ffe9';
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText('NEXT WAVE', 0, 43);
+        Neo.ctx.fillText(pickup.type === 'bossRushNextBoss' ? 'NEXT BOSS' : 'NEXT WAVE', 0, 43);
       } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         const adapter = pickup.type === 'adapterPortal';
         // Per-type palette: jester is pink/chaos, adapter is violet/tech.

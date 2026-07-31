@@ -138,6 +138,7 @@ window.Neo = {
   endlessIntermission: false,
   bossRushStage: 0,
   bossRushActive: false,
+  bossRushIntermission: false,
   bossRushNextSpawnAt: 0,
   bossRushNextSpawnTimeout: null,
   rivalRumbleOrder: [],

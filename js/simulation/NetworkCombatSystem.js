@@ -447,6 +447,7 @@
       rush.initialized = true;
       rush.stage = 0;
       rush.active = true;
+      rush.intermission = false;
       rush.nextSpawnTick = 0;
       rush.grantedPlayerIds = {};
       // The campaign starts Boss Rush at floor five so level/difficulty scaling
@@ -456,6 +457,7 @@
       if (room) {
         room.type = 'combat';
         room.cleared = false;
+        room.bossRushIntermission = false;
         room.doors = { n: false, s: false, e: false, w: false };
       }
     }
@@ -521,9 +523,88 @@
     state.pickups[potionId] = { id: potionId, type: 'potion', source: 'boss_rush_stage', roomId: room.id, x: centerX + 60, y: centerY, radius: 13, amount: 1, spawnTick: state.tick };
     emitEvent('PICKUP_SPAWNED', { pickupId: potionId, pickupType: 'potion', roomId: room.id, source: 'boss_rush_stage' });
     awardAuthorityBossRushExperience(state, room.id, 40 + rush.stage * 20, emitEvent);
-    rush.nextSpawnTick = state.tick + 80;
+    const depth = 1 + Math.floor(Number(rush.stage || 1) / 2);
+    room.shopStocked = false;
+    room.shopOffers = [];
+    room.shopMoveOffers = [];
+    room.shopWeaponOffers = [];
+    room.shopTradeOffer = null;
+    const owner = activePlayers(state).find(player => player.roomId === room.id) || activePlayers(state)[0];
+    const shopView = { ...room, type: 'shop' };
+    stockCampaignShop({
+      floorNumber: depth,
+      elapsedSeconds: state.elapsedSeconds || 0,
+      matchRules: state.matchRules || {},
+    }, shopView, owner, random?.scoped?.(`boss-rush:intermission:${rush.stage}:shop`));
+    room.shopOffers = shopView.shopOffers || [];
+    room.shopMoveOffers = shopView.shopMoveOffers || [];
+    room.shopWeaponOffers = shopView.shopWeaponOffers || [];
+    room.shopTradeOffer = shopView.shopTradeOffer || null;
+    room.shopStocked = true;
+    room.bossRushIntermission = true;
+    rush.intermission = true;
+    rush.nextSpawnTick = 0;
+
+    createEndlessIntermissionChests({
+      waveNumber: rush.stage,
+      modeKey: 'boss-rush',
+      geometry: { width: state.floorState?.width, height: state.floorState?.height },
+    }, random?.scoped?.(`boss-rush:intermission:${rush.stage}:chests`)).forEach(descriptor => {
+      const id = state.allocateEntityId('interactable');
+      state.interactables[id] = {
+        ...descriptor, id, kind: 'intermission_chest', roomId: room.id, radius: 34, spawnTick: state.tick,
+      };
+      emitEvent('INTERACTABLE_SPAWNED', {
+        interactableId: id, kind: 'intermission_chest', roomId: room.id, price: descriptor.price, source: 'boss_rush_intermission',
+      });
+    });
+    const exitPickupId = state.allocateEntityId('pickup');
+    state.pickups[exitPickupId] = {
+      id: exitPickupId,
+      type: 'bossRushNextBoss',
+      stage: rush.stage,
+      roomId: room.id,
+      x: centerX,
+      y: centerY - 132,
+      radius: 20,
+      spawnTick: state.tick,
+    };
     emitEvent('BOSS_RUSH_STAGE_CLEARED', {
-      roomId: room.id, stage: rush.stage, nextBossType: BOSS_RUSH_ORDER[rush.stage], nextSpawnTick: rush.nextSpawnTick,
+      roomId: room.id, stage: rush.stage, nextBossType: BOSS_RUSH_ORDER[rush.stage], exitPickupId,
+    });
+    return true;
+  }
+
+  function startAuthorityNextBossRushBoss(state, player, pickupId, emitEvent) {
+    if (authorityGameMode(state) !== 'boss_rush') return false;
+    const rush = state.bossRush;
+    const room = currentRoom(state, player.roomId);
+    if (!rush?.intermission || !room?.bossRushIntermission) return false;
+    Object.entries(state.interactables || {}).forEach(([id, item]) => {
+      if (item?.roomId === room.id && (item.intermissionShopChest || item.bossRushShopChest)) {
+        delete state.interactables[id];
+      }
+    });
+    Object.entries(state.pickups || {}).forEach(([id, pickup]) => {
+      if (pickup?.roomId === room.id && pickup.type === 'bossRushNextBoss') delete state.pickups[id];
+    });
+    room.bossRushIntermission = false;
+    room.shopStocked = false;
+    room.shopOffers = [];
+    room.shopMoveOffers = [];
+    room.shopWeaponOffers = [];
+    room.shopTradeOffer = null;
+    room.cleared = false;
+    rush.intermission = false;
+    rush.active = true;
+    rush.nextSpawnTick = 0;
+    delete state.floorState?.encounters?.[room.id];
+    emitEvent('BOSS_RUSH_NEXT_BOSS_READY', {
+      playerId: player.id,
+      roomId: room.id,
+      stage: Number(rush.stage || 0) + 1,
+      bossType: BOSS_RUSH_ORDER[rush.stage],
+      pickupId,
     });
     return true;
   }
@@ -536,7 +617,9 @@
     if (!room) return;
     delete state.floorState?.encounters?.[room.id];
     room.cleared = false;
+    room.bossRushIntermission = false;
     rush.nextSpawnTick = 0;
+    rush.intermission = false;
     rush.active = true;
     emitEvent('BOSS_RUSH_NEXT_BOSS_READY', { roomId: room.id, stage: Number(rush.stage || 0) + 1, bossType: BOSS_RUSH_ORDER[rush.stage] });
   }
@@ -1658,7 +1741,8 @@
 
   function resolveShopPurchase(state, player, action, emitEvent) {
     const room = currentRoom(state, player.roomId);
-    const shopRoom = authorityGameMode(state) === 'endless' && room?.endlessIntermission
+    const shopRoom = ((authorityGameMode(state) === 'endless' && room?.endlessIntermission)
+      || (authorityGameMode(state) === 'boss_rush' && room?.bossRushIntermission))
       ? { ...room, type: 'shop' }
       : room;
     const result = purchaseCampaignShop(state, shopRoom, player, action);
@@ -5148,8 +5232,11 @@
     if (!target || target.opened || target.activated || target.roomId !== player.roomId) return false;
     if (Math.hypot(Number(target.x) - Number(player.x), Number(target.y) - Number(player.y))
       > Number(target.radius || 30) + Number(player.radius || 18) + 38) return false;
-    if (target.kind === 'endless_chest') {
-      const stream = random?.scoped?.(`endless:chest:${state.endlessWave}:${target.id}`);
+    if (target.kind === 'endless_chest' || target.kind === 'intermission_chest') {
+      const intermissionKey = authorityGameMode(state) === 'boss_rush'
+        ? `boss-rush:chest:${state.bossRush?.stage || 0}:${target.id}`
+        : `endless:chest:${state.endlessWave}:${target.id}`;
+      const stream = random?.scoped?.(intermissionKey);
       const purchase = purchaseEndlessChest(player, target, {
         random: stream,
         rollItem: ({ elite }) => rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite }),
@@ -5727,7 +5814,7 @@
         hazard.tick = Math.max(0.05, Number(hazard.interval || 0.6));
         players.forEach(player => {
           if (Math.hypot(player.x - target.x, player.y - target.y) > Number(hazard.burstRadius || 56) + Number(player.radius || 18)) return;
-          damagePlayer(state, player, Number(hazard.damage || 26), hazard.ownerId, emitEvent, 'holy_turrets', {
+          damagePlayer(state, player, Number(hazard.damage || 17), hazard.ownerId, emitEvent, 'holy_turrets', {
             angle: Number(hazard.aimAngle || desiredAngle), knockback: 120,
           });
         });
@@ -8734,6 +8821,10 @@
       }
       if (pickup.type === 'endlessNextWave') {
         startAuthorityEndlessWave(state, player, pickupId, emitEvent);
+        return;
+      }
+      if (pickup.type === 'bossRushNextBoss') {
+        startAuthorityNextBossRushBoss(state, player, pickupId, emitEvent);
         return;
       }
       if (pickup.type === 'adapterPortal') {

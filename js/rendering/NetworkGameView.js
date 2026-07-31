@@ -3034,9 +3034,14 @@
       this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
       this.neo.floorsEntered = this.neo.floor;
       this.neo.shopOffers = this.neo.currentRoom?.shopOffers || [];
-      if (this.neo.currentRoom?.type !== 'shop' && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+      this.neo.endlessIntermission = !!this.neo.currentRoom?.endlessIntermission;
+      this.neo.bossRushIntermission = !!this.neo.currentRoom?.bossRushIntermission;
+      const intermissionShop = !!this.neo.currentRoom?.shopStocked
+        && (this.neo.endlessIntermission || this.neo.bossRushIntermission);
+      const shopActive = this.neo.currentRoom?.type === 'shop' || intermissionShop;
+      if (!shopActive && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
         this.neo.setShopPanelOpen?.(false, { animateClose: false });
-      } else if (this.neo.currentRoom?.type === 'shop' && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+      } else if (shopActive && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
         this.neo.markShopPanelDirty?.();
         this.neo.renderShopPanel?.();
       }
@@ -3149,13 +3154,18 @@
       const roomInteractables = Object.values(state?.interactables || {});
       const presentationChests = this._stablePresentationEntities(
         this.presentationInteractables,
-        roomInteractables.filter(interactable => interactable.kind === 'relic_chest'),
+        roomInteractables.filter(interactable => ['relic_chest', 'endless_chest', 'intermission_chest'].includes(interactable.kind)),
         interactable => ({
           id: interactable.id,
           roomId: interactable.roomId,
           x: Number(interactable.x || 0),
           y: Number(interactable.y || 0),
           open: !!interactable.opened || !!interactable.activated,
+          locked: ['endless_chest', 'intermission_chest'].includes(interactable.kind) && !interactable.opened,
+          intermissionShopChest: !!interactable.intermissionShopChest,
+          endlessShopChest: !!interactable.endlessShopChest,
+          bossRushShopChest: !!interactable.bossRushShopChest,
+          price: Number(interactable.price || 0),
           choiceType: interactable.choiceType || '',
           rewardType: interactable.rewardType || 'item',
           rewardKey: interactable.rewardKey || '',

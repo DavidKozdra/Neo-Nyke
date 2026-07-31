@@ -268,6 +268,7 @@ describe('shared campaign move effects', () => {
   });
 
   test('plans Holy Turrets with campaign edge clamping and scaled pulses', () => {
+    expect(planCampaignHolyTurrets({})[0].damage).toBe(17);
     const turrets = planCampaignHolyTurrets({
       originX: 30, originY: 30, angle: Math.PI, wall: 28, roomWidth: 900, roomHeight: 700,
       aoeRadiusMultiplier: 1.25, aoeDamageMultiplier: 1.5, baseDamage: 40,

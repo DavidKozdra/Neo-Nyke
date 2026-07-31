@@ -90,11 +90,11 @@
           state: unopened > 0 ? 'warn' : 'done',
         });
       }
-      if (Neo.endlessIntermission) {
-        const sealed = (Neo.chests || []).filter(chest => chest?.endlessShopChest && chest.locked && !chest.open).length;
+      if (Neo.endlessIntermission || Neo.bossRushIntermission) {
+        const sealed = (Neo.chests || []).filter(chest => (chest?.intermissionShopChest || chest?.endlessShopChest || chest?.bossRushShopChest) && chest.locked && !chest.open).length;
         entries.push({ text: 'Shop and buy chests', state: 'warn' });
         if (sealed > 0) entries.push({ text: `Sealed chests: ${sealed}`, state: 'warn' });
-        entries.push({ text: 'Take NEXT WAVE when ready', state: 'warn' });
+        entries.push({ text: Neo.bossRushIntermission ? 'Take NEXT BOSS when ready' : 'Take NEXT WAVE when ready', state: 'warn' });
       }
       if (Neo.currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (Neo.currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
@@ -221,7 +221,10 @@
       } else {
         const nextBoss = Neo.BOSS_RUSH_ORDER[Neo.bossRushStage];
         if (nextBoss) {
-          setObjective(`Next: ${Neo.getBossDisplayName(nextBoss)}. Get ready.`);
+          const sealed = (Neo.chests || []).filter(chest => (chest?.intermissionShopChest || chest?.bossRushShopChest) && chest.locked && !chest.open).length;
+          setObjective(Neo.bossRushIntermission
+            ? `Shop${sealed ? `, buy chests (${sealed} sealed)` : ''}, then take NEXT BOSS: ${Neo.getBossDisplayName(nextBoss)}.`
+            : `Next: ${Neo.getBossDisplayName(nextBoss)}. Get ready.`);
         } else {
           setObjective('Boss Rush complete!');
         }
@@ -1191,6 +1194,9 @@
       endlessWaveActive: Neo.endlessWaveActive,
       endlessRespawnTimer: Neo.endlessRespawnTimer,
       endlessIntermission: Neo.endlessIntermission,
+      bossRushStage: Neo.bossRushStage,
+      bossRushActive: Neo.bossRushActive,
+      bossRushIntermission: Neo.bossRushIntermission,
       gameElapsedTime: Neo.gameElapsedTime,
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,

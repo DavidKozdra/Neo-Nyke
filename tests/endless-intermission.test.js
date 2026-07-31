@@ -26,6 +26,23 @@ describe('SharedEndlessIntermissionSystem', () => {
     });
   });
 
+  test('Boss Rush can reuse the paid-chest plan with mode-specific identity', () => {
+    const chests = createEndlessIntermissionChests({
+      waveNumber: 2,
+      modeKey: 'boss-rush',
+    }, new RandomStream(12));
+    expect(chests).toHaveLength(3);
+    chests.forEach(chest => {
+      expect(chest).toMatchObject({
+        intermissionShopChest: true,
+        endlessShopChest: false,
+        bossRushShopChest: true,
+        locked: true,
+      });
+      expect(chest.id).toMatch(/^boss-rush:2:chest:/);
+    });
+  });
+
   test('a pricier chest carries better elite odds than a cheap one', () => {
     expect(chestEliteChance(rollChestPrice(1, new RandomStream(1)), 1)).toBeGreaterThanOrEqual(0.1);
     const cheap = chestEliteChance(55, 1);

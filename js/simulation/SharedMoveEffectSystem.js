@@ -657,7 +657,8 @@
     const height = Math.max(edgePad * 2, Number(options.roomHeight ?? 700));
     const radiusMultiplier = Math.max(0, Number(options.aoeRadiusMultiplier ?? 1));
     const damageMultiplier = Math.max(0, Number(options.aoeDamageMultiplier ?? 1));
-    const baseDamage = Math.max(1, Number(options.baseDamage ?? 26));
+    // 33% Holy Turrets nerf: the former 26 damage pulse rounds to 17.
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 17));
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     return Array.from({ length: 3 }, (_, index) => {
       const turretAngle = angle + (index - 1) * 0.7;
