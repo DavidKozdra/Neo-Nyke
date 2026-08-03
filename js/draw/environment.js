@@ -1577,9 +1577,18 @@
     const variant = Math.abs(Math.sin((prop.x || 0) * 0.17 + (prop.y || 0) * 0.13)) < 0.5 ? 'table_0' : 'table_1';
     const authored = Neo.ENVIRONMENT_IMAGES?.[variant]?.image;
     if (authored) {
+      // The authored tables are square 24px sprites, while their collision
+      // footprints are often long rectangles (for example 120x30). Stretching
+      // the image directly to that footprint crushes the legs and tabletop.
+      // Scale it uniformly until it covers the footprint instead.
+      const sourceW = Math.max(1, Number(authored.naturalWidth || authored.width || 24));
+      const sourceH = Math.max(1, Number(authored.naturalHeight || authored.height || 24));
+      const scale = Math.max(w / sourceW, h / sourceH);
+      const drawW = sourceW * scale;
+      const drawH = sourceH * scale;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(authored, -w / 2, -h / 2, w, h);
-      furnitureHitFlash(prop, w, h);
+      ctx.drawImage(authored, -drawW / 2, -drawH / 2, drawW, drawH);
+      furnitureHitFlash(prop, drawW, drawH);
       return;
     }
     const hw = w / 2;
