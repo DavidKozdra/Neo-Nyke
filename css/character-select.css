@@ -1103,7 +1103,7 @@
     max-height: none;
     min-height: 100dvh;
     margin: 0;
-    padding: calc(72px + env(safe-area-inset-top, 0px)) 10px calc(18px + env(safe-area-inset-bottom, 0px));
+    padding: calc(72px + env(safe-area-inset-top, 0px)) 10px calc(100px + env(safe-area-inset-bottom, 0px));
     overflow: visible;
   }
 
@@ -1281,6 +1281,17 @@
 
   #charSelect .char-selection-summary {
     text-align: center;
+  }
+
+  #charSelect #go.charselect-start-btn {
+    position: fixed;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    z-index: 30;
+    width: auto;
+    margin: 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .72);
   }
 }
 
