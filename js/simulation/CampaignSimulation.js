@@ -49,6 +49,7 @@
       generationVersion: options.generationVersion || 1,
       contentVersion: options.contentVersion || CAMPAIGN_CONTENT_VERSION,
       gameMode: options.gameMode || options.matchRules?.gameMode || options.matchRules?.mode,
+      runLoopIndex: options.runLoopIndex ?? options.state?.runLoopIndex ?? options.state?.floorState?.runLoopIndex ?? 0,
     });
     // Endless and Boss Rush are the campaign's sealed, single-arena runs rather
     // than normal dungeons with a mode flag. Keep the layout canonical here so
@@ -83,6 +84,7 @@
       roomTransition: null,
       transitionSequence: 0,
       transitionsByPlayer: {},
+      runLoopIndex: layout.runLoopIndex || 0,
       layout,
     };
   }

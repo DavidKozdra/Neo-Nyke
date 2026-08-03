@@ -1,10 +1,11 @@
 (function initializeSharedEndgameSystem(root, factory) {
-  const api = factory();
+  const loopApi = typeof require === 'function' ? require('./LoopContentSystem.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(loopApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEndgameSystemApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEndgameSystemApi(loopApi) {
   'use strict';
 
   // The final God room is an authored choice, not a generic floor exit. Keep
@@ -50,14 +51,17 @@
       const swapIndex = Math.max(0, Math.min(index, Math.floor(Number(random()) * (index + 1))));
       [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
     }
-    const selected = choices.slice(0, 3);
     const width = Math.max(1, Number(options.width || 900));
     const height = Math.max(1, Number(options.height || 700));
     const loopIndex = Math.max(1, Math.trunc(Number(options.loopIndex || 1)));
+    const loopPlan = loopApi?.getLoopFloorPlan?.(loopIndex) || { rewardOptions: 3, rewardPicks: 1 };
+    const optionCount = Math.max(3, Math.trunc(Number(loopPlan.rewardOptions || 3)));
+    const selected = choices.slice(0, optionCount);
+    const picksRemaining = Math.max(1, Math.min(selected.length, Math.trunc(Number(loopPlan.rewardPicks || 1))));
     const groupId = `loop-blue:${loopIndex}`;
     return selected.map((key, index) => ({
-      type: 'rewardChoice', key, groupId, picksRemaining: 1, label: '1/3',
-      x: width / 2 + (index - (selected.length - 1) / 2) * 104,
+      type: 'rewardChoice', key, groupId, picksRemaining, choiceTotal: selected.length, label: `${picksRemaining}/${selected.length}`,
+      x: width / 2 + (index - (selected.length - 1) / 2) * (selected.length > 5 ? 88 : 104),
       y: height / 2 + 78,
       source: 'loop_blue_reward',
     }));

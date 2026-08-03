@@ -124,6 +124,7 @@ const KOZ_PWA_CONFIG = {
     "/js/simulation/FixedTickRunner.js",
     "/js/simulation/GameSimulation.js",
     "/js/simulation/GameState.js",
+    "/js/simulation/LoopContentSystem.js",
     "/js/simulation/NetworkCombatSystem.js",
     "/js/simulation/RandomService.js",
     "/js/simulation/SharedAcquisitionSystem.js",
@@ -327,14 +328,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 314,
-    "bytes": 72683569,
-    "criticalEntries": 259,
-    "criticalBytes": 9623472,
+    "entries": 315,
+    "bytes": 72709587,
+    "criticalEntries": 260,
+    "criticalBytes": 9649490,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "6eb7580725e5fb53"
+  "version": "e12f9553fc51719b"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");

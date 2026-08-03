@@ -12,7 +12,10 @@ const entitySource = fs.readFileSync(path.join(root, 'js/draw/entities.js'), 'ut
 const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 describe('special service rooms', () => {
-  const roomTypes = ['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well'];
+  const roomTypes = [
+    'shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well',
+    'chronicle', 'armory', 'mutation_lab', 'observatory', 'void_market',
+  ];
 
   test.each(roomTypes)('%s has a complete room definition', roomType => {
     expect(specialSource).toContain(`${roomType}: {`);
@@ -20,7 +23,7 @@ describe('special service rooms', () => {
 
   test('reserves a rotating service during normal floor generation', () => {
     const treasureAssignment = floorGeneratorSource.indexOf("room.type = 'treasure'");
-    const serviceAssignment = floorGeneratorSource.indexOf('service.type = SPECIAL_ROOM_ORDER');
+    const serviceAssignment = floorGeneratorSource.indexOf('const scheduledTypes = getScheduledLoopRoomTypes');
     const shopAssignment = floorGeneratorSource.indexOf("const shop = candidates.find(room => room.type === 'combat')");
     expect(serviceAssignment).toBeGreaterThan(treasureAssignment);
     expect(serviceAssignment).toBeLessThan(shopAssignment);

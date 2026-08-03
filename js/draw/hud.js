@@ -1271,6 +1271,15 @@
     Neo.ctx.fillStyle = '#f4f7fb';
     Neo.ctx.fillText(floorLabel, 0, 0);
 
+    const loopIndex = Math.max(0, Math.floor(Number(Neo.runLoopIndex) || 0));
+    if (loopIndex > 0) {
+      const milestone = globalThis.NeoNyke?.simulation?.getLoopMilestone?.(loopIndex);
+      const campaignLength = globalThis.NeoNyke?.simulation?.LOOP_CAMPAIGN_LENGTH || 20;
+      Neo.ctx.font = `800 ${Math.min(22, Math.max(14, minSide * 0.035))}px system-ui`;
+      Neo.ctx.fillStyle = milestone?.color || '#9edfff';
+      Neo.ctx.fillText(`LOOP ${loopIndex + 1} / ${campaignLength} — ${milestone?.title || 'THE DESCENT'}`, 0, floorFontSize * 0.82);
+    }
+
     Neo.ctx.restore();
   }
 

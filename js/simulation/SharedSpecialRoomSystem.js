@@ -8,13 +8,20 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedSpecialRoomSystemApi(itemApi, inventoryApi) {
   'use strict';
-  const SPECIAL_ROOM_TYPES = Object.freeze(['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well']);
+  const SPECIAL_ROOM_TYPES = Object.freeze([
+    'shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well',
+    'chronicle', 'armory', 'mutation_lab', 'observatory', 'void_market',
+  ]);
   const CHOICE_IDS = Object.freeze({
     shrine: ['blood', 'relic', 'covenant'], bounty: ['elite_hunter', 'elite_charger', 'elite_sniper'],
     reliquary: ['fuse', 'distill', 'echo'], oracle: ['map', 'secret', 'transmute'],
     portal: ['threshold', 'vault', 'descend'], prison: ['scout', 'medic', 'veteran'],
     wishing_well: ['small', 'deep', 'blood'],
+    chronicle: ['recall', 'atlas', 'revision'], armory: ['edge', 'plate', 'arsenal'],
+    mutation_lab: ['fury', 'regeneration', 'adaptation'], observatory: ['chart', 'star', 'orbit'],
+    void_market: ['purchase', 'sell_life', 'entropy'],
   });
+  const LOOP_ROOM_UNLOCKS = Object.freeze({ chronicle: 1, armory: 3, mutation_lab: 6, observatory: 9, void_market: 13 });
   const amount = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
   const spend = (player, cost) => {
     const value = Math.max(0, Math.round(Number(cost || 0)));
@@ -45,6 +52,10 @@
   function applySpecialRoomChoice(state, room, player, choiceId, random) {
     if (!state || !room || !player || room.serviceUsed || !SPECIAL_ROOM_TYPES.includes(room.type) || !CHOICE_IDS[room.type]?.includes(choiceId)) {
       return { ok: false, reason: 'INVALID_SPECIAL_CHOICE' };
+    }
+    const loopIndex = Math.max(0, Math.trunc(Number(state.runLoopIndex ?? state.floorState?.runLoopIndex) || 0));
+    if (LOOP_ROOM_UNLOCKS[room.type] != null && loopIndex < LOOP_ROOM_UNLOCKS[room.type]) {
+      return { ok: false, reason: 'LOOP_CONTENT_LOCKED' };
     }
     const floor = Math.max(1, Number(state.floorNumber || 1));
     const relics = mutableRelics(player);
@@ -143,7 +154,7 @@
         result = 'Scout rescued';
       } else if (choiceId === 'medic') { player.maxHp += 15; player.hp = player.maxHp; result = 'Medic rescued'; }
       else { player.attackPower = Number(player.attackPower || 0) + 3 + Math.ceil(floor / 3); grantXp(player, 20 + floor * 5); result = 'Veteran rescued'; }
-    } else {
+    } else if (room.type === 'wishing_well') {
       const smallCost = 25; const deepCost = 75; const hpCost = Math.max(10, Math.round(Number(player.maxHp || 120) * 0.1));
       if (choiceId === 'small') {
         if (!spend(player, smallCost)) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
@@ -163,6 +174,76 @@
       } else {
         if (player.maxHp - hpCost < 30) return { ok: false, reason: 'LOW_MAX_HP' };
         player.maxHp -= hpCost; player.hp = Math.min(player.hp, player.maxHp); rewardKey = grantItem(player, random, true); result = 'Blood wish answered';
+      }
+    } else if (room.type === 'chronicle') {
+      if (choiceId === 'recall') {
+        grantXp(player, Math.max(30, Math.round(Number(player.xpToNext || 20) * 1.5)));
+        result = 'Every battle remembered';
+      } else if (choiceId === 'atlas') {
+        roomsOf(state).forEach(candidate => {
+          if (!candidate.secret) candidate.explored = true;
+          Object.values(candidate.secretPassages || {}).forEach(passage => { passage.open = true; });
+        });
+        result = 'Every door receives its name';
+      } else {
+        if (state.floorState) state.floorState.curses = {};
+        if (state.matchRules) { state.matchRules.obscureMap = false; state.matchRules.rivalCurses = {}; }
+        player.hp = Math.min(player.maxHp, Number(player.hp || 0) + Number(player.maxHp || 0) * 0.5);
+        result = 'The wound is revised';
+      }
+    } else if (room.type === 'armory') {
+      if (choiceId === 'edge') {
+        player.attackPower = Number(player.attackPower || 0) + 4 + Math.floor((loopIndex + 1) / 4);
+        result = 'The God-Edge is honed';
+      } else if (choiceId === 'plate') {
+        player.maxHp = Number(player.maxHp || 0) + 20; player.hp = Math.min(player.maxHp, Number(player.hp || 0) + 20);
+        result = 'Living plate fitted';
+      } else {
+        inventoryApi.collectCampaignItem(player, 'forge_voucher', { amount: 2 });
+        grantXp(player, Math.max(20, Number(player.xpToNext || 20)));
+        result = 'The arsenal is yours';
+      }
+    } else if (room.type === 'mutation_lab') {
+      if (choiceId === 'fury') {
+        const cost = Math.max(10, Math.round(Number(player.maxHp || 120) * 0.08));
+        if (player.maxHp - cost < 30) return { ok: false, reason: 'LOW_MAX_HP' };
+        player.maxHp -= cost; player.hp = Math.min(player.hp, player.maxHp);
+        player.attackPower = Number(player.attackPower || 0) + 6 + Math.floor((loopIndex + 1) / 5);
+        result = 'Fury spliced';
+      } else if (choiceId === 'regeneration') {
+        player.maxHp = Number(player.maxHp || 0) + 25; player.hp = player.maxHp; result = 'Regeneration spliced';
+      } else {
+        rewardKey = grantItem(player, random, true); result = 'Adaptation spliced';
+      }
+    } else if (room.type === 'observatory') {
+      if (choiceId === 'chart') {
+        roomsOf(state).forEach(candidate => {
+          candidate.explored = true;
+          Object.values(candidate.secretPassages || {}).forEach(passage => { passage.open = true; });
+        });
+        result = 'The unseen is charted';
+      } else if (choiceId === 'star') {
+        rewardKey = grantItem(player, random, true); result = 'A dead star is caught';
+      } else {
+        player.moveSpeed = Number(player.moveSpeed || 228) + 12;
+        grantXp(player, 40);
+        result = 'Fast orbit achieved';
+      }
+    } else if (room.type === 'void_market') {
+      if (choiceId === 'purchase') {
+        const cost = 120 + floor * 10;
+        if (!spend(player, cost)) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
+        rewardKey = grantItem(player, random, true); result = 'The impossible changes hands';
+      } else if (choiceId === 'sell_life') {
+        if (Number(player.maxHp || 0) < 46) return { ok: false, reason: 'LOW_MAX_HP' };
+        player.maxHp -= 15; player.hp = player.maxHp; player.coins = Number(player.coins || 0) + 200;
+        result = 'Fifteen years sold';
+      } else {
+        const relic = relics[relics.length - 1];
+        if (!relic || !removeItem(player, relic.key)) return { ok: false, reason: 'NO_RELIC' };
+        inventoryApi.collectCampaignItem(player, 'forge_voucher', { amount: 3 });
+        grantXp(player, Math.max(20, Number(player.xpToNext || 20)));
+        result = 'A relic is unmade';
       }
     }
     room.serviceUsed = true;

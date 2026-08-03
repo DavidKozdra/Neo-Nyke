@@ -516,6 +516,7 @@
     const maxFloor = Math.max(floor, Number(options.maxFloor || 10));
     const width = Math.max(1, Number(options.width || 900));
     const height = Math.max(1, Number(options.height || 700));
+    const loopIndex = Math.max(0, Math.trunc(Number(options.runLoopIndex) || 0));
     const shuffle = values => {
       const result = values.slice();
       for (let index = result.length - 1; index > 0; index -= 1) {
@@ -536,6 +537,94 @@
           ok: true,
           secretKind: 'mystery_lady',
           pickups: [{ x: width / 2, y: height / 2, type: 'secretLady', rewardKey }],
+        };
+      }
+    }
+    const rollRewards = (count, elite = false) => {
+      const rewards = [];
+      let guard = 0;
+      while (rewards.length < count && guard < count * 8) {
+        guard += 1;
+        const key = String((elite ? options.rollEliteItem?.(random) : options.rollItem?.(random)) || options.rollEliteItem?.(random) || '');
+        if (key && !rewards.includes(key)) rewards.push(key);
+      }
+      return rewards;
+    };
+    if (room.secretKind === 'echo_cache') {
+      const rewards = rollRewards(3, false);
+      if (rewards.length) {
+        const groupId = `echo-cache:${loopIndex}:${floor}`;
+        return {
+          ok: true,
+          secretKind: 'echo_cache',
+          pickups: rewards.map((key, index) => ({
+            x: width / 2 + (index - (rewards.length - 1) / 2) * 110,
+            y: height / 2 + (index === 1 ? -24 : 28),
+            type: 'rewardChoice', key, groupId, picksRemaining: 1, label: '1/3', source: 'echo_cache',
+          })),
+        };
+      }
+    }
+    if (room.secretKind === 'blood_forge') {
+      const rewardKey = String(options.rollEliteItem?.(random) || '');
+      const hpCost = Math.max(1, Math.min(3, 1 + Math.floor(loopIndex / 8)));
+      return {
+        ok: true,
+        secretKind: 'blood_forge',
+        pickups: [
+          { x: width / 2 - 120, y: height / 2 + 34, type: 'secretVendor', offerKind: 'vitality', cost: hpCost, label: 'vitality' },
+          { x: width / 2, y: height / 2 - 24, type: 'secretVendor', offerKind: 'relic', rewardKey, cost: Math.max(1, hpCost - 1), label: 'blood relic' },
+          { x: width / 2 + 120, y: height / 2 + 34, type: 'secretVendor', offerKind: 'xp', cost: Math.max(20, Number(options.xpCost || 30)), xpValue: Math.max(80, Number(options.xpValue || 40) * 2), label: 'forbidden xp' },
+        ],
+      };
+    }
+    if (room.secretKind === 'time_capsule') {
+      const direction = floor >= maxFloor - 2 ? -1 : 1;
+      const distance = floor <= 2 || floor >= maxFloor - 2 ? 2 : (Number(random()) < 0.5 ? 2 : 3);
+      const delta = direction * distance;
+      return {
+        ok: true,
+        secretKind: 'time_capsule',
+        pickups: [{ x: width / 2, y: height / 2, type: 'secretWarp', delta, targetFloor: Math.max(1, Math.min(maxFloor, floor + delta)), label: 'time capsule' }],
+      };
+    }
+    if (room.secretKind === 'mimic_den') {
+      return {
+        ok: true,
+        secretKind: 'mimic_den',
+        pickups: [{
+          x: width / 2, y: height / 2, type: 'secret_boss_chest',
+          rewardKey: String(options.rollEliteItem?.(random) || ''),
+          label: 'sleeping mimic',
+        }],
+      };
+    }
+    if (room.secretKind === 'star_shrine') {
+      const rewardKey = String(options.rollEliteItem?.(random) || options.rollItem?.(random) || '');
+      if (rewardKey) {
+        return {
+          ok: true,
+          secretKind: 'star_shrine',
+          pickups: [{ x: width / 2, y: height / 2, type: 'secretLady', rewardKey, label: 'fallen star' }],
+        };
+      }
+    }
+    if (room.secretKind === 'null_chamber') {
+      const rewards = rollRewards(5, true);
+      if (rewards.length) {
+        const groupId = `null-chamber:${loopIndex}:${floor}`;
+        const radius = 145;
+        return {
+          ok: true,
+          secretKind: 'null_chamber',
+          pickups: rewards.map((key, index) => {
+            const angle = -Math.PI / 2 + index * Math.PI * 2 / rewards.length;
+            return {
+              x: width / 2 + Math.cos(angle) * radius,
+              y: height / 2 + Math.sin(angle) * radius * 0.62,
+              type: 'rewardChoice', key, groupId, picksRemaining: 2, label: '2/5', source: 'null_chamber',
+            };
+          }),
         };
       }
     }

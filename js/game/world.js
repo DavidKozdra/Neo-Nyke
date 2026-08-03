@@ -3593,7 +3593,7 @@
           if (item?.type !== 'rewardChoice' || String(item.groupId || '') !== groupId) return true;
           if (remainingAfterPick <= 0) return false;
           item.picksRemaining = remainingAfterPick;
-          if (String(item.label || '').includes('/5')) item.label = `${remainingAfterPick}/5`;
+          item.label = `${remainingAfterPick}/${Math.max(1, Number(item.choiceTotal || String(item.label || '').split('/')[1]) || 5)}`;
           return true;
         });
         if (remainingAfterPick > 0) {
@@ -4189,11 +4189,13 @@
     if (!Neo.currentRoom || pool.length === 0) return;
 
     const random = Neo.createScopedRandom(`loop:${Neo.runLoopIndex}:blue-choice`);
-    const choices = Neo.shuffleWithRandom(pool, random).slice(0, 3);
+    const loopPlan = globalThis.NeoNyke?.simulation?.getLoopFloorPlan?.(Neo.runLoopIndex) || { rewardOptions: 3, rewardPicks: 1 };
+    const choices = Neo.shuffleWithRandom(pool, random).slice(0, Math.max(3, Number(loopPlan.rewardOptions || 3)));
+    const picksRemaining = Math.max(1, Math.min(choices.length, Number(loopPlan.rewardPicks || 1)));
     const groupId = `loop-blue:${Neo.runLoopIndex}`;
     const cx = Neo.ROOM_W / 2;
     const cy = Neo.ROOM_H / 2 + 78;
-    const spacing = 104;
+    const spacing = choices.length > 5 ? 88 : 104;
     choices.forEach((key, index) => {
       Neo.pickups.push({
         x: cx + (index - (choices.length - 1) / 2) * spacing,
@@ -4201,13 +4203,14 @@
         type: 'rewardChoice',
         key,
         groupId,
-        picksRemaining: 1,
-        label: '1/3',
+        picksRemaining,
+        choiceTotal: choices.length,
+        label: `${picksRemaining}/${choices.length}`,
       });
     });
     Neo.currentRoom.loopBlueRewardChoices = choices;
     Neo.currentRoom.loopBlueRewardGroupId = groupId;
-    Neo.spawnParticle({ x: cx, y: cy - 46, life: 1.4, text: 'CHOOSE 1 ARTIFICER RELIC', c: '#58b7ff' });
+    Neo.spawnParticle({ x: cx, y: cy - 46, life: 1.4, text: `CHOOSE ${picksRemaining} ARTIFICER RELIC${picksRemaining === 1 ? '' : 'S'}`, c: '#58b7ff' });
   }
 
   function returnToFloorOne() {
@@ -4245,8 +4248,18 @@
     Neo.persistMetaSoon();
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
+    const loopPlan = globalThis.NeoNyke?.simulation?.getLoopFloorPlan?.(Neo.runLoopIndex) || { recoveryFraction: 0.2 };
+    const recovered = Math.max(0, Math.round(Number(Neo.player.maxHp || 0) * Number(loopPlan.recoveryFraction || 0)));
+    Neo.player.hp = Math.min(Number(Neo.player.maxHp || 0), Number(Neo.player.hp || 0) + recovered);
+    Neo.showFloorTransition = true;
+    Neo.floorTransitionTime = 0;
     Neo.generateFloor();
     spawnLoopBlueRewardChoices();
+    const milestone = globalThis.NeoNyke?.simulation?.getLoopMilestone?.(Neo.runLoopIndex);
+    if (milestone) {
+      Neo.spawnParticle({ x: Neo.START_X, y: Neo.START_Y - 54, life: 2.2, text: milestone.title, c: milestone.color || '#ffffff' });
+      Neo.spawnParticle({ x: Neo.START_X, y: Neo.START_Y - 30, life: 2.2, text: milestone.feature, c: '#d7f6ff' });
+    }
     Neo.scheduleRunSave();
   }
 

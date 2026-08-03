@@ -50,6 +50,41 @@ export const SPECIAL_ROOM_DEFS = Object.freeze({
     color: '#ffd86b',
     subtitle: 'Pay for an unknown reward.',
   },
+  chronicle: {
+    name: 'Living Chronicle',
+    shortName: 'Chronicle',
+    glyph: 'CH',
+    color: '#bda7ff',
+    subtitle: 'Edit one truth about this run.',
+  },
+  armory: {
+    name: 'War Foundry',
+    shortName: 'Armory',
+    glyph: 'WF',
+    color: '#ff9b72',
+    subtitle: 'Choose one permanent combat refinement.',
+  },
+  mutation_lab: {
+    name: 'Mutation Lab',
+    shortName: 'Lab',
+    glyph: 'ML',
+    color: '#a8ff7a',
+    subtitle: 'Splice power into your living build.',
+  },
+  observatory: {
+    name: 'Astral Observatory',
+    shortName: 'Observatory',
+    glyph: 'AO',
+    color: '#8ab9ff',
+    subtitle: 'Pull one advantage from the stars.',
+  },
+  void_market: {
+    name: 'Void Market',
+    shortName: 'Void Market',
+    glyph: 'VM',
+    color: '#be7dff',
+    subtitle: 'Trade things no honest shop accepts.',
+  },
 });
 
 export const SPECIAL_ROOM_ORDER = Object.freeze(Object.keys(SPECIAL_ROOM_DEFS));
@@ -79,6 +114,21 @@ const SPECIAL_CHOICE_ICON_KEYS = Object.freeze({
   'wishing_well:small': 'item',
   'wishing_well:deep': 'role-god',
   'wishing_well:blood': 'bleed',
+  'chronicle:recall': 'range',
+  'chronicle:atlas': 'role-assassin',
+  'chronicle:revision': 'hp',
+  'armory:edge': 'attack',
+  'armory:plate': 'hp',
+  'armory:arsenal': 'tab-weapons',
+  'mutation_lab:fury': 'bleed',
+  'mutation_lab:regeneration': 'hp',
+  'mutation_lab:adaptation': 'role-wizard',
+  'observatory:chart': 'range',
+  'observatory:star': 'item',
+  'observatory:orbit': 'speed',
+  'void_market:purchase': 'role-god',
+  'void_market:sell_life': 'hp',
+  'void_market:entropy': 'tab-relics',
 });
 
 export function getScheduledSpecialRoomType(floor = 1, loopIndex = 0) {
@@ -598,6 +648,45 @@ function wellChoices(room) {
   ];
 }
 
+function deepLoopChoices(room) {
+  const loopNumber = Math.max(1, Number(Neo.runLoopIndex || 0) + 1);
+  const relics = ownedRelics();
+  const sacrifice = relics[relics.length - 1];
+  const noItems = Neo.isChallengeActive?.('no_items');
+  if (room.type === 'chronicle') return [
+    makeChoice('recall', 'Recall Every Battle', 'Gain 150% of a level immediately.', 'ONE MEMORY', () => false),
+    makeChoice('atlas', 'Name Every Door', 'Reveal exits, services, and all hidden passages.', 'ONE MEMORY', () => false),
+    makeChoice('revision', 'Revise the Wound', 'Cleanse floor curses and restore 50% max HP.', 'ONE MEMORY', () => false),
+  ];
+  if (room.type === 'armory') return [
+    makeChoice('edge', 'Hone the God-Edge', `Permanently gain +${4 + Math.floor(loopNumber / 4)} attack.`, 'ONE TEMPER', () => false),
+    makeChoice('plate', 'Fit Living Plate', 'Permanently gain +20 max HP and heal 20.', 'ONE TEMPER', () => false),
+    makeChoice('arsenal', 'Raid the Arsenal', 'Gain 2 Forge Vouchers and a level.', 'ONE TEMPER', () => false),
+  ];
+  if (room.type === 'mutation_lab') {
+    const hpCost = Math.max(10, Math.round(Number(Neo.player?.maxHp || 120) * 0.08));
+    return [
+      makeChoice('fury', 'Splice Fury', `-${hpCost} max HP. Permanently gain +${6 + Math.floor(loopNumber / 5)} attack.`, `${hpCost} MAX HP`, () => false, Number(Neo.player?.maxHp || 0) - hpCost >= 30, 'Maximum HP is already too low.'),
+      makeChoice('regeneration', 'Splice Regeneration', '+25 max HP and restore all health.', 'ONE MUTATION', () => false),
+      makeChoice('adaptation', 'Splice Adaptation', 'Grow an elite relic from your current build.', 'ONE MUTATION', () => false, !noItems, 'Disabled by No Items.'),
+    ];
+  }
+  if (room.type === 'observatory') return [
+    makeChoice('chart', 'Chart the Unseen', 'Reveal the entire floor and every secret door.', 'ONE SIGHTING', () => false),
+    makeChoice('star', 'Catch a Dead Star', 'Gain an elite relic.', 'ONE SIGHTING', () => false, !noItems, 'Disabled by No Items.'),
+    makeChoice('orbit', 'Enter Fast Orbit', 'Permanently gain +12 movement speed and +40 XP.', 'ONE SIGHTING', () => false),
+  ];
+  if (room.type === 'void_market') {
+    const purchaseCost = 120 + Number(Neo.floor || 1) * 10;
+    return [
+      makeChoice('purchase', 'Buy the Impossible', 'Buy an elite relic from outside the normal pool.', `${purchaseCost} COINS`, () => false, Number(Neo.player?.coins || 0) >= purchaseCost && !noItems, noItems ? 'Disabled by No Items.' : 'Not enough coins.'),
+      makeChoice('sell_life', 'Sell Fifteen Years', '-15 max HP. Gain 200 coins and a full heal.', '15 MAX HP', () => false, Number(Neo.player?.maxHp || 0) >= 46, 'Maximum HP is already too low.'),
+      makeChoice('entropy', sacrifice ? `Unmake ${sacrifice.name}` : 'Unmake a Relic', 'Trade one relic for 3 Forge Vouchers and a level.', '1 RELIC', () => false, !!sacrifice, 'No relic available.'),
+    ];
+  }
+  return [];
+}
+
 function getChoices(room) {
   if (!room || room.serviceUsed) return [];
   if (room.type === 'shrine') return shrineChoices(room);
@@ -607,6 +696,7 @@ function getChoices(room) {
   if (room.type === 'portal') return portalChoices(room);
   if (room.type === 'prison') return prisonChoices(room);
   if (room.type === 'wishing_well') return wellChoices(room);
+  if (['chronicle', 'armory', 'mutation_lab', 'observatory', 'void_market'].includes(room.type)) return deepLoopChoices(room);
   return [];
 }
 
@@ -680,6 +770,7 @@ function applySharedSpecialChoice(choiceId) {
   const randomFunction = Neo.createRoomRandom?.(Neo.currentRoom, `special:${choiceId}`) || Neo.rng;
   const result = globalThis.NeoNyke?.simulation?.applySpecialRoomChoice?.({
     floorNumber: Neo.floor,
+    runLoopIndex: Neo.runLoopIndex,
     floorState: { layout: { rooms: Neo.rooms }, curses: Neo.floorRivalCurses || {} },
     matchRules: {},
   }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });

@@ -12,7 +12,10 @@
   const worldModule = typeof require === 'function' ? require('./SharedWorldContent.js') : browserContent;
   const { RandomService } = randomModule;
   const { CAMPAIGN_ROOM_GEOMETRY } = worldModule;
-  const SPECIAL_ROOM_TYPES = new Set(['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well']);
+  const SPECIAL_ROOM_TYPES = new Set([
+    'shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well',
+    'chronicle', 'armory', 'mutation_lab', 'observatory', 'void_market',
+  ]);
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
   function circleRect(cx, cy, radius, x, y, width, height) {

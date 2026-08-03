@@ -2,7 +2,7 @@
 <img width="732" height="162" alt="image" src="https://github.com/user-attachments/assets/a15bd69a-0700-44df-8c2f-8fa153a0a83b" />
 
 
-A top-down roguelike dungeon crawler. Fight through 10 floors of procedurally arranged rooms, collect relics, upgrade your moves, and defeat the God boss.
+A top-down roguelike dungeon crawler. Fight through 10-floor descents, refuse the crown, and carry one evolving build through the authored 20-loop GODLOOP campaign.
 
 ## Characters
 
@@ -40,6 +40,11 @@ Controls are fully remappable in Settings.
 - **Portal Chamber** — teleport, reroute, or abandon the current floor
 - **Prison** — rescue one specialist for an immediate run bonus
 - **Wishing Well** — gamble coins or maximum health on a hidden outcome
+- **Living Chronicle** *(Loop 2+)* — rewrite wounds, memories, or the floor itself
+- **War Foundry** *(Loop 4+)* — add permanent attack, armor, or forge resources
+- **Mutation Lab** *(Loop 7+)* — splice risky permanent mutations into a build
+- **Astral Observatory** *(Loop 10+)* — chart secrets or claim power from the stars
+- **Void Market** *(Loop 14+)* — make late-game trades ordinary shops refuse
 - **Ladder** — exit to the next floor
 - **Secret** — hidden rooms
 - **Boss / God** — final floor encounters
@@ -55,6 +60,8 @@ Controls are fully remappable in Settings.
 **Anvil Forge** — spend XP to permanently upgrade a weapon or move for the current run.
 
 **Bank & Loop Crystals** — meta-progression currency carried between runs. Crystals unlock prestige challenges.
+
+**20-Loop Protocol** — every loop has a named milestone and unlock gate. Later loops grow from one to three service rooms and one to three secrets per floor, add Echo Caches, Blood Forges, Time Capsules, Mimic Dens, Star Shrines, and Null Chambers, and widen the inter-loop Artificer reward from one-of-three to two-of-six. Loop transitions restore a scaling portion of health so reaching and completing GODLOOP is a supported long-run objective; play can continue beyond it.
 
 ## Running the Game
 

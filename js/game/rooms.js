@@ -347,6 +347,7 @@
       const secretRandom = Neo.createRoomRandom(room, 'secret:lifecycle');
       const plan = globalThis.NeoNyke.simulation.createCampaignSecretRoomPlan(room, {
         floorNumber: Neo.floor,
+        runLoopIndex: Neo.runLoopIndex,
         maxFloor: Neo.MAX_FLOOR,
         width: Neo.ROOM_W,
         height: Neo.ROOM_H,
@@ -1552,7 +1553,13 @@
           Neo.secretRoomVisitedFloors.push(Neo.floor);
           Neo.scheduleRunSave();
         }
-        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
+        Neo.spawnParticle({
+          x: Neo.ROOM_W / 2,
+          y: Neo.ROOM_H / 2 - 24,
+          life: 1.1,
+          text: String(Neo.getRoomLabel?.('secret') || 'SECRET ROOM').toUpperCase(),
+          c: '#8dd4ff',
+        });
       }
     }
 
