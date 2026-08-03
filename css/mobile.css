@@ -65,7 +65,7 @@
 
   /* ── Action bar — center bottom, compact ─────────────────────── */
   #actionBar {
-    bottom: 5% !important;
+    bottom: 5%;
     left: 50%;
     right: auto;
     transform: translateX(-50%);
@@ -565,6 +565,16 @@
   #dead.overlay,
   #win.overlay { padding: 20px 14px; }
 
+  #pause.overlay .main-nav {
+    width: min(360px, 100%);
+    gap: 8px;
+  }
+
+  #pause.overlay .nav-btn {
+    min-height: 48px;
+    padding: 11px 16px;
+  }
+
   /* ── 17. Run history panel ───────────────────────────────────── */
 
   .rh-panel {
@@ -588,6 +598,11 @@
 
 /* ── Landscape phone ──────────────────────────────────────────────────────── */
 @media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+
+  #pause.overlay .nav-btn {
+    min-height: 44px;
+    padding-block: 9px;
+  }
 
   .menu-content {
     position: relative;
