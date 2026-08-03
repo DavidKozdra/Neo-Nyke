@@ -55,6 +55,7 @@ import './simulation/SharedAcquisitionSystem.js';
 import './simulation/SharedChestSystem.js';
 import './simulation/SharedShopSystem.js';
 import './simulation/SharedEndlessIntermissionSystem.js';
+import './simulation/LoopContentSystem.js';
 import './simulation/SharedEndgameSystem.js';
 import './simulation/SharedSpecialRoomSystem.js';
 import './simulation/SharedRoomLifecycleSystem.js';

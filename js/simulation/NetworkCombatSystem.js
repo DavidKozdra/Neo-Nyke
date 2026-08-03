@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -85,6 +85,7 @@
     createCampaignGodEndgamePlan = () => [],
     resolveCampaignGodEndgameChoice = () => ({ ok: false, reason: 'ENDGAME_UNAVAILABLE' }),
     createCampaignLoopBlueRewardPlan = () => [],
+    getLoopFloorPlan = () => ({ recoveryFraction: 0.2 }),
     invokeCampaignEnemyAI = () => false,
     segmentHitsCircle = () => null,
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
@@ -1591,6 +1592,7 @@
     const stream = random.scoped(`secret:lifecycle:${state.floorNumber}:${room.id}`);
     const plan = createCampaignSecretRoomPlan(room, {
       floorNumber: state.floorNumber,
+      runLoopIndex: state.runLoopIndex ?? state.floorState?.runLoopIndex ?? 0,
       maxFloor: MAX_FLOOR,
       width: state.floorState?.width,
       height: state.floorState?.height,
@@ -8746,8 +8748,11 @@
         }
         if (resolution.action === 'loop') {
           const nextLoopIndex = Math.max(0, Number(state.runLoopIndex || 0)) + 1;
+          const loopPlan = getLoopFloorPlan(nextLoopIndex);
           activePlayers(state).forEach(member => {
             member.loopCrystals = Math.max(0, Number(member.loopCrystals || 0)) + 1;
+            const recovered = Math.max(0, Math.round(Number(member.maxHp || 0) * Number(loopPlan.recoveryFraction || 0)));
+            member.hp = Math.min(Number(member.maxHp || 0), Number(member.hp || 0) + recovered);
           });
           advanceToNextFloor(state, emitEvent, 0, { targetFloor: 1, runLoopIndex: nextLoopIndex });
           spawnAuthorityLoopBlueRewardChoices(state, emitEvent);
@@ -8993,7 +8998,7 @@
             return;
           }
           candidate.picksRemaining = remainingAfterPick;
-          candidate.label = `${remainingAfterPick}/5`;
+          candidate.label = `${remainingAfterPick}/${Math.max(1, Number(candidate.choiceTotal || String(candidate.label || '').split('/')[1]) || 5)}`;
         });
         if (acquisition.jester?.ok) {
           Object.entries(acquisition.jester.bonusItemCounts).forEach(([itemKey, bonusAmount]) => {
@@ -9313,7 +9318,12 @@
       state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId: state.floorState.currentRoomId, radius: 20, amount: 1, spawnTick: state.tick };
       emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: 'rewardChoice', itemKey: descriptor.key, roomId: state.floorState.currentRoomId, source: descriptor.source });
     });
-    if (plan.length) emitEvent('LOOP_BLUE_REWARDS_SPAWNED', { roomId: state.floorState.currentRoomId, groupId: plan[0].groupId, picksRemaining: 1 });
+    if (plan.length) emitEvent('LOOP_BLUE_REWARDS_SPAWNED', {
+      roomId: state.floorState.currentRoomId,
+      groupId: plan[0].groupId,
+      picksRemaining: plan[0].picksRemaining,
+      optionCount: plan.length,
+    });
   }
 
   // Party-wide rival curses (shared-roster model): each defeated/alive-descended

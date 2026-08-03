@@ -1,15 +1,22 @@
 (function initializeDeterministicFloorGenerator(root, factory) {
-  const api = factory(root.NeoNyke?.simulation || {});
+  const loopApi = typeof require === 'function' ? require('./LoopContentSystem.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(root.NeoNyke?.simulation || {}, loopApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createFloorGeneratorApi(browserApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createFloorGeneratorApi(browserApi, loopApi) {
   'use strict';
 
   const randomApi = typeof require === 'function' ? require('./RandomService.js') : browserApi;
   const { RandomService } = randomApi;
+  const {
+    getLoopMilestone = loopIndex => ({ number: Number(loopIndex || 0) + 1, title: 'THE DUNGEON' }),
+    getLoopFloorPlan = () => ({ extraRooms: 0, serviceRoomCount: 1, secretRoomCount: 1 }),
+    getScheduledLoopRoomTypes = (floor, loopIndex, count) => SPECIAL_ROOM_ORDER.slice(0, count),
+    getScheduledSecretKinds = (floor, loopIndex, count) => Array.from({ length: count }, (_, index) => index ? 'vendor' : 'warp'),
+  } = loopApi || {};
   const DIRECTIONS = Object.freeze([
     { key: 'n', opposite: 's', dx: 0, dy: -1 },
     { key: 's', opposite: 'n', dx: 0, dy: 1 },
@@ -53,27 +60,35 @@
     const contentVersion = String(options.contentVersion || 'development');
     const matchSeed = options.matchSeed ?? 0;
     const floorSeed = options.floorSeed ?? `${matchSeed}|floor:${floorNumber}|generation:${generationVersion}`;
+    const runLoopIndex = Math.max(0, Math.trunc(Number(options.runLoopIndex) || 0));
+    const loopPlan = getLoopFloorPlan(runLoopIndex);
     const randomService = options.random ? null : new RandomService({ matchSeed: floorSeed, generationVersion, contentVersion });
     const random = options.random || randomService.stream('floor-generation');
     const gridSize = 9;
     const startPosition = { x: 4, y: 4 };
     const occupied = new Set([roomKey(startPosition.x, startPosition.y)]);
     const positions = [startPosition];
-    const targetRoomCount = 8 + Math.floor(random.next() * 3) + Math.min(2, floorNumber >> 2);
+    const targetRoomCount = 8 + Math.floor(random.next() * 3) + Math.min(2, floorNumber >> 2) + Number(loopPlan.extraRooms || 0);
 
     while (positions.length < targetRoomCount) {
-      const seedRoom = random.pick(positions);
-      const directions = random.shuffle(GENERATION_DIRECTIONS);
       let added = false;
-      for (const direction of directions) {
-        const x = seedRoom.x + direction.dx;
-        const y = seedRoom.y + direction.dy;
-        const key = roomKey(x, y);
-        if (x < 0 || x >= gridSize || y < 0 || y >= gridSize || occupied.has(key)) continue;
-        occupied.add(key);
-        positions.push({ x, y });
-        added = true;
-        break;
+      // Preserve the shipped loop-one seed contract byte-for-byte. Expanded
+      // late-loop floors search every room so their larger target size is a real
+      // guarantee rather than an optimistic upper bound.
+      const seedRooms = Number(loopPlan.extraRooms || 0) > 0 ? random.shuffle(positions) : [random.pick(positions)];
+      for (const seedRoom of seedRooms) {
+        const directions = random.shuffle(GENERATION_DIRECTIONS);
+        for (const direction of directions) {
+          const x = seedRoom.x + direction.dx;
+          const y = seedRoom.y + direction.dy;
+          const key = roomKey(x, y);
+          if (x < 0 || x >= gridSize || y < 0 || y >= gridSize || occupied.has(key)) continue;
+          occupied.add(key);
+          positions.push({ x, y });
+          added = true;
+          break;
+        }
+        if (added) break;
       }
       if (!added) break;
     }
@@ -128,13 +143,13 @@
     const treasureCount = Math.min(3, 1 + Math.floor(random.next() * 3));
     candidates.slice(0, treasureCount).forEach(room => { room.type = 'treasure'; });
     if (gameMode !== 'treasure_hunt' && !options.tutorial) {
-      const service = candidates.find(room => room.type === 'combat');
-      if (service) {
-        const loopIndex = Math.max(0, Math.trunc(Number(options.runLoopIndex) || 0));
-        const depth = Math.max(0, floorNumber - 1 + loopIndex * 3);
-        service.type = SPECIAL_ROOM_ORDER[depth % SPECIAL_ROOM_ORDER.length];
-        if (gameMode === 'story' && service.type === 'portal') service.type = 'reliquary';
-      }
+      const scheduledTypes = getScheduledLoopRoomTypes(floorNumber, runLoopIndex, Number(loopPlan.serviceRoomCount || 1));
+      scheduledTypes.forEach(scheduledType => {
+        const service = candidates.find(room => room.type === 'combat');
+        if (!service) return;
+        service.type = gameMode === 'story' && scheduledType === 'portal' ? 'reliquary' : scheduledType;
+        service.loopUnlock = runLoopIndex;
+      });
     }
     const shop = candidates.find(room => room.type === 'combat');
     if (shop && random.chance(0.7)) shop.type = 'shop';
@@ -144,31 +159,35 @@
     if (anvil && random.chance(0.55)) anvil.type = 'anvil';
 
     if (!options.tutorial) {
-      const secretAnchors = random.shuffle(rooms.filter(room => ['combat', 'treasure', 'shop', 'anvil'].includes(room.type)));
-      let secretRoom = null;
-      for (const anchor of secretAnchors) {
-        const secretDirections = random.shuffle(DIRECTIONS);
-        for (const direction of secretDirections) {
-          const gx = anchor.gx + direction.dx;
-          const gy = anchor.gy + direction.dy;
-          if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize || roomsByKey.has(roomKey(gx, gy))) continue;
-          secretRoom = {
-            id: `room-${gx}-${gy}`,
-            gx, gy, type: 'secret', layoutArchetype: 'open', layoutChambers: [],
-            doors: { n: false, s: false, e: false, w: false },
-            secretPassages: { [direction.opposite]: { targetGx: anchor.gx, targetGy: anchor.gy, open: false } },
-            secret: true, explored: false, visited: false, cleared: true,
-            bossStarted: false, challengeStarted: false, challengeLifecycleState: 'ready',
-            challengeRewardSpawned: false, challengeFailed: false,
-            secretKind: random.next() < 0.5 ? 'warp' : 'vendor',
-          };
-          anchor.secretPassages[direction.key] = { targetGx: gx, targetGy: gy, open: false };
-          rooms.push(secretRoom);
-          roomsByKey.set(roomKey(gx, gy), secretRoom);
-          break;
+      const secretKinds = getScheduledSecretKinds(floorNumber, runLoopIndex, Number(loopPlan.secretRoomCount || 1));
+      secretKinds.forEach(secretKind => {
+        const secretAnchors = random.shuffle(rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop', 'anvil'].includes(room.type)));
+        let secretRoom = null;
+        for (const anchor of secretAnchors) {
+          const secretDirections = random.shuffle(DIRECTIONS);
+          for (const direction of secretDirections) {
+            const gx = anchor.gx + direction.dx;
+            const gy = anchor.gy + direction.dy;
+            if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize || roomsByKey.has(roomKey(gx, gy))) continue;
+            secretRoom = {
+              id: `room-${gx}-${gy}`,
+              gx, gy, type: 'secret', layoutArchetype: 'open', layoutChambers: [],
+              doors: { n: false, s: false, e: false, w: false },
+              secretPassages: { [direction.opposite]: { targetGx: anchor.gx, targetGy: anchor.gy, open: false } },
+              secret: true, explored: false, visited: false, cleared: true,
+              bossStarted: false, challengeStarted: false, challengeLifecycleState: 'ready',
+              challengeRewardSpawned: false, challengeFailed: false,
+              secretKind,
+              loopUnlock: runLoopIndex,
+            };
+            anchor.secretPassages[direction.key] = { targetGx: gx, targetGy: gy, open: false };
+            rooms.push(secretRoom);
+            roomsByKey.set(roomKey(gx, gy), secretRoom);
+            break;
+          }
+          if (secretRoom) break;
         }
-        if (secretRoom) break;
-      }
+      });
     }
 
     return {
@@ -177,6 +196,8 @@
       matchSeed,
       floorSeed,
       floorNumber,
+      runLoopIndex,
+      loopMilestone: getLoopMilestone(runLoopIndex),
       gridSize,
       startRoomId: startRoom.id,
       exitRoomId: exitRoom.id,

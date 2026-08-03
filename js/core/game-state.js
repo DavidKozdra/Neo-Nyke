@@ -2186,6 +2186,14 @@ export function resumeGame() {
   function getRoomLabel(type) {
     if (!type) return 'Unknown';
     if (type === 'god') return 'God Chamber';
+    if (type === 'secret' && Neo.currentRoom?.secretKind) {
+      const secretLabels = {
+        vendor: 'Hidden Vendor', warp: 'Warp Crypt', mystery_lady: 'Mystery Shrine', bowman_bane: "Bowman's Bane",
+        echo_cache: 'Echo Cache', blood_forge: 'Blood Forge', time_capsule: 'Time Capsule',
+        mimic_den: 'Mimic Den', star_shrine: 'Star Shrine', null_chamber: 'Null Chamber',
+      };
+      return secretLabels[Neo.currentRoom.secretKind] || 'Secret Room';
+    }
     if (Neo.SPECIAL_ROOM_DEFS?.[type]) return Neo.SPECIAL_ROOM_DEFS[type].name;
     return titleCase(type);
   }

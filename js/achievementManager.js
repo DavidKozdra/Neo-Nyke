@@ -426,6 +426,7 @@ const achievementManager = (() => {
   achievementEvents.on('loop:completed', async ({ loopIndex }) => {
     maxLoopIndex = Math.max(maxLoopIndex, Math.max(0, Number(loopIndex) || 0));
     if (loopIndex >= 3) await unlock('loop_lord');
+    if (loopIndex >= 20) await unlock('godloop');
   });
 
   achievementEvents.on('meta:coins', async ({ total }) => {
