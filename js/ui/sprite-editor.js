@@ -466,7 +466,7 @@
       const entry = {
         id: `${isPlayable ? 'char' : 'enemy'}:${key}`,
         tab: isPlayable ? 'characters' : 'enemies',
-        kind: (isPlayable && hasCharset) ? 'image-strip' : 'pixel-grid',
+        kind: hasCharset ? 'image-strip' : 'pixel-grid',
         key,
         label: prettyLabel(key),
       };
@@ -1991,7 +1991,7 @@
       if (Array.isArray(walkFrames) && JSON.stringify(walkFrames) !== JSON.stringify(defaultWalk)) {
         lines.push(`    walkFrames: [${walkFrames.join(', ')}],`);
       }
-      ['dash', 'smash', 'beam'].forEach(action => {
+      ['attack', 'dash', 'smash', 'beam'].forEach(action => {
         const frames = sheet.animationFrames?.[action] ?? sheet[`${action}Frames`] ?? def[`${action}Frames`];
         if (Array.isArray(frames) && frames.length) {
           lines.push(`    ${action}Frames: [${frames.join(', ')}],`);

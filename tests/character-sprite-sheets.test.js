@@ -104,4 +104,27 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, def.portraitFrame, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     expect(countOpaquePixels(image, def.armFrame, def.frameWidth, def.frameHeight)).toBeGreaterThan(2);
   });
+
+  test('golem uses the authored mini-golem walk and attack strip', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.golem;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/mini-golem.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 10,
+      idleFrames: [0],
+      walkFrames: [0, 1, 2, 3, 4],
+      attackFrames: [5, 6, 7, 8, 9],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
 });
