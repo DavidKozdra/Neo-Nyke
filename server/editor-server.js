@@ -72,7 +72,7 @@ async function handleEditorApi(req, res, pathname) {
 
 async function serveStatic(res, pathname) {
   let relative = decodeURIComponent(pathname).replace(/^\/+/, '');
-  if (!relative) relative = 'editor.html';
+  if (!relative) relative = 'tools/editor.html';
   const absolute = path.resolve(ROOT, relative);
   if (absolute !== ROOT && !absolute.startsWith(`${ROOT}${path.sep}`)) {
     res.writeHead(403); res.end('Forbidden'); return;
@@ -99,6 +99,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`NeoNyke sprite editor: http://${HOST}:${PORT}/editor.html`);
+  console.log(`NeoNyke sprite editor: http://${HOST}:${PORT}/tools/editor.html`);
   console.log(`Writable project root: ${ROOT}`);
 });

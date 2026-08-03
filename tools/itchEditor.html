@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEO NYKE — Itch Artwork Editor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: #0d1219;
+      --panel-2: #121a24;
+      --line: #263646;
+      --text: #dcecf2;
+      --muted: #8196a2;
+      --cyan: #5ce7f2;
+      --amber: #f2ac57;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
+    button, input, select { font: inherit; }
+    button, select, input[type="number"], input[type="text"] {
+      color: var(--text);
+      background: #111923;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    button { min-height: 34px; padding: 7px 11px; cursor: pointer; }
+    button:hover { border-color: var(--cyan); color: #fff; }
+    button:disabled { opacity: .38; cursor: default; }
+    button.primary { color: #051014; background: var(--cyan); border-color: var(--cyan); font-weight: 800; }
+    button.danger:hover { border-color: #ed6b6b; color: #ffaaaa; }
+    input[type="number"], input[type="text"], select { width: 100%; min-height: 34px; padding: 6px 8px; }
+    input[type="range"] { width: 100%; accent-color: var(--cyan); }
+    input[type="color"] { width: 100%; height: 34px; padding: 2px; background: #111923; border: 1px solid var(--line); border-radius: 6px; }
+
+    .app { height: 100%; display: grid; grid-template-rows: 54px minmax(0, 1fr); }
+    .topbar {
+      display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+      border-bottom: 1px solid var(--line); background: rgba(9, 13, 19, .98); z-index: 3;
+    }
+    .brand { margin-right: 10px; color: var(--cyan); font-weight: 900; letter-spacing: .14em; white-space: nowrap; }
+    .topbar .spacer { flex: 1; }
+    .zoom-label { min-width: 58px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .workspace { min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 280px; }
+    .sidebar { min-height: 0; overflow: auto; background: var(--panel); }
+    .sidebar.left { border-right: 1px solid var(--line); }
+    .sidebar.right { border-left: 1px solid var(--line); }
+    .section { padding: 14px; border-bottom: 1px solid var(--line); }
+    .section h2 { margin: 0 0 11px; color: #a7c0cb; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+    .button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .button-grid .wide { grid-column: 1 / -1; }
+    .hint { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .field { margin: 0 0 10px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { display: flex; justify-content: space-between; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+    .field .value { color: var(--text); font-variant-numeric: tabular-nums; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .layer-list { display: grid; gap: 6px; }
+    .layer {
+      display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; align-items: center; gap: 5px;
+      min-height: 42px; padding: 5px; border: 1px solid transparent; border-radius: 7px; background: #0a1017;
+    }
+    .layer.selected { border-color: var(--cyan); background: #12222b; }
+    .layer button { min-height: 28px; padding: 2px; }
+    .layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; cursor: pointer; }
+    .layer-kind { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; }
+    .asset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .asset-card { min-width: 0; min-height: 58px; padding: 5px 3px 4px; display: grid; place-items: center; gap: 3px; }
+    .asset-card img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+    .asset-card span { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 8px; white-space: nowrap; }
+
+    .stage-shell {
+      position: relative; min-width: 0; min-height: 0; overflow: hidden;
+      background-color: #090c11;
+      background-image: linear-gradient(45deg,#0d131b 25%,transparent 25%),linear-gradient(-45deg,#0d131b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#0d131b 75%),linear-gradient(-45deg,transparent 75%,#0d131b 75%);
+      background-size: 24px 24px; background-position: 0 0,0 12px,12px -12px,-12px 0;
+    }
+    .stage-pan { position: absolute; inset: 0; display: grid; place-items: center; transform-origin: center; }
+    #editorCanvas { display: block; max-width: none; background: #000; box-shadow: 0 22px 70px #000b; touch-action: none; }
+    .status {
+      position: absolute; left: 12px; bottom: 10px; padding: 5px 8px; border: 1px solid #26364699;
+      border-radius: 5px; background: #080c12d9; color: var(--muted); font-size: 10px; pointer-events: none;
+    }
+    .empty { color: var(--muted); font-size: 12px; }
+    .hidden { display: none !important; }
+
+    @media (max-width: 980px) {
+      .workspace { grid-template-columns: 210px minmax(0, 1fr) 230px; }
+      .brand { font-size: 12px; }
+      .topbar button { padding-inline: 8px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">NEO NYKE / ITCH EDITOR</div>
+    <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+    <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+    <span class="spacer"></span>
+    <button id="zoomOutBtn" title="Zoom out">−</button>
+    <span id="zoomLabel" class="zoom-label">100%</span>
+    <button id="zoomInBtn" title="Zoom in">+</button>
+    <button id="fitBtn">Fit</button>
+    <button id="exportBtn" class="primary">Export PNG</button>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section class="section">
+        <h2>Add</h2>
+        <div class="button-grid">
+          <button id="addImageBtn">Image</button>
+          <button id="addTextBtn">Text</button>
+          <button id="addTintBtn">Tint panel</button>
+          <button id="duplicateBtn">Duplicate</button>
+          <button id="addPillarPairBtn" class="wide">Add project pillar pair</button>
+        </div>
+        <input id="imageInput" type="file" accept="image/*" hidden multiple>
+        <p class="hint">Drag layers on the canvas. Mouse wheel scales the selected layer; Shift + wheel rotates it.</p>
+      </section>
+
+      <section class="section">
+        <h2>Project sprites</h2>
+        <div id="assetGrid" class="asset-grid"></div>
+        <p class="hint">These are the exact PNG assets from <code>../assets/sprites</code>. Click one to add it as a movable layer.</p>
+      </section>
+
+      <section class="section">
+        <h2>Layers</h2>
+        <div id="layerList" class="layer-list"></div>
+        <div class="button-grid" style="margin-top:8px">
+          <button id="layerUpBtn">Move up</button>
+          <button id="layerDownBtn">Move down</button>
+          <button id="deleteBtn" class="wide danger">Delete selected</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Project</h2>
+        <div class="button-grid">
+          <button id="saveProjectBtn">Save JSON</button>
+          <button id="loadProjectBtn">Load JSON</button>
+          <button id="resetBtn" class="wide danger">Reset artwork</button>
+        </div>
+        <input id="projectInput" type="file" accept="application/json,.json" hidden>
+      </section>
+    </aside>
+
+    <section id="stageShell" class="stage-shell" aria-label="Artwork canvas">
+      <div id="stagePan" class="stage-pan"><canvas id="editorCanvas" width="1672" height="941"></canvas></div>
+      <div id="status" class="status">Loading background…</div>
+    </section>
+
+    <aside class="sidebar right">
+      <section class="section">
+        <h2>Document</h2>
+        <div class="two">
+          <div class="field"><label for="docWidth">Width</label><input id="docWidth" type="number" min="64" max="8192" value="1672"></div>
+          <div class="field"><label for="docHeight">Height</label><input id="docHeight" type="number" min="64" max="8192" value="941"></div>
+        </div>
+        <div class="button-grid">
+          <button class="preset" data-w="1920" data-h="1080">16:9 HD</button>
+          <button class="preset" data-w="630" data-h="500">630 × 500</button>
+        </div>
+      </section>
+
+      <section id="properties" class="section">
+        <h2>Selected layer</h2>
+        <div id="noSelection" class="empty">Select a layer to edit it.</div>
+        <div id="propertyFields" class="hidden">
+          <div class="field"><label for="layerName">Name</label><input id="layerName" type="text"></div>
+          <div id="textField" class="field hidden"><label for="layerText">Text</label><input id="layerText" type="text"></div>
+          <div class="two">
+            <div class="field"><label for="propX">X</label><input id="propX" type="number" step="1"></div>
+            <div class="field"><label for="propY">Y</label><input id="propY" type="number" step="1"></div>
+          </div>
+          <div class="two">
+            <div class="field"><label for="propW">Width</label><input id="propW" type="number" min="1" step="1"></div>
+            <div class="field"><label for="propH">Height</label><input id="propH" type="number" min="1" step="1"></div>
+          </div>
+          <div class="field"><label for="propRotation">Rotation <span id="rotationValue" class="value">0°</span></label><input id="propRotation" type="range" min="-180" max="180" step="1"></div>
+          <div class="field"><label for="propOpacity">Opacity <span id="opacityValue" class="value">100%</span></label><input id="propOpacity" type="range" min="0" max="1" step=".01"></div>
+          <div id="colorField" class="field hidden"><label for="propColor">Color</label><input id="propColor" type="color"></div>
+          <div id="fontSizeField" class="field hidden"><label for="propFontSize">Font size</label><input id="propFontSize" type="number" min="4" max="1000"></div>
+          <div class="button-grid">
+            <button id="coverBtn">Cover canvas</button>
+            <button id="centerBtn">Center</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const DEFAULT_BACKGROUND = '../assets/itch/neo-nyke-itch-background.png';
+  const PROJECT_ASSETS = [
+    'env/anvil_0.png', 'env/barrel_0.png', 'env/chair_0.png', 'env/chair_1.png',
+    'env/chest_0.png', 'env/chest_a_b.png', 'env/forge_0.png', 'env/ground_0.png',
+    'env/ladder_0.png', 'env/pillar.png', 'env/pillar_0.png', 'env/pillar_1.png',
+    'env/pillar_2.png', 'env/pillar_3.png', 'env/table_0.png', 'env/table_1.png',
+    'chars/Gelleh.png', 'chars/Metao.png', 'chars/Mooggy.png', 'chars/Sarge.png',
+    'chars/Thorn Knight.png', 'chars/TurtleBoy.png', 'chars/princess.png', 'chars/turtle_boy.png',
+    'ui/mobile-menu.png'
+  ].map(file => `../assets/sprites/${file}`);
+  const $ = id => document.getElementById(id);
+  const canvas = $('editorCanvas');
+  const ctx = canvas.getContext('2d');
+  const stageShell = $('stageShell');
+  const imageCache = new Map();
+  const imagePromises = new Map();
+  const state = { width: 1672, height: 941, layers: [], selectedId: null, zoom: 1 };
+  const history = [];
+  let historyIndex = -1;
+  let drag = null;
+  let restoring = false;
+
+  const uid = () => crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const selected = () => state.layers.find(layer => layer.id === state.selectedId) || null;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const snapshot = () => JSON.stringify({ width: state.width, height: state.height, layers: state.layers, selectedId: state.selectedId });
+
+  function loadImage(src) {
+    if (imageCache.has(src)) return Promise.resolve(imageCache.get(src));
+    if (imagePromises.has(src)) return imagePromises.get(src);
+    const promise = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => { imageCache.set(src, image); imagePromises.delete(src); resolve(image); };
+      image.onerror = reject;
+      image.src = src;
+    });
+    imagePromises.set(src, promise);
+    return promise;
+  }
+
+  function createBackgroundLayer() {
+    return { id: uid(), kind: 'image', name: 'Generated dungeon background', src: DEFAULT_BACKGROUND, x: state.width / 2, y: state.height / 2, w: state.width, h: state.height, rotation: 0, opacity: 1, visible: true, locked: false };
+  }
+
+  async function resetArtwork(skipConfirm = false) {
+    if (!skipConfirm && !confirm('Reset the editor to the generated dungeon background?')) return;
+    state.width = 1672; state.height = 941;
+    const bg = createBackgroundLayer();
+    state.layers = [bg]; state.selectedId = bg.id;
+    syncCanvasSize();
+    pushHistory(true);
+    await ensureImages();
+    renderAll(); fitCanvas();
+  }
+
+  async function ensureImages() {
+    await Promise.all(state.layers.filter(l => l.kind === 'image').map(l => loadImage(l.src).catch(() => null)));
+  }
+
+  function pushHistory(replace = false) {
+    if (restoring) return;
+    const data = snapshot();
+    if (replace && historyIndex >= 0) history[historyIndex] = data;
+    else {
+      history.splice(historyIndex + 1);
+      if (history[history.length - 1] !== data) history.push(data);
+      if (history.length > 60) history.shift();
+      historyIndex = history.length - 1;
+    }
+    updateUndoButtons();
+    try { localStorage.setItem('neoNykeItchEditor', data); } catch (_) {}
+  }
+
+  async function restore(data) {
+    restoring = true;
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    state.width = clamp(Number(parsed.width) || 1672, 64, 8192);
+    state.height = clamp(Number(parsed.height) || 941, 64, 8192);
+    state.layers = Array.isArray(parsed.layers) ? parsed.layers : [];
+    state.selectedId = parsed.selectedId || state.layers.at(-1)?.id || null;
+    syncCanvasSize(); await ensureImages(); restoring = false; renderAll();
+  }
+
+  function updateUndoButtons() {
+    $('undoBtn').disabled = historyIndex <= 0;
+    $('redoBtn').disabled = historyIndex >= history.length - 1;
+  }
+
+  async function undo() { if (historyIndex > 0) { historyIndex--; await restore(history[historyIndex]); updateUndoButtons(); } }
+  async function redo() { if (historyIndex < history.length - 1) { historyIndex++; await restore(history[historyIndex]); updateUndoButtons(); } }
+
+  function syncCanvasSize() {
+    canvas.width = state.width; canvas.height = state.height;
+    $('docWidth').value = state.width; $('docHeight').value = state.height;
+    applyZoom();
+  }
+
+  function applyZoom() {
+    canvas.style.width = `${state.width * state.zoom}px`;
+    canvas.style.height = `${state.height * state.zoom}px`;
+    $('zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
+  }
+
+  function fitCanvas() {
+    const pad = 56;
+    state.zoom = clamp(Math.min((stageShell.clientWidth - pad) / state.width, (stageShell.clientHeight - pad) / state.height), .05, 4);
+    applyZoom();
+  }
+
+  function rotatePoint(px, py, layer, inverse = false) {
+    const a = layer.rotation * Math.PI / 180 * (inverse ? -1 : 1);
+    const dx = px - layer.x, dy = py - layer.y;
+    return { x: layer.x + dx * Math.cos(a) - dy * Math.sin(a), y: layer.y + dx * Math.sin(a) + dy * Math.cos(a) };
+  }
+
+  function hitTest(x, y) {
+    for (let i = state.layers.length - 1; i >= 0; i--) {
+      const layer = state.layers[i];
+      if (!layer.visible || layer.locked) continue;
+      const p = rotatePoint(x, y, layer, true);
+      if (Math.abs(p.x - layer.x) <= layer.w / 2 && Math.abs(p.y - layer.y) <= layer.h / 2) return layer;
+    }
+    return null;
+  }
+
+  function drawLayer(g, layer) {
+    if (!layer.visible) return;
+    g.save();
+    g.translate(layer.x, layer.y); g.rotate(layer.rotation * Math.PI / 180); g.globalAlpha = layer.opacity;
+    if (layer.kind === 'image') {
+      const image = imageCache.get(layer.src);
+      if (image) g.drawImage(image, -layer.w / 2, -layer.h / 2, layer.w, layer.h);
+    } else if (layer.kind === 'text') {
+      g.fillStyle = layer.color; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = `900 ${layer.fontSize}px "Arial Black", Impact, sans-serif`;
+      g.fillText(layer.text, 0, 0, layer.w);
+    } else if (layer.kind === 'rect') {
+      g.fillStyle = layer.color; g.fillRect(-layer.w / 2, -layer.h / 2, layer.w, layer.h);
+    }
+    g.restore();
+  }
+
+  function drawSelection(g, layer) {
+    if (!layer || !layer.visible) return;
+    g.save(); g.translate(layer.x, layer.y); g.rotate(layer.rotation * Math.PI / 180);
+    g.strokeStyle = '#5ce7f2'; g.lineWidth = Math.max(2, 2 / state.zoom); g.setLineDash([10 / state.zoom, 6 / state.zoom]);
+    g.strokeRect(-layer.w / 2, -layer.h / 2, layer.w, layer.h);
+    g.setLineDash([]); g.fillStyle = '#5ce7f2';
+    const r = Math.max(4, 5 / state.zoom);
+    [[-layer.w/2,-layer.h/2],[layer.w/2,-layer.h/2],[-layer.w/2,layer.h/2],[layer.w/2,layer.h/2]].forEach(([x,y]) => g.fillRect(x-r,y-r,r*2,r*2));
+    g.restore();
+  }
+
+  function renderCanvas(g = ctx, includeSelection = true) {
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, state.width, state.height);
+    g.fillStyle = '#020509'; g.fillRect(0, 0, state.width, state.height);
+    state.layers.forEach(layer => drawLayer(g, layer));
+    if (includeSelection) drawSelection(g, selected());
+  }
+
+  function renderAll() {
+    renderCanvas(); renderLayerList(); renderProperties();
+    const layer = selected();
+    $('status').textContent = `${state.width} × ${state.height}px · ${state.layers.length} layer${state.layers.length === 1 ? '' : 's'}${layer ? ` · ${layer.name}` : ''}`;
+  }
+
+  function renderLayerList() {
+    const list = $('layerList'); list.innerHTML = '';
+    [...state.layers].reverse().forEach(layer => {
+      const row = document.createElement('div'); row.className = `layer${layer.id === state.selectedId ? ' selected' : ''}`;
+      const eye = document.createElement('button'); eye.textContent = layer.visible ? '◉' : '○'; eye.title = 'Toggle visibility';
+      eye.onclick = event => { event.stopPropagation(); layer.visible = !layer.visible; pushHistory(); renderAll(); };
+      const name = document.createElement('div'); name.className = 'layer-name'; name.innerHTML = `${escapeHtml(layer.name)}<span class="layer-kind">${layer.kind}${layer.locked ? ' · locked' : ''}</span>`;
+      const lock = document.createElement('button'); lock.textContent = layer.locked ? '◆' : '◇'; lock.title = 'Toggle lock';
+      lock.onclick = event => { event.stopPropagation(); layer.locked = !layer.locked; pushHistory(); renderAll(); };
+      row.onclick = () => { state.selectedId = layer.id; renderAll(); };
+      row.append(eye, name, lock); list.append(row);
+    });
+  }
+
+  function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+  function renderProperties() {
+    const layer = selected();
+    $('noSelection').classList.toggle('hidden', !!layer); $('propertyFields').classList.toggle('hidden', !layer);
+    if (!layer) return;
+    $('layerName').value = layer.name; $('propX').value = Math.round(layer.x); $('propY').value = Math.round(layer.y);
+    $('propW').value = Math.round(layer.w); $('propH').value = Math.round(layer.h); $('propRotation').value = layer.rotation;
+    $('propOpacity').value = layer.opacity; $('rotationValue').textContent = `${Math.round(layer.rotation)}°`; $('opacityValue').textContent = `${Math.round(layer.opacity * 100)}%`;
+    $('textField').classList.toggle('hidden', layer.kind !== 'text'); $('colorField').classList.toggle('hidden', !['text','rect'].includes(layer.kind)); $('fontSizeField').classList.toggle('hidden', layer.kind !== 'text');
+    if (layer.kind === 'text') { $('layerText').value = layer.text; $('propFontSize').value = layer.fontSize; }
+    if (layer.color) $('propColor').value = layer.color;
+  }
+
+  function pointerPosition(event) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * state.width / rect.width, y: (event.clientY - rect.top) * state.height / rect.height };
+  }
+
+  canvas.addEventListener('pointerdown', event => {
+    const p = pointerPosition(event); const layer = hitTest(p.x, p.y);
+    state.selectedId = layer?.id || null;
+    if (layer) { drag = { pointerId: event.pointerId, startX: p.x, startY: p.y, layerX: layer.x, layerY: layer.y }; canvas.setPointerCapture(event.pointerId); }
+    renderAll();
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const layer = selected(); if (!layer) return;
+    const p = pointerPosition(event); layer.x = drag.layerX + p.x - drag.startX; layer.y = drag.layerY + p.y - drag.startY; renderCanvas(); renderProperties();
+  });
+  canvas.addEventListener('pointerup', event => { if (drag?.pointerId === event.pointerId) { drag = null; pushHistory(); renderAll(); } });
+  canvas.addEventListener('wheel', event => {
+    const layer = selected(); if (!layer || layer.locked) return;
+    event.preventDefault();
+    if (event.shiftKey) layer.rotation = clamp(layer.rotation + Math.sign(event.deltaY) * 2, -180, 180);
+    else { const factor = event.deltaY < 0 ? 1.035 : .966; layer.w = Math.max(1, layer.w * factor); layer.h = Math.max(1, layer.h * factor); }
+    renderAll(); clearTimeout(canvas._wheelCommit); canvas._wheelCommit = setTimeout(() => pushHistory(), 160);
+  }, { passive: false });
+
+  async function addImages(files) {
+    for (const file of files) {
+      const src = await fileToDataUrl(file); const image = await loadImage(src);
+      const scale = Math.min(state.width * .55 / image.width, state.height * .55 / image.height, 1);
+      const layer = { id: uid(), kind: 'image', name: file.name.replace(/\.[^.]+$/, ''), src, x: state.width / 2, y: state.height / 2, w: image.width * scale, h: image.height * scale, rotation: 0, opacity: 1, visible: true, locked: false };
+      state.layers.push(layer); state.selectedId = layer.id;
+    }
+    pushHistory(); renderAll();
+  }
+  const fileToDataUrl = file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+
+  async function addProjectAsset(src, options = {}) {
+    const image = await loadImage(src);
+    const defaultScale = options.scale || clamp(Math.min(state.width, state.height) * .18 / Math.max(image.width, image.height), 1, 16);
+    const layer = {
+      id: uid(), kind: 'image', name: options.name || src.split('/').pop().replace(/\.[^.]+$/, ''), src,
+      x: options.x ?? state.width / 2, y: options.y ?? state.height / 2,
+      w: options.w ?? image.width * defaultScale, h: options.h ?? image.height * defaultScale,
+      rotation: options.rotation || 0, opacity: options.opacity ?? 1, visible: true, locked: false
+    };
+    state.layers.push(layer); state.selectedId = layer.id; pushHistory(); renderAll(); return layer;
+  }
+
+  async function addPillarPair() {
+    const src = '../assets/sprites/env/pillar.png';
+    const pillarHeight = state.height * .76;
+    const image = await loadImage(src);
+    const pillarWidth = pillarHeight * image.width / image.height;
+    await addProjectAsset(src, { name: 'Left project pillar', x: pillarWidth * .48, y: state.height * .53, w: pillarWidth, h: pillarHeight });
+    await addProjectAsset(src, { name: 'Right project pillar', x: state.width - pillarWidth * .48, y: state.height * .53, w: pillarWidth, h: pillarHeight });
+  }
+
+  function renderAssetGrid() {
+    const grid = $('assetGrid');
+    PROJECT_ASSETS.forEach(src => {
+      const button = document.createElement('button'); button.className = 'asset-card'; button.title = `Add ${src}`;
+      const image = document.createElement('img'); image.src = src; image.alt = '';
+      const label = document.createElement('span'); label.textContent = src.split('/').pop().replace(/\.[^.]+$/, '');
+      button.append(image, label); button.onclick = () => addProjectAsset(src); grid.append(button);
+    });
+  }
+
+  function addText() {
+    const layer = { id: uid(), kind: 'text', name: 'Title', text: 'NEO NYKE', color: '#b8f4ff', fontSize: Math.round(state.height * .12), x: state.width / 2, y: state.height / 2, w: state.width * .7, h: state.height * .16, rotation: 0, opacity: 1, visible: true, locked: false };
+    state.layers.push(layer); state.selectedId = layer.id; pushHistory(); renderAll();
+  }
+  function addTint() {
+    const layer = { id: uid(), kind: 'rect', name: 'Tint panel', color: '#07131f', x: state.width / 2, y: state.height / 2, w: state.width * .7, h: state.height * .28, rotation: 0, opacity: .58, visible: true, locked: false };
+    state.layers.push(layer); state.selectedId = layer.id; pushHistory(); renderAll();
+  }
+  function duplicate() {
+    const layer = selected(); if (!layer) return;
+    const copy = structuredClone(layer); copy.id = uid(); copy.name += ' copy'; copy.x += 24; copy.y += 24; state.layers.push(copy); state.selectedId = copy.id; pushHistory(); renderAll();
+  }
+  function deleteSelected() {
+    const index = state.layers.findIndex(l => l.id === state.selectedId); if (index < 0) return;
+    state.layers.splice(index, 1); state.selectedId = state.layers.at(Math.min(index, state.layers.length - 1))?.id || null; pushHistory(); renderAll();
+  }
+  function moveLayer(delta) {
+    const index = state.layers.findIndex(l => l.id === state.selectedId); const next = clamp(index + delta, 0, state.layers.length - 1);
+    if (index < 0 || index === next) return; const [layer] = state.layers.splice(index, 1); state.layers.splice(next, 0, layer); pushHistory(); renderAll();
+  }
+
+  function coverLayer() {
+    const layer = selected(); if (!layer) return;
+    const ratio = layer.w / layer.h; const docRatio = state.width / state.height;
+    if (ratio > docRatio) { layer.h = state.height; layer.w = state.height * ratio; } else { layer.w = state.width; layer.h = state.width / ratio; }
+    layer.x = state.width / 2; layer.y = state.height / 2; pushHistory(); renderAll();
+  }
+
+  function setDocumentSize(width, height) {
+    const oldW = state.width, oldH = state.height; state.width = clamp(Math.round(width), 64, 8192); state.height = clamp(Math.round(height), 64, 8192);
+    const sx = state.width / oldW, sy = state.height / oldH;
+    state.layers.forEach(layer => { layer.x *= sx; layer.y *= sy; layer.w *= sx; layer.h *= sy; if (layer.kind === 'text') layer.fontSize *= sy; });
+    syncCanvasSize(); pushHistory(); renderAll(); fitCanvas();
+  }
+
+  async function exportPng() {
+    await ensureImages();
+    const out = document.createElement('canvas'); out.width = state.width; out.height = state.height;
+    renderCanvas(out.getContext('2d'), false);
+    const link = document.createElement('a'); link.download = `neo-nyke-itch-${state.width}x${state.height}.png`; link.href = out.toDataURL('image/png'); link.click();
+  }
+  function saveProject() {
+    const blob = new Blob([JSON.stringify(JSON.parse(snapshot()), null, 2)], { type: 'application/json' });
+    const link = document.createElement('a'); link.download = 'neo-nyke-itch-project.json'; link.href = URL.createObjectURL(blob); link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 500);
+  }
+
+  $('addImageBtn').onclick = () => $('imageInput').click(); $('imageInput').onchange = event => addImages([...event.target.files]);
+  $('addTextBtn').onclick = addText; $('addTintBtn').onclick = addTint; $('duplicateBtn').onclick = duplicate; $('addPillarPairBtn').onclick = addPillarPair; $('deleteBtn').onclick = deleteSelected;
+  $('layerUpBtn').onclick = () => moveLayer(1); $('layerDownBtn').onclick = () => moveLayer(-1);
+  $('undoBtn').onclick = undo; $('redoBtn').onclick = redo; $('resetBtn').onclick = () => resetArtwork(); $('exportBtn').onclick = exportPng;
+  $('fitBtn').onclick = fitCanvas; $('zoomInBtn').onclick = () => { state.zoom = clamp(state.zoom * 1.2, .05, 4); applyZoom(); }; $('zoomOutBtn').onclick = () => { state.zoom = clamp(state.zoom / 1.2, .05, 4); applyZoom(); };
+  $('saveProjectBtn').onclick = saveProject; $('loadProjectBtn').onclick = () => $('projectInput').click();
+  $('projectInput').onchange = async event => { const file = event.target.files[0]; if (!file) return; await restore(await file.text()); pushHistory(); fitCanvas(); };
+  $('coverBtn').onclick = coverLayer; $('centerBtn').onclick = () => { const layer = selected(); if (!layer) return; layer.x = state.width / 2; layer.y = state.height / 2; pushHistory(); renderAll(); };
+  document.querySelectorAll('.preset').forEach(button => button.onclick = () => setDocumentSize(+button.dataset.w, +button.dataset.h));
+  $('docWidth').onchange = () => setDocumentSize(+$('docWidth').value, state.height); $('docHeight').onchange = () => setDocumentSize(state.width, +$('docHeight').value);
+
+  const binds = {
+    layerName: ['name', v => v], propX: ['x', Number], propY: ['y', Number], propW: ['w', v => Math.max(1, Number(v))], propH: ['h', v => Math.max(1, Number(v))],
+    propRotation: ['rotation', Number], propOpacity: ['opacity', Number], propColor: ['color', v => v], layerText: ['text', v => v], propFontSize: ['fontSize', v => Math.max(4, Number(v))]
+  };
+  Object.entries(binds).forEach(([id, [key, parse]]) => {
+    $(id).addEventListener('input', event => { const layer = selected(); if (!layer) return; layer[key] = parse(event.target.value); renderCanvas(); renderProperties(); renderLayerList(); });
+    $(id).addEventListener('change', () => pushHistory());
+  });
+
+  window.addEventListener('keydown', event => {
+    const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && !typing) { event.preventDefault(); duplicate(); return; }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !typing) { event.preventDefault(); deleteSelected(); return; }
+    if (!typing && selected() && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
+      event.preventDefault(); const amount = event.shiftKey ? 10 : 1; const layer = selected();
+      if (event.key === 'ArrowLeft') layer.x -= amount; if (event.key === 'ArrowRight') layer.x += amount; if (event.key === 'ArrowUp') layer.y -= amount; if (event.key === 'ArrowDown') layer.y += amount;
+      pushHistory(); renderAll();
+    }
+  });
+  window.addEventListener('resize', fitCanvas);
+
+  (async function init() {
+    renderAssetGrid();
+    let saved = null;
+    try { saved = localStorage.getItem('neoNykeItchEditor'); } catch (_) {}
+    if (saved) {
+      try { await restore(saved); history.push(snapshot()); historyIndex = 0; updateUndoButtons(); fitCanvas(); return; } catch (_) {}
+    }
+    await resetArtwork(true);
+  })();
+})();
+</script>
+</body>
+</html>
