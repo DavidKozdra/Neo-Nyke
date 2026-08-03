@@ -1,4 +1,7 @@
 // entities.js — standalone IIFE. Sprite atlas, player/enemy drawing.
+  const ACTOR_HIT_FLASH_MS = 110;
+  const actorHitFeedback = new WeakMap();
+
   function buildSpriteAtlas() {
     const entries = [];
     Object.keys(Neo.SPRITE_DEFS).forEach(key => {
@@ -94,7 +97,16 @@
       });
       atlasX += width + GUTTER;
     });
-    return { canvas: canvasEl, frames };
+    const flashCanvas = document.createElement('canvas');
+    flashCanvas.width = canvasEl.width;
+    flashCanvas.height = canvasEl.height;
+    const flashCtx = flashCanvas.getContext('2d');
+    flashCtx.imageSmoothingEnabled = false;
+    flashCtx.drawImage(canvasEl, 0, 0);
+    flashCtx.globalCompositeOperation = 'source-in';
+    flashCtx.fillStyle = '#ffffff';
+    flashCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
+    return { canvas: canvasEl, flashCanvas, frames };
   }
 
   function getEnemySpriteKey(enemy) {
@@ -319,6 +331,38 @@
     return 1 - Neo.clamp(remaining / Math.max(0.01, total), 0, 1);
   }
 
+  // HP loss is a more reliable hit signal than invulnerability, which is also
+  // used by dashes and defensive moves. Keeping this render-side means every
+  // damage source, including network snapshots, gets the same brief response.
+  function isActorHitFlashActive(actor) {
+    if (!actor) return false;
+    const hp = Number(actor.hp);
+    if (!Number.isFinite(hp)) return false;
+    const now = performance.now();
+    const feedback = actorHitFeedback.get(actor) || {
+      hp,
+      until: 0,
+      combatFlashUntil: 0,
+    };
+    if (window.NeoSettings?.getAccess?.()?.reduceFlash) {
+      feedback.hp = hp;
+      feedback.until = 0;
+      actorHitFeedback.set(actor, feedback);
+      return false;
+    }
+    if (hp < feedback.hp) feedback.until = now + ACTOR_HIT_FLASH_MS;
+    if (actor === Neo.player) {
+      const combatFlashUntil = Number(Neo.lowHealthHitFlashUntil || 0);
+      if (combatFlashUntil > Date.now() && combatFlashUntil > feedback.combatFlashUntil) {
+        feedback.until = Math.max(feedback.until, now + ACTOR_HIT_FLASH_MS);
+        feedback.combatFlashUntil = combatFlashUntil;
+      }
+    }
+    feedback.hp = hp;
+    actorHitFeedback.set(actor, feedback);
+    return now < feedback.until;
+  }
+
   function drawWarpPreview() {
     if (Neo.getEquippedMove?.('dash') !== 'warp' || !Neo.getWarpLandingPoint) return;
     const landing = Neo.getWarpLandingPoint();
@@ -431,7 +475,7 @@
       if (facing < 0) Neo.ctx.scale(-1, 1);
       Neo.ctx.imageSmoothingEnabled = false;
       Neo.ctx.drawImage(
-        atlas.canvas,
+        options.hitFlash && atlas.flashCanvas ? atlas.flashCanvas : atlas.canvas,
         armFrame.x, armFrame.y, armFrame.w, armFrame.h,
         -pivotX, -pivotY, renderSize, renderSize * (sourceH / sourceW),
       );
@@ -627,6 +671,7 @@
       shadowColor = null,
       shadowBlur = 0,
       tint = null,
+      hitFlash = false,
       spriteOffsetX = 0,
       spriteOffsetY = 0,
       scaleX = 1,
@@ -653,7 +698,7 @@
     }
     Neo.ctx.imageSmoothingEnabled = false;
     Neo.ctx.drawImage(
-      atlas.canvas,
+      hitFlash && atlas.flashCanvas ? atlas.flashCanvas : atlas.canvas,
       frame.x,
       frame.y,
       frame.w,
@@ -1254,6 +1299,7 @@
         attackProgress: enemyAttackProgress,
         seedKey: spriteKey,
       };
+      const hitFlash = isActorHitFlashActive(enemy);
       const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation, spriteKey);
       const enemyFrameKey = getActorSpriteFrameKey(spriteKey, enemy, enemyAnimation);
       // The Queen physically convulses while charging her death blast — jitter
@@ -1272,7 +1318,8 @@
         flipX: facing < 0,
         shadowColor: enemy.type === 'mooggy' ? 'rgba(255,30,52,0.55)' : enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
         shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : denseEnemyFx ? 0 : 4,
-        tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
+        tint: hitFlash ? null : flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
+        hitFlash,
         ...enemyAnim,
       });
       // Mooggy's claw swing is a single swingTime timer (like the player's
@@ -1735,6 +1782,7 @@
     // half of its duration); after the midpoint they fade back into view.
     const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
       && (Neo.isPlayerHidden?.(Neo.player) ?? true);
+    const hitFlash = isActorHitFlashActive(Neo.player);
     drawActorStatusRings(Neo.player);
     drawWarpPreview();
     drawActorOverhealBarrier(Neo.player);
@@ -1744,7 +1792,8 @@
       flipX: facing < 0,
       shadowColor,
       shadowBlur: godTime > 0 ? 18 : 6,
-      tint: godTime > 0 ? 'rgba(255,245,220,0.6)' : null,
+      tint: !hitFlash && godTime > 0 ? 'rgba(255,245,220,0.6)' : null,
+      hitFlash,
       animation: {
         maxSpeed: Neo.player.mooggyZoomiesTime > 0 ? 640 : Neo.player.princessFlightTime > 0 ? 420 : 260,
         stepRate: Neo.player.mooggyZoomiesTime > 0 ? 11 : 7.5,
@@ -1766,6 +1815,7 @@
       hidden: shouldHideActorAimArm(getPlayerSpriteKey(), playerActionState.action),
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
+      hitFlash,
     });
     drawPlayerWeaponAnimation(Neo.player, Neo.getEquippedWeapon(), aimAngle, facing, {
       godActive: godTime > 0,
@@ -1915,6 +1965,7 @@
     drawActorStatusRings(pn);
     drawActorOverhealBarrier(pn);
     const slotGodTime = getActorGodTime(pn);
+    const hitFlash = isActorHitFlashActive(pn);
     drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
       alpha: pn.inv > 0 ? 0.55 : 1,
       flipX: facing < 0,
@@ -1922,7 +1973,8 @@
       // hero, rather than reading as an ordinary player.
       shadowColor: slotGodTime > 0 ? 'rgba(255,248,210,0.65)' : hexToRgba(tintColor, 0.45),
       shadowBlur: slotGodTime > 0 ? 18 : 10,
-      tint: slotGodTime > 0 ? 'rgba(255,245,220,0.6)' : hexToRgba(tintColor, 0.25),
+      tint: hitFlash ? null : slotGodTime > 0 ? 'rgba(255,245,220,0.6)' : hexToRgba(tintColor, 0.25),
+      hitFlash,
       animation: {
         maxSpeed: 260,
         stepRate: 7.5,
@@ -1941,6 +1993,7 @@
     drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
       hidden: shouldHideActorAimArm(spriteKey, slotActionState.action),
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
+      hitFlash,
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
     Neo.ctx.restore();
@@ -2298,6 +2351,7 @@
   Neo.shouldHideActorAimArm = shouldHideActorAimArm;
   Neo.getActorSpriteActionState = getActorSpriteActionState;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
+  Neo.isActorHitFlashActive = isActorHitFlashActive;
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;
   Neo.getActorSpriteScale = getActorSpriteScale;
   Neo.getActorGodTime = getActorGodTime;
