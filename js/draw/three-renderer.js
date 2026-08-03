@@ -157,8 +157,8 @@ function makeCanvasTexture(canvasEl) {
 }
 
 // Rasterize one atlas frame (sprite pixel-art) into its own texture.
-function getSpriteTexture(spriteKey, flip = false) {
-  const cacheKey = `${spriteKey}|${flip ? 1 : 0}`;
+function getSpriteTexture(spriteKey, flip = false, hitFlash = false) {
+  const cacheKey = `${spriteKey}|${flip ? 1 : 0}|${hitFlash ? 'hit' : 'normal'}`;
   const cached = spriteTextureCache.get(cacheKey);
   if (cached) return cached;
   const atlas = Neo.SPRITE_ATLAS;
@@ -175,7 +175,10 @@ function getSpriteTexture(spriteKey, flip = false) {
     g.translate(frame.w, 0);
     g.scale(-1, 1);
   }
-  g.drawImage(atlas.canvas, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+  g.drawImage(
+    hitFlash && atlas.flashCanvas ? atlas.flashCanvas : atlas.canvas,
+    frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h,
+  );
   const texture = makeCanvasTexture(canvasEl);
   texture.userData = { renderScale: Number(frame.renderScale || 1), aspect: frame.w / frame.h };
   spriteTextureCache.set(cacheKey, texture);
@@ -1328,7 +1331,7 @@ function syncMooggyAura(group, enemy) {
 function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
   const sprite = group.getObjectByName('body');
   if (!sprite) return;
-  const texture = getSpriteTexture(spriteKey, flip);
+  const texture = getSpriteTexture(spriteKey, flip, !!opts.hitFlash);
   if (texture && sprite.material.map !== texture) {
     sprite.material.map = texture;
     sprite.material.needsUpdate = true;
@@ -1343,34 +1346,32 @@ function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
   if (sprite.material.color.getHex() !== tint) sprite.material.color.setHex(tint);
 }
 
-// Invulnerability is shared by damage recovery, dashes, and defensive moves,
-// so it cannot tell the renderer whether an actor was actually hurt. Track HP
-// loss independently to keep dash i-frames from producing a false red blink.
+// Keep a local fallback for startup, while normally sharing the 2D renderer's
+// HP-loss tracker so switching camera modes cannot swallow an active flash.
 function isActorDamageFlashActive(actor) {
-  if (!actor || window.NeoSettings?.getAccess?.()?.reduceFlash) return false;
+  if (typeof Neo.isActorHitFlashActive === 'function') return Neo.isActorHitFlashActive(actor);
+  if (!actor) return false;
   const hp = Number(actor.hp);
   if (!Number.isFinite(hp)) return false;
   const now = performance.now();
   const feedback = actorDamageFeedback.get(actor) || { hp, until: 0 };
-  if (hp < feedback.hp) {
-    feedback.until = now + Math.max(0, Number(Neo.LOW_HEALTH_HIT_FLASH_MS || 700));
+  if (window.NeoSettings?.getAccess?.()?.reduceFlash) {
+    feedback.hp = hp;
+    feedback.until = 0;
+    actorDamageFeedback.set(actor, feedback);
+    return false;
   }
-  // Local damage can be followed by an immediate heal before the next render;
-  // the combat-side timestamp still preserves the hit feedback in that case.
-  if (actor === Neo.player) {
-    const remaining = Number(Neo.lowHealthHitFlashUntil || 0) - Date.now();
-    if (remaining > 0) feedback.until = Math.max(feedback.until, now + remaining);
-  }
+  if (hp < feedback.hp) feedback.until = now + 110;
   feedback.hp = hp;
   actorDamageFeedback.set(actor, feedback);
-  return now < feedback.until && Math.floor(Neo.frameId / 3) % 2 === 0;
+  return now < feedback.until;
 }
 
 function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const arm = group.getObjectByName('arm');
   const weapon3d = group.getObjectByName('weapon-3d');
   if (!arm) return;
-  const texture = getSpriteTexture(`${spriteKey}:arm`, flip);
+  const texture = getSpriteTexture(`${spriteKey}:arm`, flip, !!options.hitFlash);
   if (!texture || options.hidden) {
     arm.visible = false;
     if (weapon3d) weapon3d.visible = false;
@@ -1844,8 +1845,8 @@ function syncPlayer() {
   const capeActive = Number(p?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
     && (Neo.isPlayerHidden?.(p) ?? true);
   let alpha = capeActive ? 0.34 : 1;
-  let tint = godTime > 0 ? 0xfff5dc
-    : isActorDamageFlashActive(p) ? 0xff9999 : 0xffffff;
+  const hitFlash = !anim && !networkDowned && isActorDamageFlashActive(p);
+  let tint = godTime > 0 && !hitFlash ? 0xfff5dc : 0xffffff;
   let fallEase = 0;
   if (anim) {
     const t = Neo.clamp?.(anim.timer / anim.duration, 0, 1) ?? Math.max(0, Math.min(1, anim.timer / anim.duration));
@@ -1859,7 +1860,9 @@ function syncPlayer() {
     playerDeathPool.visible = false;
   }
   const actorScale = Number(Neo.getActorSpriteScale?.(p) || 1);
-  updateActorSprite(playerSprite, frameKey, (p.r || 14) * actorScale, flip, { ...bob, alpha, tint });
+  updateActorSprite(playerSprite, frameKey, (p.r || 14) * actorScale, flip, {
+    ...bob, alpha, tint, hitFlash,
+  });
   const body = playerSprite.getObjectByName('body');
   if (body) {
     body.renderOrder = 6;
@@ -1876,6 +1879,7 @@ function syncPlayer() {
     recoil,
     attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
     alpha,
+    hitFlash,
   });
   if (!networkDowned) {
     syncActorStatus(playerSprite, p, p.r || 14, true);
@@ -1940,9 +1944,8 @@ function syncOtherPlayers() {
       if (Number(actor.dashTime || 0) > 0) {
         bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
       }
-      const tint = downed
-        ? 0x641b2a
-        : isActorDamageFlashActive(actor) ? 0xff9999 : 0xffffff;
+      const hitFlash = !downed && isActorDamageFlashActive(actor);
+      const tint = downed ? 0x641b2a : 0xffffff;
       group.visible = true;
       group.position.set(actor.x, 0, actor.y);
       const actorScale = Number(Neo.getActorSpriteScale?.(actor) || 1);
@@ -1952,7 +1955,8 @@ function syncOtherPlayers() {
       updateActorSprite(group, frameKey, (actor.r || 14) * actorScale, flip, {
         ...bob,
         alpha: capeActive ? 0.34 : 1,
-        tint: actorGodTime > 0 ? 0xfff5dc : tint,
+        tint: actorGodTime > 0 && !hitFlash ? 0xfff5dc : tint,
+        hitFlash,
       });
       const body = group.getObjectByName('body');
       if (body) {
@@ -1965,6 +1969,7 @@ function syncOtherPlayers() {
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
+        hitFlash,
       });
       if (!downed) {
         syncActorStatus(group, actor, actor.r || 14, true);
@@ -2071,6 +2076,7 @@ function syncEnemies() {
       const bob = walkBob(enemy, enemy.x);
       const stunned = Number(enemy.stun || 0) > 0;
       const tint = stunned ? 0xaad4ff : enemy.elite ? 0xffe2a8 : 0xffffff;
+      const hitFlash = isActorDamageFlashActive(enemy);
       const attackRemaining = Math.max(Number(enemy.swingTime || 0), Number(enemy.windup || 0), Number(enemy.attackAnimT || 0));
       const attackProgress = attackRemaining > 0 ? Math.max(0.001, 1 - Math.min(1, attackRemaining / 0.5)) : 0;
       const animation = {
@@ -2085,8 +2091,10 @@ function syncEnemies() {
       const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, enemy, animation) || baseKey;
       const transforming = Number(enemy.transformAnimT || 0) > 0;
       const transformPulse = transforming ? 1.1 + Math.sin(performance.now() / 60) * 0.13 * Number(enemy.transformAnimT || 0) * 2 : 1;
-      const transformTint = transforming && Math.floor(performance.now() / 80) % 2 === 0 ? 0xffffb4 : tint;
-      updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, { ...bob, tint: transformTint });
+      const transformTint = !hitFlash && transforming && Math.floor(performance.now() / 80) % 2 === 0 ? 0xffffb4 : tint;
+      updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, {
+        ...bob, tint: transformTint, hitFlash,
+      });
       const groundShadow = group.getObjectByName('shadow');
       if (groundShadow) groundShadow.position.y = 0.6 - jumpHeight;
       syncEnemyWindup(group, enemy);

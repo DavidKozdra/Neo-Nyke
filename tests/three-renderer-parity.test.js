@@ -20,13 +20,18 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDeathPool(anim, size, fallEase)');
   });
 
-  test('uses actual health loss instead of dash invulnerability for the red damage flash', () => {
+  test('uses actual health loss for a shared white sprite flash in 2D and 3D', () => {
+    const entities = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
     expect(renderer).toContain('const actorDamageFeedback = new WeakMap();');
     expect(renderer).toContain('if (hp < feedback.hp)');
-    expect(renderer).toContain('isActorDamageFlashActive(p) ? 0xff9999 : 0xffffff');
-    expect(renderer).toContain('isActorDamageFlashActive(actor) ? 0xff9999 : 0xffffff');
-    expect(renderer).not.toMatch(/p\.inv > 0[^\n]*0xff9999/);
-    expect(renderer).not.toMatch(/actor\.inv > 0[^\n]*0xff9999/);
+    expect(renderer).toContain("getSpriteTexture(spriteKey, flip, !!opts.hitFlash)");
+    expect(renderer).toContain('hitFlash && atlas.flashCanvas ? atlas.flashCanvas : atlas.canvas');
+    expect(renderer).toContain('const hitFlash = isActorDamageFlashActive(enemy);');
+    expect(entities).toContain('const actorHitFeedback = new WeakMap();');
+    expect(entities).toContain('if (hp < feedback.hp) feedback.until = now + ACTOR_HIT_FLASH_MS;');
+    expect(entities).toContain('return { canvas: canvasEl, flashCanvas, frames };');
+    expect(entities).toContain('const hitFlash = isActorHitFlashActive(enemy);');
+    expect(renderer).not.toMatch(/\.inv > 0[^\n]*hitFlash/);
   });
 
   test('renders network peers through the normal first- and third-person scene', () => {
