@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEO NYKE — Portrait Exporter</title>
+  <style>
+    :root { color-scheme: dark; --bg:#06090d; --panel:#0d131b; --line:#263747; --cyan:#5ce7f2; --text:#e0edf2; --muted:#8197a3; font-family:Inter,system-ui,sans-serif; }
+    * { box-sizing:border-box; } html,body { height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--text); }
+    button,input,select { font:inherit; color:inherit; } button,select,input[type=number],input[type=text] { min-height:34px; border:1px solid var(--line); border-radius:6px; background:#111a24; }
+    button { padding:7px 10px; cursor:pointer; } button:hover { border-color:var(--cyan); } button.primary { background:var(--cyan); border-color:var(--cyan); color:#041014; font-weight:900; }
+    input[type=range] { width:100%; accent-color:var(--cyan); } input[type=color] { width:100%; height:34px; background:#111a24; border:1px solid var(--line); border-radius:6px; }
+    .app { height:100%; display:grid; grid-template-rows:54px minmax(0,1fr); }
+    header { display:flex; align-items:center; gap:8px; padding:9px 13px; border-bottom:1px solid var(--line); background:#090e14; }
+    .brand { color:var(--cyan); font-weight:900; letter-spacing:.14em; } header .spacer { flex:1; } header a { color:var(--muted); font-size:12px; }
+    main { min-height:0; display:grid; grid-template-columns:255px minmax(0,1fr) 290px; }
+    aside { min-height:0; overflow:auto; background:var(--panel); } aside:first-child { border-right:1px solid var(--line); } aside:last-child { border-left:1px solid var(--line); }
+    section { padding:14px; border-bottom:1px solid var(--line); } h2 { margin:0 0 11px; color:#a9c0ca; font-size:11px; letter-spacing:.16em; text-transform:uppercase; }
+    .characters { display:grid; gap:6px; }
+    .character { width:100%; display:grid; grid-template-columns:38px minmax(0,1fr); align-items:center; gap:9px; text-align:left; }
+    .character.active { border-color:var(--cyan); background:#14232b; } .character img { width:32px; height:32px; object-fit:none; object-position:left top; image-rendering:pixelated; }
+    .character span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .stage { position:relative; min-width:0; min-height:0; display:grid; place-items:center; overflow:hidden; background-color:#090d12; background-image:linear-gradient(45deg,#101821 25%,transparent 25%),linear-gradient(-45deg,#101821 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#101821 75%),linear-gradient(-45deg,transparent 75%,#101821 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
+    #portrait { width:min(70vmin,680px); height:min(70vmin,680px); max-width:calc(100% - 54px); max-height:calc(100% - 54px); object-fit:contain; image-rendering:pixelated; box-shadow:0 24px 80px #000b; touch-action:none; }
+    .status { position:absolute; left:12px; bottom:10px; padding:5px 8px; border:1px solid #263747aa; border-radius:5px; color:var(--muted); background:#080d13dd; font-size:10px; }
+    .field { margin-bottom:11px; } .field label { display:flex; justify-content:space-between; margin-bottom:5px; color:var(--muted); font-size:11px; } .field output { color:var(--text); }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .two input,.two select { width:100%; padding:6px 8px; }
+    .buttons { display:grid; grid-template-columns:1fr 1fr; gap:7px; } .buttons .wide { grid-column:1/-1; }
+    .frames { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; max-height:250px; overflow:auto; }
+    .frame { aspect-ratio:1; padding:2px; display:grid; place-items:center; position:relative; } .frame.active { border-color:var(--cyan); background:#17303a; }
+    .frame canvas { width:100%; height:100%; image-rendering:pixelated; } .frame small { position:absolute; right:2px; bottom:1px; color:#9fc2cd; font-size:7px; text-shadow:0 1px 2px #000; }
+    .hint { margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.45; }
+    @media(max-width:950px){ main{grid-template-columns:205px minmax(0,1fr) 235px}.brand{font-size:12px} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">NEO NYKE / PORTRAITS</div>
+    <span class="spacer"></span>
+    <a href="itchEditor.html">Open itch editor</a>
+    <button id="exportCurrent" class="primary">Export portrait</button>
+    <button id="exportAll">Export all characters</button>
+  </header>
+  <main>
+    <aside>
+      <section><h2>Characters</h2><div id="characters" class="characters"></div></section>
+      <section><h2>Animation frames</h2><div id="frames" class="frames"></div><p class="hint">Choose any frame from the original sprite sheet. Empty cells are dimmed.</p></section>
+    </aside>
+    <div id="stage" class="stage">
+      <canvas id="portrait" width="512" height="512"></canvas>
+      <div id="status" class="status"></div>
+    </div>
+    <aside>
+      <section>
+        <h2>Portrait</h2>
+        <div class="two">
+          <div class="field"><label for="width">Width</label><input id="width" type="number" min="64" max="2048" value="512"></div>
+          <div class="field"><label for="height">Height</label><input id="height" type="number" min="64" max="2048" value="512"></div>
+        </div>
+        <div class="buttons"><button class="preset" data-w="512" data-h="512">Square</button><button class="preset" data-w="630" data-h="500">630 × 500</button></div>
+      </section>
+      <section>
+        <h2>Character placement</h2>
+        <div class="field"><label for="scale">Scale <output id="scaleValue"></output></label><input id="scale" type="range" min="2" max="24" step=".25"></div>
+        <div class="two">
+          <div class="field"><label for="x">X</label><input id="x" type="number"></div>
+          <div class="field"><label for="y">Y</label><input id="y" type="number"></div>
+        </div>
+        <div class="field"><label for="shadow">Shadow <output id="shadowValue"></output></label><input id="shadow" type="range" min="0" max="1" step=".01"></div>
+        <div class="buttons"><button id="center">Center</button><button id="resetCharacter">Reset pose</button></div>
+        <p class="hint">Drag directly on the portrait. Mouse wheel changes character scale.</p>
+      </section>
+      <section>
+        <h2>Presentation</h2>
+        <div class="field"><label for="name">Display name</label><input id="name" type="text" style="width:100%;padding:6px 8px"></div>
+        <div class="field"><label><span>Show name</span><input id="showName" type="checkbox" checked></label></div>
+        <div class="field"><label for="accent">Accent</label><input id="accent" type="color" value="#5ce7f2"></div>
+        <div class="field"><label for="backdrop">Backdrop</label><select id="backdrop"><option value="dungeon">Dungeon artwork</option><option value="dark">Dark gradient</option><option value="transparent">Transparent</option></select></div>
+      </section>
+    </aside>
+  </main>
+</div>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const canvas = $('portrait'); const ctx = canvas.getContext('2d');
+  const BG_SRC = '../assets/itch/neo-nyke-itch-background.png';
+  const defs = [
+    {id:'gelleh',name:'Gelleh',src:'../assets/sprites/chars/Gelleh.png',cell:24},
+    {id:'metao',name:'Metao',src:'../assets/sprites/chars/Metao.png',cell:24},
+    {id:'mooggy',name:'Mooggy',src:'../assets/sprites/chars/Mooggy.png',cell:24},
+    {id:'sarge',name:'Sarge',src:'../assets/sprites/chars/Sarge.png',cell:24},
+    {id:'thorn-knight',name:'Thorn Knight',src:'../assets/sprites/chars/Thorn Knight.png',cell:24},
+    {id:'turtle-boy',name:'Turtle Boy',src:'../assets/sprites/chars/TurtleBoy.png',cell:32},
+    {id:'princess',name:'Princess',src:'../assets/sprites/chars/princess.png',cell:24},
+    {id:'turtle-boy-alt',name:'Turtle Boy Alt',src:'../assets/sprites/chars/turtle_boy.png',cell:32}
+  ];
+  const images = new Map(); const settings = new Map();
+  let current = defs[0]; let width = 512, height = 512, drag = null;
+  const image = src => new Promise((resolve,reject)=>{ if(images.has(src)) return resolve(images.get(src)); const img=new Image(); img.onload=()=>{images.set(src,img);resolve(img)}; img.onerror=reject; img.src=src; });
+  const defaults = def => ({frame:0,x:width/2,y:height*.47,scale:def.cell===32?10:13,shadow:.7,name:def.name,showName:true,accent:'#5ce7f2',backdrop:'dungeon'});
+  const options = () => { if(!settings.has(current.id)) settings.set(current.id,defaults(current)); return settings.get(current.id); };
+  const frameGrid = def => { const img=images.get(def.src); return {cols:Math.floor(img.width/def.cell),rows:Math.floor(img.height/def.cell)}; };
+  const sourceRect = def => { const grid=frameGrid(def), frame=options().frame; return {x:(frame%grid.cols)*def.cell,y:Math.floor(frame/grid.cols)*def.cell}; };
+
+  async function preload(){ await Promise.all([...defs.map(d=>image(d.src)),image(BG_SRC)]); }
+  function draw(g=ctx, selected=current){
+    const def=selected, opt=settings.get(def.id)||defaults(def); g.clearRect(0,0,width,height); g.imageSmoothingEnabled=false;
+    if(opt.backdrop==='dungeon'){
+      const bg=images.get(BG_SRC), scale=Math.max(width/bg.width,height/bg.height), sw=width/scale,sh=height/scale;
+      g.drawImage(bg,(bg.width-sw)/2,(bg.height-sh)/2,sw,sh,0,0,width,height);
+      const shade=g.createRadialGradient(width/2,height*.38,0,width/2,height*.45,Math.max(width,height)*.72); shade.addColorStop(0,'rgba(4,12,17,.08)');shade.addColorStop(1,'rgba(0,2,5,.88)');g.fillStyle=shade;g.fillRect(0,0,width,height);
+    } else if(opt.backdrop==='dark') { const bg=g.createLinearGradient(0,0,0,height); bg.addColorStop(0,'#172734');bg.addColorStop(1,'#030609');g.fillStyle=bg;g.fillRect(0,0,width,height); }
+    const img=images.get(def.src), src=sourceRectFor(def,opt.frame), size=def.cell*opt.scale;
+    if(opt.shadow>0){g.save();g.globalAlpha=opt.shadow;g.filter=`blur(${Math.max(4,opt.scale*.8)}px)`;g.fillStyle='#000';g.beginPath();g.ellipse(opt.x,opt.y+size*.34,size*.34,size*.12,0,0,Math.PI*2);g.fill();g.restore();}
+    g.drawImage(img,src.x,src.y,def.cell,def.cell,opt.x-size/2,opt.y-size/2,size,size);
+    if(opt.showName){ const font=Math.max(20,Math.round(height*.065));g.textAlign='center';g.textBaseline='bottom';g.font=`900 ${font}px "Arial Black",Impact,sans-serif`;g.lineWidth=Math.max(3,font*.14);g.strokeStyle='#020609';g.strokeText(opt.name,width/2,height*.94);g.fillStyle=opt.accent;g.fillText(opt.name,width/2,height*.94); }
+    g.save();g.strokeStyle=opt.accent;g.globalAlpha=.8;g.lineWidth=Math.max(2,width*.006);g.strokeRect(g.lineWidth/2,g.lineWidth/2,width-g.lineWidth,height-g.lineWidth);g.restore();
+  }
+  function sourceRectFor(def,frame){const grid=frameGrid(def);return{x:(frame%grid.cols)*def.cell,y:Math.floor(frame/grid.cols)*def.cell};}
+  function render(){ draw(); const o=options(); $('scale').value=o.scale;$('scaleValue').value=`${o.scale}×`;$('x').value=Math.round(o.x);$('y').value=Math.round(o.y);$('shadow').value=o.shadow;$('shadowValue').value=`${Math.round(o.shadow*100)}%`;$('name').value=o.name;$('showName').checked=o.showName;$('accent').value=o.accent;$('backdrop').value=o.backdrop;$('status').textContent=`${current.name} · frame ${o.frame+1} · ${width} × ${height}px`; document.querySelectorAll('.character').forEach(b=>b.classList.toggle('active',b.dataset.id===current.id)); document.querySelectorAll('.frame').forEach((b,i)=>b.classList.toggle('active',i===o.frame)); }
+  function buildCharacters(){ const host=$('characters');defs.forEach(def=>{const b=document.createElement('button');b.className='character';b.dataset.id=def.id;b.innerHTML=`<img src="${def.src}" alt=""><span>${def.name}</span>`;b.onclick=()=>{current=def;buildFrames();render()};host.append(b)}); }
+  function buildFrames(){ const host=$('frames');host.innerHTML='';const img=images.get(current.src),grid=frameGrid(current),count=grid.cols*grid.rows;for(let i=0;i<count;i++){const b=document.createElement('button');b.className='frame';const c=document.createElement('canvas');c.width=current.cell;c.height=current.cell;const g=c.getContext('2d');g.imageSmoothingEnabled=false;const s=sourceRectFor(current,i);g.drawImage(img,s.x,s.y,current.cell,current.cell,0,0,current.cell,current.cell);const label=document.createElement('small');label.textContent=i+1;b.append(c,label);b.onclick=()=>{options().frame=i;render()};host.append(b)} }
+  function resize(w,h){const ow=width,oh=height;width=Math.max(64,Math.min(2048,Math.round(w)));height=Math.max(64,Math.min(2048,Math.round(h)));settings.forEach(o=>{o.x*=width/ow;o.y*=height/oh});canvas.width=width;canvas.height=height;$('width').value=width;$('height').value=height;render();}
+  function download(def){current=def;const out=document.createElement('canvas');out.width=width;out.height=height;draw(out.getContext('2d'),def);const a=document.createElement('a');a.download=`neo-nyke-${def.id}-portrait-${width}x${height}.png`;a.href=out.toDataURL('image/png');a.click();}
+  async function exportAll(){const original=current;for(const def of defs){download(def);await new Promise(r=>setTimeout(r,180));}current=original;buildFrames();render();}
+  canvas.onpointerdown=e=>{const r=canvas.getBoundingClientRect(),o=options();drag={dx:(e.clientX-r.left)*width/r.width-o.x,dy:(e.clientY-r.top)*height/r.height-o.y};canvas.setPointerCapture(e.pointerId)};
+  canvas.onpointermove=e=>{if(!drag)return;const r=canvas.getBoundingClientRect(),o=options();o.x=(e.clientX-r.left)*width/r.width-drag.dx;o.y=(e.clientY-r.top)*height/r.height-drag.dy;render()};canvas.onpointerup=()=>drag=null;
+  canvas.onwheel=e=>{e.preventDefault();options().scale=Math.max(2,Math.min(24,options().scale*(e.deltaY<0?1.05:.95)));render()};
+  [['scale','scale',Number],['x','x',Number],['y','y',Number],['shadow','shadow',Number],['name','name',String],['showName','showName',v=>v],['accent','accent',String],['backdrop','backdrop',String]].forEach(([id,key,parse])=>{$(id).oninput=e=>{options()[key]=id==='showName'?e.target.checked:parse(e.target.value);render()}});
+  $('center').onclick=()=>{options().x=width/2;options().y=height*.47;render()};$('resetCharacter').onclick=()=>{settings.set(current.id,defaults(current));render()};
+  $('width').onchange=()=>resize(+$('width').value,height);$('height').onchange=()=>resize(width,+$('height').value);document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>resize(+b.dataset.w,+b.dataset.h));
+  $('exportCurrent').onclick=()=>download(current);$('exportAll').onclick=exportAll;
+  (async()=>{await preload();defs.forEach(d=>settings.set(d.id,defaults(d)));buildCharacters();buildFrames();render()})().catch(error=>{$('status').textContent=`Could not load portraits: ${error.message}`});
+})();
+</script>
+</body>
+</html>

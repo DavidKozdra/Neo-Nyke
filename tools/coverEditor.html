@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEO NYKE — itch.io Cover Editor</title>
+  <style>
+    :root { color-scheme:dark; --bg:#06090d; --panel:#0d131b; --line:#263747; --cyan:#5ce7f2; --text:#e2edf2; --muted:#8397a2; --warn:#ffb45d; font-family:Inter,system-ui,sans-serif; }
+    *{box-sizing:border-box} html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text)} button,input,select{font:inherit;color:inherit} button,input[type=number],select{min-height:34px;border:1px solid var(--line);border-radius:6px;background:#111a24} button{padding:7px 10px;cursor:pointer}button:hover{border-color:var(--cyan)}button.primary{background:var(--cyan);border-color:var(--cyan);color:#041014;font-weight:900}button.danger:hover{border-color:#ee7373;color:#ffaaaa}input[type=range]{width:100%;accent-color:var(--cyan)}
+    .app{height:100%;display:grid;grid-template-rows:54px minmax(0,1fr)}header{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line);background:#090e14}.brand{color:var(--cyan);font-weight:900;letter-spacing:.14em}.spacer{flex:1}header a{color:var(--muted);font-size:12px}
+    main{min-height:0;display:grid;grid-template-columns:255px minmax(0,1fr) 285px}aside{min-height:0;overflow:auto;background:var(--panel)}aside:first-child{border-right:1px solid var(--line)}aside:last-child{border-left:1px solid var(--line)}section{padding:14px;border-bottom:1px solid var(--line)}h2{margin:0 0 11px;color:#a9c0ca;font-size:11px;letter-spacing:.16em;text-transform:uppercase}.hint{margin:8px 0 0;color:var(--muted);font-size:11px;line-height:1.45}
+    .stage{position:relative;min-width:0;min-height:0;display:grid;place-items:center;overflow:hidden;background-color:#090d12;background-image:linear-gradient(45deg,#101821 25%,transparent 25%),linear-gradient(-45deg,#101821 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#101821 75%),linear-gradient(-45deg,transparent 75%,#101821 75%);background-size:24px 24px;background-position:0 0,0 12px,12px -12px,-12px 0}#cover{max-width:calc(100% - 60px);max-height:calc(100% - 60px);object-fit:contain;box-shadow:0 24px 80px #000c;touch-action:none}.status{position:absolute;left:12px;bottom:10px;padding:5px 8px;border:1px solid #263747aa;border-radius:5px;color:var(--muted);background:#080d13df;font-size:10px}.safe-note{position:absolute;right:12px;bottom:10px;color:#7f929d;font-size:10px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.grid .wide{grid-column:1/-1}.characters{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.character{min-width:0;min-height:66px;padding:5px;display:grid;place-items:center;gap:2px}.character img{width:38px;height:38px;object-fit:none;object-position:left top;image-rendering:pixelated}.character span{width:100%;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:8px;white-space:nowrap}
+    .layers{display:grid;gap:6px}.layer{display:grid;grid-template-columns:27px minmax(0,1fr) 27px;align-items:center;gap:5px;padding:5px;border:1px solid transparent;border-radius:6px;background:#0a1017}.layer.selected{border-color:var(--cyan);background:#14242c}.layer button{min-height:27px;padding:2px}.layer-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.layer small{display:block;color:var(--muted);font-size:8px;text-transform:uppercase}
+    .field{margin-bottom:11px}.field label{display:flex;justify-content:space-between;margin-bottom:5px;color:var(--muted);font-size:11px}.field output{color:var(--text)}.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.two input,.two select{width:100%;padding:6px 8px}.warning{display:none;margin-top:9px;padding:8px;border:1px solid #80592e;border-radius:6px;background:#26190b;color:var(--warn);font-size:11px}.warning.show{display:block}
+    @media(max-width:950px){main{grid-template-columns:210px minmax(0,1fr) 235px}.brand{font-size:12px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header><div class="brand">NEO NYKE / ITCH COVER</div><span class="spacer"></span><a href="portraitEditor.html">Portraits</a><a href="itchEditor.html">Full editor</a><button id="reset">Reset</button><button id="export" class="primary">Export PNG</button></header>
+  <main>
+    <aside>
+      <section>
+        <h2>Add project art</h2>
+        <div class="grid"><button id="addTitle">Title artwork</button><button id="addTint">Dark panel</button><button id="upload">Upload image</button><button id="duplicate">Duplicate</button></div>
+        <input id="file" type="file" accept="image/*" hidden>
+      </section>
+      <section><h2>Characters</h2><div id="characters" class="characters"></div><p class="hint">Uses the first frame from each existing character sprite sheet.</p></section>
+      <section><h2>Layers</h2><div id="layers" class="layers"></div><div class="grid" style="margin-top:8px"><button id="up">Move up</button><button id="down">Move down</button><button id="remove" class="wide danger">Delete selected</button></div></section>
+    </aside>
+    <div id="stage" class="stage"><canvas id="cover" width="630" height="500"></canvas><div id="status" class="status"></div><div class="safe-note">5:4 cover preview</div></div>
+    <aside>
+      <section>
+        <h2>Output size</h2>
+        <div class="grid"><button class="preset" data-w="630" data-h="500">Recommended<br>630 × 500</button><button class="preset" data-w="315" data-h="250">Minimum<br>315 × 250</button></div>
+        <div class="two" style="margin-top:10px"><div class="field"><label for="width">Width</label><input id="width" type="number" min="1" max="4096" value="630"></div><div class="field"><label for="height">Height</label><input id="height" type="number" min="1" max="4096" value="500"></div></div>
+        <div id="warning" class="warning">itch.io requires at least 315 × 250 pixels.</div>
+      </section>
+      <section>
+        <h2>Selected layer</h2>
+        <div id="empty" class="hint">Select a layer on the canvas or in the list.</div>
+        <div id="properties" hidden>
+          <div class="two"><div class="field"><label for="x">X</label><input id="x" type="number"></div><div class="field"><label for="y">Y</label><input id="y" type="number"></div></div>
+          <div class="two"><div class="field"><label for="w">Width</label><input id="w" type="number" min="1"></div><div class="field"><label for="h">Height</label><input id="h" type="number" min="1"></div></div>
+          <div class="field"><label for="rotation">Rotation <output id="rotationValue"></output></label><input id="rotation" type="range" min="-180" max="180" step="1"></div>
+          <div class="field"><label for="opacity">Opacity <output id="opacityValue"></output></label><input id="opacity" type="range" min="0" max="1" step=".01"></div>
+          <div class="grid"><button id="center">Center</button><button id="coverLayer">Cover canvas</button></div>
+          <p class="hint">Drag to move. Mouse wheel scales. Shift + wheel rotates.</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+<script>
+(()=>{
+  'use strict';
+  const $=id=>document.getElementById(id),canvas=$('cover'),ctx=canvas.getContext('2d'),images=new Map();
+  const BG='../assets/itch/neo-nyke-itch-background.png',TITLE='../assets/icons/NeoNykeTitle.png';
+  const characters=[
+    ['Gelleh','../assets/sprites/chars/Gelleh.png',24],['Metao','../assets/sprites/chars/Metao.png',24],['Mooggy','../assets/sprites/chars/Mooggy.png',24],['Sarge','../assets/sprites/chars/Sarge.png',24],
+    ['Thorn Knight','../assets/sprites/chars/Thorn Knight.png',24],['Turtle Boy','../assets/sprites/chars/TurtleBoy.png',32],['Princess','../assets/sprites/chars/princess.png',24],['Turtle Boy Alt','../assets/sprites/chars/turtle_boy.png',32]
+  ];
+  const state={width:630,height:500,layers:[],selected:null};let drag=null;
+  const uid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
+  const load=src=>new Promise((resolve,reject)=>{if(images.has(src))return resolve(images.get(src));const image=new Image();image.onload=()=>{images.set(src,image);resolve(image)};image.onerror=reject;image.src=src});
+  const selected=()=>state.layers.find(l=>l.id===state.selected)||null,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function imageLayer(name,src,x,y,w,h,crop=null){return{id:uid(),type:'image',name,src,x,y,w,h,crop,rotation:0,opacity:1,visible:true,locked:false}}
+  function reset(confirmFirst=false){if(confirmFirst&&!confirm('Reset to the default itch.io cover?'))return;state.width=630;state.height=500;const bg=imageLayer('Dungeon background',BG,315,250,630,500);bg.locked=true;const title=imageLayer('NEO NYKE title',TITLE,315,112,540,180);state.layers=[bg,title];state.selected=title.id;resizeCanvas();render()}
+  function rotate(px,py,l,inverse=false){const a=l.rotation*Math.PI/180*(inverse?-1:1),dx=px-l.x,dy=py-l.y;return{x:l.x+dx*Math.cos(a)-dy*Math.sin(a),y:l.y+dx*Math.sin(a)+dy*Math.cos(a)}}
+  function hit(x,y){for(let i=state.layers.length-1;i>=0;i--){const l=state.layers[i];if(!l.visible||l.locked)continue;const p=rotate(x,y,l,true);if(Math.abs(p.x-l.x)<=l.w/2&&Math.abs(p.y-l.y)<=l.h/2)return l}return null}
+  function drawLayer(g,l){if(!l.visible)return;g.save();g.translate(l.x,l.y);g.rotate(l.rotation*Math.PI/180);g.globalAlpha=l.opacity;if(l.type==='image'){const im=images.get(l.src);if(im){const c=l.crop||{x:0,y:0,w:im.width,h:im.height};g.drawImage(im,c.x,c.y,c.w,c.h,-l.w/2,-l.h/2,l.w,l.h)}}else{g.fillStyle=l.color;g.fillRect(-l.w/2,-l.h/2,l.w,l.h)}g.restore()}
+  function draw(g=ctx,selection=true){g.clearRect(0,0,state.width,state.height);g.imageSmoothingEnabled=false;state.layers.forEach(l=>drawLayer(g,l));const l=selected();if(selection&&l&&l.visible){g.save();g.translate(l.x,l.y);g.rotate(l.rotation*Math.PI/180);g.strokeStyle='#5ce7f2';g.lineWidth=Math.max(2,state.width/315);g.setLineDash([8,5]);g.strokeRect(-l.w/2,-l.h/2,l.w,l.h);g.restore()}}
+  function render(){draw();renderLayers();renderProperties();$('status').textContent=`${state.width} × ${state.height}px · ${state.layers.length} layers`;const bad=state.width<315||state.height<250;$('warning').classList.toggle('show',bad);$('export').disabled=bad}
+  function renderLayers(){const host=$('layers');host.innerHTML='';[...state.layers].reverse().forEach(l=>{const row=document.createElement('div');row.className=`layer${l.id===state.selected?' selected':''}`;const eye=document.createElement('button');eye.textContent=l.visible?'◉':'○';eye.onclick=e=>{e.stopPropagation();l.visible=!l.visible;render()};const name=document.createElement('div');name.className='layer-name';name.innerHTML=`${l.name}<small>${l.type}${l.locked?' · locked':''}</small>`;const lock=document.createElement('button');lock.textContent=l.locked?'◆':'◇';lock.onclick=e=>{e.stopPropagation();l.locked=!l.locked;render()};row.onclick=()=>{state.selected=l.id;render()};row.append(eye,name,lock);host.append(row)})}
+  function renderProperties(){const l=selected();$('empty').hidden=!!l;$('properties').hidden=!l;if(!l)return;$('x').value=Math.round(l.x);$('y').value=Math.round(l.y);$('w').value=Math.round(l.w);$('h').value=Math.round(l.h);$('rotation').value=l.rotation;$('opacity').value=l.opacity;$('rotationValue').value=`${Math.round(l.rotation)}°`;$('opacityValue').value=`${Math.round(l.opacity*100)}%`}
+  function resizeCanvas(){canvas.width=state.width;canvas.height=state.height;$('width').value=state.width;$('height').value=state.height;const stage=$('stage'),zoom=Math.min((stage.clientWidth-60)/state.width,(stage.clientHeight-60)/state.height);canvas.style.width=`${state.width*zoom}px`;canvas.style.height=`${state.height*zoom}px`}
+  function resize(w,h){const ow=state.width,oh=state.height;state.width=clamp(Math.round(w)||1,1,4096);state.height=clamp(Math.round(h)||1,1,4096);const sx=state.width/ow,sy=state.height/oh;state.layers.forEach(l=>{l.x*=sx;l.y*=sy;l.w*=sx;l.h*=sy});resizeCanvas();render()}
+  async function addCharacter([name,src,cell]){await load(src);const size=Math.round(state.height*.38),l=imageLayer(name,src,state.width/2,state.height*.63,size,size,{x:0,y:0,w:cell,h:cell});state.layers.push(l);state.selected=l.id;render()}
+  async function addTitle(){await load(TITLE);const l=imageLayer('NEO NYKE title',TITLE,state.width/2,state.height*.24,state.width*.78,state.width*.78/3);state.layers.push(l);state.selected=l.id;render()}
+  function addTint(){const l={id:uid(),type:'rect',name:'Dark tint panel',color:'#06111b',x:state.width/2,y:state.height/2,w:state.width*.72,h:state.height*.34,rotation:0,opacity:.62,visible:true,locked:false};state.layers.push(l);state.selected=l.id;render()}
+  function duplicate(){const l=selected();if(!l)return;const c=structuredClone(l);c.id=uid();c.name+=' copy';c.x+=12;c.y+=12;c.locked=false;state.layers.push(c);state.selected=c.id;render()}
+  function remove(){const i=state.layers.findIndex(l=>l.id===state.selected);if(i<0)return;state.layers.splice(i,1);state.selected=state.layers.at(-1)?.id||null;render()}
+  function move(delta){const i=state.layers.findIndex(l=>l.id===state.selected),n=clamp(i+delta,0,state.layers.length-1);if(i<0||i===n)return;const [l]=state.layers.splice(i,1);state.layers.splice(n,0,l);render()}
+  function point(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*state.width/r.width,y:(e.clientY-r.top)*state.height/r.height}}
+  canvas.onpointerdown=e=>{const p=point(e),l=hit(p.x,p.y);state.selected=l?.id||null;if(l){drag={id:e.pointerId,sx:p.x,sy:p.y,x:l.x,y:l.y};canvas.setPointerCapture(e.pointerId)}render()};canvas.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const l=selected(),p=point(e);l.x=drag.x+p.x-drag.sx;l.y=drag.y+p.y-drag.sy;render()};canvas.onpointerup=()=>drag=null;
+  canvas.onwheel=e=>{const l=selected();if(!l||l.locked)return;e.preventDefault();if(e.shiftKey)l.rotation=clamp(l.rotation+Math.sign(e.deltaY)*2,-180,180);else{const f=e.deltaY<0?1.045:.957;l.w=Math.max(1,l.w*f);l.h=Math.max(1,l.h*f)}render()};
+  function exportPng(){if(state.width<315||state.height<250)return;const out=document.createElement('canvas');out.width=state.width;out.height=state.height;draw(out.getContext('2d'),false);const a=document.createElement('a');a.download=`neo-nyke-itch-cover-${state.width}x${state.height}.png`;a.href=out.toDataURL('image/png');a.click()}
+  function buildCharacters(){characters.forEach(ch=>{const b=document.createElement('button');b.className='character';b.innerHTML=`<img src="${ch[1]}" alt=""><span>${ch[0]}</span>`;b.onclick=()=>addCharacter(ch);$('characters').append(b)})}
+  const bindings={x:['x',Number],y:['y',Number],w:['w',v=>Math.max(1,Number(v))],h:['h',v=>Math.max(1,Number(v))],rotation:['rotation',Number],opacity:['opacity',Number]};Object.entries(bindings).forEach(([id,[key,parse]])=>{$(id).oninput=e=>{const l=selected();if(l){l[key]=parse(e.target.value);render()}}});
+  $('center').onclick=()=>{const l=selected();if(l){l.x=state.width/2;l.y=state.height/2;render()}};$('coverLayer').onclick=()=>{const l=selected();if(!l)return;const ratio=l.w/l.h,doc=state.width/state.height;if(ratio>doc){l.h=state.height;l.w=state.height*ratio}else{l.w=state.width;l.h=state.width/ratio}l.x=state.width/2;l.y=state.height/2;render()};
+  $('addTitle').onclick=addTitle;$('addTint').onclick=addTint;$('duplicate').onclick=duplicate;$('remove').onclick=remove;$('up').onclick=()=>move(1);$('down').onclick=()=>move(-1);$('reset').onclick=()=>reset(true);$('export').onclick=exportPng;
+  $('upload').onclick=()=>$('file').click();$('file').onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=async()=>{const src=reader.result,im=await load(src),s=Math.min(state.width*.7/im.width,state.height*.7/im.height,1),l=imageLayer(file.name,src,state.width/2,state.height/2,im.width*s,im.height*s);state.layers.push(l);state.selected=l.id;render()};reader.readAsDataURL(file)};
+  document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>resize(+b.dataset.w,+b.dataset.h));$('width').onchange=()=>resize(+$('width').value,state.height);$('height').onchange=()=>resize(state.width,+$('height').value);window.onresize=resizeCanvas;
+  (async()=>{await Promise.all([load(BG),load(TITLE),...characters.map(c=>load(c[1]))]);buildCharacters();reset()})().catch(error=>{$('status').textContent=`Asset error: ${error.message}`});
+})();
+</script>
+</body>
+</html>
