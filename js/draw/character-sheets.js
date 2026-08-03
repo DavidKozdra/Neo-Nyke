@@ -110,6 +110,19 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 1,
     idleRate: 1.5,
   },
+  golem: {
+    src: 'assets/sprites/chars/mini-golem.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 10,
+    renderScale: 1,
+    stepRate: 7,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [0, 1, 2, 3, 4],
+    attackFrames: [5, 6, 7, 8, 9],
+    portraitFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices
@@ -162,7 +175,7 @@ function loadCharacterSheet(key, def) {
       }
       const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
       const animationFrames = {};
-      ['dash', 'smash', 'beam'].forEach(action => {
+      ['attack', 'dash', 'smash', 'beam'].forEach(action => {
         const indices = Array.isArray(def[`${action}Frames`])
           ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
           : [];

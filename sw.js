@@ -34,6 +34,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/itch/neo-nyke-itch-background.png",
     "/assets/sprites/chars/Gelleh.png",
     "/assets/sprites/chars/Metao.png",
+    "/assets/sprites/chars/mini-golem.png",
     "/assets/sprites/chars/Mooggy.png",
     "/assets/sprites/chars/princess.png",
     "/assets/sprites/chars/Sarge.png",
@@ -329,14 +330,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": true,
   "manifestSummary": {
-    "entries": 316,
-    "bytes": 74998597,
-    "criticalEntries": 261,
-    "criticalBytes": 11938500,
+    "entries": 317,
+    "bytes": 74999989,
+    "criticalEntries": 262,
+    "criticalBytes": 11939892,
     "optionalEntries": 55,
     "optionalBytes": 63060097
   },
-  "version": "b84f8b0b354b3813"
+  "version": "975f4b6f6ab47c8e"
 };
 
 importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js");
