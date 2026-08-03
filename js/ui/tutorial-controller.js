@@ -187,6 +187,12 @@ function targetWorld(getter, options = {}) {
   return { kind: 'world', getter, padding: options.padding ?? 16, route: !!options.route };
 }
 
+// Touch players need the tutorial ring on the control they can actually press,
+// not on the keyboard-oriented HUD card that merely describes the same action.
+function targetTouch(selector, fallback, padding = 10) {
+  return { kind: 'touch', selector, fallback, padding };
+}
+
 function targetMinimap() {
   return { kind: 'minimap', padding: 8 };
 }
@@ -222,7 +228,7 @@ function createSteps() {
       title: 'Move your hero',
       text: () => 'Move your hero for a moment.',
       command: getMovementLabel,
-      target: targetWorld(() => Neo.player, { padding: 28 }),
+      target: targetTouch('.joy-base', targetWorld(() => Neo.player, { padding: 28 }), 8),
       complete: state => !!state.completed?.move,
     },
     {
@@ -247,6 +253,13 @@ function createSteps() {
       command: () => getInputMode() === 'touch' ? 'MENU → PAUSE' : getActionLabel('pause', 'ESC'),
       commandLabel: getInputMode() === 'touch' ? 'TAP' : 'PRESS',
       liveDuringPause: true,
+      target: targetTouch(
+        () => document.querySelector('.touch-ham-menu.open')
+          ? '.touch-ham-menu.open .touch-ham-btn:first-child'
+          : '.touch-hamburger',
+        null,
+        8,
+      ),
       complete: () => Neo.gameState === 'pause' && !Neo.inventoryPauseActive,
     },
     {
@@ -338,7 +351,7 @@ function createSteps() {
       title: 'Dash through danger',
       text: () => 'Dashing gives a short burst of invulnerability.',
       command: () => getActionLabel('dash', 'SHIFT'),
-      target: targetDom('[data-skill="dash"]', 8),
+      target: targetTouch('.btn-dash', targetDom('[data-skill="dash"]', 8), 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.dash,
     },
@@ -348,7 +361,7 @@ function createSteps() {
       title: 'Use your close attack',
       text: () => 'Aim at the training dummy and use your close attack.',
       command: () => getActionLabel('slash', 'LMB'),
-      target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
+      target: targetTouch('.btn-a', targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }), 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.melee,
     },
@@ -359,7 +372,7 @@ function createSteps() {
       title: 'Use your ranged attack',
       text: () => 'Aim at the dummy and use your ranged attack.',
       command: () => getActionLabel('laser', 'RMB'),
-      target: targetDom('[data-skill="laser"]', 8),
+      target: targetTouch('.btn-b', targetDom('[data-skill="laser"]', 8), 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.laser,
     },
@@ -371,7 +384,7 @@ function createSteps() {
       text: () => `Aim your laser directly into the red training beam. When the beams lock, release and repeatedly press ${getActionLabel('laser', 'RMB')} to drive the clash back. Losing a struggle in a real run is devastating.`,
       command: () => `AIM + MASH ${getActionLabel('laser', 'RMB')}`,
       commandLabel: 'CLASH',
-      target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialBeamUser), { padding: 30 }),
+      target: targetTouch('.btn-b', targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialBeamUser), { padding: 30 }), 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.beam_struggle,
     },
@@ -381,7 +394,7 @@ function createSteps() {
       title: 'Use your heavy move',
       text: () => 'Heavy moves hit hard or control space.',
       command: () => getActionLabel('smash', 'R'),
-      target: targetDom('[data-skill="smash"]', 8),
+      target: targetTouch('.btn-y', targetDom('[data-skill="smash"]', 8), 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.smash,
     },
@@ -1135,7 +1148,22 @@ export function createTutorialController() {
   }
 
   function resolveTarget(step) {
-    const spec = step?.target;
+    let spec = step?.target;
+    if (!spec) return null;
+    if (spec.kind === 'touch') {
+      if (getInputMode() !== 'touch') {
+        spec = spec.fallback;
+      } else {
+        const selector = typeof spec.selector === 'function' ? spec.selector() : spec.selector;
+        const element = document.querySelector(selector);
+        // The touch overlay is intentionally aria-hidden as one virtual game
+        // controller, but its visible buttons are still valid visual targets.
+        if (!element || element.closest('.hidden') || getComputedStyle(element).display === 'none') return null;
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        return { ...normalizeRect(rect, spec.padding), route: false };
+      }
+    }
     if (!spec) return null;
     if (spec.kind === 'dom') {
       const element = document.querySelector(spec.selector);
@@ -1180,14 +1208,28 @@ export function createTutorialController() {
     const viewportH = window.innerHeight;
     spotlight?.setAttribute('viewBox', `0 0 ${viewportW} ${viewportH}`);
     const cardRect = card.getBoundingClientRect();
-    if (viewportW <= 720) {
+    const touchControlsVisible = window.NeoSettings?.isTouchControlsEnabled?.() === true;
+    const shortTouchLandscape = touchControlsVisible && viewportW > viewportH && viewportH <= 560;
+    if (viewportW <= 720 || shortTouchLandscape) {
       const targetCenterY = targetRect ? targetRect.top + targetRect.height / 2 : viewportH / 2;
       const placeTop = !targetRect || targetCenterY > viewportH / 2;
-      const touchControlsVisible = window.NeoSettings?.isTouchControlsEnabled?.() === true;
       // Don't force full width — honour the CSS cap so the card stays a
       // readable size and leaves the right edge free for the hamburger.
       card.style.width = '';
       const cardW = card.getBoundingClientRect().width;
+      if (shortTouchLandscape) {
+        // Keep the entire bottom control deck clear. Put the compact card on
+        // the side opposite the highlighted touch control and leave room for
+        // the hamburger/tool rail at the right edge.
+        const targetCenterX = targetRect ? targetRect.left + targetRect.width / 2 : viewportW / 2;
+        const rightSafe = 64;
+        card.style.left = targetCenterX > viewportW / 2
+          ? `${margin}px`
+          : `${Math.max(margin, viewportW - cardW - rightSafe)}px`;
+        card.style.top = `${margin}px`;
+        card.style.bottom = 'auto';
+        return;
+      }
       if (placeTop) {
         // Top-anchored: keep clear of the top-right hamburger (~38px + insets,
         // ~54px total). Left-align unless that would collide, then shift left.

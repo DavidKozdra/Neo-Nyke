@@ -551,10 +551,51 @@ html.princess-ui .tutorial-target-ring {
 
 @media (max-height: 520px) and (orientation: landscape) {
   .tutorial-card {
-    width: min(360px, 46vw) !important;
-    max-width: min(360px, 46vw);
-    /* Leave the bottom strip free for the joystick / button cluster. */
-    max-height: min(78dvh, 300px);
+    width: min(320px, 40vw) !important;
+    max-width: min(320px, 40vw);
+    /* Leave the whole bottom control deck free for the joystick and buttons. */
+    max-height: min(54dvh, 220px);
+    padding: 9px 11px 8px;
+  }
+
+  .tutorial-title {
+    margin: 4px 0 3px;
+    font-size: calc(21px * var(--font-scale, 1));
+  }
+
+  .tutorial-text {
+    font-size: calc(16px * var(--font-scale, 1));
+    line-height: 1.22;
+  }
+
+  .tutorial-command {
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-width: 2px;
+  }
+
+  .tutorial-command__label {
+    font-size: calc(10px * var(--font-scale, 1));
+  }
+
+  .tutorial-command__value {
+    font-size: calc(18px * var(--font-scale, 1));
+  }
+
+  .tutorial-actions {
+    margin-top: 5px;
+  }
+
+  .tutorial-hint {
+    display: none;
+  }
+
+  .tutorial-nav-btn,
+  .tutorial-skip-btn {
+    min-height: 28px;
+    padding: 4px 7px;
+    font-size: calc(11px * var(--font-scale, 1));
   }
 }
 

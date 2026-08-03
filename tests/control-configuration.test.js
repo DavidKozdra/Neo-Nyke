@@ -105,6 +105,25 @@ describe('control configuration', () => {
     expect(getHudHint('gamepad')).toBe('L3');
   });
 
+  test('mobile tutorial highlights the controls players actually touch', () => {
+    const tutorial = read('js/ui/tutorial-controller.js');
+    const mobileCss = read('css/mobile.css');
+    const tutorialCss = read('css/tutorial.css');
+
+    expect(tutorial).toContain("targetTouch('.joy-base'");
+    expect(tutorial).toContain("targetTouch('.btn-dash'");
+    expect(tutorial).toContain("targetTouch('.btn-a'");
+    expect(tutorial).toContain("targetTouch('.btn-b'");
+    expect(tutorial).toContain("targetTouch('.btn-y'");
+    expect(tutorial).toContain("'.touch-ham-menu.open .touch-ham-btn:first-child'");
+    expect(tutorial).toContain("'.touch-hamburger'");
+    expect(tutorial).toContain('shortTouchLandscape');
+    expect(mobileCss).not.toContain('bottom: 5% !important');
+    expect(mobileCss).toContain('#pause.overlay .nav-btn');
+    expect(mobileCss).toContain('min-height: 48px');
+    expect(tutorialCss).toContain('max-height: min(54dvh, 220px)');
+  });
+
   test('beam struggle prompt uses the active laser binding', () => {
     const environment = read('js/draw/environment.js');
     expect(environment).toContain("getActiveControlHint?.('laser', 'rmb')");
