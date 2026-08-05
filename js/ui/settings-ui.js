@@ -627,6 +627,7 @@
   window.addEventListener('neo-view-mode-changed', syncViewModeButtons);
 
   function openSettings() {
+    window.Neo?.mountLazyPanel?.('settingsModal');
     stopListening();
     refreshGamepadStatus();
     syncViewModeButtons();
@@ -1101,8 +1102,12 @@
       : normalizeHudScale(entry.scale);
   }
 
+  const compactHudViewportQuery = window.matchMedia?.('(max-width: 920px)') || null;
+
   function isCompactHudViewport() {
-    return window.innerWidth <= 920;
+    // Viewport-only media queries stay current across resize/orientation changes
+    // without forcing layout while the settings module is updating HUD styles.
+    return compactHudViewportQuery ? compactHudViewportQuery.matches : window.innerWidth <= 920;
   }
 
   function getHudRenderMultiplier(key) {
@@ -1623,6 +1628,8 @@
       // "Auto" (inherit global scale) rather than a fixed 50%.
       const slider = document.createElement('input');
       slider.type = 'range';
+      slider.name = `hud-${el.key}-scale`;
+      slider.setAttribute('aria-label', `${el.label} scale`);
       slider.className = 'hud-element-row__slider';
       slider.min = String(HUD_SCALE_MIN - HUD_SCALE_STEP);
       slider.max = String(HUD_SCALE_MAX);
@@ -1644,6 +1651,7 @@
         cap.textContent = axisLabel;
         const sl = document.createElement('input');
         sl.type = 'range';
+        sl.name = `hud-${el.key}-${axisLabel.toLowerCase()}-offset`;
         sl.className = 'hud-element-offset__slider';
         sl.min = String(HUD_OFFSET_MIN);
         sl.max = String(HUD_OFFSET_MAX);
@@ -1667,6 +1675,7 @@
         iconLabel.textContent = 'Icons';
         iconSlider = document.createElement('input');
         iconSlider.type = 'range';
+        iconSlider.name = 'hud-minimap-icon-scale';
         iconSlider.className = 'hud-element-offset__slider';
         iconSlider.min = String(MINIMAP_ICON_SCALE_MIN);
         iconSlider.max = String(MINIMAP_ICON_SCALE_MAX);
@@ -1832,6 +1841,7 @@
   });
 
   function openHudLayoutEditor() {
+    window.Neo?.mountLazyPanel?.('hudPreviewOverlay');
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     populateHudPreviewContent();

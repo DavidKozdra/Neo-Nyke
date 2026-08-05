@@ -11,6 +11,15 @@
 
   const Neo = window.Neo || {};
 
+  function loadDeferredMedia() {
+    panel.querySelectorAll('[data-src]').forEach((element) => {
+      const source = element.dataset.src;
+      if (!source) return;
+      element.setAttribute('src', source);
+      element.removeAttribute('data-src');
+    });
+  }
+
   // Heroes paraded across the bottom, in roster order. Sprite keys match the
   // char-select cards (data-char-sprite). Each gets a tint hint for its glow.
   const PARADE = [
@@ -487,6 +496,7 @@
   function onVisChange() {
     const open = !panel.classList.contains('hidden');
     if (open) {
+      loadDeferredMedia();
       window.NeoAnimateMenuTitle?.(titleLetters, titleSubtitle);
       ensureAvatars();
       start();

@@ -119,4 +119,5 @@ import './ui/sprite-editor.js';
 import './ui/move-preview.js';
 import './ui/controller.js';
 import './core/save-store.js';
+import './ui/lazy-panels.js';
 import './core/perf.js';

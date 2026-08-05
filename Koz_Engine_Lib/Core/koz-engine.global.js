@@ -4,9 +4,10 @@
    * Provides CommonJS-like require semantics in the browser and publishes
    * selected APIs to the global namespace.
    * @param {Object} root - The global object (window or globalThis)
-   */
+  */
   if (!root) return;
-  if (typeof XMLHttpRequest !== "function") return;
+  const bundledSources = root.__KOZ_ENGINE_MODULE_SOURCES__ || null;
+  if (!bundledSources && typeof XMLHttpRequest !== "function") return;
 
   const engineNamespace = root.KozEngine = root.KozEngine || {};
   const moduleCache = new Map();
@@ -37,12 +38,19 @@
     const normalizedPath = normalizePath(withJsExtension(path));
     if (moduleCache.has(normalizedPath)) return moduleCache.get(normalizedPath);
 
-    const request = new XMLHttpRequest();
-    request.open("GET", normalizedPath, false);
-    request.send(null);
+    let source = bundledSources?.[normalizedPath];
+    if (typeof source !== "string") {
+      // Keep the source bridge useful in isolated tests and engine demos. The
+      // shipped game uses the generated browser bundle, so this compatibility
+      // path never performs synchronous network work in production.
+      const request = new XMLHttpRequest();
+      request.open("GET", normalizedPath, false);
+      request.send(null);
 
-    if (!((request.status >= 200 && request.status < 300) || request.status === 0)) {
-      throw new Error(`Failed to load engine module: ${normalizedPath} (${request.status})`);
+      if (!((request.status >= 200 && request.status < 300) || request.status === 0)) {
+        throw new Error(`Failed to load engine module: ${normalizedPath} (${request.status})`);
+      }
+      source = request.responseText;
     }
 
     const module = { exports: {} };
@@ -51,7 +59,7 @@
       "module",
       "exports",
       "require",
-      `${request.responseText}\n//# sourceURL=${normalizedPath}`
+      `${source}\n//# sourceURL=${normalizedPath}`
     );
 
     evaluate(module, exports, function bridgeRequire(id) {
@@ -470,6 +478,10 @@
       root.console?.warn?.(`[KozEngine] Module unavailable: ${def.path}`, error);
     }
   }
+
+  // All declared modules and their dependencies have been evaluated. Drop the
+  // embedded source strings so the browser can reclaim them after startup.
+  if (bundledSources) delete root.__KOZ_ENGINE_MODULE_SOURCES__;
 })(typeof window !== "undefined" ? window : globalThis);
 
 (function initKozRuntimeBootstrap(root) {

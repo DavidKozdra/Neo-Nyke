@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildPrecacheList, readCurrentPrecache } = require('../scripts/generate-precache');
+const { collectModuleSources } = require('../scripts/generate-koz-browser-bundle');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -47,21 +48,15 @@ describe('service worker precache completeness', () => {
     expect(missing).toEqual([]);
   });
 
-  test('every Koz Engine runtime module is cached', () => {
-    const engineRoot = path.join(ROOT, 'Koz_Engine_Lib');
-    const queue = [engineRoot];
-    const modules = [];
-    while (queue.length) {
-      const directory = queue.shift();
-      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-        const absolute = path.join(directory, entry.name);
-        if (entry.isDirectory()) queue.push(absolute);
-        else if (entry.isFile() && entry.name.endsWith('.js')) {
-          modules.push('/' + path.relative(ROOT, absolute).split(path.sep).join('/'));
-        }
-      }
-    }
-    expect(modules.filter(modulePath => !cached.has(modulePath))).toEqual([]);
+  test('the cached Koz browser bundle embeds every bridge runtime module', () => {
+    const bundleUrl = '/Koz_Engine_Lib/Core/koz-engine.browser-bundle.js';
+    const bridgeSource = fs.readFileSync(path.join(ROOT, 'Koz_Engine_Lib/Core/koz-engine.global.js'), 'utf8');
+    const bundleSource = fs.readFileSync(path.join(ROOT, bundleUrl.slice(1)), 'utf8');
+    const modules = Object.keys(collectModuleSources(bridgeSource));
+
+    expect(cached.has(bundleUrl)).toBe(true);
+    expect(modules.length).toBeGreaterThan(60);
+    expect(modules.filter(modulePath => !bundleSource.includes(`${JSON.stringify(modulePath)}:`))).toEqual([]);
   });
 
   test('editor sources are NOT shipped into the cache', () => {
