@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Tantangan dalam meraih kemenangan",
   "achievementProgress.master_huntsman.label": "Bounty mengetikkan proses ini",
   "achievementProgress.relic_alchemist.label": "Layanan relikwi ini dijalankan",
-  "achievementProgress.seven_heroes_one_crown.label": "Pahlawan dengan kemenangan"
+  "achievementProgress.seven_heroes_one_crown.label": "Pahlawan dengan kemenangan",
+  "difficulties.thorn_knight.name": "Ksatria Duri",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Adat",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Anak Kura-kura",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Putaran Dewa",
+  "achievements.godloop.desc": "Selesaikan 20 putaran dalam satu permainan",
+  "achievementProgress.godloop.label": "Putaran dalam permainan ini"
 }

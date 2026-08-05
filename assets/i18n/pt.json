@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Desafios em uma corrida vitoriosa",
   "achievementProgress.master_huntsman.label": "Tipos de recompensa nesta execução",
   "achievementProgress.relic_alchemist.label": "Serviços de relicário nesta execução",
-  "achievementProgress.seven_heroes_one_crown.label": "Heróis com vitória"
+  "achievementProgress.seven_heroes_one_crown.label": "Heróis com vitória",
+  "difficulties.thorn_knight.name": "Cavaleiro Espinhoso",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Personalizado",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Menino Tartaruga",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Ciclo Divino",
+  "achievements.godloop.desc": "Complete 20 ciclos em uma única partida",
+  "achievementProgress.godloop.label": "Ciclos nesta partida"
 }

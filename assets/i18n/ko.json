@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "승리를 향한 도전",
   "achievementProgress.master_huntsman.label": "이번 실행의 현상금 유형",
   "achievementProgress.relic_alchemist.label": "이번 운영의 유물 서비스",
-  "achievementProgress.seven_heroes_one_crown.label": "승리를 거둔 영웅들"
+  "achievementProgress.seven_heroes_one_crown.label": "승리를 거둔 영웅들",
+  "difficulties.thorn_knight.name": "가시기사",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "맞춤",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "거북이 소년",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "신의 순환",
+  "achievements.godloop.desc": "한 번의 도전에서 루프 20회 완료",
+  "achievementProgress.godloop.label": "이번 도전의 루프 수"
 }

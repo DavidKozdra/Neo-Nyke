@@ -320,7 +320,7 @@
     mooggy_swipe:     { base: 44, charge: [1, 2.5] },
     // laser moves
     blood_beam:       { base: 10, mult: 'beamDamageMultiplier', tick: true },
-    love_beam:        { base: 14, mult: 'beamDamageMultiplier', tick: true },
+    love_beam:        { base: 13.3, mult: 'beamDamageMultiplier', tick: true },
     turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
     power_disks:      { base: 20, hits: 8, mult: 'beamDamageMultiplier' },
     blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
@@ -1412,7 +1412,7 @@
         : Neo.laserMode === 'turtle_wave'
           ? 34
           : loveBeamActive
-            ? 14
+            ? 13.3
             : wizardBeamActive
               ? 30
               : mooggyBeamActive

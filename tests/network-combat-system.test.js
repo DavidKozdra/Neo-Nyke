@@ -998,6 +998,10 @@ describe('authoritative network combat system', () => {
     const { state, simulation } = combatHarness('princess');
     const player = state.players.p1;
     applyNetworkHeroProfile(player, 'princess');
+    expect(player).toEqual(expect.objectContaining({
+      maxHp: 131, moveSpeed: 216.6, damageMultiplier: 1.14, aoeRadiusMultiplier: 0.95,
+    }));
+    expect(player.itemStats.aoeRadiusMultiplier).toBe(0.95);
     state.projectiles.enemyShot = {
       id: 'enemyShot', hostile: true, ownerId: 'enemy-test', roomId: player.roomId,
       x: player.x, y: player.y, vx: 0, vy: 0, radius: 8, damage: 30,
@@ -1010,7 +1014,7 @@ describe('authoritative network combat system', () => {
     // the old failure where multiplayer carried the item but never derived its
     // authoritative itemStats, so the same hit dealt the full 30 damage.
     expect(player.itemStats.damageReduction).toBeCloseTo(0.1);
-    expect(player.hp).toBe(111);
+    expect(player.hp).toBe(104);
   });
 
   test('makes Cold stacks remove the same fraction of defense as campaign brittle status', () => {
@@ -1362,12 +1366,12 @@ describe('authoritative network combat system', () => {
     const { state, simulation, events, random } = combatHarness('princess');
     const player = state.players.p1;
     applyNetworkHeroProfile(player, 'princess', { dash: 'princess_shield' });
-    player.hp = 20;
+    player.hp = 19;
     player.barrier = 17;
 
     simulation.updateGame({}, 0.05);
 
-    expect(player.barrier).toBe(72);
+    expect(player.barrier).toBe(69);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'PLAYER_ABILITY_USED', data: expect.objectContaining({ abilityId: 'princess_shield', mode: 'shield' }),
     }));

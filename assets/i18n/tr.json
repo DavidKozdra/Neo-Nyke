@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Kazanan koşudaki zorluklar",
   "achievementProgress.master_huntsman.label": "Bu çalışmadaki ödül türleri",
   "achievementProgress.relic_alchemist.label": "Bu çalışmadaki kutsal emanet hizmetleri",
-  "achievementProgress.seven_heroes_one_crown.label": "Galibiyet kazanan kahramanlar"
+  "achievementProgress.seven_heroes_one_crown.label": "Galibiyet kazanan kahramanlar",
+  "difficulties.thorn_knight.name": "Diken Şövalyesi",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Özel",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Kaplumbağa Çocuk",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Tanrı Döngüsü",
+  "achievements.godloop.desc": "Tek bir koşuda 20 döngü tamamla",
+  "achievementProgress.godloop.label": "Bu koşudaki döngüler"
 }

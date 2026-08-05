@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Проблемы на пути к победе",
   "achievementProgress.master_huntsman.label": "Типы наград в этом забеге",
   "achievementProgress.relic_alchemist.label": "Реликварийные услуги в этом пробеге",
-  "achievementProgress.seven_heroes_one_crown.label": "Герои с победой"
+  "achievementProgress.seven_heroes_one_crown.label": "Герои с победой",
+  "difficulties.thorn_knight.name": "Торн Рыцарь",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Пользовательский",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Черепаший Мальчик",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Божественный цикл",
+  "achievements.godloop.desc": "Завершите 20 циклов за один забег",
+  "achievementProgress.godloop.label": "Циклы в этом забеге"
 }

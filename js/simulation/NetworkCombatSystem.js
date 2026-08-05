@@ -320,7 +320,7 @@
   // Keep the authority's selected hero identical to createDefaultPlayer(),
   // rather than maintaining a separate multiplayer balance table.
   const HERO_BASE_STATS = Object.freeze({
-    princess: Object.freeze({ maxHp: 138, moveSpeed: 228, damageMultiplier: 1.2 }),
+    princess: Object.freeze({ maxHp: 131, moveSpeed: 216.6, damageMultiplier: 1.14, aoeRadiusMultiplier: 0.95 }),
     thorn_knight: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
     metao: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 0.5 }),
     gelleh: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
@@ -426,11 +426,12 @@
     player.hp = Math.round(profile.maxHp * healthRatio);
     player.moveSpeed = profile.moveSpeed;
     player.damageMultiplier = profile.damageMultiplier;
+    player.aoeRadiusMultiplier = Number(profile.aoeRadiusMultiplier || 1);
     // A network hero is immediately playable after character selection. Derive
     // the starter-item effects here rather than waiting for a later pickup or
     // tick, otherwise the authoritative damage path treats every hero as if
     // they had no items (notably Princess loses her 10% Glasses defense).
-    player.itemStats = deriveCampaignItemStats(player);
+    player.itemStats = deriveCampaignItemStats(player, { aoeRadiusMultiplier: player.aoeRadiusMultiplier });
     return player;
   }
 

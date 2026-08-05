@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Herausforderungen bei einem Siegeslauf",
   "achievementProgress.master_huntsman.label": "Bounty-Typen in diesem Lauf",
   "achievementProgress.relic_alchemist.label": "Reliquiengottesdienste finden derzeit statt",
-  "achievementProgress.seven_heroes_one_crown.label": "Helden mit einem Sieg"
+  "achievementProgress.seven_heroes_one_crown.label": "Helden mit einem Sieg",
+  "difficulties.thorn_knight.name": "Dornenritter",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Benutzerdefiniert",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Schildkrötenjunge",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Götterschleife",
+  "achievements.godloop.desc": "Schließe 20 Schleifen in einem einzigen Lauf ab",
+  "achievementProgress.godloop.label": "Schleifen in diesem Lauf"
 }

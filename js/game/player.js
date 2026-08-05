@@ -810,9 +810,10 @@ export function getItemStats() {
       flatHitDamageBonus: foleyCharm,
       attackSpeedMultiplier: 1 + attackServo * 0.08 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: 1 + turtleShell * 0.05
+      moveSpeedMultiplier: (1 + turtleShell * 0.05
         + (Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0 ? 0.2 : 0)
-        + getLevelMoveSpeedBonus(Neo.player?.character || Neo.chosenCharacter, Neo.player?.level || 1),
+        + getLevelMoveSpeedBonus(Neo.player?.character || Neo.chosenCharacter, Neo.player?.level || 1))
+        * Number(characterDef.moveSpeedMultiplier || 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,

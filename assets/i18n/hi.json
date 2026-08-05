@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "विजयी दौड़ में चुनौतियाँ",
   "achievementProgress.master_huntsman.label": "बाउंटी इस रन को टाइप करता है",
   "achievementProgress.relic_alchemist.label": "अवशेष सेवाएँ यह चलती हैं",
-  "achievementProgress.seven_heroes_one_crown.label": "जीत के साथ हीरो"
+  "achievementProgress.seven_heroes_one_crown.label": "जीत के साथ हीरो",
+  "difficulties.thorn_knight.name": "थॉर्न नाइट",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "कस्टम",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "कछुआ लड़का",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "ईश्वरीय चक्र",
+  "achievements.godloop.desc": "एक ही दौड़ में 20 चक्र पूरे करें",
+  "achievementProgress.godloop.label": "इस दौड़ के चक्र"
 }

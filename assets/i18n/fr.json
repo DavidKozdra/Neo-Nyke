@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Défis sur une course gagnante",
   "achievementProgress.master_huntsman.label": "Types de primes pour cette course",
   "achievementProgress.relic_alchemist.label": "Services reliquaires cette course",
-  "achievementProgress.seven_heroes_one_crown.label": "Des héros gagnants"
+  "achievementProgress.seven_heroes_one_crown.label": "Des héros gagnants",
+  "difficulties.thorn_knight.name": "Chevalier épineux",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Personnalisé",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Garçon Tortue",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Boucle divine",
+  "achievements.godloop.desc": "Terminez 20 boucles en une seule partie",
+  "achievementProgress.godloop.label": "Boucles dans cette partie"
 }

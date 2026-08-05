@@ -5,6 +5,7 @@ const {
   MOVE_SLOT_KEYS,
   DEFAULT_MOVE_LOADOUTS,
   KIT_ALTERNATIVES,
+  BEAM_CHANNEL_PROFILES,
   isContinuousBeamMove,
   getDefaultMoveLoadout,
   getMoveSlot,
@@ -17,6 +18,17 @@ describe('shared Neo Nyke move content', () => {
   test('caps Flying Untouchable at five seconds', () => {
     expect(FLYING_UNTOUCHABLE_DURATION_SECONDS).toBe(5);
     expect(MOVE_BASE_STATS.flying_unhitable.duration).toBe(5);
+  });
+
+  test('keeps the five-percent Love Beam damage nerf aligned across runtimes', () => {
+    expect(MOVE_BASE_STATS.love_beam.damage).toBeCloseTo(13.3);
+    expect(BEAM_CHANNEL_PROFILES.love_beam.tickDamage).toBeCloseTo(13.3);
+
+    const browserCombat = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+    const browserInput = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
+    expect(browserCombat).toMatch(/love_beam:\s+\{ base: 13\.3,/);
+    expect(browserCombat).toMatch(/loveBeamActive\s*\n\s*\? 13\.3/);
+    expect(browserInput).toMatch(/love_beam:\s+\{ damage: 13\.3,/);
   });
 
   test('catalogs every authored move exactly once for headless authorities', () => {
