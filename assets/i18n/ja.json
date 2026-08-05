@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "勝利への挑戦",
   "achievementProgress.master_huntsman.label": "今回の賞金タイプ",
   "achievementProgress.relic_alchemist.label": "このサービスが実行する遺物サービス",
-  "achievementProgress.seven_heroes_one_crown.label": "勝利を収めたヒーローたち"
+  "achievementProgress.seven_heroes_one_crown.label": "勝利を収めたヒーローたち",
+  "difficulties.thorn_knight.name": "いばらの騎士",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "カスタム",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "タートルボーイ",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "ゴッドループ",
+  "achievements.godloop.desc": "1回のランで20ループを完了する",
+  "achievementProgress.godloop.label": "今回のランのループ数"
 }

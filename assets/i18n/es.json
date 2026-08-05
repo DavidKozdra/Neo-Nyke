@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Desafíos en una racha ganadora",
   "achievementProgress.master_huntsman.label": "Tipos de recompensa esta carrera",
   "achievementProgress.relic_alchemist.label": "Servicios de relicario en esta ejecución.",
-  "achievementProgress.seven_heroes_one_crown.label": "Héroes con una victoria"
+  "achievementProgress.seven_heroes_one_crown.label": "Héroes con una victoria",
+  "difficulties.thorn_knight.name": "Caballero espina",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "personalizado",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Chico Tortuga",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Bucle divino",
+  "achievements.godloop.desc": "Completa 20 bucles en una sola partida",
+  "achievementProgress.godloop.label": "Bucles en esta partida"
 }

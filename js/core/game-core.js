@@ -1034,8 +1034,12 @@ export const CHARACTER_DEFS = {
     key: 'princess',
     name: 'Princess',
     rarity: 'princess',
-    damageMultiplier: 1.2,
-    hpMultiplier: 1.15,
+    // Global 5% base-stat nerf: health, damage, movement, and AOE all retain
+    // Princess's identity while sitting one step below their previous values.
+    damageMultiplier: 1.14,
+    hpMultiplier: 1.0925,
+    moveSpeedMultiplier: 0.95,
+    aoeRadiusMultiplier: 0.95,
     skills: { melee: 'Royal Strike', laser: 'Petal Beam', smash: 'Blossom Burst', dash: 'Graceful Step' },
   },
   thorn_knight: {

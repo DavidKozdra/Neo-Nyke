@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "Challenges on a winning run",
   "achievementProgress.master_huntsman.label": "Bounty types this run",
   "achievementProgress.relic_alchemist.label": "Reliquary services this run",
-  "achievementProgress.seven_heroes_one_crown.label": "Heroes with a win"
+  "achievementProgress.seven_heroes_one_crown.label": "Heroes with a win",
+  "difficulties.thorn_knight.name": "Thorn Knight",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "Custom",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "Turtle Boy",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "Godloop",
+  "achievements.godloop.desc": "Complete 20 loops in a single run",
+  "achievementProgress.godloop.label": "Loops this run"
 }

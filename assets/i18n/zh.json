@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "胜利之路上的挑战",
   "achievementProgress.master_huntsman.label": "本次运行的赏金类型",
   "achievementProgress.relic_alchemist.label": "本次运行的圣物服务",
-  "achievementProgress.seven_heroes_one_crown.label": "胜利的英雄"
+  "achievementProgress.seven_heroes_one_crown.label": "胜利的英雄",
+  "difficulties.thorn_knight.name": "荆棘骑士",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "定制",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "神龟小子",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "神之轮回",
+  "achievements.godloop.desc": "在单次挑战中完成20次循环",
+  "achievementProgress.godloop.label": "本次挑战的循环数"
 }

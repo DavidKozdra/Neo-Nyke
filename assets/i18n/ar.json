@@ -506,5 +506,15 @@
   "achievementProgress.against_all_odds.label": "التحديات على المدى الفوز",
   "achievementProgress.master_huntsman.label": "أنواع المكافأة في هذا السباق",
   "achievementProgress.relic_alchemist.label": "خدمات الذخائر المقدسة هذا المدى",
-  "achievementProgress.seven_heroes_one_crown.label": "الأبطال مع الفوز"
+  "achievementProgress.seven_heroes_one_crown.label": "الأبطال مع الفوز",
+  "difficulties.thorn_knight.name": "ثورن نايت",
+  "difficulties.metao.name": "Metao",
+  "difficulties.custom_character.name": "مخصص",
+  "characters.gelleh.name": "Gelleh",
+  "characters.mooggy.name": "Mooggy",
+  "characters.turtle_boy.name": "فتى السلحفاة",
+  "characters.sarge.name": "Sarge",
+  "achievements.godloop.name": "حلقة الآلهة",
+  "achievements.godloop.desc": "أكمل 20 حلقة في جولة واحدة",
+  "achievementProgress.godloop.label": "الحلقات في هذه الجولة"
 }

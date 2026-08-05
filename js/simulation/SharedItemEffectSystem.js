@@ -170,6 +170,7 @@
       if (!player) continue;
       player.itemStats = deriveCampaignItemStats(player, {
         ...options,
+        aoeRadiusMultiplier: Number(player.aoeRadiusMultiplier ?? options.aoeRadiusMultiplier ?? 1),
         currentTick: Number(state?.tick || 0),
         lowerCombatCurse: !!state?.floorState?.rivalCurses?.lowerCombat,
       });

@@ -6,6 +6,7 @@ const coreSource = fs.readFileSync(path.join(root, 'js/core/game-core.js'), 'utf
 const controllerSource = fs.readFileSync(path.join(root, 'js/ui/controller.js'), 'utf8');
 const stateSource = fs.readFileSync(path.join(root, 'js/core/game-state.js'), 'utf8');
 const updateSource = fs.readFileSync(path.join(root, 'js/core/update.js'), 'utf8');
+const playerSource = fs.readFileSync(path.join(root, 'js/game/player.js'), 'utf8');
 
 function matchBraces(source, openIndex) {
   let depth = 0;
@@ -47,18 +48,18 @@ describe('character stat bars', () => {
   const byLabel = character => Object.fromEntries(getStats(character).map(stat => [stat.label, stat]));
 
   test.each([
-    ['princess', 138, '1.20×', '1.00×'],
-    ['thorn_knight', 120, '1.00×', '1.00×'],
-    ['metao', 120, '0.50×', '1.20×'],
-    ['gelleh', 120, '1.00×', '1.00×'],
-    ['mooggy', 130, '0.60×', '1.00×'],
-    ['turtle_boy', 144, '1.00×', '1.00×'],
-    ['sarge', 108, '1.05×', '1.00×'],
-  ])('%s reports gameplay-derived HP, damage, and AOE', (character, hp, damage, aoe) => {
+    ['princess', 131, '1.14×', '0.95×', '0.95×'],
+    ['thorn_knight', 120, '1.00×', '1.00×', '1.00×'],
+    ['metao', 120, '0.50×', '1.00×', '1.20×'],
+    ['gelleh', 120, '1.00×', '1.00×', '1.00×'],
+    ['mooggy', 130, '0.60×', '1.00×', '1.00×'],
+    ['turtle_boy', 144, '1.00×', '1.00×', '1.00×'],
+    ['sarge', 108, '1.05×', '1.00×', '1.00×'],
+  ])('%s reports gameplay-derived HP, damage, movement, and AOE', (character, hp, damage, move, aoe) => {
     const stats = byLabel(character);
     expect(Number(stats.HP.value)).toBe(hp);
     expect(stats.DMG.value).toBe(damage);
-    expect(stats.MOVE.value).toBe('1.00×');
+    expect(stats.MOVE.value).toBe(move);
     expect(stats.AOE.value).toBe(aoe);
   });
 
@@ -66,7 +67,7 @@ describe('character stat bars', () => {
     expect(byLabel('turtle_boy').HP.pct).toBe(100);
     expect(byLabel('sarge').HP.pct).toBe(75);
     expect(byLabel('princess').DMG.pct).toBe(100);
-    expect(byLabel('metao').DMG.pct).toBe(41.7);
+    expect(byLabel('metao').DMG.pct).toBe(43.9);
     expect(byLabel('metao').AOE.pct).toBe(100);
     expect(byLabel('thorn_knight').AOE.pct).toBe(83.3);
   });
@@ -81,5 +82,6 @@ describe('character stat bars', () => {
   test('gameplay consumes the shared base health and movement constants', () => {
     expect(stateSource).toContain('(Neo.PLAYER_BASE_MAX_HP || 120) * (character.hpMultiplier || 1)');
     expect(updateSource).toContain('(Neo.PLAYER_BASE_MOVE_SPEED || 228) * flightBoost');
+    expect(playerSource).toContain('* Number(characterDef.moveSpeedMultiplier || 1)');
   });
 });

@@ -1284,7 +1284,7 @@ export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
     smite:            { damage: 28,  cooldown: 0.55, range: 110 },
     narwal_fight:     { damage: 36,  cooldown: 0.55, range: 126 },
     blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
-    love_beam:        { damage: 14,  cooldown: 3.40, duration: 1.275, critChance: 0 },
+    love_beam:        { damage: 13.3, cooldown: 3.40, duration: 1.275, critChance: 0 },
     love_bomb_laser:  { damage: 34,  cooldown: 3.80, range: 420 },
     turtle_wave:      { damage: 55,  cooldown: 6.00, duration: 1.35 },
     ghost_ball:       { damage: 34,  cooldown: 5.50, range: 460 },

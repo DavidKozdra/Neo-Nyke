@@ -35,7 +35,7 @@
     smite: Object.freeze({ damage: 28, cooldown: 0.55, range: 110 }),
     narwal_fight: Object.freeze({ damage: 36, cooldown: 0.55, range: 126 }),
     blood_beam: Object.freeze({ damage: 14, cooldown: 3.00, duration: 1.2, critChance: 0 }),
-    love_beam: Object.freeze({ damage: 14, cooldown: 3.40, duration: 1.275, critChance: 0 }),
+    love_beam: Object.freeze({ damage: 13.3, cooldown: 3.40, duration: 1.275, critChance: 0 }),
     love_bomb_laser: Object.freeze({ damage: 34, cooldown: 3.80, range: 420 }),
     turtle_wave: Object.freeze({ damage: 55, cooldown: 6.00, duration: 1.35 }),
     ghost_ball: Object.freeze({ damage: 34, cooldown: 5.50, range: 460 }),
@@ -175,7 +175,7 @@
   }
   const BEAM_CHANNEL_PROFILES = Object.freeze({
     blood_beam: Object.freeze({ duration: 0.58, tickDamage: 10, tickInterval: 0.08, range: 430, padding: 6, knockback: 60 }),
-    love_beam: Object.freeze({ duration: 1.275, tickDamage: 14, tickInterval: 0.06, range: 500, padding: 6, knockback: 52 }),
+    love_beam: Object.freeze({ duration: 1.275, tickDamage: 13.3, tickInterval: 0.06, range: 500, padding: 6, knockback: 52 }),
     turtle_wave: Object.freeze({ duration: 1.35, tickDamage: 34, tickInterval: 0.08, range: 620, padding: 14, knockback: 155 }),
     holy_eye_beams: Object.freeze({ duration: 1.2, tickDamage: 13, tickInterval: 0.08, range: 430, padding: 6, knockback: 70, fan: Object.freeze([-0.07, 0.07]) }),
     god_sweep: Object.freeze({ duration: 1.45, tickDamage: 12, tickInterval: 0.05, range: 560, padding: 6, knockback: 120, sweep: 4.6 }),
