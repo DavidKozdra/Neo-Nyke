@@ -35,6 +35,10 @@
   const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
+  // applyHudElements() runs during module initialization, before the settings
+  // controls below are wired. Keep this query with the other eager state so
+  // effectiveHudRenderScale() can safely consult it on the first render.
+  const compactHudViewportQuery = window.matchMedia?.('(max-width: 920px)') || null;
 
   function normalizeBloodMultiplier(value) {
     const n = Number(value);
@@ -1101,8 +1105,6 @@
       ? normalizeHudScale(defaultScale ?? access.hudScale)
       : normalizeHudScale(entry.scale);
   }
-
-  const compactHudViewportQuery = window.matchMedia?.('(max-width: 920px)') || null;
 
   function isCompactHudViewport() {
     // Viewport-only media queries stay current across resize/orientation changes
