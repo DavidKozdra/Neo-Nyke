@@ -3,8 +3,8 @@
 // In-game states play the dedicated gameplay loop.
 (function initMusic() {
   const mixerApi = window.KozEngine?.Audio?.mixerSystem || null;
-  const TITLE_INTRO_PATH = 'assets/sounds/music/Neo Nyke - Title Intro.wav';
-  const TITLE_LOOP_PATH = 'assets/sounds/music/Neo Nyke - Title Loop.wav';
+  const TITLE_INTRO_PATH = 'assets/sounds/music/Neo Nyke - Title Intro.mp3';
+  const TITLE_LOOP_PATH = 'assets/sounds/music/Neo Nyke - Title Loop.mp3';
   const GAMEPLAY_TRACK_PATH = 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav';
 
   const MENU_STATES = new Set(['menu', 'charselect', 'start']);
@@ -356,8 +356,8 @@
     {
       id: 'neo_nyke_title',
       title: 'Neo Nyke Title',
-      intro: 'assets/sounds/music/Neo Nyke - Title Intro.wav',
-      path: 'assets/sounds/music/Neo Nyke - Title Loop.wav',
+      intro: 'assets/sounds/music/Neo Nyke - Title Intro.mp3',
+      path: 'assets/sounds/music/Neo Nyke - Title Loop.mp3',
     },
     { id: 'sword_and_synth', title: 'Sword and Synth', path: 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav' },
     { id: 'neo_nyke_title_alt', title: 'Neo Nyke Title (Alternative Version)', bonus: true, path: 'assets/sounds/music/Neo Nyke - main theme.mp3' },

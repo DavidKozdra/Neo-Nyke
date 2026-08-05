@@ -669,6 +669,12 @@ body.render3d #c {
   backdrop-filter: blur(6px);
 }
 
+.meta-pill--save {
+  box-sizing: border-box;
+  justify-content: center;
+  min-width: 9.6em;
+}
+
 .meta-pill--button {
   color: inherit;
   font: inherit;

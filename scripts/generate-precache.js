@@ -78,15 +78,12 @@ function collectAssets() {
   return collectFiles(path.join(ROOT, "assets"), {
     include: function includeAsset(fileAbs) {
       const extension = path.extname(fileAbs).toLowerCase();
+      // Lossless source masters stay in the repository, while the browser and
+      // offline package use their much smaller delivery formats.
+      if (extension === ".wav" && fs.existsSync(fileAbs.replace(/\.wav$/i, ".mp3"))) return false;
+      if (fileAbs.endsWith(`${path.sep}Explorer2000.png`)
+        && fs.existsSync(fileAbs.replace(/\.png$/i, ".webp"))) return false;
       return SHIPPABLE_ASSET_EXT.has(extension) && !EXCLUDED_ASSET_EXT.has(extension);
-    },
-  });
-}
-
-function collectEngineRuntime() {
-  return collectFiles(path.join(ROOT, "Koz_Engine_Lib"), {
-    include: function includeJavaScript(fileAbs) {
-      return path.extname(fileAbs).toLowerCase() === ".js";
     },
   });
 }
@@ -103,10 +100,9 @@ function buildPrecacheList() {
   for (const ref of collectIndexReferences()) urls.add(ref);
   for (const fileAbs of collectAssets()) urls.add(toAbsUrlPath(fileAbs));
 
-  // The browser bridge loads CommonJS modules dynamically, so static ESM graph
-  // traversal cannot discover them. Include every engine runtime file to keep a
-  // newly installed game genuinely offline as the bridge evolves.
-  for (const fileAbs of collectEngineRuntime()) urls.add(toAbsUrlPath(fileAbs));
+  // The generated bridge contains all browser-side CommonJS sources. The
+  // service-worker runtime is loaded independently with importScripts().
+  urls.add(PWA_RUNTIME_URL);
 
   for (const extra of [
     "/assets/sprites/combatants.js",
@@ -145,7 +141,7 @@ function createGeneratedConfig() {
     networkOnly: ["/api/"],
     concurrency: 4,
     optionalConcurrency: 2,
-    warmOptionalOnInstall: true,
+    warmOptionalOnInstall: false,
     manifestSummary: manifest.totals,
   };
   config.version = createVersionToken({

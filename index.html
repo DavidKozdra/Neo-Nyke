@@ -71,6 +71,8 @@
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192x192.png">
   <link rel="apple-touch-icon" sizes="152x152" href="assets/icons/icon-152x152.png">
   <link rel="manifest" href="manifest.json">
+  <link rel="preload" href="assets/fonts/VT323-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/PressStart2P-Latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#0a0a0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -821,7 +823,7 @@
   <div class="menu-stage">
     <!-- Cinematic title layer (sits above canvas, below menu-content) -->
     <div id="menuCinema" class="menu-cinema">
-      <div id="menuLetters" class="menu-letters" aria-hidden="true"></div>
+      <div id="menuLetters" class="menu-letters" aria-hidden="true"><span class="menu-letter">N</span><span class="menu-letter">E</span><span class="menu-letter">O</span><span class="menu-letter space"> </span><span class="menu-letter">-</span><span class="menu-letter space"> </span><span class="menu-letter">N</span><span class="menu-letter">Y</span><span class="menu-letter">K</span><span class="menu-letter">E</span></div>
       <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON OF GOD</div>
     </div>
     <div class="menu-content">
@@ -844,7 +846,7 @@
     <div class="menu-footer">
       <div class="meta-row">
         <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> <span data-i18n="menu.bank">BANK</span> <b id="bankCoins">0</b></span>
-        <button id="metaLoopPill" class="meta-pill meta-pill--button" type="button" aria-label="Open Loop Crystal progression" data-i18n-aria-label="menu.loopCrystals.open"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> <span data-i18n="menu.loopCrystals">LOOP CRYSTALS</span> <b id="loopCount">0</b></button>
+        <button id="metaLoopPill" class="meta-pill meta-pill--button" type="button"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> <span data-i18n="menu.loopCrystals">LOOP CRYSTALS</span> <b id="loopCount">0</b></button>
         <span class="meta-pill"><span class="meta-pill__icon">↟</span> <span data-i18n="menu.bestFloor">BEST FLOOR</span> <b id="bestFloor">1</b></span>
         <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
       </div>
@@ -1205,33 +1207,33 @@
           <div class="sandbox-rows">
             <div class="sandbox-row" data-sbox-param="enemyStatMultiplier">
               <span>Enemy Stats</span>
-              <input type="range" class="sandbox-slider" min="0.2" max="4" step="0.05" value="1">
-              <input type="number" class="sandbox-num" min="0.2" max="4" step="0.05" value="1">
+              <input type="range" name="sandbox-enemy-stats-range" aria-label="Enemy stats multiplier" class="sandbox-slider" min="0.2" max="4" step="0.05" value="1">
+              <input type="number" name="sandbox-enemy-stats-number" aria-label="Enemy stats multiplier value" class="sandbox-num" min="0.2" max="4" step="0.05" value="1">
             </div>
             <div class="sandbox-row" data-sbox-param="enemySpeedMultiplier">
               <span>Enemy Speed</span>
-              <input type="range" class="sandbox-slider" min="0.2" max="3" step="0.05" value="1">
-              <input type="number" class="sandbox-num" min="0.2" max="3" step="0.05" value="1">
+              <input type="range" name="sandbox-enemy-speed-range" aria-label="Enemy speed multiplier" class="sandbox-slider" min="0.2" max="3" step="0.05" value="1">
+              <input type="number" name="sandbox-enemy-speed-number" aria-label="Enemy speed multiplier value" class="sandbox-num" min="0.2" max="3" step="0.05" value="1">
             </div>
             <div class="sandbox-row" data-sbox-param="enemyDamageMultiplier">
               <span>Enemy Damage</span>
-              <input type="range" class="sandbox-slider" min="0.1" max="3" step="0.05" value="1">
-              <input type="number" class="sandbox-num" min="0.1" max="3" step="0.05" value="1">
+              <input type="range" name="sandbox-enemy-damage-range" aria-label="Enemy damage multiplier" class="sandbox-slider" min="0.1" max="3" step="0.05" value="1">
+              <input type="number" name="sandbox-enemy-damage-number" aria-label="Enemy damage multiplier value" class="sandbox-num" min="0.1" max="3" step="0.05" value="1">
             </div>
             <div class="sandbox-row" data-sbox-param="playerDamageMultiplier">
               <span>Player Damage</span>
-              <input type="range" class="sandbox-slider" min="0.1" max="6" step="0.05" value="1">
-              <input type="number" class="sandbox-num" min="0.1" max="6" step="0.05" value="1">
+              <input type="range" name="sandbox-player-damage-range" aria-label="Player damage multiplier" class="sandbox-slider" min="0.1" max="6" step="0.05" value="1">
+              <input type="number" name="sandbox-player-damage-number" aria-label="Player damage multiplier value" class="sandbox-num" min="0.1" max="6" step="0.05" value="1">
             </div>
             <div class="sandbox-row" data-sbox-param="startingCoins">
               <span>Starting Coins</span>
-              <input type="range" class="sandbox-slider" min="0" max="999" step="1" value="0">
-              <input type="number" class="sandbox-num" min="0" max="999" step="1" value="0">
+              <input type="range" name="sandbox-starting-coins-range" aria-label="Starting coins" class="sandbox-slider" min="0" max="999" step="1" value="0">
+              <input type="number" name="sandbox-starting-coins-number" aria-label="Starting coins value" class="sandbox-num" min="0" max="999" step="1" value="0">
             </div>
             <div class="sandbox-row" data-sbox-param="startingLevel">
               <span>Starting Level</span>
-              <input type="range" class="sandbox-slider" min="1" max="99" step="1" value="1">
-              <input type="number" class="sandbox-num" min="1" max="99" step="1" value="1">
+              <input type="range" name="sandbox-starting-level-range" aria-label="Starting level" class="sandbox-slider" min="1" max="99" step="1" value="1">
+              <input type="number" name="sandbox-starting-level-number" aria-label="Starting level value" class="sandbox-num" min="1" max="99" step="1" value="1">
             </div>
           </div>
         </div>
@@ -1368,7 +1370,7 @@
 
       <article class="credits__person credits__person--audio">
         <div class="credits__avatar" aria-hidden="true">
-          <image src="assets/credits-images/Explorer2000.png"  width="72" height="72" class="credits-image"></image>
+          <image data-src="assets/credits-images/Explorer2000.webp" width="72" height="72" class="credits-image"></image>
         </div>
         <header class="credits__person-head">
           <span class="credits__role">Music &amp; Sound</span>
@@ -1783,8 +1785,8 @@
           <button class="difficulty-btn" data-difficulty="god" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="god"></canvas>God</button>
         </div>
         <div class="seedrow seedrow--panel">
-          <label id="seedLabel">SEED</label>
-          <input id="seed" placeholder="Random seed">
+          <label id="seedLabel" for="seed">SEED</label>
+          <input id="seed" name="seed" placeholder="Random seed">
         </div>
 
         <div class="charselect-extra-options">
@@ -1836,13 +1838,13 @@
         <div class="sandbox-rows">
           <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="damageMultiplier">
             <span>Attack Power</span>
-            <input type="range" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
-            <input type="number" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="range" name="custom-attack-power-range" aria-label="Custom character attack power" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="number" name="custom-attack-power-number" aria-label="Custom character attack power value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
           </div>
           <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="hpMultiplier">
             <span>Max HP</span>
-            <input type="range" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
-            <input type="number" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="range" name="custom-max-hp-range" aria-label="Custom character maximum health" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="number" name="custom-max-hp-number" aria-label="Custom character maximum health value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
           </div>
         </div>
       </div>
@@ -1922,10 +1924,10 @@
     <div class="sprite-editor-body">
       <div class="sprite-editor-sidebar">
         <div class="sprite-editor-tabs" id="spriteEditorTabs" role="tablist"></div>
-        <input type="text" id="spriteEditorSearch" class="sprite-editor-search" placeholder="Search sprites…">
+        <input type="text" id="spriteEditorSearch" name="sprite-editor-search" aria-label="Search sprites" class="sprite-editor-search" placeholder="Search sprites…">
         <div class="sprite-editor-palette-row">
           <button type="button" class="sandbox-mini-btn" id="spriteEditorLoadPalette">Load Palette…</button>
-          <input type="file" id="spriteEditorPaletteInput" accept=".json,.gpl,.txt,.hex" style="display:none">
+          <input type="file" id="spriteEditorPaletteInput" name="sprite-editor-palette" aria-label="Load sprite palette" accept=".json,.gpl,.txt,.hex" style="display:none">
           <span class="sprite-editor-note" id="spriteEditorPaletteStatus"></span>
         </div>
         <div class="sprite-editor-grid" id="spriteEditorGrid"></div>
@@ -1986,7 +1988,7 @@
   </div>
 </section>
 
-<script src="Koz_Engine_Lib/Core/koz-engine.global.js" defer></script>
+<script src="Koz_Engine_Lib/Core/koz-engine.browser-bundle.js" defer></script>
 <script src="assets/sprites/combatants.js" defer></script>
 <script src="assets/sprites/environment.js" defer></script>
 <script src="assets/sprites/icons.js" defer></script>
@@ -2098,7 +2100,7 @@
             <tr>
               <td class="bind-label">Touch A Button</td>
               <td>
-                <select class="mobile-bind-select" data-touchbind="touchA">
+                <select name="touch-binding-a" aria-label="Touch A button action" class="mobile-bind-select" data-touchbind="touchA">
                   <option value="slash">Slash</option>
                   <option value="laser">Laser</option>
                   <option value="smash">Smash</option>
@@ -2110,7 +2112,7 @@
             <tr>
               <td class="bind-label">Touch B Button</td>
               <td>
-                <select class="mobile-bind-select" data-touchbind="touchB">
+                <select name="touch-binding-b" aria-label="Touch B button action" class="mobile-bind-select" data-touchbind="touchB">
                   <option value="slash">Slash</option>
                   <option value="laser">Laser</option>
                   <option value="smash">Smash</option>
@@ -2122,7 +2124,7 @@
             <tr>
               <td class="bind-label">Touch Y Button</td>
               <td>
-                <select class="mobile-bind-select" data-touchbind="touchY">
+                <select name="touch-binding-y" aria-label="Touch Y button action" class="mobile-bind-select" data-touchbind="touchY">
                   <option value="slash">Slash</option>
                   <option value="laser">Laser</option>
                   <option value="smash">Smash</option>
@@ -2134,7 +2136,7 @@
             <tr>
               <td class="bind-label">Touch X Button</td>
               <td>
-                <select class="mobile-bind-select" data-touchbind="touchX">
+                <select name="touch-binding-x" aria-label="Touch X button action" class="mobile-bind-select" data-touchbind="touchX">
                   <option value="slash">Slash</option>
                   <option value="laser">Laser</option>
                   <option value="smash">Smash</option>
@@ -2146,7 +2148,7 @@
             <tr>
               <td class="bind-label">Touch Dash Button</td>
               <td>
-                <select class="mobile-bind-select" data-touchbind="touchDash">
+                <select name="touch-binding-dash" aria-label="Touch Dash button action" class="mobile-bind-select" data-touchbind="touchDash">
                   <option value="slash">Slash</option>
                   <option value="laser">Laser</option>
                   <option value="smash">Smash</option>
@@ -2167,18 +2169,18 @@
         <p class="gamepad-status" id="gamepadStatus" aria-live="polite">No gamepad detected. Press any button after connecting one.</p>
         <button type="button" class="settings-reset" id="gamepadMapperBtn">Test / map controller</button>
         <div class="gamepad-bind-grid">
-          <label class="gamepad-bind-row"><span>A</span><select class="gamepad-bind-select" data-gamepad-button="0"></select></label>
-          <label class="gamepad-bind-row"><span>B</span><select class="gamepad-bind-select" data-gamepad-button="1"></select></label>
-          <label class="gamepad-bind-row"><span>X</span><select class="gamepad-bind-select" data-gamepad-button="2"></select></label>
-          <label class="gamepad-bind-row"><span>Y</span><select class="gamepad-bind-select" data-gamepad-button="3"></select></label>
-          <label class="gamepad-bind-row"><span>LB</span><select class="gamepad-bind-select" data-gamepad-button="4"></select></label>
-          <label class="gamepad-bind-row"><span>RB</span><select class="gamepad-bind-select" data-gamepad-button="5"></select></label>
-          <label class="gamepad-bind-row"><span>LT</span><select class="gamepad-bind-select" data-gamepad-button="6"></select></label>
-          <label class="gamepad-bind-row"><span>RT</span><select class="gamepad-bind-select" data-gamepad-button="7"></select></label>
-          <label class="gamepad-bind-row"><span>View</span><select class="gamepad-bind-select" data-gamepad-button="8"></select></label>
-          <label class="gamepad-bind-row"><span>Menu</span><select class="gamepad-bind-select" data-gamepad-button="9"></select></label>
-          <label class="gamepad-bind-row"><span>Left Stick</span><select class="gamepad-bind-select" data-gamepad-button="10"></select></label>
-          <label class="gamepad-bind-row"><span>Right Stick</span><select class="gamepad-bind-select" data-gamepad-button="11"></select></label>
+          <label class="gamepad-bind-row"><span>A</span><select name="gamepad-binding-a" class="gamepad-bind-select" data-gamepad-button="0"></select></label>
+          <label class="gamepad-bind-row"><span>B</span><select name="gamepad-binding-b" class="gamepad-bind-select" data-gamepad-button="1"></select></label>
+          <label class="gamepad-bind-row"><span>X</span><select name="gamepad-binding-x" class="gamepad-bind-select" data-gamepad-button="2"></select></label>
+          <label class="gamepad-bind-row"><span>Y</span><select name="gamepad-binding-y" class="gamepad-bind-select" data-gamepad-button="3"></select></label>
+          <label class="gamepad-bind-row"><span>LB</span><select name="gamepad-binding-lb" class="gamepad-bind-select" data-gamepad-button="4"></select></label>
+          <label class="gamepad-bind-row"><span>RB</span><select name="gamepad-binding-rb" class="gamepad-bind-select" data-gamepad-button="5"></select></label>
+          <label class="gamepad-bind-row"><span>LT</span><select name="gamepad-binding-lt" class="gamepad-bind-select" data-gamepad-button="6"></select></label>
+          <label class="gamepad-bind-row"><span>RT</span><select name="gamepad-binding-rt" class="gamepad-bind-select" data-gamepad-button="7"></select></label>
+          <label class="gamepad-bind-row"><span>View</span><select name="gamepad-binding-view" class="gamepad-bind-select" data-gamepad-button="8"></select></label>
+          <label class="gamepad-bind-row"><span>Menu</span><select name="gamepad-binding-menu" class="gamepad-bind-select" data-gamepad-button="9"></select></label>
+          <label class="gamepad-bind-row"><span>Left Stick</span><select name="gamepad-binding-left-stick" class="gamepad-bind-select" data-gamepad-button="10"></select></label>
+          <label class="gamepad-bind-row"><span>Right Stick</span><select name="gamepad-binding-right-stick" class="gamepad-bind-select" data-gamepad-button="11"></select></label>
         </div>
         <button class="settings-reset" id="resetGamepadBindings">Reset gamepad defaults</button>
       </section>
@@ -2220,7 +2222,7 @@
           <span class="access-desc">Scales bleed spray and dead body blood from current amount to 10×.</span>
         </div>
         <div class="access-slider-wrap">
-          <input type="range" id="gameplayBloodMultiplier" min="1" max="10" step="1" value="1" class="access-slider">
+          <input type="range" id="gameplayBloodMultiplier" name="blood-multiplier" aria-label="Blood amount" min="1" max="10" step="1" value="1" class="access-slider">
           <span id="gameplayBloodMultiplierVal" class="access-slider-val">1×</span>
         </div>
       </div>
@@ -2311,7 +2313,7 @@
       <section class="settings-group">
       <h3 class="settings-group__title">Custom Theme</h3>
       <div class="theme-name-row">
-        <input id="themeNameInput" class="theme-name-input" type="text" maxlength="32" placeholder="Theme name…">
+        <input id="themeNameInput" name="theme-name" aria-label="Theme name" class="theme-name-input" type="text" maxlength="32" placeholder="Theme name…">
         <button id="themeSaveBtn" class="theme-action-btn">Save</button>
         <button id="themeDeleteBtn" class="theme-action-btn theme-action-btn--danger">Delete</button>
       </div>
@@ -2328,14 +2330,14 @@
           <span class="access-label">Display name</span>
           <span class="access-desc">Shown on the competitive leaderboard.</span>
         </div>
-        <input id="usernameInput" class="settings-text-input" type="text" maxlength="24" placeholder="Enter name..." autocomplete="off" spellcheck="false">
+        <input id="usernameInput" name="display-name" aria-label="Display name" class="settings-text-input" type="text" maxlength="24" placeholder="Enter name..." autocomplete="off" spellcheck="false">
       </div>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Birthday</span>
           <span class="access-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
         </div>
-        <input id="birthdayInput" class="settings-text-input" type="date" autocomplete="off">
+        <input id="birthdayInput" name="birthday" aria-label="Birthday" class="settings-text-input" type="date" autocomplete="off">
       </div>
       </section>
       <section class="settings-group">
@@ -2353,7 +2355,7 @@
           <span class="access-desc">Restore all stored game data from a JSON file.</span>
         </div>
         <button class="settings-reset" id="dataImport">Import</button>
-        <input type="file" id="dataImportFile" accept=".json" style="display:none">
+        <input type="file" id="dataImportFile" name="save-import" aria-label="Import save file" accept=".json" style="display:none">
       </div>
       <div class="access-row data-row--danger">
         <div class="access-text">
@@ -2376,7 +2378,7 @@
           <span class="access-desc">Resizes the whole in-game HUD at once. The minimap follows this too unless you give it its own scale below.</span>
         </div>
         <div class="access-slider-wrap">
-          <input type="range" id="accHudScale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
+          <input type="range" id="accHudScale" name="hud-scale" aria-label="HUD scale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
           <span id="accHudScaleVal" class="access-slider-val">100%</span>
         </div>
       </div>
@@ -2450,7 +2452,7 @@
           <span class="access-desc">Scales all text — HUD, menus, panels, and these settings.</span>
         </div>
         <div class="access-slider-wrap">
-          <input type="range" id="accFontScale" min="0.8" max="1.6" step="0.05" value="1" class="access-slider">
+          <input type="range" id="accFontScale" name="font-scale" aria-label="Font size" min="0.8" max="1.6" step="0.05" value="1" class="access-slider">
           <span id="accFontScaleVal" class="access-slider-val">100%</span>
         </div>
       </div>
@@ -2462,14 +2464,14 @@
           <span class="access-label">Can afford</span>
           <span class="access-desc">Price tag and buy button colour when you have enough coins.</span>
         </div>
-        <input type="color" id="accShopCanAfford" class="acc-color-input" value="#4caf50">
+        <input type="color" id="accShopCanAfford" name="shop-can-afford-color" aria-label="Can afford color" class="acc-color-input" value="#4caf50">
       </div>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Can't afford</span>
           <span class="access-desc">Price tag and buy button colour when you don't have enough coins.</span>
         </div>
-        <input type="color" id="accShopCantAfford" class="acc-color-input" value="#e05555">
+        <input type="color" id="accShopCantAfford" name="shop-cannot-afford-color" aria-label="Cannot afford color" class="acc-color-input" value="#e05555">
       </div>
       </section>
       <section class="settings-group">

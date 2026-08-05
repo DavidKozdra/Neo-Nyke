@@ -26,8 +26,10 @@
     "multiplayer:dev": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml",
     "multiplayer:dev:load": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml --var MULTIPLAYER_LOAD_TEST_TOKEN:playwright-local-100",
     "multiplayer:smoke": "node scripts/smoke-cloudflare-multiplayer.js",
-    "precache": "node scripts/generate-precache.js",
-    "precache:check": "node scripts/generate-precache.js --check",
+    "koz-bundle": "node scripts/generate-koz-browser-bundle.js",
+    "koz-bundle:check": "node scripts/generate-koz-browser-bundle.js --check",
+    "precache": "npm run koz-bundle && node scripts/generate-precache.js",
+    "precache:check": "npm run koz-bundle:check && node scripts/generate-precache.js --check",
     "build": "npm run precache && rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/ && node scripts/verify-precache-build.js dist"
   },
   "devDependencies": {

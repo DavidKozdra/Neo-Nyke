@@ -1972,6 +1972,7 @@ export function createUIController(view) {
     }
 
     function setChallengePanelOpen(open) {
+      if (open) Neo.mountLazyPanel?.('challengePanel');
       challengePanelOpen = !!open;
       if (!challengePanelOpen) blurIfFocusInside(view.challengePanel);
       view.challengePanel?.classList.toggle('hidden', !challengePanelOpen);
@@ -2052,7 +2053,10 @@ export function createUIController(view) {
     }
 
     function setRunHistoryOpen(open) {
-      ensureRunHistoryPanelCanOverlayGame();
+      if (open) {
+        Neo.mountLazyPanel?.('runHistoryPanel');
+        ensureRunHistoryPanelCanOverlayGame();
+      }
       runHistoryOpen = !!open;
       if (!runHistoryOpen) blurIfFocusInside(view.runHistoryPanel);
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
@@ -2569,6 +2573,7 @@ export function createUIController(view) {
     }
 
     function setCreditsPanelOpen(open) {
+      if (open) Neo.mountLazyPanel?.('creditsPanel');
       const panel = view.creditsPanel;
       // Credits is a full-viewport overlay, consistent with the other
       // secondary menu destinations. The main menu remains underneath.
@@ -2733,6 +2738,7 @@ export function createUIController(view) {
     }
 
     function setSandboxPanelOpen(open) {
+      if (open) Neo.mountLazyPanel?.('sandboxPanel');
       // Refresh fields from current settings each time the panel opens (settings
       // may have loaded from saved meta after initial wiring).
       if (open) syncSandboxPanelFieldsHook?.();
@@ -2746,6 +2752,7 @@ export function createUIController(view) {
     }
 
     function setCustomCharacterPanelOpen(open) {
+      if (open) Neo.mountLazyPanel?.('customCharacterPanel');
       if (open) syncCustomCharacterPanelFieldsHook?.();
       else blurIfFocusInside(view.customCharacterPanel);
       view.customCharacterPanel?.classList.toggle('hidden', !open);
