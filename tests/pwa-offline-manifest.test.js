@@ -7,6 +7,14 @@ describe('offline PWA entry points', () => {
   const generator = fs.readFileSync(path.join(root, 'scripts/generate-precache.js'), 'utf8');
   const worker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   const runtime = fs.readFileSync(path.join(root, 'Koz_Engine_Lib/PWA/serviceWorkerRuntime.js'), 'utf8');
+  const preCommit = fs.readFileSync(path.join(root, '.githooks/pre-commit'), 'utf8');
+
+  test('pre-commit regenerates and stages both offline build artifacts', () => {
+    expect(preCommit).toContain('npm run precache || exit $?');
+    expect(preCommit).toContain('git add -- Koz_Engine_Lib/Core/koz-engine.browser-bundle.js sw.js || exit $?');
+    expect(preCommit).toContain('npm run precache:check || exit $?');
+    expect(preCommit).not.toContain('node scripts/generate-precache.js || exit $?');
+  });
 
   test('precache generation permanently includes both browser entry points', () => {
     const generated = buildPrecacheList();
