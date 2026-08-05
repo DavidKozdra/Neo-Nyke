@@ -32,6 +32,10 @@ describe('enemy lost-sight indicator', () => {
     updatePath,
     'isEnemyBlindedByHiddenPlayer',
   );
+  const advancePrincessFlightState = loadExportedFunction(
+    updatePath,
+    'advancePrincessFlightState',
+  );
 
   test('tracks how long an enemy has lost sight of the player', () => {
     const enemy = {};
@@ -56,6 +60,17 @@ describe('enemy lost-sight indicator', () => {
     expect(isEnemyBlindedByHiddenPlayer({ type: 'god' }, true)).toBe(false);
     expect(isEnemyBlindedByHiddenPlayer({ type: 'hunter' }, true)).toBe(true);
     expect(isEnemyBlindedByHiddenPlayer({ type: 'god' }, false)).toBe(false);
+  });
+
+  test('Princess Flying Untouchable expires during active play', () => {
+    const player = { princessFlightTime: 5 };
+    for (let tick = 0; tick < 100; tick += 1) {
+      advancePrincessFlightState(player, 0.05);
+    }
+
+    expect(player.princessFlightTime).toBe(0);
+    expect(advancePrincessFlightState(player, 0.05)).toBe(false);
+    expect(fs.readFileSync(updatePath, 'utf8')).toContain('advancePrincessFlightState(Neo.player, dt);');
   });
 
   test('enemy rendering includes the lost-sight question mark', () => {

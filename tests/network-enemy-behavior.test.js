@@ -1006,7 +1006,8 @@ describe('authored campaign enemy behaviors on the authority', () => {
       mirrorLaserCd: 8, mirrorSmashCd: 8, mirrorDashCd: 0,
     });
     tick(flightHarness.simulation, 6);
-    expect(flyer.rivalFlightUntilTick).toBeGreaterThan(flightHarness.state.tick + 280);
+    expect(flyer.rivalFlightUntilTick).toBeGreaterThan(flightHarness.state.tick + 80);
+    expect(flyer.rivalFlightUntilTick).toBeLessThanOrEqual(flightHarness.state.tick + 100);
     expect(flyer.invulnerableUntilTick).toBe(flyer.rivalFlightUntilTick);
 
     const copiedFlightHarness = behaviorHarness();

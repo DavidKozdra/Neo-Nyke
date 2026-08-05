@@ -1,5 +1,6 @@
 const {
   MOVE_BASE_STATS,
+  FLYING_UNTOUCHABLE_DURATION_SECONDS,
   MOVE_PRESENTATION_DEFS,
   MOVE_SLOT_KEYS,
   DEFAULT_MOVE_LOADOUTS,
@@ -13,6 +14,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 describe('shared Neo Nyke move content', () => {
+  test('caps Flying Untouchable at five seconds', () => {
+    expect(FLYING_UNTOUCHABLE_DURATION_SECONDS).toBe(5);
+    expect(MOVE_BASE_STATS.flying_unhitable.duration).toBe(5);
+  });
+
   test('catalogs every authored move exactly once for headless authorities', () => {
     const catalog = Object.values(MOVE_SLOT_KEYS).flat();
     expect(catalog).toHaveLength(47);

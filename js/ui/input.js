@@ -114,7 +114,7 @@ export const MOVE_DEFS = {
       key: 'flying_unhitable',
       slot: 'dash',
       name: 'Flying Untouchable',
-      desc: 'Rise into the air and become untouchable for 15 seconds.',
+      desc: 'Rise into the air and become untouchable for 5 seconds.',
       exclusiveCharacter: 'princess',
     },
     princess_shield: {
@@ -1303,7 +1303,7 @@ export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
     nimrod_stomp:     { damage: 60,  cooldown: 2.50, range: 110 },
     warp:             { cooldown: 3.40 },
     zip_lightning:    { damage: 30,  cooldown: 2.00 },
-    flying_unhitable: { cooldown: 18.00, duration: 15.0 },
+    flying_unhitable: { cooldown: 18.00, duration: 5.0 },
     princess_shield:  { cooldown: 16.00 },
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
     mooggy_swipe:     { damage: 44,  cooldown: 0.50, range: 130 },

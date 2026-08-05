@@ -2795,8 +2795,9 @@
 
   function castFlyingUntouchable() {
     Neo.playSfx?.('dash');
-    Neo.player.princessFlightTime = 15;
-    Neo.player.inv = Math.max(Neo.player.inv, 15);
+    const duration = Number(globalThis.NeoNyke?.content?.FLYING_UNTOUCHABLE_DURATION_SECONDS || 5);
+    Neo.player.princessFlightTime = duration;
+    Neo.player.inv = Math.max(Neo.player.inv, duration);
     Neo.player.vx = 0;
     Neo.player.vy = 0;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
