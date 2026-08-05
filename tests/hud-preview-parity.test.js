@@ -8,6 +8,13 @@ describe('HUD layout preview parity', () => {
   const hud = read('js/draw/hud.js');
   const styles = read('css/style.css');
 
+  test('initializes compact viewport state before the eager HUD render', () => {
+    expect(settings.indexOf('const compactHudViewportQuery =')).toBeGreaterThan(-1);
+    expect(settings.indexOf('const compactHudViewportQuery =')).toBeLessThan(
+      settings.indexOf('\n  applyHudElements();'),
+    );
+  });
+
   test('projects live DOM widget bounds into the preview frame', () => {
     expect(settings).toContain('function captureLiveHudLayoutSnapshot()');
     expect(settings).toContain('const rect = live.getBoundingClientRect();');
