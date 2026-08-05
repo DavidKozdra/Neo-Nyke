@@ -42,6 +42,10 @@
   const ITEM_RARITY_BY_KEY = Object.freeze(Object.fromEntries(ITEM_DROP_ENTRIES.map(([key, , rarity]) => [key, rarity])));
   const ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 80, wizard: 15, god: 5 });
   const ELITE_ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 65, wizard: 25, god: 10 });
+  // Preserve the original three starter rolls (including the third-roll elite
+  // boost) and append two normal rolls. Both local and authoritative Boss Rush
+  // consume this shared plan from a run-seeded random stream.
+  const BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS = Object.freeze([false, false, true, false, false]);
 
   function nextRandom(random) {
     if (typeof random === 'function') return random();
@@ -83,6 +87,14 @@
       if (key && !seen.has(key)) { seen.add(key); choices.push(key); }
     }
     return choices;
+  }
+
+  function createBossRushStarterItemPlan(random) {
+    return BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS.map((elite, index) => ({
+      index,
+      elite,
+      itemKey: rollCampaignItem(random, { elite }),
+    }));
   }
 
   function rollCampaignScroll(random) {
@@ -141,8 +153,10 @@
     ITEM_RARITY_BY_KEY,
     ITEM_RARITY_DROP_WEIGHTS,
     ELITE_ITEM_RARITY_DROP_WEIGHTS,
+    BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS,
     rollCampaignItem,
     createCampaignItemChoices,
+    createBossRushStarterItemPlan,
     rollCampaignScroll,
     createTreasureChestPlan,
   };

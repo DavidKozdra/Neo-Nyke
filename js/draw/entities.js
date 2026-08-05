@@ -120,6 +120,26 @@
     return Neo.SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
   }
 
+  function getEnemySpriteActionOptions(enemy) {
+    if (enemy?.type !== 'bulk_golem') return {};
+    const jumpDuration = Math.max(0.01, Number(enemy.bulkJumpDuration || 0.82));
+    if (Number(enemy.bulkJumpTime || 0) > 0) {
+      return {
+        action: 'smash',
+        actionProgress: Neo.clamp(1 - Number(enemy.bulkJumpTime) / jumpDuration, 0, 0.999),
+      };
+    }
+    const smashWindup = 0.6;
+    const aoeTime = Number(enemy.aoeTime);
+    if (Number.isFinite(aoeTime) && aoeTime >= 0 && aoeTime < smashWindup) {
+      return {
+        action: 'smash',
+        actionProgress: Neo.clamp(1 - aoeTime / smashWindup, 0, 0.999),
+      };
+    }
+    return {};
+  }
+
   function getPlayerSpriteKey() {
     const key = Neo.getCharacterDef().key;
     return Neo.SPRITE_DEFS[key] ? key : 'thorn_knight';
@@ -1298,6 +1318,7 @@
         castPulse: enemyCastPulse,
         attackProgress: enemyAttackProgress,
         seedKey: spriteKey,
+        ...getEnemySpriteActionOptions(enemy),
       };
       const hitFlash = isActorHitFlashActive(enemy);
       const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation, spriteKey);
@@ -2344,6 +2365,7 @@
   // Expose on Neo
   Neo.buildSpriteAtlas = buildSpriteAtlas;
   Neo.getEnemySpriteKey = getEnemySpriteKey;
+  Neo.getEnemySpriteActionOptions = getEnemySpriteActionOptions;
   Neo.getPlayerSpriteKey = getPlayerSpriteKey;
   Neo.getPortraitSpriteKey = getPortraitSpriteKey;
   Neo.getFacingDirection = getFacingDirection;

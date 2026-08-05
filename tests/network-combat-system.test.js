@@ -716,6 +716,7 @@ describe('authoritative network combat system', () => {
     simulation.updateGame({}, 0.05);
     const runes = Object.values(state.pickups).filter(pickup => pickup.type === 'challengeRune');
     expect(runes).toHaveLength(5);
+    expect(new Set(runes.map(rune => Math.hypot(rune.vx, rune.vy).toFixed(6))).size).toBeGreaterThan(1);
     const before = runes[0].x;
     simulation.updateGame({}, 0.05);
     expect(runes[0].x).not.toBe(before);
@@ -738,6 +739,7 @@ describe('authoritative network combat system', () => {
     const bombs = Object.values(state.pickups).filter(pickup => pickup.type === 'challengeBomb');
     expect(bombs).toHaveLength(5);
     expect(bombs.filter(bomb => bomb.safe)).toHaveLength(3);
+    expect(new Set(bombs.map(bomb => `${bomb.x.toFixed(4)}:${bomb.y.toFixed(4)}`)).size).toBeGreaterThan(1);
     expect(Object.values(state.enemies).filter(enemy => enemy.type === 'sniper' && enemy.roomId === room.id)).toHaveLength(5);
 
     const wrong = bombs.find(bomb => !bomb.safe);

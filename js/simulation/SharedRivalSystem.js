@@ -7,6 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedRivalSystemApi() {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   // Rival personality is gameplay data, not browser-only dialogue metadata.
   // Campaign and authority both consume this table to decide warning, aggression
   // and retreat behavior. Dialogue text remains in the UI content definition.
@@ -68,7 +69,7 @@
   function getCampaignRivalLoadout(characterKey, options = {}) {
     const base = (RIVAL_LOADOUTS[String(characterKey || '')] || []).map(entry => ({ ...entry }));
     const alternatives = RIVAL_LOADOUT_ALTERNATIVES[String(characterKey || '')] || [];
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const defaultChance = Number.isFinite(Number(options.defaultChance)) ? Number(options.defaultChance) : RIVAL_DEFAULT_KIT_CHANCE;
     if (!base.length || !alternatives.length || Number(random()) < defaultChance) return base;
     const alternative = alternatives[Math.max(0, Math.min(alternatives.length - 1, Math.floor(Number(random()) * alternatives.length)))];

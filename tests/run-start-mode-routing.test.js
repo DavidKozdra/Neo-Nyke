@@ -34,6 +34,7 @@ function createNormalStartHarness({
     .mockReturnValueOnce(replayTutorial)
     .mockReturnValue(false);
   const startCompetitive = jest.fn();
+  const createRandomSeed = jest.fn(() => randomSeed);
   const Neo = {
     gameMode: 'normal',
     chosenCharacter: 'thorn_knight',
@@ -73,7 +74,8 @@ function createNormalStartHarness({
     restoreRun: jest.fn(),
     resetTutorialState,
     TUTORIAL_SEED: 'NEONYKE-TUTORIAL-01',
-    createRandomSeed: jest.fn(() => randomSeed),
+    createRandomSeed,
+    getConfiguredRunSeed: () => String(Neo.ui.seed?.value || '').trim() || createRandomSeed(),
     normalizeDifficulty: jest.fn(value => value),
     normalizeChallengeSelection: jest.fn(value => [...value]),
     syncSeedState: jest.fn(),

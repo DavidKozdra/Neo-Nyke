@@ -2087,6 +2087,7 @@ function syncEnemies() {
         castPulse: Number(enemy.beamTime || 0) > 0 || Number(enemy.aoeTime || 0) > 0 ? 0.5 : 0,
         attackProgress,
         seedKey: baseKey,
+        ...(Neo.getEnemySpriteActionOptions?.(enemy) || {}),
       };
       const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, enemy, animation) || baseKey;
       const transforming = Number(enemy.transformAnimT || 0) > 0;

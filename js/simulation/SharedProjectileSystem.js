@@ -8,13 +8,14 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedProjectileApi(motionApi) {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   // Projectile presentation remains browser-owned. These operations are the
   // campaign rules that decide the trajectory and lifecycle in either runtime.
   const { normalizeAngle, steerHomingProjectile, advanceProjectile, bounceProjectile } = motionApi;
   function turnCampaignAngleToward(current, target, maxStep) { return normalizeAngle(steerTurn(current, target, maxStep)); }
   function steerTurn(current, target, maxStep) { return motionApi.turnAngleToward(current, target, maxStep); }
 
-  function rollCampaignProjectileBounces(stacks, random = Math.random) {
+  function rollCampaignProjectileBounces(stacks, random = deterministicRandom) {
     const count = Math.max(0, Math.floor(Number(stacks || 0)));
     if (count <= 0) return 0;
     let bounces = 1;
@@ -24,7 +25,7 @@
     return bounces;
   }
 
-  function getCampaignProjectileItemModifiers(itemStats = {}, random = Math.random) {
+  function getCampaignProjectileItemModifiers(itemStats = {}, random = deterministicRandom) {
     const homingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0));
     return {
       speedMultiplier: Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1)),
@@ -64,7 +65,7 @@
   const advanceCampaignProjectile = advanceProjectile;
   const bounceCampaignProjectile = bounceProjectile;
 
-  function createCampaignSubSpawnDescriptors(projectile, config, random = Math.random) {
+  function createCampaignSubSpawnDescriptors(projectile, config, random = deterministicRandom) {
     const travel = Math.atan2(Number(projectile?.vy || 0), Number(projectile?.vx || 1));
     const count = Math.max(1, Number(config?.count || 2));
     const jitterRadians = Number(config?.jitterRadians ?? 0.5);
@@ -358,7 +359,7 @@
   // status-resistance/rollback policy and the mutation callback.
   function resolveCampaignProjectileStatusApplications(projectile, options = {}) {
     if (!Array.isArray(projectile?.statusEffects)) return [];
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const resolveProc = typeof options.resolveProc === 'function'
       ? options.resolveProc
       : effect => ({ chance: Number(effect?.chance ?? 1), effectMultiplier: 1 });

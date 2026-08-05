@@ -424,6 +424,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     simulation.updateGame({}, 0.05);
     expect(state.floorNumber).toBe(5);
     expect(player.coins).toBe(120);
+    expect(events.filter(event => event.eventType === 'BOSS_RUSH_STARTER_ITEM_GRANTED')).toHaveLength(5);
     expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('queen_cult');
     const firstBoss = Object.values(state.enemies).find(enemy => !enemy.dead);
     player.x = firstBoss.x - 12;

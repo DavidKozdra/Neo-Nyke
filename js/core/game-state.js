@@ -1537,6 +1537,11 @@ export function resumeGame() {
     return `${Math.floor(Math.random() * 1e9)}`;
   }
 
+  function getConfiguredRunSeed() {
+    const enteredSeed = String(Neo.ui.seed?.value || '').trim();
+    return enteredSeed || createRandomSeed();
+  }
+
   function syncSeedState() {
     Neo.seedStr = Neo.runLoopIndex > 0 ? `${Neo.baseSeedStr}:loop:${Neo.runLoopIndex}` : Neo.baseSeedStr;
   }
@@ -2939,7 +2944,7 @@ export function resumeGame() {
         ? (globalThis.NeoNyke?.story?.storySeed?.(Neo.chosenCharacter, storySkipTutorial ? 2 : 1) || `NEONYKE-STORY-V1|${Neo.chosenCharacter}`)
         : shouldRunGuidedFloor
           ? TUTORIAL_SEED
-          : (Neo.ui.seed.value.trim() || createRandomSeed());
+          : getConfiguredRunSeed();
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
       Neo.selectedChallenges = storyRun || shouldRunTutorial
         ? []
@@ -3006,7 +3011,7 @@ export function resumeGame() {
 
   function startCoop() {
     setGameState('play');
-    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -3038,7 +3043,7 @@ export function resumeGame() {
   function startPvp() {
     setGameState('play');
     Neo.mpPlayerCount = 2;
-    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -3126,7 +3131,7 @@ export function resumeGame() {
 
   function startEndless() {
     setGameState('play');
-    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -3161,7 +3166,7 @@ export function resumeGame() {
 
   function startPractice() {
     setGameState('play');
-    Neo.baseSeedStr = createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = Neo.practiceVariant === 'challenges'
       ? normalizeDifficulty(Neo.selectedDifficulty)
       : Neo.practiceVariant === 'beams' ? 'hard' : 'easy';
@@ -3388,7 +3393,7 @@ export function resumeGame() {
 
   function startBossRush() {
     setGameState('play');
-    Neo.baseSeedStr = createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -3422,12 +3427,13 @@ export function resumeGame() {
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
-    // Grant 3 random starting items
+    // The shared five-item package is rolled from the entered run seed. Keeping
+    // this scoped means unrelated world/FX draws cannot perturb starter loot.
     const bossRushStartRandom = createScopedRandom('boss-rush:starting-items');
-    for (let i = 0; i < 3; i++) {
-      const key = Neo.rollItemDrop({ elite: i === 2, random: bossRushStartRandom });
-      if (key) Neo.collectItem(key);
-    }
+    globalThis.NeoNyke.content.createBossRushStarterItemPlan(bossRushStartRandom)
+      .forEach(({ itemKey }) => {
+        if (itemKey) Neo.collectItem(itemKey);
+      });
     Neo.addCoins(120);
     updateBossRushHud();
     // Spawn first boss immediately
@@ -3621,15 +3627,12 @@ export function resumeGame() {
     const roster = Object.keys(Neo.CHARACTER_DEFS || {})
       .filter(key => key !== Neo.chosenCharacter && Neo.RIVAL_DEFS?.[key]);
     const order = createScopedRandom('rival-rumble:order');
-    return roster
-      .map(key => ({ key, sort: order() }))
-      .sort((a, b) => a.sort - b.sort)
-      .map(entry => entry.key);
+    return Neo.shuffleWithRandom(roster, order);
   }
 
   function startRivalRumble() {
     setGameState('play');
-    Neo.baseSeedStr = createRandomSeed();
+    Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;

@@ -8,6 +8,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi) {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
+
   // The authored campaign enemy behaviors from js/game/enemies.js, ported onto
   // a context interface so an authority (or any headless runtime) executes the
   // exact same state machines the campaign plays: wind-ups, dashes, beams,
@@ -53,7 +55,7 @@
     const tuningOf = () => ctx.getTuning?.() || { reaction: 1, rangedCadence: 1, supportPower: 1 };
     const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
     const angleBetween = (from, to) => Math.atan2(to.y - from.y, to.x - from.x);
-    const random = scope => (ctx.random ? ctx.random(scope) : Math.random());
+    const random = scope => (ctx.random ? ctx.random(scope) : deterministicRandom());
     const randRange = (min, max, scope) => min + random(scope) * (max - min);
 
     function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {

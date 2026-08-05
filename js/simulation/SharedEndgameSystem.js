@@ -8,6 +8,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEndgameSystemApi(loopApi) {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   // The final God room is an authored choice, not a generic floor exit. Keep
   // its shape independent from either runtime so campaign and authority cannot
   // quietly diverge into crown-only versus stairs-only end states.
@@ -44,7 +45,7 @@
   }
 
   function createCampaignLoopBlueRewardPlan(options = {}) {
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const keys = Array.from(new Set(Array.isArray(options.blueItemKeys) ? options.blueItemKeys.filter(Boolean) : []));
     const choices = keys.slice();
     for (let index = choices.length - 1; index > 0; index -= 1) {
