@@ -3789,8 +3789,9 @@
       enemy.inv = Math.max(Number(enemy.inv || 0), 0.5);
       Neo.ringBurst(enemy.x, enemy.y, 22, '#b99cff', 0.3);
     } else if (key === 'flying_unhitable') {
-      enemy.rivalFlightTime = 15;
-      enemy.inv = Math.max(Number(enemy.inv || 0), 15);
+      const duration = Number(globalThis.NeoNyke?.content?.FLYING_UNTOUCHABLE_DURATION_SECONDS || 5);
+      enemy.rivalFlightTime = duration;
+      enemy.inv = Math.max(Number(enemy.inv || 0), duration);
       enemy.vx = 0; enemy.vy = 0;
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
     } else if (key === 'princess_shield') {

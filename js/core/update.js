@@ -114,6 +114,14 @@ export function isEnemyBlindedByHiddenPlayer(enemy, playerHidden) {
   return Number(enemy?.confusedBlindUntil || 0) > Number(Neo.gameElapsedTime || 0);
 }
 
+export function advancePrincessFlightState(player, dt = 0) {
+  if (!player) return false;
+  const step = Math.max(0, Number(dt) || 0);
+  const remaining = Math.max(0, Number(player.princessFlightTime || 0) - step);
+  player.princessFlightTime = remaining < 1e-9 ? 0 : remaining;
+  return player.princessFlightTime > 0;
+}
+
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
     const elapsedSeconds = Neo.lastTime > 0 ? Math.max(0, (timestamp - Neo.lastTime) / 1000) : 0;
@@ -491,6 +499,7 @@ export function loop(timestamp) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(16, -16, 'fx'), y: Neo.player.y + Neo.rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
       }
     }
+    advancePrincessFlightState(Neo.player, dt);
     if (Neo.player.mooggyZoomiesTime > 0) {
       Neo.player.mooggyZoomiesTime = Math.max(0, Neo.player.mooggyZoomiesTime - dt);
       if (Neo.nextRandom('fx') < 0.45) {

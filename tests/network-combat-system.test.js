@@ -2114,6 +2114,8 @@ describe('authoritative network combat system', () => {
       { action: 'DASH', abilityId: 'flying_unhitable', aimDirection: 0 },
     ] } }, 0.05);
     const flyer = flight.state.players.p1;
+    expect(flyer.statusUntilTick.flying_unhitable - flight.state.tick).toBeGreaterThanOrEqual(99);
+    expect(flyer.statusUntilTick.flying_unhitable - flight.state.tick).toBeLessThanOrEqual(100);
     const projectileId = flight.state.allocateEntityId('projectile');
     flight.state.projectiles[projectileId] = {
       id: projectileId, hostile: true, ownerId: 'enemy', roomId: flyer.roomId,

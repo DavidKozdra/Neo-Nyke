@@ -44,6 +44,7 @@
     buildCampaignWeaponProjectileConfig = () => null,
     WEAPON_BASE_STATS = {},
     MOVE_BASE_STATS = {},
+    FLYING_UNTOUCHABLE_DURATION_SECONDS = 5,
     MOVE_SLOT_BY_KEY = {},
     KIT_ALTERNATIVES = {},
     CONTINUOUS_BEAM_MOVES = [],
@@ -4182,7 +4183,11 @@
         player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), state.tick + Math.ceil(stomp.invulnerabilitySeconds * 20));
         mode = 'dash_aoe';
       } else if (moveKey === 'flying_unhitable' || moveKey === 'cowards_way' || moveKey === 'mooggy_zoomies') {
-        const durationTicks = Math.max(1, Math.round(Number(stats.duration || 3) * 20));
+        const authoredDuration = Math.max(0, Number(stats.duration ?? 3));
+        const durationSeconds = moveKey === 'flying_unhitable'
+          ? Math.min(FLYING_UNTOUCHABLE_DURATION_SECONDS, authoredDuration)
+          : authoredDuration;
+        const durationTicks = Math.max(1, Math.round(durationSeconds * 20));
         statusUntil[moveKey] = state.tick + durationTicks;
         mode = 'status';
       } else if (moveKey === 'princess_shield') {
@@ -7663,7 +7668,7 @@
           enemy.state = 'mirrorNimrodStomp';
           return true;
         } else if (enemy.type === 'rival' && enemy.mirrorPendingDash === 'flying_unhitable') {
-          const durationSeconds = 15;
+          const durationSeconds = FLYING_UNTOUCHABLE_DURATION_SECONDS;
           enemy.rivalFlightUntilTick = Math.max(Number(enemy.rivalFlightUntilTick || 0), state.tick + Math.ceil(durationSeconds * 20));
           enemy.invulnerableUntilTick = Math.max(Number(enemy.invulnerableUntilTick || 0), enemy.rivalFlightUntilTick);
           enemy.vx = 0;

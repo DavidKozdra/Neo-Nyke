@@ -9,6 +9,7 @@
   'use strict';
 
   const MOVE_SLOTS = Object.freeze(['melee', 'laser', 'smash', 'dash']);
+  const FLYING_UNTOUCHABLE_DURATION_SECONDS = 5;
   const MOVE_SLOT_KEYS = Object.freeze({
     melee: Object.freeze(['slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe']),
     laser: Object.freeze([
@@ -53,7 +54,7 @@
     nimrod_stomp: Object.freeze({ damage: 46, cooldown: 2.50, range: 110 }),
     warp: Object.freeze({ cooldown: 3.40 }),
     zip_lightning: Object.freeze({ damage: 26, cooldown: 2.00 }),
-    flying_unhitable: Object.freeze({ cooldown: 18.00, duration: 15.0 }),
+    flying_unhitable: Object.freeze({ cooldown: 18.00, duration: FLYING_UNTOUCHABLE_DURATION_SECONDS }),
     princess_shield: Object.freeze({ cooldown: 16.00 }),
     cowards_way: Object.freeze({ cooldown: 6.00, duration: 3.0 }),
     mooggy_swipe: Object.freeze({ damage: 44, cooldown: 0.50, range: 130 }),
@@ -287,6 +288,7 @@
 
   return {
     MOVE_SLOTS,
+    FLYING_UNTOUCHABLE_DURATION_SECONDS,
     MOVE_SLOT_KEYS,
     MOVE_SLOT_BY_KEY,
     MOVE_EXCLUSIVE_CHARACTERS,
