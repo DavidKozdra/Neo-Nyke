@@ -8,6 +8,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedWorldMutationApi(definitions) {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   const GREEN_DROP_CHANCE = 0.1;
   const GREEN_ITEM_POOL = Object.freeze(Object.entries(definitions.ITEM_DEFS || {})
     .filter(([, item]) => item?.rarity === 'green').map(([key]) => key).sort());
@@ -23,8 +24,8 @@
     prop.broken = true;
     prop.breakAge = 0;
     const drops = [];
-    const greenRandom = typeof options.greenRandom === 'function' ? options.greenRandom : Math.random;
-    const potRandom = typeof options.potRandom === 'function' ? options.potRandom : Math.random;
+    const greenRandom = typeof options.greenRandom === 'function' ? options.greenRandom : deterministicRandom;
+    const potRandom = typeof options.potRandom === 'function' ? options.potRandom : deterministicRandom;
     if (['barrel', 'pot'].includes(prop.kind) && Number(options.runLoopIndex || 0) >= 1
       && GREEN_ITEM_POOL.length && greenRandom() < GREEN_DROP_CHANCE) {
       drops.push({ type: 'item', key: GREEN_ITEM_POOL[Math.floor(greenRandom() * GREEN_ITEM_POOL.length)] || GREEN_ITEM_POOL[0], source: 'green' });

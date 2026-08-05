@@ -4,10 +4,13 @@ const {
   ITEM_DROP_ENTRIES,
   ITEM_DROP_WEIGHTS,
   ITEM_RARITY_BY_KEY,
+  BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS,
   rollCampaignItem,
   createCampaignItemChoices,
+  createBossRushStarterItemPlan,
   createTreasureChestPlan,
 } = require('../js/simulation/SharedItemContent');
+const { RandomService } = require('../js/simulation/RandomService');
 
 describe('shared campaign item content', () => {
   test('publishes the complete normal-campaign drop table without network-only substitutes', () => {
@@ -30,6 +33,32 @@ describe('shared campaign item content', () => {
     expect(new Set(choices).size).toBe(3);
     choices.forEach(key => expect(ITEM_RARITY_BY_KEY[key]).toBeDefined());
     expect(rollCampaignItem(() => 0)).toBe('neo_knife');
+  });
+
+  test('Boss Rush grants five starter rolls deterministically from its run seed', () => {
+    const createPlan = () => createBossRushStarterItemPlan(
+      new RandomService({ matchSeed: 'repeatable-boss-rush' }).scoped('boss-rush:starting-items:p1'),
+    );
+    const first = createPlan();
+    const second = createPlan();
+
+    expect(BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS).toEqual([false, false, true, false, false]);
+    expect(first).toHaveLength(5);
+    expect(second).toEqual(first);
+    expect(first.map(entry => entry.elite)).toEqual(BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS);
+    first.forEach(entry => expect(ITEM_RARITY_BY_KEY[entry.itemKey]).toBeDefined());
+  });
+
+  test('solo Boss Rush keeps the entered seed and uses the scoped shared starter plan', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
+    const start = source.indexOf('function startBossRush()');
+    const end = source.indexOf('function spawnBossRushBoss()', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain('Neo.baseSeedStr = getConfiguredRunSeed();');
+    expect(body).toContain("createScopedRandom('boss-rush:starting-items')");
+    expect(body).toContain('createBossRushStarterItemPlan(bossRushStartRandom)');
+    expect(body).not.toContain('Neo.baseSeedStr = createRandomSeed();');
   });
 
   test('network authority imports shared content instead of defining a private item pool', () => {

@@ -90,6 +90,7 @@
     segmentHitsCircle = () => null,
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
     createCampaignItemChoices = () => [],
+    createBossRushStarterItemPlan = () => [],
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
     ITEM_DEFS = {},
@@ -264,6 +265,10 @@
     resolveCampaignWallOfTophBarriers = () => [],
   } = contentApi || {};
   const combatRandomByState = new WeakMap();
+  // Authority code must never fall through to ambient randomness. The normal
+  // simulation path always supplies RandomService; this deterministic value
+  // also keeps direct/bootstrap calls reproducible when it is unavailable.
+  const authorityFallbackRandom = () => 0.5;
   const CONTINUOUS_BEAM_MOVE_SET = new Set(CONTINUOUS_BEAM_MOVES);
   // Input button bit the client holds while its laser button is down. A channel
   // that has seen the bit ends as soon as it clears (release-to-stop, like the
@@ -465,11 +470,10 @@
     activePlayers(state).forEach(player => {
       if (rush.grantedPlayerIds[player.id]) return;
       const stream = random?.scoped?.(`boss-rush:starting-items:${player.id}`);
-      for (let index = 0; index < 3; index += 1) {
-        const key = rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite: index === 2 });
-        if (!key || !collectSharedCampaignItem(player, key)?.ok) continue;
-        emitEvent('BOSS_RUSH_STARTER_ITEM_GRANTED', { playerId: player.id, itemKey: key, elite: index === 2 });
-      }
+      createBossRushStarterItemPlan(() => stream?.next?.() ?? 0.5).forEach(({ itemKey, elite }) => {
+        if (!itemKey || !collectSharedCampaignItem(player, itemKey)?.ok) return;
+        emitEvent('BOSS_RUSH_STARTER_ITEM_GRANTED', { playerId: player.id, itemKey, elite });
+      });
       player.coins = Math.max(0, Number(player.coins || 0)) + 120;
       rush.grantedPlayerIds[player.id] = true;
       emitEvent('BOSS_RUSH_STARTED', { playerId: player.id, stage: 1, coins: player.coins });
@@ -1520,7 +1524,7 @@
       owner.xp = Math.max(0, Number(owner.xp || 0))
         + Math.round((35 + Math.max(1, Number(state.floorNumber || 1)) * 5) * rewardMultiplier);
     } else if (bounty.kind === 'elite_sniper') {
-      rewardKey = rollCampaignItem(stream ? () => stream.next() : Math.random, { elite: true }) || '';
+      rewardKey = rollCampaignItem(stream ? () => stream.next() : authorityFallbackRandom, { elite: true }) || '';
       if (rewardKey) collectSharedCampaignItem(owner, rewardKey);
       if (Number(bounty.escapes || 0) > 0) {
         owner.coins = Math.max(0, Number(owner.coins || 0)) + Math.round(60 * rewardMultiplier);
@@ -2173,7 +2177,7 @@
   function spawnAuthorityRivalKillRewards(state, enemy, playerId, reward, emitEvent) {
     const randomService = combatRandomByState.get(state);
     const stream = randomService?.scoped?.(`rival:reward:${state.floorNumber}:${enemy.roomId}:${enemy.id}`);
-    const nextRandom = stream ? () => stream.next() : Math.random;
+    const nextRandom = stream ? () => stream.next() : authorityFallbackRandom;
     const coinAmount = Math.max(0, Number(reward?.coins || 0));
     if (coinAmount > 0) {
       const plan = createCampaignCoinDropPlan(enemy.x, enemy.y, coinAmount, {
@@ -5333,7 +5337,7 @@
     const acquisition = collectAuthorityCampaignPickup(state, player, claim.itemKey, {
       duplicateChance: player.itemStats?.itemDuplicateChance,
       canDuplicate: claim.itemKey !== 'artificer_charger',
-      random: loot ? () => loot.next() : Math.random,
+      random: loot ? () => loot.next() : authorityFallbackRandom,
       rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
     }, emitEvent);
     if (!acquisition.ok) return false;
@@ -6480,7 +6484,7 @@
   function spawnAuthorityFloorBoss(state, spawner, emitEvent) {
     const random = combatRandomByState.get(state);
     const stream = random?.scoped?.(`floor-boss:type:${state.floorNumber}`);
-    const bossType = getCampaignFloorBossType(state.floorNumber, stream ? () => stream.next() : Math.random);
+    const bossType = getCampaignFloorBossType(state.floorNumber, stream ? () => stream.next() : authorityFallbackRandom);
     const definition = getEnemyDefinition(bossType) || getEnemyDefinition('queen_cult');
     const encounter = state.floorState?.encounters?.[spawner.roomId];
     delete state.enemies[spawner.id];
@@ -6752,7 +6756,7 @@
         height: Number(state.floorState?.height || 700),
       };
       const service = combatRandomByState.get(state);
-      const rand = (min, max) => min + (service ? service.next('encounter') : Math.random()) * (max - min);
+      const rand = (min, max) => min + (service ? service.next('encounter') : authorityFallbackRandom()) * (max - min);
       for (let index = 0; index < 2; index += 1) {
         this.spawnHazard(enemy, {
           kind: 'lightning_column',
@@ -8107,7 +8111,7 @@
     if (amount <= 0) return;
     const randomService = combatRandomByState.get(state);
     const stream = randomService?.scoped?.(`enemy-coins:${state.floorNumber}:${enemy.roomId}:${enemy.id}`);
-    const random = typeof options.random === 'function' ? options.random : (stream ? () => stream.next() : Math.random);
+    const random = typeof options.random === 'function' ? options.random : (stream ? () => stream.next() : authorityFallbackRandom);
     const plan = createCampaignCoinDropPlan(enemy.x, enemy.y, amount, {
       gameMode: state.matchRules?.gameMode || state.matchRules?.mode,
       coinRewardMultiplier: state.matchRules?.difficulty?.coinRewardMultiplier,
@@ -8124,7 +8128,7 @@
     spawnCoinDrop(state, enemy, emitEvent, options);
     const randomService = combatRandomByState.get(state);
     const loot = randomService?.scoped?.(`enemy-loot:${state.floorNumber}:${enemy.roomId}:${enemy.id}`);
-    const nextRandom = typeof options.random === 'function' ? options.random : (loot ? () => loot.next() : Math.random);
+    const nextRandom = typeof options.random === 'function' ? options.random : (loot ? () => loot.next() : authorityFallbackRandom);
     const descriptor = resolveCampaignEnemyDrop(enemy, {
       random: nextRandom,
       tutorialDummy: !!enemy.tutorialDummy,
@@ -8231,9 +8235,9 @@
           centerX: Number(state.floorState.width || 900) / 2,
           centerY: Number(state.floorState.height || 700) / 2,
           authoredRewardKey: result.rewardKey,
-          random: rewardRandom ? () => rewardRandom.next() : Math.random,
-          scrollRandom: scrollRandom ? () => scrollRandom.next() : Math.random,
-          weaponRandom: weaponRandom ? () => weaponRandom.next() : Math.random,
+          random: rewardRandom ? () => rewardRandom.next() : authorityFallbackRandom,
+          scrollRandom: scrollRandom ? () => scrollRandom.next() : authorityFallbackRandom,
+          weaponRandom: weaponRandom ? () => weaponRandom.next() : authorityFallbackRandom,
           rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
           rollScroll: nextRandom => rollCampaignScroll(nextRandom),
           weaponPool,
@@ -8271,7 +8275,7 @@
         difficultyKey: state.matchRules?.difficultyKey || state.matchRules?.difficulty?.key,
         centerX: Number(state.floorState?.width || 900) / 2,
         centerY: Number(state.floorState?.height || 700) / 2 + 68,
-        createChoices: count => createCampaignItemChoices(count, stream ? () => stream.next() : Math.random, { elite: true }),
+        createChoices: count => createCampaignItemChoices(count, stream ? () => stream.next() : authorityFallbackRandom, { elite: true }),
       });
       if (rewardPlan.ok) {
         rewardPlan.pickups.forEach(descriptor => {
@@ -8890,9 +8894,10 @@
           if (!started.ok) return;
         }
         if ((room.challengeType || pickup.trial) === 'runes') {
+          const runeStream = random.scoped(`challenge:runes:${state.floorNumber}:${room.id}`);
           const started = startCampaignRuneChallenge(room, {
             floorNumber: state.floorNumber, width: state.floorState?.width, height: state.floorState?.height,
-            random: () => random.scoped(`challenge:runes:${state.floorNumber}:${room.id}`).next(),
+            random: () => runeStream.next(),
           });
           if (!started.ok) return;
           started.runes.forEach(rune => {
@@ -8901,9 +8906,10 @@
           });
         }
         if ((room.challengeType || pickup.trial) === 'bomb') {
+          const bombStream = random.scoped(`challenge:bombs:${state.floorNumber}:${room.id}`);
           const started = startCampaignBombChallenge(room, {
             floorNumber: state.floorNumber, width: state.floorState?.width, height: state.floorState?.height,
-            random: () => random.scoped(`challenge:bombs:${state.floorNumber}:${room.id}`).next(),
+            random: () => bombStream.next(),
           });
           if (!started.ok) return;
           started.bombs.forEach(bomb => {
@@ -9045,7 +9051,7 @@
         const room = currentRoom(state, pickup.roomId);
         const gardenRandom = random?.scoped?.(`garden:respawn:${state.floorNumber}:${pickup.roomId}:${pickup.gardenNodeId}:${state.tick}`);
         const collected = collectCampaignGardenFruit(room, pickup, state.elapsedSeconds, {
-          random: gardenRandom ? () => gardenRandom.next() : Math.random,
+          random: gardenRandom ? () => gardenRandom.next() : authorityFallbackRandom,
           minimumRespawnSeconds: 12,
           respawnSpreadSeconds: 10,
         });
@@ -9309,7 +9315,7 @@
       .filter(([, item]) => String(item?.rarity || '').toLowerCase() === 'blue')
       .map(([key]) => key);
     const plan = createCampaignLoopBlueRewardPlan({
-      blueItemKeys, random: stream ? () => stream.next() : Math.random,
+      blueItemKeys, random: stream ? () => stream.next() : authorityFallbackRandom,
       width: Number(state.floorState?.width || 900), height: Number(state.floorState?.height || 700),
       loopIndex: state.runLoopIndex,
     });

@@ -7,6 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEncounterApi() {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   const CAMPAIGN_BOSS_POOL = Object.freeze(['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye']);
 
   function next(random) {
@@ -20,12 +21,12 @@
     return Math.floor(next(random) * (max - min + 1)) + min;
   }
 
-  function getCampaignWaveCount(floorNumber, baseOffset, difficulty = {}, challengeBonus = 0, random = Math.random) {
+  function getCampaignWaveCount(floorNumber, baseOffset, difficulty = {}, challengeBonus = 0, random = deterministicRandom) {
     return Math.max(1, Math.floor(Number(baseOffset || 0) + Number(floorNumber || 1)
       + Number(difficulty.waveBonus || 0) + Number(challengeBonus || 0) + int(random, 0, 1)));
   }
 
-  function rollCampaignEnemyType(floorNumber, roomWeightBonus = 0, random = Math.random) {
+  function rollCampaignEnemyType(floorNumber, roomWeightBonus = 0, random = deterministicRandom) {
     const floor = Math.max(1, Number(floorNumber || 1));
     const bonus = Number(roomWeightBonus || 0);
     const roll = next(random);
@@ -42,7 +43,7 @@
   function buildCampaignWavePlan(count, options = {}) {
     const floor = Math.max(1, Number(options.floorNumber || 1));
     const roomType = options.roomType || 'combat';
-    const random = options.random || Math.random;
+    const random = options.random || deterministicRandom;
     const roomWeightBonus = Number(options.roomWeightBonus || 0);
     if (floor < 4) {
       return Array.from({ length: count }, () => rollCampaignEnemyType(floor, roomWeightBonus, random));
@@ -75,7 +76,7 @@
     return plan.slice(0, count);
   }
 
-  function getCampaignFloorBossType(floorNumber, random = Math.random) {
+  function getCampaignFloorBossType(floorNumber, random = deterministicRandom) {
     if (Number(floorNumber) === 6 && next(random) < 0.66) return 'handsome_devil';
     return CAMPAIGN_BOSS_POOL[Math.floor(next(random) * CAMPAIGN_BOSS_POOL.length)] || CAMPAIGN_BOSS_POOL[0];
   }
@@ -89,7 +90,7 @@
 
   function createCampaignEndlessWavePlan(waveNumber, options = {}) {
     const wave = Math.max(1, Math.floor(Number(waveNumber) || 1));
-    const random = options.random || Math.random;
+    const random = options.random || deterministicRandom;
     if (wave % 10 === 0) {
       const addCount = Math.min(2 + Math.floor(wave / 10), 6);
       return [getCampaignFloorBossType(options.floorNumber, random), ...buildCampaignWavePlan(addCount, { ...options, roomType: 'combat' })];

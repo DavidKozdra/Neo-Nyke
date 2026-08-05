@@ -127,4 +127,30 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+
+  test('bulk golem uses the authored large walk, punch, and smash strip', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.bulk_golem;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/large-golem.png',
+      frameWidth: 128,
+      frameHeight: 128,
+      frameCount: 16,
+      idleFrames: [0],
+      walkFrames: [0, 1, 2],
+      attackFrames: [3, 4, 5, 6, 7, 8, 9],
+      smashFrames: [10, 11, 12, 13, 14, 15],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    expect(image.naturalWidth).toBe(2048);
+    expect(image.naturalHeight).toBe(128);
+    [...def.walkFrames, ...def.attackFrames, ...def.smashFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(1000);
+    });
+  });
 });

@@ -7,6 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedRoomLifecycleApi() {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   const CHALLENGE_PICKUP_TYPES = Object.freeze([
     'challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch',
   ]);
@@ -26,7 +27,7 @@
     Object.freeze({ x: 670, y: 475, color: '#70e09a', label: '4' }),
   ]);
 
-  function rollCampaignChallengeType(floorNumber, random = Math.random) {
+  function rollCampaignChallengeType(floorNumber, random = deterministicRandom) {
     const floor = Math.max(1, Number(floorNumber || 1));
     const maximumIndex = floor <= 2 ? 2 : floor <= 4 ? 4 : CAMPAIGN_CHALLENGE_TYPES.length - 1;
     return CAMPAIGN_CHALLENGE_TYPES[Math.floor(Number(random()) * (maximumIndex + 1))] || CAMPAIGN_CHALLENGE_TYPES[0];
@@ -62,7 +63,7 @@
     return {};
   }
 
-  function createCampaignCircuitSequence(length, random = Math.random) {
+  function createCampaignCircuitSequence(length, random = deterministicRandom) {
     const sequence = [];
     const count = Math.max(3, Math.floor(Number(length || 4)));
     for (let index = 0; index < count; index += 1) {
@@ -118,7 +119,7 @@
 
   function createCampaignTrialEnemyWavePlan(count = 1, options = {}) {
     const floor = Math.max(1, Number(options.floorNumber || 1));
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const width = Math.max(1, Number(options.width || 900));
     const height = Math.max(1, Number(options.height || 700));
     const pool = floor >= 6 ? ['hunter', 'laser', 'charger', 'knave'] : ['hunter', 'laser', 'charger'];
@@ -200,7 +201,7 @@
     const count = Math.max(1, Math.floor(Number(options.count || 5)));
     const width = Math.max(1, Number(options.width || 900));
     const height = Math.max(1, Number(options.height || 700));
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     return Array.from({ length: count }, (_, index) => {
       const angle = Math.PI * 2 * index / count + Number(random()) * 0.18;
       const driftAngle = angle + Math.PI / 2 + (-0.55 + Number(random()) * 1.1);
@@ -250,7 +251,7 @@
     const tutorial = !!options.tutorial;
     const safeCount = tutorial ? 2 : 3; const unsafeCount = tutorial ? 1 : 2;
     const flags = Array.from({ length: safeCount + unsafeCount }, (_, index) => index < safeCount);
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     for (let index = flags.length - 1; index > 0; index -= 1) { const other = Math.floor(Number(random()) * (index + 1)); [flags[index], flags[other]] = [flags[other], flags[index]]; }
     const width = Math.max(1, Number(options.width || 900)); const height = Math.max(1, Number(options.height || 700)); const margin = 90;
     return flags.map(safe => {
@@ -286,7 +287,7 @@
     const targetX = clamp(Number(player.x || width / 2) + Number(player.vx || 0) * leadSeconds, margin, width - margin);
     const targetY = clamp(Number(player.y || height / 2) + Number(player.vy || 0) * leadSeconds, margin, height - margin);
     if (Number(index) === 0) return { x: targetX, y: targetY };
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const angle = Number(random()) * Math.PI * 2;
     const distance = 90 + Number(random()) * 170;
     return {
@@ -367,7 +368,7 @@
     const centerX = Number(options.centerX || 450);
     const centerY = Number(options.centerY || 350);
     const authoredRewardKey = String(options.authoredRewardKey || '');
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const scrollRandom = typeof options.scrollRandom === 'function' ? options.scrollRandom : random;
     const weaponRandom = typeof options.weaponRandom === 'function' ? options.weaponRandom : random;
     const rollEliteItem = typeof options.rollEliteItem === 'function' ? options.rollEliteItem : () => '';
@@ -454,7 +455,7 @@
   function collectCampaignGardenFruit(room, pickup, elapsedSeconds, options = {}) {
     const node = room?.gardenFruitNodes?.find(candidate => candidate?.id === pickup?.gardenNodeId);
     if (!node) return { ok: false, reason: 'GARDEN_NODE_NOT_FOUND' };
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const minimum = Math.max(0, Number(options.minimumRespawnSeconds ?? 12));
     const spread = Math.max(0, Number(options.respawnSpreadSeconds ?? 10));
     node.respawnAt = Number(elapsedSeconds || 0) + minimum + random() * spread;
@@ -511,7 +512,7 @@
 
   function createCampaignSecretRoomPlan(room, options = {}) {
     if (!room || room.type !== 'secret') return { ok: false, reason: 'INVALID_SECRET_ROOM', pickups: [] };
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const floor = Math.max(1, Number(options.floorNumber || 1));
     const maxFloor = Math.max(floor, Number(options.maxFloor || 10));
     const width = Math.max(1, Number(options.width || 900));

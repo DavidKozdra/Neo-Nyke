@@ -11,6 +11,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedAcquisitionApi(definitions, inventory, moves, combat) {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   const WIZARD_PAW_STATS = Object.freeze(['maxHp', 'attackPower', 'attackSpeed']);
   const VOUCHER_RARITY = Object.freeze({
     voucher_white: 'knight',
@@ -46,14 +47,14 @@
     return String(item?.rarity || item?.category || 'knight').toLowerCase();
   }
 
-  function getSameRarityCampaignItem(sourceKey, random = Math.random) {
+  function getSameRarityCampaignItem(sourceKey, random = deterministicRandom) {
     const sameRarity = getScrollItemPool({ rarity: getScrollChoiceRarity(sourceKey), exclude: [sourceKey] });
     const fallback = getScrollItemPool({ exclude: [sourceKey] });
     const pool = sameRarity.length ? sameRarity : fallback;
     return pool[Math.floor(Number(random()) * pool.length)] || 'neo_knife';
   }
 
-  function createCampaignScrollPoolChoices(random = Math.random, count = 4) {
+  function createCampaignScrollPoolChoices(random = deterministicRandom, count = 4) {
     const pool = getScrollItemPool();
     for (let index = pool.length - 1; index > 0; index -= 1) {
       const swapIndex = Math.floor(Number(random()) * (index + 1));
@@ -67,7 +68,7 @@
     const selected = Array.isArray(picks) ? [...new Set(picks.map(String))] : [];
     const fromKeys = Array.isArray(options.fromKeys) ? [...new Set(options.fromKeys.map(String))].slice(0, 3) : [];
     const floor = Math.max(1, Number(options.floorNumber || 1));
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     if (!player || !SCROLL_KEYS.has(key) || itemCount(player, key) <= 0) return { ok: false, reason: 'INVALID_SCROLL_SELECTION' };
     const allItems = new Set(getScrollItemPool());
     const limits = {
@@ -119,7 +120,7 @@
   function applyJestersDiceAcquisition(runState, player, collectCount, options = {}) {
     const copies = Math.max(0, Math.floor(Number(collectCount || 0)));
     if (!runState || !player || copies <= 0) return { ok: false, reason: 'INVALID_JESTER_ACQUISITION', bonusItemCounts: {} };
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const rollItem = typeof options.rollItem === 'function'
       ? options.rollItem
       : () => '';
@@ -142,7 +143,7 @@
     const key = String(itemKey || '');
     if (!runState || !player || !definitions.ITEM_DEFS?.[key]) return { ok: false, reason: 'INVALID_ITEM' };
     if (options.noItems) return { ok: false, reason: 'ITEMS_DISABLED' };
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const duplicateChance = Math.max(0, Math.min(0.75, Number(options.duplicateChance || 0)));
     const canDuplicate = options.canDuplicate !== false && key !== 'artificer_charger';
     const duplicated = canDuplicate && duplicateChance > 0 && random() < duplicateChance;

@@ -123,6 +123,20 @@ const CHARACTER_SHEET_DEFS = {
     attackFrames: [5, 6, 7, 8, 9],
     portraitFrame: 0,
   },
+  bulk_golem: {
+    src: 'assets/sprites/chars/large-golem.png',
+    frameWidth: 128,
+    frameHeight: 128,
+    frameCount: 16,
+    renderScale: 1,
+    stepRate: 7,
+    actionRate: 10,
+    idleFrames: [0],
+    walkFrames: [0, 1, 2],
+    attackFrames: [3, 4, 5, 6, 7, 8, 9],
+    smashFrames: [10, 11, 12, 13, 14, 15],
+    portraitFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices

@@ -7,6 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEventItemApi() {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
   const count = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
 
   function chargeRequirement(player, baseRequirement, itemStats = {}) {
@@ -32,7 +33,7 @@
   function applyCampaignKillCharge(player, options = {}) {
     if (!player) return { ok: false, intents: [] };
     const stats = options.itemStats || player.itemStats || {};
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const intents = [];
     const steps = (Number(stats.overclockedWatchChance || 0) > 0 && random() < Number(stats.overclockedWatchChance) ? 2 : 1)
       + (options.overcharged ? 1 : 0);
@@ -123,7 +124,7 @@
     if (!player || Number(options.damageDealt || 0) <= 0 || options.noInvFrames) return null;
     const chance = Math.min(0.75, Math.max(0, Number(stats.scarfBleedsOnHit || 0)) * 0.25);
     if (chance <= 0) return null;
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     if (random() >= chance) return null;
     if (!attacker || attacker.dead || attacker.bleedImmune) return null;
     return { kind: 'bleed', stacks: 1, duration: 4, chance };
@@ -163,7 +164,7 @@
   function resolveCampaignKillAreaEffects(enemy, player, options = {}) {
     if (!enemy || !player) return [];
     const stats = options.itemStats || player.itemStats || {};
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const intents = [];
     const bleedStacks = Math.max(0, Number(options.deathBleedStacks || 0));
     const splashStacks = Math.max(0, Number(stats.bleedSplashStacks || 0));

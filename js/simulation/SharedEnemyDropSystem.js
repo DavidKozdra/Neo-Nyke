@@ -7,6 +7,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyDropApi() {
   'use strict';
 
+  const deterministicRandom = () => 0.5;
+
   function getCampaignItemDropChance(baseChance, maximumChance = 1, options = {}) {
     const difficultyMultiplier = Math.max(0, Number(options.difficultyMultiplier ?? 1));
     const itemBonus = Math.max(0, Number(options.itemDropChanceBonus || 0));
@@ -27,7 +29,7 @@
   }
 
   function createCampaignCoinDropPlan(x, y, amount, options = {}) {
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const modeMultiplier = options.gameMode === 'treasure_hunt' ? 3 : 1;
     let remaining = Math.max(1, Math.round(Number(amount || 0)
       * Math.max(0, Number(options.coinRewardMultiplier ?? 1)) * modeMultiplier));
@@ -54,7 +56,7 @@
   // materialization while sharing branch priority, chance math and random use.
   function resolveCampaignEnemyDrop(enemy, options = {}) {
     if (!enemy) return null;
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const tutorialDummy = !!options.tutorialDummy;
     if (tutorialDummy) return { type: 'item', elite: false, tutorial: true };
     if (enemy.rivalTurret) return random() < 0.5 ? { type: 'potion', source: 'rival_turret' } : null;
@@ -76,14 +78,14 @@
   // values cannot change a subsequent campaign drop.
   function resolveCampaignBossBonusDrops(enemy, options = {}) {
     if (!enemy || !options.isBoss || options.tutorialDummy || options.forceDeath || options.practice || options.noItems) return [];
-    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     if (Number(random()) >= 0.65) return [];
     const drops = [{ type: 'item', key: 'forge_voucher', source: 'boss_voucher' }];
     if (Number(random()) < 0.12) drops.push({ type: 'god_item', source: 'boss_voucher' });
     return drops;
   }
 
-  function rollCampaignGodItem(itemDefinitions = {}, random = Math.random) {
+  function rollCampaignGodItem(itemDefinitions = {}, random = deterministicRandom) {
     const keys = Object.entries(itemDefinitions)
       .filter(([, item]) => String(item?.rarity || '').toLowerCase() === 'god' && !item?.voucher)
       .map(([key]) => key);
@@ -99,7 +101,7 @@
     return { coins, experience: 20 + floorNumber * 3, finalRelic: finalDeath };
   }
 
-  function rollCampaignFinalRivalRelic(itemDefinitions = {}, random = Math.random) {
+  function rollCampaignFinalRivalRelic(itemDefinitions = {}, random = deterministicRandom) {
     const keys = Object.entries(itemDefinitions)
       .filter(([, item]) => String(item?.rarity || '').toLowerCase() === 'blue')
       .map(([key]) => key);
