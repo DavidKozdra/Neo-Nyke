@@ -2653,21 +2653,66 @@
 <script src="js/ui/credits.js" defer></script>
 <script src="js/ui/pwa-update-prompt.js" defer></script>
 <script>
-  window.addEventListener('load', () => {
+  window.addEventListener('load', async () => {
     const pwaApi = window.KozEngine?.PWA?.clientRegistration;
     if (!pwaApi?.createPwaClient) return;
-    const pwa = pwaApi.createPwaClient({
-      scriptUrl: '/sw.js',
-      updateIntervalMs: 60 * 60 * 1000,
-      onUpdateAvailable: detail => {
-        window.dispatchEvent(new CustomEvent('neonyke:pwa-update-ready', { detail }));
-      },
-      onStateChange: detail => {
-        window.dispatchEvent(new CustomEvent('neonyke:pwa-state', { detail }));
-      },
-    });
-    window.neoNykePwa = pwa;
-    pwa.register().catch(() => {});
+
+    const registrationState = window.__neonykePwaRegistrationState = {
+      attempts: [],
+      failures: [],
+      result: null,
+    };
+
+    function resolveScopeFor(scriptUrl) {
+      try {
+        const url = new URL(scriptUrl, window.location.href);
+        return url.pathname.replace(/[^/]*$/, '');
+      } catch {
+        return '/';
+      }
+    }
+
+    const scriptCandidates = ['/sw.js', './sw.js'];
+    for (const scriptUrl of scriptCandidates) {
+      let failure;
+      const pwa = pwaApi.createPwaClient({
+        scriptUrl,
+        scope: resolveScopeFor(scriptUrl),
+        updateIntervalMs: 60 * 60 * 1000,
+        onUpdateAvailable: detail => {
+          window.dispatchEvent(new CustomEvent('neonyke:pwa-update-ready', { detail }));
+        },
+        onStateChange: detail => {
+          registrationState.attempts.push(detail);
+          if (detail?.state === 'registration-error') {
+            registrationState.failures.push(detail);
+          }
+          window.dispatchEvent(new CustomEvent('neonyke:pwa-state', { detail }));
+        },
+      });
+      registrationState.client = pwa;
+      window.neoNykePwa = pwa;
+      try {
+        const registration = await pwa.register();
+        if (registration) {
+          registrationState.result = { scriptUrl, scope: resolveScopeFor(scriptUrl), success: true };
+          return;
+        }
+      } catch (error) {
+        failure = error;
+        // createPwaClient may throw for environment errors; continue to next candidate.
+        registrationState.failures.push({ state: 'registration-exception', detail: { error } });
+      }
+
+      registrationState.result = { scriptUrl, scope: resolveScopeFor(scriptUrl), success: false };
+      window.neoNykePwa = null;
+      window.dispatchEvent(new CustomEvent('neonyke:pwa-registration-failed', {
+        detail: {
+          scriptUrl,
+          error: failure instanceof Error ? failure.message : String(failure ?? 'registration-returned-null'),
+        },
+      }));
+    }
   });
 </script>
 </body>

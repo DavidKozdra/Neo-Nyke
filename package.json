@@ -6,6 +6,7 @@
     "prepare": "node scripts/install-git-hooks.js",
     "icons": "node generate-icons.js",
     "test": "npm run precache:check && node scripts/run-tests.js",
+    "test:pwa-contract": "npm run precache:check && node node_modules/jest/bin/jest.js tests/pwa-offline-manifest.test.js --runInBand",
     "i18n:check": "node scripts/check-i18n.js --strict",
     "i18n:check:structure": "node scripts/check-i18n.js",
     "i18n:check:strict": "node scripts/check-i18n.js --strict",

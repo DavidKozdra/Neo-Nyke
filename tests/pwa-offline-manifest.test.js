@@ -8,6 +8,8 @@ describe('offline PWA entry points', () => {
   const worker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   const runtime = fs.readFileSync(path.join(root, 'js/vendor/koz-pwa-service-worker-runtime.js'), 'utf8');
   const preCommit = fs.readFileSync(path.join(root, '.githooks/pre-commit'), 'utf8');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
   test('pre-commit regenerates and stages both offline build artifacts', () => {
     expect(preCommit).toContain('npm run precache || exit $?');
@@ -43,11 +45,29 @@ describe('offline PWA entry points', () => {
   });
 
   test('offers a player-controlled update prompt before activating a waiting worker', () => {
-    const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
     const prompt = fs.readFileSync(path.join(root, 'js/ui/pwa-update-prompt.js'), 'utf8');
     expect(page).toContain('js/ui/pwa-update-prompt.js');
     expect(prompt).toContain('neonyke:pwa-update-ready');
     expect(prompt).toContain("applyUpdate({ reload: true })");
     expect(prompt).toContain('Update now');
+  });
+
+  test('manifest install contract is valid for fresh installs', () => {
+    expect(manifest).toHaveProperty('start_url', '/');
+    expect(manifest).toHaveProperty('scope', '/');
+    expect(manifest).toHaveProperty('id', '/');
+    expect(manifest).toHaveProperty('display');
+    expect(manifest.display).toMatch(/^(?:fullscreen|standalone)$/);
+  });
+
+  test('index registers service worker with fallback-safe script candidates', () => {
+    expect(page).toContain('function resolveScopeFor');
+    expect(page).toContain('scriptCandidates = [\'/sw.js\', \'./sw.js\']');
+    expect(page).toContain('for (const scriptUrl of scriptCandidates)');
+    expect(page).toContain('scope: resolveScopeFor(scriptUrl)');
+    expect(page).toContain('neonyke:pwa-registration-failed');
+    expect(page).toContain('const registration = await pwa.register()');
+    expect(page).toContain('if (registration)');
+    expect(page).toContain('return;');
   });
 });
