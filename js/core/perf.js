@@ -238,42 +238,228 @@ function installPerfDebugApi() {
   if (perfState.enabled) ensurePerfOverlay();
 }
 
-export async function boot() {
-  Neo.uiController = Neo.createUIController(Neo.ui);
-  Neo.tutorialController = Neo.createTutorialController?.();
-  Neo.saveStore = Neo.createSaveStore();
-  window._neoSaveStore = Neo.saveStore;
-  Neo.itemRegistry = Neo.createItemRegistry();
+function installBootFailureHandlers() {
+  if (window.__neoBootFailureHandlersInstalled) return;
+  window.__neoBootFailureHandlersInstalled = true;
 
-  installPerfDebugApi();
-  if (Neo.gameStateManager) Neo.gameStateManager.setState(Neo.gameState);
-  else Neo.uiController.setState(Neo.gameState);
-  Neo.uiController.setHudUpdateHook(() => {
-    if (Neo.gameState !== 'play' || !Neo.player) return;
-    const hudPerfStart = perfStart();
-    Neo.updateObjective();
-    Neo.updateHud();
-    perfEnd('Neo.ui.hud', hudPerfStart);
+  const handleError = (errorLike) => {
+    const reason = errorLike?.error || errorLike?.reason || errorLike?.message || errorLike || 'Unknown error';
+    showBootError(reason);
+  };
+
+  window.addEventListener('error', (event) => {
+    if (event && event.error) {
+      handleError(event.error);
+    } else if (event && event.message) {
+      handleError(event.message);
+    } else {
+      handleError('A runtime error stopped the game.');
+    }
   });
-  if (!Neo.metaProgress) Neo.metaProgress = Neo.createDefaultMeta();
-  await Promise.all([
-    Neo.preloadCharacterSheets?.(),
-    Neo.preloadEnvironmentImages?.(),
-  ]);
-  Neo.SPRITE_ATLAS = Neo.buildSpriteAtlas();
-  Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
-  Neo.bindCanvasRecovery?.();
-  Neo.bindInput();
-  Neo.bindPanelInput();
-  Neo.drawActionIcons();
-  await Neo.loadPersistedState();
-  Neo.tutorialController?.syncFromState?.();
-  Neo.drawDifficultyIcons();
-  Neo.updateCharacterSelectionUI();
-  Neo.refreshMenuState();
-  Neo.draw();
-  Neo.installLazyPanels?.();
-  hideBootLoading();
+  window.addEventListener('unhandledrejection', (event) => {
+    handleError(event?.reason || 'An unhandled promise rejection stopped the game.');
+  });
+}
+
+function safePhase(label, fn) {
+  try {
+    return fn();
+  } catch (error) {
+    console.warn(`[Neo Nyke] Boot phase failed: ${label}`, error);
+    return undefined;
+  }
+}
+
+async function safePhaseAsync(label, fn) {
+  try {
+    return await fn();
+  } catch (error) {
+    console.warn(`[Neo Nyke] Boot phase failed: ${label}`, error);
+    return undefined;
+  }
+}
+
+function showBootError(error) {
+  const bootLoading = document.getElementById('bootLoading');
+  if (!bootLoading) return;
+
+  const box = bootLoading.querySelector('.boot-loading__box');
+  if (!box) return;
+
+  const hint = box.querySelector('.boot-loading__hint');
+  if (hint) hint.textContent = 'Startup hit an error on mobile. Using a recovery path.';
+  const message = String(error?.message || error || 'Unknown boot error');
+  const existing = box.querySelector('.boot-loading__error');
+  if (existing) existing.remove();
+
+  const pre = document.createElement('pre');
+  pre.className = 'boot-loading__error';
+  pre.style.cssText = 'margin:10px 0 0; text-align:left; max-width:calc(100vw - 38px); white-space:pre-wrap; font-size:11px; color:#ffd3d3;';
+  pre.textContent = message;
+  box.appendChild(pre);
+
+  bootLoading.classList.remove('boot-loading--done');
+
+  if (!box.querySelector('[data-neo-reload]')) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.neoReload = '1';
+    button.style.cssText = 'margin-top:14px; font:inherit; font-weight:700; min-height:38px; width:100%;';
+    button.textContent = 'Reload game';
+    button.addEventListener('click', () => window.location.reload());
+    box.appendChild(button);
+  }
+}
+
+async function runSafeBootFallback(error) {
+  try { console.warn('[Neo Nyke] Entering safe boot fallback', error); } catch {}
+  showBootError(error);
+  try {
+    if (typeof Neo.createUIController === 'function') {
+      Neo.uiController = Neo.createUIController(Neo.ui);
+    }
+    if (Neo.gameStateManager) Neo.gameStateManager.setState(Neo.gameState);
+    else Neo.uiController?.setState?.(Neo.gameState);
+    Neo.uiController?.setHudUpdateHook?.(() => {});
+    Neo.bindInput?.();
+    Neo.draw?.();
+    Neo.drawDifficultyIcons?.();
+    Neo.refreshMenuState?.();
+    hideBootLoading();
+  } catch (fallbackError) {
+    console.error('[Neo Nyke] Safe boot fallback failed', fallbackError);
+    showBootError(fallbackError);
+  }
+}
+
+export async function boot() {
+  const defaultHideBootLoading = () => {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    const bootLoading = document.getElementById('bootLoading');
+    if (!bootLoading) return;
+    bootLoading.classList.add('boot-loading--done');
+    setTimeout(() => bootLoading.remove(), 320);
+  };
+
+  const fallbackSafePhase = (label, fn) => {
+    if (typeof safePhase === 'function') return safePhase(label, fn);
+    try {
+      return fn();
+    } catch (error) {
+      console.warn(`[Neo Nyke] Boot phase failed: ${label}`, error);
+      return undefined;
+    }
+  };
+
+  const fallbackSafePhaseAsync = async (label, fn) => {
+    if (typeof safePhaseAsync === 'function') return safePhaseAsync(label, fn);
+    try {
+      return await fn();
+    } catch (error) {
+      console.warn(`[Neo Nyke] Boot phase failed: ${label}`, error);
+      return undefined;
+    }
+  };
+
+  const fallbackShowBootError = (error) => {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') {
+      console.warn('[Neo Nyke] Boot error:', error);
+      return;
+    }
+    if (typeof showBootError === 'function') return showBootError(error);
+    const bootLoading = document.getElementById('bootLoading');
+    if (!bootLoading) return;
+    const box = bootLoading.querySelector('.boot-loading__box');
+    if (!box) return;
+    box.querySelector('.boot-loading__hint')?.remove();
+    const message = String(error?.message || error || 'Unknown boot error');
+    const pre = document.createElement('pre');
+    pre.className = 'boot-loading__error';
+    pre.style.cssText = 'margin:10px 0 0; text-align:left; max-width:calc(100vw - 38px); white-space:pre-wrap; font-size:11px; color:#ffd3d3;';
+    pre.textContent = message;
+    box.appendChild(pre);
+  };
+
+  const fallbackInstallBootFailureHandlers = () => {
+    if (typeof installBootFailureHandlers === 'function') return installBootFailureHandlers();
+    const hostWindow = typeof window === 'undefined' ? null : window;
+    if (!hostWindow || typeof hostWindow.addEventListener !== 'function') {
+      return;
+    }
+    if (hostWindow.__neoBootFailureHandlersInstalled) return;
+    hostWindow.__neoBootFailureHandlersInstalled = true;
+    if (typeof hostWindow.addEventListener === 'function') {
+      hostWindow.addEventListener('error', fallbackShowBootError);
+      hostWindow.addEventListener('unhandledrejection', fallbackShowBootError);
+    }
+  };
+
+  const fallbackRunSafeBootFallback = async (error) => {
+    if (typeof runSafeBootFallback === 'function') return runSafeBootFallback(error);
+    try { console.warn('[Neo Nyke] Entering safe boot fallback', error); } catch {}
+    fallbackShowBootError(error);
+    try {
+      if (typeof Neo.createUIController === 'function') {
+        Neo.uiController = Neo.createUIController(Neo.ui);
+      }
+      if (Neo.gameStateManager) Neo.gameStateManager.setState(Neo.gameState);
+      else Neo.uiController?.setState?.(Neo.gameState);
+      Neo.uiController?.setHudUpdateHook?.(() => {});
+      Neo.bindInput?.();
+      Neo.draw?.();
+      Neo.drawDifficultyIcons?.();
+      Neo.refreshMenuState?.();
+      (typeof hideBootLoading === 'function' ? hideBootLoading : defaultHideBootLoading)();
+    } catch (fallbackError) {
+      console.error('[Neo Nyke] Safe boot fallback failed', fallbackError);
+      fallbackShowBootError(fallbackError);
+    }
+  };
+
+  try {
+    fallbackInstallBootFailureHandlers();
+    Neo.uiController = fallbackSafePhase('createUIController', () => Neo.createUIController(Neo.ui));
+    Neo.tutorialController = fallbackSafePhase('createTutorialController', () => Neo.createTutorialController?.());
+    Neo.saveStore = fallbackSafePhase('createSaveStore', () => Neo.createSaveStore());
+    window._neoSaveStore = Neo.saveStore;
+    Neo.itemRegistry = fallbackSafePhase('createItemRegistry', () => Neo.createItemRegistry());
+
+    if (typeof installPerfDebugApi === 'function') {
+      installPerfDebugApi();
+    }
+    if (Neo.gameStateManager) Neo.gameStateManager.setState(Neo.gameState);
+    else Neo.uiController?.setState?.(Neo.gameState);
+
+    Neo.uiController?.setHudUpdateHook?.(() => {
+      if (Neo.gameState !== 'play' || !Neo.player) return;
+      const hudPerfStart = perfStart();
+      Neo.updateObjective?.();
+      Neo.updateHud?.();
+      perfEnd('Neo.ui.hud', hudPerfStart);
+    });
+
+    if (!Neo.metaProgress) Neo.metaProgress = Neo.createDefaultMeta?.();
+    await Promise.all([
+      fallbackSafePhaseAsync('preloadCharacterSheets', () => Neo.preloadCharacterSheets?.()),
+      fallbackSafePhaseAsync('preloadEnvironmentImages', () => Neo.preloadEnvironmentImages?.()),
+    ]);
+    Neo.SPRITE_ATLAS = fallbackSafePhase('buildSpriteAtlas', () => Neo.buildSpriteAtlas?.());
+    Neo.ENV_TILE_ATLAS = fallbackSafePhase('buildEnvironmentTileAtlas', () => Neo.buildEnvironmentTileAtlas?.());
+    fallbackSafePhase('bindCanvasRecovery', () => Neo.bindCanvasRecovery?.());
+    fallbackSafePhase('bindInput', () => Neo.bindInput?.());
+    fallbackSafePhase('bindPanelInput', () => Neo.bindPanelInput?.());
+    fallbackSafePhase('drawActionIcons', () => Neo.drawActionIcons?.());
+    await fallbackSafePhaseAsync('loadPersistedState', () => Neo.loadPersistedState?.());
+    fallbackSafePhase('syncTutorialState', () => Neo.tutorialController?.syncFromState?.());
+    fallbackSafePhase('drawDifficultyIcons', () => Neo.drawDifficultyIcons?.());
+    fallbackSafePhase('updateCharacterSelectionUI', () => Neo.updateCharacterSelectionUI?.());
+    fallbackSafePhase('refreshMenuState', () => Neo.refreshMenuState?.());
+    fallbackSafePhase('drawFrame', () => Neo.draw?.());
+    fallbackSafePhase('installLazyPanels', () => Neo.installLazyPanels?.());
+    (typeof hideBootLoading === 'function' ? hideBootLoading : defaultHideBootLoading)();
+  } catch (error) {
+    await fallbackRunSafeBootFallback(error);
+  }
 }
 
 function hideBootLoading() {

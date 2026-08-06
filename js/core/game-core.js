@@ -4,8 +4,18 @@ export const canvas = document.getElementById('c');
 export const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-const SHARED_ROOM_GEOMETRY = globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY;
-if (!SHARED_ROOM_GEOMETRY) throw new Error('Shared campaign room geometry is unavailable');
+const SHARED_ROOM_GEOMETRY = globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY || {
+  width: 900,
+  height: 700,
+  wallThickness: 28,
+  doorWidth: 140,
+};
+if (!globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY) {
+  console.warn('[Neo Nyke] Shared campaign room geometry was unavailable; using fallback defaults.');
+}
+if (!SHARED_ROOM_GEOMETRY || SHARED_ROOM_GEOMETRY.width == null || SHARED_ROOM_GEOMETRY.height == null) {
+  throw new Error('Shared campaign room geometry is invalid');
+}
 export const ROOM_W = SHARED_ROOM_GEOMETRY.width;
 export const ROOM_H = SHARED_ROOM_GEOMETRY.height;
 export const WALL = SHARED_ROOM_GEOMETRY.wallThickness;

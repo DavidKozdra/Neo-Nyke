@@ -90,4 +90,8 @@ Neo.getViewMode = getViewMode;
 Neo.setViewMode = setViewMode;
 window.addEventListener('keydown', onViewModeKeydown);
 
-if (Neo.render3D) await loadThreeRenderer();
+if (Neo.render3D) {
+  // Top-level await can fail hard on older mobile engines and turns into a total
+  // boot blocker. Load 3D asynchronously and downgrade to 2D mode on failure.
+  loadThreeRenderer().catch(() => {});
+}
