@@ -1,4 +1,4 @@
-const { TypewriterDialogueManager } = require('../Koz_Engine_Lib/UI/typewriterDialogue.js');
+const { TypewriterDialogueManager } = require('koz-engine-lib/UI/typewriterDialogue.js');
 
 describe('TypewriterDialogueManager', () => {
   test('prepares the first line before publishing the dialogue game state', () => {

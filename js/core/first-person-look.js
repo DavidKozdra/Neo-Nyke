@@ -1,6 +1,6 @@
 (function initializeFirstPersonLook(root, factory) {
   const reusableApi = typeof require === 'function'
-    ? require('../../Koz_Engine_Lib/Rendering3D/cameraRig.js')
+    ? require('koz-engine-lib/Rendering3D/cameraRig.js')
     : root.KozEngine?.Rendering3D?.cameraRig;
   const api = factory(reusableApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};

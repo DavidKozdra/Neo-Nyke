@@ -1,4 +1,4 @@
-const { createTypedAgentDispatcher } = require('../Koz_Engine_Lib/AI/agentDispatcher');
+const { createTypedAgentDispatcher } = require('koz-engine-lib/AI/agentDispatcher');
 
 describe('Koz Engine typed agent dispatcher', () => {
   test('runs the pre-update hook before the selected host handler', () => {

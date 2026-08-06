@@ -17,10 +17,10 @@
   const DIAGNOSTIC_PING_INTERVAL_MS = 1_000;
   const INTENTIONAL_DISPOSE_REASONS = new Set(['left', 'leave', 'disposed', 'quit', 'menu', 'changed-session']);
   const resumeApi = typeof require === 'function'
-    ? require('../../Koz_Engine_Lib/Multiplayer/resumeStore.js')
+    ? require('koz-engine-lib/Multiplayer/resumeStore.js')
     : root.KozEngine?.Multiplayer?.resumeStore;
   const coordinatorApi = typeof require === 'function'
-    ? require('../../Koz_Engine_Lib/Multiplayer/tabCoordinator.js')
+    ? require('koz-engine-lib/Multiplayer/tabCoordinator.js')
     : root.KozEngine?.Multiplayer?.tabCoordinator;
 
   function safeStorage(explicitStorage) {

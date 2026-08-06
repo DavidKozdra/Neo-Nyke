@@ -11,12 +11,12 @@ const {
   collectFiles,
   createCacheManifest,
   createVersionToken,
-} = require("../Koz_Engine_Lib/PWA/cacheManifest");
+} = require("koz-engine-lib/PWA/cacheManifest");
 
 const ROOT = path.resolve(__dirname, "..");
 const SW_PATH = path.join(ROOT, "sw.js");
 const INDEX_PATH = path.join(ROOT, "index.html");
-const PWA_RUNTIME_URL = "/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js";
+const PWA_RUNTIME_URL = "/js/vendor/koz-pwa-service-worker-runtime.js";
 // 3D is loaded with import() only after a player selects it, so it is not
 // reachable from main.js's static graph. Keep it precached for offline players.
 const DYNAMIC_MODULE_ENTRIES = [

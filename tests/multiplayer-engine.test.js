@@ -2,34 +2,34 @@ const {
   NetworkTransport,
   normalizeDeliveryOptions,
   assertTransport,
-} = require('../Koz_Engine_Lib/Multiplayer/networkTransport');
+} = require('koz-engine-lib/Multiplayer/networkTransport');
 const {
   DIRECTIONS,
   createProtocolMap,
-} = require('../Koz_Engine_Lib/Multiplayer/protocolMap');
+} = require('koz-engine-lib/Multiplayer/protocolMap');
 const {
   normalizeSessionDescriptor,
   redactSessionDescriptor,
-} = require('../Koz_Engine_Lib/Multiplayer/sessionDescriptor');
+} = require('koz-engine-lib/Multiplayer/sessionDescriptor');
 const {
   createMemoryStorage,
   createResumeStore,
-} = require('../Koz_Engine_Lib/Multiplayer/resumeStore');
-const { createTabCoordinator } = require('../Koz_Engine_Lib/Multiplayer/tabCoordinator');
-const { createResilientSession } = require('../Koz_Engine_Lib/Multiplayer/resilientSession');
-const { SequenceWindow } = require('../Koz_Engine_Lib/Multiplayer/sequenceWindow');
+} = require('koz-engine-lib/Multiplayer/resumeStore');
+const { createTabCoordinator } = require('koz-engine-lib/Multiplayer/tabCoordinator');
+const { createResilientSession } = require('koz-engine-lib/Multiplayer/resilientSession');
+const { SequenceWindow } = require('koz-engine-lib/Multiplayer/sequenceWindow');
 const {
   createEntityDelta,
   applyEntityDelta,
-} = require('../Koz_Engine_Lib/Multiplayer/entityDelta');
-const { PeerRateLimiter } = require('../Koz_Engine_Lib/Multiplayer/rateLimiter');
+} = require('koz-engine-lib/Multiplayer/entityDelta');
+const { PeerRateLimiter } = require('koz-engine-lib/Multiplayer/rateLimiter');
 const {
   createAuthorityCheckpoint,
   restoreAuthorityCheckpoint,
-} = require('../Koz_Engine_Lib/Multiplayer/authorityCheckpoint');
+} = require('koz-engine-lib/Multiplayer/authorityCheckpoint');
 const {
   createDurableObjectAdapter,
-} = require('../Koz_Engine_Lib/Multiplayer/Platforms/Cloudflare/durableObjectAdapter');
+} = require('koz-engine-lib/Multiplayer/Platforms/Cloudflare/durableObjectAdapter');
 
 describe('Koz multiplayer engine extraction', () => {
   test('provides a provider-neutral transport contract', () => {

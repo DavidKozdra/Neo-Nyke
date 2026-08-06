@@ -21,10 +21,31 @@
     }
   }
 
+  function resolveKnownPath(pathname, knownPaths) {
+    if (knownPaths.has(pathname)) return pathname;
+    const directoryIndex = pathname.endsWith("/")
+      ? `${pathname}index.html`
+      : `${pathname}/index.html`;
+    return knownPaths.has(directoryIndex) ? directoryIndex : null;
+  }
+
   function normalizeEntries(entries) {
-    return Array.from(new Set((entries || []).map(function normalizeEntry(entry) {
-      return normalizePath(typeof entry === "string" ? entry : entry?.url);
-    })));
+    return normalizeManifestEntries(entries).map(function entryPath(entry) {
+      return entry.url;
+    });
+  }
+
+  function normalizeManifestEntries(entries) {
+    const normalized = new Map();
+    for (const rawEntry of entries || []) {
+      const entry = typeof rawEntry === "string" ? { url: rawEntry } : rawEntry;
+      const url = normalizePath(entry?.url);
+      normalized.set(url, {
+        url,
+        revision: entry?.revision ? String(entry.revision) : "",
+      });
+    }
+    return Array.from(normalized.values());
   }
 
   function createCacheNames(options) {
@@ -61,6 +82,15 @@
     return !!response && response.status >= 200 && response.status < 300 && response.type !== "opaque";
   }
 
+  function makeNavigationSafe(response) {
+    if (!response?.redirected) return response;
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+
   function install(scope, rawOptions) {
     if (!scope?.addEventListener || !scope?.caches || !scope?.fetch) {
       throw new TypeError("Koz PWA service worker requires a service-worker-like scope");
@@ -68,54 +98,78 @@
 
     const options = rawOptions || {};
     const cacheNames = createCacheNames(options);
-    const critical = normalizeEntries(options.critical);
-    const optional = normalizeEntries(options.optional);
+    const criticalEntries = normalizeManifestEntries(options.critical);
+    const optionalEntries = normalizeManifestEntries(options.optional);
+    const critical = criticalEntries.map(function entryPath(entry) { return entry.url; });
+    const optional = optionalEntries.map(function entryPath(entry) { return entry.url; });
+    const entriesByPath = new Map(
+      criticalEntries.concat(optionalEntries).map(function pair(entry) {
+        return [entry.url, entry];
+      }),
+    );
     const knownPaths = new Set(critical.concat(optional));
     const navigationFallback = normalizePath(options.navigationFallback || "/index.html");
     const networkOnly = (options.networkOnly || ["/api/"]).map(normalizePath);
     const fetchImpl = scope.fetch.bind(scope);
     const warmOptionalOnInstall = options.warmOptionalOnInstall !== false;
 
-    function requestFor(path) {
-      return new Request(new URL(path, scope.location.origin).toString(), {
+    function requestFor(pathname) {
+      return new Request(new URL(pathname, scope.location.origin).toString(), {
         cache: "reload",
         credentials: "same-origin",
       });
     }
 
-    async function fetchIntoCache(cache, path) {
-      const response = await fetchImpl(requestFor(path));
-      if (!isSuccessfulResponse(response)) {
-        throw new Error(`Unable to precache ${path}: HTTP ${response?.status || "unknown"}`);
-      }
-      await cache.put(path, response);
-      return path;
+    function cacheKeyFor(entry) {
+      const url = new URL(entry.url, scope.location.origin);
+      if (entry.revision) url.searchParams.set("__koz_pwa_revision", entry.revision);
+      return new Request(url.toString(), { credentials: "same-origin" });
     }
 
-    async function fillCache(paths, concurrency) {
+    async function fetchIntoCache(cache, entry) {
+      const cacheKey = cacheKeyFor(entry);
+      const reusable = await scope.caches.match(cacheKey);
+      if (reusable) {
+        await cache.put(cacheKey, reusable);
+        return entry.url;
+      }
+
+      const response = await fetchImpl(requestFor(entry.url));
+      if (!isSuccessfulResponse(response)) {
+        throw new Error(
+          `Unable to precache ${entry.url}: HTTP ${response?.status || "unknown"}`,
+        );
+      }
+      await cache.put(cacheKey, response);
+      return entry.url;
+    }
+
+    async function fillCache(entries, concurrency) {
       const cache = await scope.caches.open(cacheNames.precache);
-      return createPool(paths, concurrency, function cachePath(path) {
-        return fetchIntoCache(cache, path);
+      return createPool(entries, concurrency, function cacheEntry(entry) {
+        return fetchIntoCache(cache, entry);
       });
     }
 
     async function cacheCritical() {
-      const results = await fillCache(critical, options.concurrency || 4);
+      const results = await fillCache(criticalEntries, options.concurrency || 4);
       const failures = results.filter(function failed(result) { return !result.ok; });
       if (failures.length) {
         await scope.caches.delete(cacheNames.precache);
-        const failedPaths = failures.map(function failedPath(result) { return result.item; });
+        const failedPaths = failures.map(function failedPath(result) {
+          return result.item.url;
+        });
         throw new Error(`Critical PWA precache failed: ${failedPaths.join(", ")}`);
       }
       return results;
     }
 
     async function warmOptional() {
-      const results = await fillCache(optional, options.optionalConcurrency || 2);
+      const results = await fillCache(optionalEntries, options.optionalConcurrency || 2);
       return {
         cached: results.filter(function passed(result) { return result.ok; }).length,
         failed: results.filter(function failed(result) { return !result.ok; })
-          .map(function failedPath(result) { return result.item; }),
+          .map(function failedPath(result) { return result.item.url; }),
       };
     }
 
@@ -130,8 +184,10 @@
     }
 
     async function matchPrecache(path) {
+      const entry = entriesByPath.get(path);
+      if (!entry) return null;
       const cache = await scope.caches.open(cacheNames.precache);
-      return cache.match(path);
+      return cache.match(cacheKeyFor(entry));
     }
 
     async function putRuntime(request, response) {
@@ -140,11 +196,6 @@
       await cache.put(request, response);
     }
 
-    // A network error rejection from respondWith() is fatal to the page, so an
-    // uncacheable offline miss degrades to a response the caller can handle.
-    // Media and images simply fire their own error events on a 503, but a script
-    // or stylesheet that 503s aborts the importing module graph, so those get an
-    // empty 200 body and fail at the point of use instead of at load.
     const EMPTY_BODY_DESTINATIONS = new Set(["script", "worker", "style"]);
 
     function offlineResponse(request) {
@@ -158,7 +209,6 @@
         headers: { "Content-Type": "text/plain" },
       });
     }
-
     function isNetworkOnly(pathname) {
       return networkOnly.some(function matches(prefix) {
         return pathname === prefix || pathname.startsWith(prefix);
@@ -167,9 +217,9 @@
 
     async function handleNavigation(request, url, event) {
       const pathname = decodePathname(url.pathname);
-      const directPath = knownPaths.has(pathname) ? pathname : null;
+      const directPath = resolveKnownPath(pathname, knownPaths);
       const cached = directPath ? await matchPrecache(directPath) : null;
-      if (cached) return cached;
+      if (cached) return makeNavigationSafe(cached);
 
       try {
         const response = await fetchImpl(request);
@@ -181,7 +231,8 @@
         return response;
       } catch {
         const runtime = await (await scope.caches.open(cacheNames.runtime)).match(request);
-        return runtime || await matchPrecache(navigationFallback)
+        const fallback = runtime || await matchPrecache(navigationFallback);
+        return makeNavigationSafe(fallback)
           || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
       }
     }
@@ -198,19 +249,19 @@
       const isNavigation = request.mode === "navigate" || request.destination === "document";
       if (isNavigation) return handleNavigation(request, url, event);
 
-      if (knownPaths.has(pathname)) {
-        const cached = await matchPrecache(pathname);
+      const knownPath = resolveKnownPath(pathname, knownPaths);
+      if (knownPath) {
+        const cached = await matchPrecache(knownPath);
         if (cached) return cached;
-        // Optional entries (audio, credits media) may be absent when quota or an
-        // early offline switch cut the warm pass short. A rejected respondWith()
-        // surfaces as a network error and can break the running page, so failed
-        // asset lookups must resolve to a response instead of throwing.
         const response = await fetchImpl(request).catch(function offlineMiss() { return null; });
         if (!response) return offlineResponse(request);
         if (isSuccessfulResponse(response)) {
+          const entry = entriesByPath.get(knownPath);
           const copy = response.clone();
           const write = scope.caches.open(cacheNames.precache)
-            .then(function openPrecache(cache) { return cache.put(pathname, copy); });
+            .then(function openPrecache(cache) {
+              return cache.put(cacheKeyFor(entry), copy);
+            });
           event.waitUntil?.(write.catch(function ignorePrecacheWrite() {}));
         }
         return response;
@@ -218,29 +269,34 @@
 
       const runtimeCache = await scope.caches.open(cacheNames.runtime);
       const runtime = await runtimeCache.match(request);
-      if (runtime) return runtime;
-      const response = await fetchImpl(request).catch(function offlineMiss() { return null; });
-      if (!response) return offlineResponse(request);
-      if (isSuccessfulResponse(response)) {
-        const copy = response.clone();
-        const write = runtimeCache.put(request, copy);
-        event.waitUntil?.(write.catch(function ignoreRuntimeWrite() {}));
+      try {
+        const response = await fetchImpl(request);
+        if (isSuccessfulResponse(response)) {
+          const copy = response.clone();
+          const write = runtimeCache.put(request, copy);
+          event.waitUntil?.(write.catch(function ignoreRuntimeWrite() {}));
+        }
+        return response;
+      } catch {
+        return runtime || offlineResponse(request);
       }
-      return response;
     }
 
     async function getStatus() {
       const cache = await scope.caches.open(cacheNames.precache);
-      const keys = await cache.keys();
-      const cachedPaths = new Set(keys.map(function keyPath(request) {
-        return decodePathname(new URL(request.url).pathname);
-      }));
+      async function isCached(entry) {
+        return !!(await cache.match(cacheKeyFor(entry)));
+      }
+      const criticalStates = await Promise.all(criticalEntries.map(isCached));
+      const optionalStates = await Promise.all(optionalEntries.map(isCached));
+      const criticalCached = criticalStates.filter(Boolean).length;
+      const optionalCached = optionalStates.filter(Boolean).length;
       return {
         version: String(options.version || "dev"),
-        criticalReady: critical.every(function cached(path) { return cachedPaths.has(path); }),
-        criticalCached: critical.filter(function cached(path) { return cachedPaths.has(path); }).length,
+        criticalReady: criticalCached === criticalEntries.length,
+        criticalCached,
         criticalTotal: critical.length,
-        optionalCached: optional.filter(function cached(path) { return cachedPaths.has(path); }).length,
+        optionalCached,
         optionalTotal: optional.length,
       };
     }
@@ -289,6 +345,8 @@
       cacheNames,
       critical,
       optional,
+      criticalEntries,
+      optionalEntries,
       cacheCritical,
       warmOptional,
       cleanupOldCaches,
@@ -300,7 +358,9 @@
   return {
     normalizePath,
     decodePathname,
+    resolveKnownPath,
     normalizeEntries,
+    normalizeManifestEntries,
     createCacheNames,
     createPool,
     isSuccessfulResponse,

@@ -1,4 +1,4 @@
-const { createAgentActor, createStateMachine } = require('../Koz_Engine_Lib/AI/actorStateMachine');
+const { createAgentActor, createStateMachine } = require('koz-engine-lib/AI/actorStateMachine');
 
 describe('Koz Engine actor state machine', () => {
   test('runs lifecycle callbacks and transitions returned by a state update', () => {

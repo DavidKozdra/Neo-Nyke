@@ -30,7 +30,7 @@
     "koz-bundle:check": "node scripts/generate-koz-browser-bundle.js --check",
     "precache": "npm run koz-bundle && node scripts/generate-precache.js",
     "precache:check": "npm run koz-bundle:check && node scripts/generate-precache.js --check",
-    "build": "npm run precache && rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/ && node scripts/verify-precache-build.js dist"
+    "build": "npm run precache && rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets dist/ && node scripts/verify-precache-build.js dist"
   },
   "devDependencies": {
     "canvas": "^3.2.3",
@@ -39,6 +39,7 @@
     "terser": "^5.0.0"
   },
   "dependencies": {
+    "koz-engine-lib": "0.1.0",
     "three": "^0.185.1"
   }
 }

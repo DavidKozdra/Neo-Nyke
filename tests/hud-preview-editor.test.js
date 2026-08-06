@@ -1,5 +1,5 @@
-const { HudLayoutRegistry } = require('../Koz_Engine_Lib/UI/components/hudLayout');
-const { HudPreviewEditor } = require('../Koz_Engine_Lib/UI/components/hudPreviewEditor');
+const { HudLayoutRegistry } = require('koz-engine-lib/UI/components/hudLayout');
+const { HudPreviewEditor } = require('koz-engine-lib/UI/components/hudPreviewEditor');
 
 describe('Koz Engine HUD preview editor', () => {
   test('registers components by target class and writes through the layout registry', () => {

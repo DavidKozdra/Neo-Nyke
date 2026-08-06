@@ -1,8 +1,8 @@
-const geometry = require('../Koz_Engine_Lib/Core/geometry2d');
-const { findNearestFromVisit } = require('../Koz_Engine_Lib/Core/targetQuery');
-const { advanceCountdown, advanceInterval } = require('../Koz_Engine_Lib/Time/stepTimer');
-const { ensureStatusMap, applyStackedStatus, clearStatusState } = require('../Koz_Engine_Lib/Combat/statusBook');
-const motion = require('../Koz_Engine_Lib/Combat/projectileMotion');
+const geometry = require('koz-engine-lib/Core/geometry2d');
+const { findNearestFromVisit } = require('koz-engine-lib/Core/targetQuery');
+const { advanceCountdown, advanceInterval } = require('koz-engine-lib/Time/stepTimer');
+const { ensureStatusMap, applyStackedStatus, clearStatusState } = require('koz-engine-lib/Combat/statusBook');
+const motion = require('koz-engine-lib/Combat/projectileMotion');
 
 describe('Koz Engine combat primitives', () => {
   test('shares stable geometry and a spatially-hosted nearest-target query', () => {

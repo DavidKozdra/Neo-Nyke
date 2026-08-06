@@ -1,8 +1,8 @@
-const { createEventBus } = require("../Koz_Engine_Lib/Events/eventBus");
+const { createEventBus } = require('koz-engine-lib/Events/eventBus');
 const {
   createAchievementSystem,
   createMemoryAchievementStore,
-} = require("../Koz_Engine_Lib/Achievements/achievementSystem");
+} = require('koz-engine-lib/Achievements/achievementSystem');
 
 function definitions() {
   return [

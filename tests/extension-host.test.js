@@ -1,4 +1,4 @@
-const { createExtensionHost } = require('../Koz_Engine_Lib/Core/extensionHost');
+const { createExtensionHost } = require('koz-engine-lib/Core/extensionHost');
 
 describe('Koz Engine extension host', () => {
   test('registers typed extension points and supports scoped overrides', () => {

@@ -5,7 +5,7 @@ const {
   BrowserMultiplayerSession,
 } = require('../js/multiplayer/BrowserMultiplayerSession');
 const { RECONNECT_RESERVATION_TICKS } = require('../js/multiplayer/LocalMultiplayerSession');
-const { createMemoryStorage } = require('../Koz_Engine_Lib/Multiplayer/resumeStore');
+const { createMemoryStorage } = require('koz-engine-lib/Multiplayer/resumeStore');
 
 class FakeCloudflareTransport extends NetworkTransport {
   constructor() {

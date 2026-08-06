@@ -1,4 +1,4 @@
-const { createEventBus } = require("../Koz_Engine_Lib/Events/eventBus");
+const { createEventBus } = require('koz-engine-lib/Events/eventBus');
 
 describe("Koz Engine EventBus", () => {
   test("delivers exact, namespace wildcard, and global subscriptions by priority", () => {
