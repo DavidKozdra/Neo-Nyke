@@ -128,6 +128,29 @@ describe('character sprite sheet assets', () => {
     });
   });
 
+  test('hunter enemy uses the authored walk and attack strip', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.hunter;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/hunter.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 8,
+      idleFrames: [0],
+      walkFrames: [1, 2, 3, 4],
+      attackFrames: [5, 6, 7],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [...def.idleFrames, ...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
   test('bulk golem uses the authored large walk, punch, and smash strip', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.bulk_golem;
