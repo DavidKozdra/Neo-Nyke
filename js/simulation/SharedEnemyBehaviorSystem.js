@@ -1,5 +1,5 @@
 (function initializeSharedEnemyBehaviorSystem(root, factory) {
-  const geometryApi = typeof require === 'function' ? require('../../Koz_Engine_Lib/Core/geometry2d.js') : root.KozEngine?.Core?.geometry2d;
+  const geometryApi = typeof require === 'function' ? require('koz-engine-lib/Core/geometry2d.js') : root.KozEngine?.Core?.geometry2d;
   const api = factory(geometryApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};

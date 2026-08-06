@@ -6,7 +6,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 npm run precache || exit $?
-git add -- Koz_Engine_Lib/Core/koz-engine.browser-bundle.js sw.js || exit $?
+git add -- js/vendor/koz-engine.browser-bundle.js js/vendor/koz-pwa-service-worker-runtime.js sw.js || exit $?
 npm run precache:check || exit $?
 node scripts/check-i18n.js --strict || exit $?
 exec node scripts/run-tests.js

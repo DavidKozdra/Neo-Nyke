@@ -6,12 +6,12 @@ describe('offline PWA entry points', () => {
   const root = path.join(__dirname, '..');
   const generator = fs.readFileSync(path.join(root, 'scripts/generate-precache.js'), 'utf8');
   const worker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  const runtime = fs.readFileSync(path.join(root, 'Koz_Engine_Lib/PWA/serviceWorkerRuntime.js'), 'utf8');
+  const runtime = fs.readFileSync(path.join(root, 'js/vendor/koz-pwa-service-worker-runtime.js'), 'utf8');
   const preCommit = fs.readFileSync(path.join(root, '.githooks/pre-commit'), 'utf8');
 
   test('pre-commit regenerates and stages both offline build artifacts', () => {
     expect(preCommit).toContain('npm run precache || exit $?');
-    expect(preCommit).toContain('git add -- Koz_Engine_Lib/Core/koz-engine.browser-bundle.js sw.js || exit $?');
+    expect(preCommit).toContain('git add -- js/vendor/koz-engine.browser-bundle.js js/vendor/koz-pwa-service-worker-runtime.js sw.js || exit $?');
     expect(preCommit).toContain('npm run precache:check || exit $?');
     expect(preCommit).not.toContain('node scripts/generate-precache.js || exit $?');
   });
@@ -30,7 +30,7 @@ describe('offline PWA entry points', () => {
   });
 
   test('uses the reusable engine runtime and a content-derived version', () => {
-    expect(worker).toContain('importScripts("/Koz_Engine_Lib/PWA/serviceWorkerRuntime.js")');
+    expect(worker).toContain('importScripts("/js/vendor/koz-pwa-service-worker-runtime.js")');
     expect(worker).toMatch(/"version": "[a-f0-9]{16}"/);
     expect(generator).toContain('createCacheManifest');
   });

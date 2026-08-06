@@ -1,6 +1,6 @@
 (function initializeNetworkTransport(root, factory) {
   const reusableApi = typeof require === 'function'
-    ? require('../../Koz_Engine_Lib/Multiplayer/networkTransport.js')
+    ? require('koz-engine-lib/Multiplayer/networkTransport.js')
     : root.KozEngine?.Multiplayer?.networkTransport;
   const api = factory(reusableApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};

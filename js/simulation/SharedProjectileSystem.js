@@ -1,5 +1,5 @@
 (function initializeSharedProjectileSystem(root, factory) {
-  const motionApi = typeof require === 'function' ? require('../../Koz_Engine_Lib/Combat/projectileMotion.js') : root.KozEngine?.Combat?.projectileMotion;
+  const motionApi = typeof require === 'function' ? require('koz-engine-lib/Combat/projectileMotion.js') : root.KozEngine?.Combat?.projectileMotion;
   const api = factory(motionApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};

@@ -62,7 +62,7 @@ Milestone 1 now loads `js/simulation/FixedTickRunner.js` before the legacy runti
 
 The existing game already has good groundwork:
 
-- `Koz_Engine_Lib/World/seededRng.js` provides seeded streams.
+- `koz-engine-lib/World/seededRng` provides seeded streams.
 - `game-state.js` derives per-floor `world`, `loot`, `encounter`, and `fx` streams and serializes their consumption counts.
 - `rooms.js` uses `world`; loot and combat generally use their named streams; scoped room/entity random functions reduce call-order coupling.
 

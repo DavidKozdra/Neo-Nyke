@@ -1,6 +1,6 @@
 (function initializeSharedEnemyAISystem(root, factory) {
   const agentApi = typeof require === 'function'
-    ? { ...require('../../Koz_Engine_Lib/AI/agentDispatcher.js'), ...require('../../Koz_Engine_Lib/AI/actorStateMachine.js') }
+    ? { ...require('koz-engine-lib/AI/agentDispatcher.js'), ...require('koz-engine-lib/AI/actorStateMachine.js') }
     : { ...(root.KozEngine?.AI?.agentDispatcher || {}), ...(root.KozEngine?.AI?.actorStateMachine || {}) };
   const api = factory(agentApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};

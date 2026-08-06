@@ -4,9 +4,9 @@ const path = require("node:path");
 const {
   createCacheManifest,
   normalizeUrl,
-} = require("../Koz_Engine_Lib/PWA/cacheManifest");
-const pwaWorker = require("../Koz_Engine_Lib/PWA/serviceWorkerRuntime");
-const { createPwaClient } = require("../Koz_Engine_Lib/PWA/clientRegistration");
+} = require('koz-engine-lib/PWA/cacheManifest');
+const pwaWorker = require('../js/vendor/koz-pwa-service-worker-runtime');
+const { createPwaClient } = require('koz-engine-lib/PWA/clientRegistration');
 
 class FakeCache {
   constructor(origin) {
@@ -47,6 +47,13 @@ function createCacheStorage(origin) {
     },
     async delete(name) {
       return stores.delete(name);
+    },
+    async match(input) {
+      for (const cache of stores.values()) {
+        const response = await cache.match(input);
+        if (response) return response;
+      }
+      return undefined;
     },
   };
 }

@@ -1,7 +1,7 @@
 (function initializeSharedStatusSystem(root, factory) {
   const hitResolution = typeof require === 'function' ? require('./SharedHitResolutionSystem.js') : (root.NeoNyke?.simulation || {});
-  const statusBook = typeof require === 'function' ? require('../../Koz_Engine_Lib/Combat/statusBook.js') : root.KozEngine?.Combat?.statusBook;
-  const timerApi = typeof require === 'function' ? require('../../Koz_Engine_Lib/Time/stepTimer.js') : root.KozEngine?.Time?.stepTimer;
+  const statusBook = typeof require === 'function' ? require('koz-engine-lib/Combat/statusBook.js') : root.KozEngine?.Combat?.statusBook;
+  const timerApi = typeof require === 'function' ? require('koz-engine-lib/Time/stepTimer.js') : root.KozEngine?.Time?.stepTimer;
   const api = factory(hitResolution, statusBook || {}, timerApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};

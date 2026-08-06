@@ -1,5 +1,5 @@
-const { NavigationAgent } = require('../Koz_Engine_Lib/AI/navigationAgent');
-const collision = require('../Koz_Engine_Lib/Combat/collisionLayers');
+const { NavigationAgent } = require('koz-engine-lib/AI/navigationAgent');
+const collision = require('koz-engine-lib/Combat/collisionLayers');
 
 describe('Koz Engine navigation and collision layers', () => {
   test('caches paths, consumes waypoints, and repaths only when needed', () => {

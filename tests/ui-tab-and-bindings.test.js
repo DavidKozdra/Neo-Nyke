@@ -1,5 +1,5 @@
-const { createTabController } = require('../Koz_Engine_Lib/UI/tabController');
-const { assignExclusiveBinding, formatBinding } = require('../Koz_Engine_Lib/UI/controlBindings');
+const { createTabController } = require('koz-engine-lib/UI/tabController');
+const { assignExclusiveBinding, formatBinding } = require('koz-engine-lib/UI/controlBindings');
 
 describe('Koz Engine UI tabs and control bindings', () => {
   test('formats bindings and swaps an occupied exclusive control', () => {

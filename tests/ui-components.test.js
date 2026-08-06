@@ -1,7 +1,7 @@
-const { MenuShell } = require('../Koz_Engine_Lib/UI/components/menuShell');
-const { ControlEditor } = require('../Koz_Engine_Lib/UI/components/controlEditor');
-const { AudioSettings } = require('../Koz_Engine_Lib/UI/components/audioSettings');
-const { HudLayoutRegistry } = require('../Koz_Engine_Lib/UI/components/hudLayout');
+const { MenuShell } = require('koz-engine-lib/UI/components/menuShell');
+const { ControlEditor } = require('koz-engine-lib/UI/components/controlEditor');
+const { AudioSettings } = require('koz-engine-lib/UI/components/audioSettings');
+const { HudLayoutRegistry } = require('koz-engine-lib/UI/components/hudLayout');
 
 describe('Koz Engine UI components', () => {
   test('manages menu visibility and control capture', () => {

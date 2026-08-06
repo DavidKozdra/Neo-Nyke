@@ -1,7 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildPrecacheList, readCurrentPrecache } = require('../scripts/generate-precache');
-const { collectModuleSources } = require('../scripts/generate-koz-browser-bundle');
+const {
+  BRIDGE_PATH,
+  OUTPUT_PATH,
+  collectModuleSources,
+} = require('../scripts/generate-koz-browser-bundle');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -49,9 +53,9 @@ describe('service worker precache completeness', () => {
   });
 
   test('the cached Koz browser bundle embeds every bridge runtime module', () => {
-    const bundleUrl = '/Koz_Engine_Lib/Core/koz-engine.browser-bundle.js';
-    const bridgeSource = fs.readFileSync(path.join(ROOT, 'Koz_Engine_Lib/Core/koz-engine.global.js'), 'utf8');
-    const bundleSource = fs.readFileSync(path.join(ROOT, bundleUrl.slice(1)), 'utf8');
+    const bundleUrl = '/js/vendor/koz-engine.browser-bundle.js';
+    const bridgeSource = fs.readFileSync(BRIDGE_PATH, 'utf8');
+    const bundleSource = fs.readFileSync(OUTPUT_PATH, 'utf8');
     const modules = Object.keys(collectModuleSources(bridgeSource));
 
     expect(cached.has(bundleUrl)).toBe(true);

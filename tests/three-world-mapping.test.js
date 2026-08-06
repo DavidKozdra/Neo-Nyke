@@ -1,6 +1,6 @@
-const mapping = require('../Koz_Engine_Lib/Rendering3D/worldMapping');
-const cameraRig = require('../Koz_Engine_Lib/Rendering3D/cameraRig');
-const roomGeometry = require('../Koz_Engine_Lib/Rendering3D/roomGeometry');
+const mapping = require('koz-engine-lib/Rendering3D/worldMapping');
+const cameraRig = require('koz-engine-lib/Rendering3D/cameraRig');
+const roomGeometry = require('koz-engine-lib/Rendering3D/roomGeometry');
 const fs = require('node:fs');
 const path = require('node:path');
 

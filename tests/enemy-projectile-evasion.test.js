@@ -24,7 +24,7 @@ describe('enemy projectile evasion', () => {
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
   const updateSource = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
   const sharedAiSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedEnemyAISystem.js'), 'utf8');
-  const dispatcherSource = fs.readFileSync(path.join(__dirname, '../Koz_Engine_Lib/AI/agentDispatcher.js'), 'utf8');
+  const dispatcherSource = fs.readFileSync(require.resolve('koz-engine-lib/AI/agentDispatcher'), 'utf8');
 
   test('detects active beams and incoming player projectiles', () => {
     const pathSegment = { x1: 0, y1: 100, x2: 500, y2: 100 };

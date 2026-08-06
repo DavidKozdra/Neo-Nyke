@@ -13,7 +13,7 @@ The repository has three main parts:
 | Area | Responsibility |
 | --- | --- |
 | `index.html`, `js/`, `css/`, `assets/` | The playable browser client and its UI. |
-| `Koz_Engine_Lib/` | A transitional collection of reusable engine modules, exposed to the browser through a global bridge. |
+| `koz-engine-lib` dependency | Reusable engine modules, exposed to the browser through a generated global bridge. |
 | `server/` + `wrangler.toml` | Cloudflare Worker API backed by the `STORE` KV namespace. |
 
 The root `README.md` is the player-facing overview. This file is the
@@ -486,7 +486,8 @@ npm run build             # writes deployable static assets to dist/
 - `npm install` installs a tracked pre-commit hook which runs `npm test`.
 - The test runner tries the Worker endpoints at `http://localhost:8787/api`
   for informational output, then still runs Jest if they are unavailable.
-- `npm run build` copies static files; it does not transpile or bundle them.
+- `npm run build` regenerates the engine bridge and copies the static files; it
+  does not transpile the application modules.
 - Deploy from the repository root, where `wrangler.toml` points at
   `server/server.js` and `dist/`.
 
@@ -495,8 +496,8 @@ npm run build             # writes deployable static assets to dist/
 `index.html` is both the page shell and a substantial UI template. It loads,
 in the required order:
 
-1. `Koz_Engine_Lib/Core/koz-engine.global.js`, which exposes engine APIs under
-   `window.KozEngine`.
+1. `js/vendor/koz-engine.browser-bundle.js`, generated from the installed
+   `koz-engine-lib` package, which exposes engine APIs under `window.KozEngine`.
 2. Sprite definition scripts under `assets/sprites/`, which create
    `window.NeoNykeSpriteDefs`, `window.NeoNykeEnvironmentTileDefs`, and
    `window.NeoNykeIconDefs`.
@@ -520,8 +521,8 @@ state object begins in `js/core/neo.js`.
 - `window.Neo` is the live runtime namespace. Modules import constants and
   helpers where practical, but also read/write `Neo` for players, entities,
   run state, UI handles, content registries, and callbacks.
-- `window.KozEngine` is the transitional engine bridge, not a stable package
-  API. Its source is `Koz_Engine_Lib/Core/koz-engine.global.js`.
+- `window.KozEngine` is the browser compatibility bridge generated from the
+  pinned `koz-engine-lib` dependency. Node-side code should use package imports.
 - `window.NeoSettings`, `window.NeoTouch`, and `window.NeoGamepad` are created
   by their respective input/settings scripts and are used throughout gameplay.
 - DOM IDs and `data-*` attributes in `index.html` are queried directly from
@@ -609,20 +610,19 @@ CSS is deliberately split by concern:
 - `css/panel-borders.css`: panel decoration
 - `css/tutorial.css`: tutorial presentation
 
-The PWA service worker is `sw.js`. When adding a boot-critical asset or script,
-add it to `PRECACHE` as appropriate and bump `CACHE_VERSION`; otherwise users
-with a prior install may not receive the change promptly. `manifest.json` and
-the icon links in `index.html` must remain consistent for installability.
+The PWA service worker is generated at `sw.js`. When adding a boot-critical
+asset or script, ensure `scripts/generate-precache.js` discovers it; content
+changes automatically produce a new cache version. `manifest.json` and the icon
+links in `index.html` must remain consistent for installability.
 
 ## Koz Engine library
 
-`Koz_Engine_Lib/` is a work-in-progress engine extraction, not an isolated
-dependency. Most files are CommonJS-friendly for tests and are exposed in the
-browser by the bridge. Before moving game code into it, read:
-
-- `Koz_Engine_Lib/README.md`
-- `Koz_Engine_Lib/docs/new-user-guide.md`
-- `Koz_Engine_Lib/docs/module-catalog.md`
+The reusable engine is installed as the exact-version dependency
+`koz-engine-lib`. Node-side modules and tests import its public package
+subpaths. `npm run koz-bundle` generates the browser bridge and service-worker
+runtime under `js/vendor/`; `npm run precache` runs that step automatically.
+Package documentation is available under `node_modules/koz-engine-lib/docs/`
+after `npm install`.
 
 The intended boundary is one-way: game code may depend on the engine, while
 engine code should not depend on Neo Nyke globals, game content, DOM wiring, or

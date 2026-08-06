@@ -1,8 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const mixer = require('../Koz_Engine_Lib/Audio/mixerSystem');
-const { createSoundRegistry } = require('../Koz_Engine_Lib/Audio/soundRegistry');
+const mixer = require('koz-engine-lib/Audio/mixerSystem');
+const { createSoundRegistry } = require('koz-engine-lib/Audio/soundRegistry');
 
 describe('audio mixer', () => {
   test('converts requested mix tiers from decibels', () => {

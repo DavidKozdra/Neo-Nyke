@@ -1,7 +1,7 @@
 (function initializeCampaignMovementRules(root, factory) {
   const status = typeof require === 'function' ? require('./SharedStatusSystem.js') : (root.NeoNyke?.simulation || {});
   const cameraRig = typeof require === 'function'
-    ? require('../../Koz_Engine_Lib/Rendering3D/cameraRig.js')
+    ? require('koz-engine-lib/Rendering3D/cameraRig.js')
     : root.KozEngine?.Rendering3D?.cameraRig;
   const moveEffect = typeof require === 'function' ? require('./SharedMoveEffectSystem.js') : (root.NeoNyke?.simulation || {});
   const api = factory(status, cameraRig, moveEffect);
