@@ -933,6 +933,8 @@
     Neo.beamStruggle = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     Neo.setGameState('play');
     const reviveText = cost > 0 ? `REVIVED -${cost} LC` : 'REVIVED';
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1, text: reviveText, c: '#8dd4ff' });
@@ -974,7 +976,12 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 44, life: 2.0, text: `${killerRival.name.toUpperCase()} LOOTS YOUR BODY`, c: killerRival.color });
     }
     updateHud();
-    const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
+    const entry = finalizeRun('dead', {
+      killedBy: Neo.lastDamageSource,
+      killerKey: Neo.lastDamageSourceKey,
+      killerSpriteKey: Neo.lastDamageSourceSpriteKey,
+      killerHazardIcon: Neo.lastDamageSourceHazardIcon,
+    });
     Neo.lastDeathEntryId = entry.id;
     const aimAngle = Neo.player ? Neo.angleToMouse() : 0;
     // Carry the killing blow's residual velocity into the corpse so it gets a
@@ -1054,6 +1061,8 @@
     Neo.activeRun = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     const clearPromise = Promise.all([
       Neo.saveStore.delete('run'),
       Neo.saveStore.put('meta', Neo.metaProgress),

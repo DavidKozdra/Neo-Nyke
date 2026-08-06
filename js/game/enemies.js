@@ -1620,6 +1620,7 @@
   function spawnBombFailAoe(x = Neo.ROOM_W / 2, y = Neo.ROOM_H / 2) {
     Neo.hazards.push({
       kind: 'bomb_aoe',
+      source: 'challenge_bomb',
       x,
       y,
       r: BOMB_FAIL_AOE_RADIUS,

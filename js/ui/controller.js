@@ -4494,6 +4494,7 @@ export function createUIController(view) {
         }
       },
       setDeadScreen(entry) {
+        const killer = Neo.resolveKillerPresentation(entry);
         const fmt = (n) => String(n ?? '—');
         const fmtTime = (s) => {
           const m = Math.floor(s / 60);
@@ -4501,15 +4502,9 @@ export function createUIController(view) {
           return `${m}:${sec.toString().padStart(2, '0')}`;
         };
         if (view.deadKillerCanvas) {
-          const killerLookup = entry.killerKey || entry.killedBy || '';
-          const hazardIcon = Neo.resolveKillerHazardIcon?.(killerLookup);
-          if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
-            Neo.drawHazardKillerIcon(view.deadKillerCanvas, hazardIcon);
-          } else {
-            Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(killerLookup), 120);
-          }
+          Neo.drawKillerPresentation(view.deadKillerCanvas, killer, 120);
         }
-        if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
+        if (view.deadKillerName) view.deadKillerName.textContent = killer.label;
         // Endless mode is single-floor, so the FLOOR stat is repurposed to show
         // the wave reached — the meaningful score for that mode.
         const isEndlessEntry = entry.mode === 'endless';

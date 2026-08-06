@@ -172,6 +172,8 @@ window.Neo = {
   // --- tracking ---
   lastDamageSource: '',
   lastDamageSourceKey: '',
+  lastDamageSourceSpriteKey: '',
+  lastDamageSourceHazardIcon: '',
   nextDoor: null,
   rivals: [],
   pendingRivalDescends: [],
