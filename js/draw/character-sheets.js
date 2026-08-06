@@ -138,7 +138,7 @@ const CHARACTER_SHEET_DEFS = {
     frameWidth: 128,
     frameHeight: 128,
     frameCount: 16,
-    renderScale: 1,
+    renderScale: 2,
     stepRate: 7,
     actionRate: 10,
     idleFrames: [0],

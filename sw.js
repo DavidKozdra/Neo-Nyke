@@ -265,7 +265,7 @@ const KOZ_PWA_CONFIG = {
     "optionalEntries": 55,
     "optionalBytes": 39724530
   },
-  "version": "7f00ac5bfe3990a5"
+  "version": "3a0c23952be11155"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
