@@ -5,8 +5,8 @@
   "scripts": {
     "prepare": "node scripts/install-git-hooks.js",
     "icons": "node generate-icons.js",
-    "test": "npm run precache:check && node scripts/run-tests.js",
-    "test:pwa-contract": "npm run precache:check && node node_modules/jest/bin/jest.js tests/pwa-offline-manifest.test.js --runInBand",
+    "test": "npm run test:pwa-contract && node scripts/run-tests.js",
+    "test:pwa-contract": "npm run precache:check && node node_modules/jest/bin/jest.js tests/pwa-offline-manifest.test.js tests/pwa-bootstrap-behavior.test.js --runInBand",
     "i18n:check": "node scripts/check-i18n.js --strict",
     "i18n:check:structure": "node scripts/check-i18n.js",
     "i18n:check:strict": "node scripts/check-i18n.js --strict",
@@ -27,6 +27,7 @@
     "multiplayer:dev": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml",
     "multiplayer:dev:load": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml --var MULTIPLAYER_LOAD_TEST_TOKEN:playwright-local-100",
     "multiplayer:smoke": "node scripts/smoke-cloudflare-multiplayer.js",
+    "mobile:pwa-smoke": "node scripts/mobile-pwa-smoke.mjs",
     "koz-bundle": "node scripts/generate-koz-browser-bundle.js",
     "koz-bundle:check": "node scripts/generate-koz-browser-bundle.js --check",
     "precache": "npm run koz-bundle && node scripts/generate-precache.js",

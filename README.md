@@ -73,6 +73,12 @@ Local run (recommended):
 2. Run `npm start`.
 3. Open `http://localhost:5173`.
 
+Optional mobile startup smoke check (requires Playwright browsers):
+
+1. Start the game with `npm start`.
+2. In another terminal run `npm run mobile:pwa-smoke` (optionally pass URL as first arg and timeout ms as second arg).
+3. Confirm it prints `[mobile-pwa-smoke] pass`.
+
 Alternative if Python is installed as `python` instead of `python3`:
 
 1. Run `npm run start:py`.
@@ -81,14 +87,21 @@ Alternative if Python is installed as `python` instead of `python3`:
 ## Development
 
 Run `npm install` to install dependencies and configure the tracked Git hooks. The
-pre-commit hook runs `npm run i18n:check` and `npm test`, blocking commits when
-translation locale keys drift, non-English locale values still contain English
-fallback text, or the test suite fails. When adding new moves, items, weapons,
-achievements, or other extracted game content, run `npm run i18n:sync` first so
-the locale files receive the new keys, then translate the new values before
-committing. `npm run i18n:fill` can fill newly synced fallback values across the
-supported locale files. Use `npm run i18n:check:structure` only when you need a
-key-parity-only diagnostic.
+pre-commit hook runs `npm run precache`, `npm run test:pwa-contract`,
+`npm run precache:check`, `npm run i18n:check` (via
+`node scripts/check-i18n.js --strict`), and the main Jest suite. It blocks commits
+when the offline manifest changes without regeneration, locale validation fails, or
+any tests fail.
+
+`npm test` now includes the same PWA contract checks (`test:pwa-contract`) plus
+the full Jest suite, so running tests locally enforces the mobile-first PWA
+regression checks before merge.
+
+When adding new moves, items, weapons, achievements, or other extracted game
+content, run `npm run i18n:sync` first so the locale files receive the new keys,
+then translate the new values before committing. `npm run i18n:fill` can fill
+newly synced fallback values across the supported locale files. Use
+`npm run i18n:check:structure` only when you need a key-parity-only diagnostic.
 
 ## Building and Deploying
 

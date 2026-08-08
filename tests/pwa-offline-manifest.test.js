@@ -8,6 +8,7 @@ describe('offline PWA entry points', () => {
   const worker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   const runtime = fs.readFileSync(path.join(root, 'js/vendor/koz-pwa-service-worker-runtime.js'), 'utf8');
   const preCommit = fs.readFileSync(path.join(root, '.githooks/pre-commit'), 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
   const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
@@ -16,6 +17,15 @@ describe('offline PWA entry points', () => {
     expect(preCommit).toContain('git add -- js/vendor/koz-engine.browser-bundle.js js/vendor/koz-pwa-service-worker-runtime.js sw.js || exit $?');
     expect(preCommit).toContain('npm run precache:check || exit $?');
     expect(preCommit).not.toContain('node scripts/generate-precache.js || exit $?');
+  });
+
+  test('test scripts route pre-commit verification through pwa contract gates', () => {
+    expect(packageJson?.scripts).toMatchObject({
+      test: expect.stringContaining('npm run test:pwa-contract'),
+      'test:pwa-contract': expect.stringContaining('precache:check'),
+    });
+    expect(packageJson?.scripts['test:pwa-contract']).toContain('pwa-bootstrap-behavior.test.js');
+    expect(preCommit).toContain('npm run test:pwa-contract || exit $?');
   });
 
   test('precache generation permanently includes both browser entry points', () => {
@@ -66,7 +76,8 @@ describe('offline PWA entry points', () => {
     expect(page).toContain('for (const scriptUrl of scriptCandidates)');
     expect(page).toContain('scope: resolveScopeFor(scriptUrl)');
     expect(page).toContain('neonyke:pwa-registration-failed');
-    expect(page).toContain('const registration = await pwa.register()');
+    expect(page).toContain('const registration = await withTimeout(');
+    expect(page).toContain('service worker registration');
     expect(page).toContain('if (registration)');
     expect(page).toContain('return;');
   });

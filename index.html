@@ -2657,6 +2657,32 @@
     const pwaApi = window.KozEngine?.PWA?.clientRegistration;
     if (!pwaApi?.createPwaClient) return;
 
+    function getRegistrationTimeoutMs() {
+      const requested = Number(window.__neonykePwaRegistrationTimeoutMs);
+      if (Number.isFinite(requested) && requested > 0) {
+        return Math.max(250, Math.min(30000, requested));
+      }
+      return 12000;
+    }
+
+    function withTimeout(task, ms, label) {
+      return new Promise((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          reject(new Error(`${label || 'operation'} timed out after ${ms}ms`));
+        }, ms);
+
+        Promise.resolve(task)
+          .then(value => {
+            window.clearTimeout(timeoutId);
+            resolve(value);
+          })
+          .catch(error => {
+            window.clearTimeout(timeoutId);
+            reject(error);
+          });
+      });
+    }
+
     const registrationState = window.__neonykePwaRegistrationState = {
       attempts: [],
       failures: [],
@@ -2675,33 +2701,44 @@
     const scriptCandidates = ['/sw.js', './sw.js'];
     for (const scriptUrl of scriptCandidates) {
       let failure;
-      const pwa = pwaApi.createPwaClient({
-        scriptUrl,
-        scope: resolveScopeFor(scriptUrl),
-        updateIntervalMs: 60 * 60 * 1000,
-        onUpdateAvailable: detail => {
-          window.dispatchEvent(new CustomEvent('neonyke:pwa-update-ready', { detail }));
-        },
-        onStateChange: detail => {
-          registrationState.attempts.push(detail);
-          if (detail?.state === 'registration-error') {
-            registrationState.failures.push(detail);
-          }
-          window.dispatchEvent(new CustomEvent('neonyke:pwa-state', { detail }));
-        },
-      });
-      registrationState.client = pwa;
-      window.neoNykePwa = pwa;
+      let pwa;
       try {
-        const registration = await pwa.register();
+        pwa = pwaApi.createPwaClient({
+          scriptUrl,
+          scope: resolveScopeFor(scriptUrl),
+          updateIntervalMs: 60 * 60 * 1000,
+          onUpdateAvailable: detail => {
+            window.dispatchEvent(new CustomEvent('neonyke:pwa-update-ready', { detail }));
+          },
+          onStateChange: detail => {
+            registrationState.attempts.push(detail);
+            if (detail?.state === 'registration-error') {
+              registrationState.failures.push(detail);
+            }
+            window.dispatchEvent(new CustomEvent('neonyke:pwa-state', { detail }));
+          },
+        });
+        registrationState.client = pwa;
+        window.neoNykePwa = pwa;
+
+        const registration = await withTimeout(
+          pwa.register(),
+          getRegistrationTimeoutMs(),
+          'service worker registration',
+        );
         if (registration) {
           registrationState.result = { scriptUrl, scope: resolveScopeFor(scriptUrl), success: true };
           return;
         }
       } catch (error) {
         failure = error;
-        // createPwaClient may throw for environment errors; continue to next candidate.
-        registrationState.failures.push({ state: 'registration-exception', detail: { error } });
+        // createPwaClient or register may throw for environment errors; continue to next candidate.
+        registrationState.failures.push({ state: 'registration-exception', detail: { error: String(failure?.message ?? failure) } });
+        try {
+          await Promise.resolve(pwa?.destroy?.());
+        } catch (destroyError) {
+          registrationState.failures.push({ state: 'destroy-error', detail: { error: String(destroyError?.message ?? destroyError) } });
+        }
       }
 
       registrationState.result = { scriptUrl, scope: resolveScopeFor(scriptUrl), success: false };
