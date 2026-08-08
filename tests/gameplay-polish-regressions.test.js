@@ -74,6 +74,12 @@ describe('gameplay polish regressions', () => {
     expect(renderer3d).toContain('? BOSS_REWARD_CHOICE_FLOOR_LIFT');
   });
 
+  test('3D A/B chest choices keep their dwell instructions above the floor', () => {
+    expect(renderer3d).toContain('const AB_CHEST_REWARD_CHOICE_FLOOR_LIFT = 46;');
+    expect(renderer3d).toContain("pickup.type === 'rewardChoice' && pickup.dwellMode");
+    expect(renderer3d).toContain('? AB_CHEST_REWARD_CHOICE_FLOOR_LIFT');
+  });
+
   test('3D chests contain only the authored chest sprite', () => {
     const start = renderer3d.indexOf('function syncChests()');
     const end = renderer3d.indexOf('\nfunction syncDestructibles()', start);

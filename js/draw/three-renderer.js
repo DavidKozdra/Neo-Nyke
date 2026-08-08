@@ -2422,6 +2422,10 @@ const BAKED_PICKUP_FLOOR_LIFT = {
 // Lift them enough to clear the arena floor while leaving dwell-choice circles
 // anchored to the ground.
 const BOSS_REWARD_CHOICE_FLOOR_LIFT = 24;
+// A/B chest choices add a second instruction line down at y=44 in their baked
+// art. Put the bottom of that 90-unit billboard just above the floor so the
+// item name and dwell prompt stay readable in perspective.
+const AB_CHEST_REWARD_CHOICE_FLOOR_LIFT = 46;
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
 // Sized from each type's actual draw extents in drawPickups, doubled (the bake
@@ -2555,13 +2559,16 @@ function syncPickups() {
         const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
         const isBossRewardChoice = pickup.type === 'rewardChoice'
           && String(pickup.groupId || '').startsWith('boss:');
+        const isAbChestRewardChoice = pickup.type === 'rewardChoice' && pickup.dwellMode;
         const mappedFloorLift = roomGeometry3d.resolveElevation?.(
           { kind: pickup.type },
           { kindOffsets: BAKED_PICKUP_FLOOR_LIFT },
         );
-        const floorLift = isBossRewardChoice
-          ? BOSS_REWARD_CHOICE_FLOOR_LIFT
-          : Number(mappedFloorLift) > 0 ? mappedFloorLift : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
+        const floorLift = isAbChestRewardChoice
+          ? AB_CHEST_REWARD_CHOICE_FLOOR_LIFT
+          : isBossRewardChoice
+            ? BOSS_REWARD_CHOICE_FLOOR_LIFT
+            : Number(mappedFloorLift) > 0 ? mappedFloorLift : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
         obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : floorLift;
         return;
       }
