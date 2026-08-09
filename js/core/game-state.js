@@ -922,6 +922,7 @@ export function resumeGame() {
       moggys_coat: 0,
       veggys_pendant: 0,
       procy_pickle: 0,
+      factor_of_elements: 0,
       princes_glasses: 0,
       mateos_bag: 0,
       extra_battery: 0,

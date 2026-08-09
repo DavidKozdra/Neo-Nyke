@@ -33,6 +33,7 @@
     ['shield_of_aegis', 4, 'god'], ['pendant_of_kronos', 5, 'god'],
     ['robot_arm', 3, 'god'], ['rich_mans_luck', 5, 'god'],
     ['princes_glasses', 14, 'wizard'], ['procy_pickle', 5, 'god'],
+    ['factor_of_elements', 5, 'god'],
     ['veggys_pendant', 0, 'wizard'], ['mateos_bag', 10, 'wizard'],
     ['extra_battery', 10, 'wizard'], ['mooggy_zoomies', 14, 'wizard'],
     ['el_bartos_cape', 6, 'god'], ['voucher_white', 5, 'knight'],

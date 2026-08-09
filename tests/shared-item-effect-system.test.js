@@ -38,6 +38,13 @@ describe('shared campaign item effects', () => {
     expect(stats.coinPickupMultiplier).toBe(2.5);
   });
 
+  test('derives Factor of Elements damage scaling per relic stack', () => {
+    const stats = itemEffects.deriveCampaignItemStats({
+      items: { factor_of_elements: 2 },
+    });
+    expect(stats.factorOfElementsDamagePerStatusStack).toBe(0.1);
+  });
+
   test('plans Sweepy Box mines with campaign arm, blast, damage, and bleed scaling', () => {
     expect(itemEffects.planCampaignThornMine(3)).toEqual({
       count: 3, durationSeconds: 5, armSeconds: 0.18, triggerRadius: 34,

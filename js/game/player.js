@@ -660,6 +660,7 @@ export function getItemStats() {
     const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
     const procyPickle = getItemCount('procy_pickle');
+    const factorOfElements = getItemCount('factor_of_elements');
     const ironLung = getItemCount('iron_lung');
     const pendantOfRock = getItemCount('pendant_of_rock');
     // Foley's Irish NewYork Charm (GREEN): really +1 flat on-hit damage per stack
@@ -802,6 +803,7 @@ export function getItemStats() {
       critMultiplier,
       kronosDamageMultiplier,
       kronosBossDamageMultiplier,
+      factorOfElementsDamagePerStatusStack: factorOfElements * 0.05,
       // Pendant of Rock: +2% damage per stack to any rock-kind projectile. Applied
       // in spawnProjectile when props.kind === 'rock' (see world.js).
       rockDamageMultiplier: 1 + pendantOfRock * 0.02,

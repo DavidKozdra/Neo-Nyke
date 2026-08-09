@@ -120,6 +120,7 @@
       critChance, critMultiplier: rollback.critMultiplier,
       kronosDamageMultiplier: 1 + stacks('pendant_of_kronos') * godItemStacks * 0.025,
       kronosBossDamageMultiplier: 1 + stacks('pendant_of_kronos') * 0.05,
+      factorOfElementsDamagePerStatusStack: stacks('factor_of_elements') * 0.05,
       rockDamageMultiplier: 1 + stacks('pendant_of_rock') * 0.02,
       flatHitDamageBonus: stacks('foleys_irish_newyork_charm'),
       attackSpeedMultiplier: 1 + stacks('attack_servo') * 0.08 + (chronoActive ? stacks('chrono_spring') * 0.16 : 0),

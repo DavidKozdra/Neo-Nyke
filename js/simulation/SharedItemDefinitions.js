@@ -605,6 +605,17 @@ const ITEM_DEFS = {
       category: 'god',
       tags: ['poison', 'status', 'spread', 'tools', 'crit', 'god'],
     },
+    factor_of_elements: {
+      key: 'factor_of_elements',
+      name: 'Factor of Elements',
+      shortName: 'Status +5%',
+      description: 'Each stack: deal 5% more damage for every status stack on the enemy.',
+      rarity: 'god',
+      color: '#ffd85a',
+      accent: '#6fe7ff',
+      category: 'god',
+      tags: ['status', 'damage', 'god'],
+    },
     princes_glasses: {
       key: 'princes_glasses',
       name: "Prince's Glasses",
@@ -815,6 +826,7 @@ const ITEM_SHORT_DESCRIPTIONS = Object.freeze({
   moggys_coat: 'Hidden kills prime an opening Dark Drain ambush.',
   veggys_pendant: 'Gain max HP now and every three rooms.',
   procy_pickle: 'Crits, status procs, and tools can spread statuses.',
+  factor_of_elements: 'Deal +5% damage per enemy status stack per relic stack.',
   princes_glasses: 'Upgrade the minimap and gain crit and defense.',
   mateos_bag: 'Store potions for stronger healing and emergency use.',
   extra_battery: 'Choose one move to gain +1 max stack.',
@@ -925,4 +937,3 @@ const SCROLL_KEYS = Object.keys(SCROLL_DEFS);
 
   return { ITEM_DEFS, ITEM_SHORT_DESCRIPTIONS, getItemShortDescription, SCROLL_DEFS, SCROLL_KEYS };
 });
-

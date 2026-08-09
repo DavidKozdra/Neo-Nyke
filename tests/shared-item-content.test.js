@@ -16,7 +16,7 @@ describe('shared campaign item content', () => {
   test('publishes the complete normal-campaign drop table without network-only substitutes', () => {
     const keys = ITEM_DROP_ENTRIES.map(([key]) => key);
 
-    expect(keys).toHaveLength(50);
+    expect(keys).toHaveLength(51);
     expect(new Set(keys).size).toBe(keys.length);
     expect(ITEM_DROP_WEIGHTS.map(([key]) => key)).toEqual(keys);
     expect(Object.keys(ITEM_RARITY_BY_KEY)).toEqual(keys);
