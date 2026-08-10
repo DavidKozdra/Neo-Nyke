@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Tanrı Döngüsü",
   "achievements.godloop.desc": "Tek bir koşuda 20 döngü tamamla",
-  "achievementProgress.godloop.label": "Bu koşudaki döngüler"
+  "achievementProgress.godloop.label": "Bu koşudaki döngüler",
+  "moves.intense_biscuits.name": "Yoğun Bisküviler",
+  "moves.intense_biscuits.desc": "Bisküvi bombardımanı diyelim: küçük bir atlayış beş güdümlü bisküvi fırlatır ve yakalanan düşman başına azami canın %2'sini, en fazla %8'e kadar iyileştirir."
 }

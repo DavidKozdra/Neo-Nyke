@@ -538,7 +538,7 @@
     return targets;
   }
 
-  function planCampaignRandomPounce(options = {}) {
+  function planCampaignPounceVolley(options = {}, config = {}) {
     const originX = Number(options.originX || 0);
     const originY = Number(options.originY || 0);
     const radiusMultiplier = Math.max(0, Number(options.aoeRadiusMultiplier ?? 1));
@@ -547,20 +547,23 @@
     const anvilRange = Number(options.anvilRange || 0);
     const godMode = !!options.godMode;
     const random = typeof options.random === 'function' ? options.random : () => 0.5;
-    const targets = selectCampaignRandomPounceTargets(options.entities, 8, random);
-    const burstBaseDamage = Number.isFinite(Number(options.burstBaseDamage)) ? Number(options.burstBaseDamage) : godMode ? 78 : 52;
-    const fangBaseDamage = Number.isFinite(Number(options.fangBaseDamage)) ? Number(options.fangBaseDamage) : godMode ? 34 : 24;
+    const projectileCount = Math.max(1, Math.floor(Number(config.projectileCount || 8)));
+    const targets = selectCampaignRandomPounceTargets(options.entities, projectileCount, random);
+    const burstBaseDamage = Number.isFinite(Number(options.burstBaseDamage))
+      ? Number(options.burstBaseDamage)
+      : godMode ? Number(config.godBurstDamage || 78) : Number(config.burstDamage || 52);
+    const projectileBaseDamage = Number.isFinite(Number(options.projectileBaseDamage ?? options.fangBaseDamage))
+      ? Number(options.projectileBaseDamage ?? options.fangBaseDamage)
+      : godMode ? Number(config.godProjectileDamage || 34) : Number(config.projectileDamage || 24);
     return {
-      radius: (160 + anvilRange) * radiusMultiplier,
+      radius: (Number(config.radius || 160) + anvilRange) * radiusMultiplier,
       burstBaseDamage,
       // Campaign applies the AOE item multiplier to the authored base, then
       // adds forge damage afterwards; do not fold the forge bonus into it.
       burstDamage: Math.round(burstBaseDamage * damageMultiplier) + anvilDamage,
-      bleedStacks: 2,
-      bleedDurationSeconds: 5,
-      fangs: Array.from({ length: 8 }, (_, index) => {
+      projectiles: Array.from({ length: projectileCount }, (_, index) => {
         const target = targets.length ? targets[index % targets.length] : null;
-        const spreadAngle = index / 8 * Math.PI * 2;
+        const spreadAngle = index / projectileCount * Math.PI * 2;
         const baseAngle = target
           ? Math.atan2(Number(target.y) - originY, Number(target.x) - originX) + (Number(random() || 0) - 0.5) * 0.5
           : spreadAngle;
@@ -568,20 +571,49 @@
           target,
           targetId: target?.id || null,
           angle: baseAngle,
-          speed: target ? 620 : 560,
-          radius: 5,
-          lifeSeconds: 1.1,
-          damage: Math.round(fangBaseDamage * damageMultiplier) + anvilDamage,
-          baseDamage: fangBaseDamage,
-          knockback: 180,
+          speed: target ? Number(config.homingSpeed || 620) : Number(config.speed || 560),
+          radius: Number(config.projectileRadius || 5),
+          lifeSeconds: Number(config.lifeSeconds || 1.1),
+          damage: Math.round(projectileBaseDamage * damageMultiplier) + anvilDamage,
+          baseDamage: projectileBaseDamage,
+          knockback: Number(config.knockback || 180),
           homing: !!target,
-          homingRadius: 380,
-          homingSpeed: 680,
-          homingAccel: 4.2,
-          homingTurnRate: 3.8,
-          hitOptions: { bleedChance: 0.55, bleedStacks: 2, bleedDuration: 5, critBonus: 0.35 },
+          homingRadius: Number(config.homingRadius || 380),
+          homingSpeed: Number(config.homingTopSpeed || 680),
+          homingAccel: Number(config.homingAccel || 4.2),
+          homingTurnRate: Number(config.homingTurnRate || 3.8),
+          hitOptions: { ...(config.hitOptions || {}) },
         };
       }),
+    };
+  }
+
+  function planCampaignRandomPounce(options = {}) {
+    const plan = planCampaignPounceVolley(options, {
+      radius: 160, burstDamage: 52, godBurstDamage: 78,
+      projectileCount: 8, projectileDamage: 24, godProjectileDamage: 34,
+      projectileRadius: 5, speed: 560, homingSpeed: 620, homingTopSpeed: 680,
+      lifeSeconds: 1.1, knockback: 180, homingRadius: 380,
+      homingAccel: 4.2, homingTurnRate: 3.8,
+      hitOptions: { bleedChance: 0.55, bleedStacks: 2, bleedDuration: 5, critBonus: 0.35 },
+    });
+    return { ...plan, bleedStacks: 2, bleedDurationSeconds: 5, fangs: plan.projectiles };
+  }
+
+  function planCampaignIntenseBiscuits(options = {}) {
+    const plan = planCampaignPounceVolley(options, {
+      radius: 105, burstDamage: 28, godBurstDamage: 42,
+      projectileCount: 5, projectileDamage: 11, godProjectileDamage: 16,
+      projectileRadius: 7, speed: 480, homingSpeed: 520, homingTopSpeed: 570,
+      lifeSeconds: 1.05, knockback: 110, homingRadius: 310,
+      homingAccel: 3.8, homingTurnRate: 3.5,
+      hitOptions: { critBonus: 0.1 },
+    });
+    return {
+      ...plan,
+      biscuits: plan.projectiles,
+      healMaxHpRatioPerTarget: 0.02,
+      healMaxHpRatioCap: 0.08,
     };
   }
 
@@ -893,6 +925,7 @@
     advanceCampaignFloorLavaTrail,
     selectCampaignRandomPounceTargets,
     planCampaignRandomPounce,
+    planCampaignIntenseBiscuits,
     planCampaignNailShot,
     planCampaignLaserShockwave,
     resolveCampaignChaosBurst,

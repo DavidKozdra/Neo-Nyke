@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "ゴッドループ",
   "achievements.godloop.desc": "1回のランで20ループを完了する",
-  "achievementProgress.godloop.label": "今回のランのループ数"
+  "achievementProgress.godloop.label": "今回のランのループ数",
+  "moves.intense_biscuits.name": "激烈ビスケット",
+  "moves.intense_biscuits.desc": "いわばビスケット砲撃。小さく飛びかかって追尾ビスケットを5枚放ち、巻き込んだ敵1体につき最大HPの2%を、最大8%まで回復する。"
 }

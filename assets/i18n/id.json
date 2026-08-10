@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Putaran Dewa",
   "achievements.godloop.desc": "Selesaikan 20 putaran dalam satu permainan",
-  "achievementProgress.godloop.label": "Putaran dalam permainan ini"
+  "achievementProgress.godloop.label": "Putaran dalam permainan ini",
+  "moves.intense_biscuits.name": "Biskuit Intens",
+  "moves.intense_biscuits.desc": "Hujan biskuit, kalau boleh dibilang: terjangan kecil menembakkan lima biskuit pelacak dan memulihkan 2% HP maksimum per musuh yang terkena, hingga 8%."
 }

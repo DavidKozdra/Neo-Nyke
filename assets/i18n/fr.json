@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Boucle divine",
   "achievements.godloop.desc": "Terminez 20 boucles en une seule partie",
-  "achievementProgress.godloop.label": "Boucles dans cette partie"
+  "achievementProgress.godloop.label": "Boucles dans cette partie",
+  "moves.intense_biscuits.name": "Biscuits intenses",
+  "moves.intense_biscuits.desc": "Un déluge de biscuits, si vous voulez : un bond compact lance cinq biscuits à tête chercheuse et soigne 2 % des PV max par ennemi touché, jusqu’à 8 %."
 }

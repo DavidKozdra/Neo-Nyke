@@ -273,6 +273,13 @@ export function drawMoveToastIcon(canvas, moveDef) {
     iconDef.pixels.forEach(([px, py]) => {
       ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
     });
+    if (iconDef.accent) {
+      ctx2d.shadowBlur = 0;
+      ctx2d.fillStyle = iconDef.accent;
+      (iconDef.accentPixels || []).forEach(([px, py]) => {
+        ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+      });
+    }
     ctx2d.shadowBlur = 0;
     return;
   }

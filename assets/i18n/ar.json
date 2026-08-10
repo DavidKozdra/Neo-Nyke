@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "حلقة الآلهة",
   "achievements.godloop.desc": "أكمل 20 حلقة في جولة واحدة",
-  "achievementProgress.godloop.label": "الحلقات في هذه الجولة"
+  "achievementProgress.godloop.label": "الحلقات في هذه الجولة",
+  "moves.intense_biscuits.name": "بسكويت جامح",
+  "moves.intense_biscuits.desc": "قصف بالبسكويت، إن شئت: انقضاضة صغيرة تطلق خمس قطع بسكويت موجهة وتشفي 2٪ من أقصى الصحة لكل عدو تصيبه، حتى 8٪."
 }

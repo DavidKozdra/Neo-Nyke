@@ -25,6 +25,7 @@ const {
   resolveCampaignFloorLava,
   advanceCampaignFloorLavaTrail,
   planCampaignRandomPounce,
+  planCampaignIntenseBiscuits,
   planCampaignNailShot,
   planCampaignLaserShockwave,
   resolveCampaignChaosBurst,
@@ -236,6 +237,27 @@ describe('shared campaign move effects', () => {
       targetId: 'enemy-9', speed: 620, damage: 54, baseDamage: 34,
       homing: true, homingRadius: 380,
       hitOptions: expect.objectContaining({ critBonus: 0.35, bleedChance: 0.55 }),
+    }));
+  });
+
+  test('plans Intense Biscuits as a smaller, weaker healing pounce with five homing biscuits', () => {
+    const entities = Array.from({ length: 6 }, (_, index) => ({ id: `enemy-${index + 1}`, x: 80 + index * 10, y: 0 }));
+    const biscuits = planCampaignIntenseBiscuits({
+      originX: 0, originY: 0, entities,
+      aoeRadiusMultiplier: 1.2, aoeDamageMultiplier: 1.5,
+      anvilDamage: 2, anvilRange: 5, random: () => 0,
+    });
+    expect(biscuits).toEqual(expect.objectContaining({
+      radius: 132, burstBaseDamage: 28, burstDamage: 44,
+      healMaxHpRatioPerTarget: 0.02, healMaxHpRatioCap: 0.08,
+    }));
+    expect(biscuits.radius).toBeLessThan(planCampaignRandomPounce().radius);
+    expect(biscuits.burstBaseDamage).toBeLessThan(planCampaignRandomPounce().burstBaseDamage);
+    expect(biscuits.biscuits).toHaveLength(5);
+    expect(biscuits.biscuits[0]).toEqual(expect.objectContaining({
+      targetId: 'enemy-6', speed: 520, damage: 19, baseDamage: 11,
+      radius: 7, homing: true, homingRadius: 310,
+      hitOptions: { critBonus: 0.1 },
     }));
   });
 

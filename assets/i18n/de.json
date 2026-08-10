@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Götterschleife",
   "achievements.godloop.desc": "Schließe 20 Schleifen in einem einzigen Lauf ab",
-  "achievementProgress.godloop.label": "Schleifen in diesem Lauf"
+  "achievementProgress.godloop.label": "Schleifen in diesem Lauf",
+  "moves.intense_biscuits.name": "Heftige Kekse",
+  "moves.intense_biscuits.desc": "Keks-Bombardement, wenn man so will: Ein kompakter Sprung feuert fünf zielsuchende Kekse ab und heilt 2 % der maximalen LP pro erfasstem Gegner, bis zu 8 %."
 }

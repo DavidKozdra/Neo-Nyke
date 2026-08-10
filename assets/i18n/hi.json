@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "ईश्वरीय चक्र",
   "achievements.godloop.desc": "एक ही दौड़ में 20 चक्र पूरे करें",
-  "achievementProgress.godloop.label": "इस दौड़ के चक्र"
+  "achievementProgress.godloop.label": "इस दौड़ के चक्र",
+  "moves.intense_biscuits.name": "ज़बरदस्त बिस्कुट",
+  "moves.intense_biscuits.desc": "इसे बिस्कुट बमबारी कहें: एक छोटी झपट पाँच लक्ष्य-साधक बिस्कुट छोड़ती है और हर फँसे दुश्मन पर अधिकतम HP का 2%, कुल 8% तक, ठीक करती है।"
 }

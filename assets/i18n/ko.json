@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "신의 순환",
   "achievements.godloop.desc": "한 번의 도전에서 루프 20회 완료",
-  "achievementProgress.godloop.label": "이번 도전의 루프 수"
+  "achievementProgress.godloop.label": "이번 도전의 루프 수",
+  "moves.intense_biscuits.name": "강렬한 비스킷",
+  "moves.intense_biscuits.desc": "말하자면 비스킷 포격입니다. 작은 도약으로 유도 비스킷 5개를 발사하고, 휘말린 적 하나당 최대 HP의 2%를 최대 8%까지 회복합니다."
 }

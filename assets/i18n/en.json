@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Godloop",
   "achievements.godloop.desc": "Complete 20 loops in a single run",
-  "achievementProgress.godloop.label": "Loops this run"
+  "achievementProgress.godloop.label": "Loops this run",
+  "moves.intense_biscuits.name": "Intense Biscuits",
+  "moves.intense_biscuits.desc": "Biscuit blasting, if you will: a compact pounce fires five homing biscuits and heals 2% max HP per enemy caught, up to 8%."
 }

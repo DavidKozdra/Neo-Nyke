@@ -252,6 +252,7 @@
     advanceCampaignTitanHammer = hammer => hammer,
     resolveCampaignFloorLava = () => ({ durationSeconds: 7.5, trailIntervalSeconds: 0.22, puddleRadius: 24, puddleDurationSeconds: 1.8, damagePerSecond: 14, pulseIntervalSeconds: 0.05, statusIntervalSeconds: 0.45, fireDurationSeconds: 2.8 }),
     planCampaignRandomPounce = () => ({ radius: 160, burstBaseDamage: 52, bleedStacks: 2, bleedDurationSeconds: 5, fangs: [] }),
+    planCampaignIntenseBiscuits = () => ({ radius: 105, burstBaseDamage: 28, burstDamage: 28, healMaxHpRatioPerTarget: 0.02, healMaxHpRatioCap: 0.08, biscuits: [] }),
     planCampaignNailShot = () => [],
     planCampaignLaserShockwave = () => ({ spikes: [] }),
     resolveCampaignChaosBurst = () => ({ fieldRadius: 180, durationSeconds: 1.8, intervalSeconds: 0.22, initialBurstCount: 4, burstRadius: 52, burstDamage: 18, poisonDurationSeconds: 4.8, fireDurationSeconds: 3.5 }),
@@ -4936,6 +4937,58 @@
           }, fang.angle).id);
         });
         mode = 'aoe_projectile';
+      } else if (moveKey === 'intense_biscuits') {
+        const base = MOVE_BASE_STATS.intense_biscuits || {};
+        const biscuits = planCampaignIntenseBiscuits({
+          originX: player.x,
+          originY: player.y,
+          entities: livingEncounterEnemies(state, player.roomId),
+          aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
+          aoeDamageMultiplier: player.itemStats?.aoeDamageMultiplier,
+          anvilDamage: Number(stats.damage || 0) - Number(base.damage || 28),
+          anvilRange: Number(stats.range || 0) - Number(base.range || 105),
+          godMode: godModeActive(state, player),
+          random: () => random?.next?.('encounter') ?? 0.5,
+        });
+        effectRadius = biscuits.radius;
+        chipDestructiblesInRadius(state, player, player.x, player.y, biscuits.radius, biscuits.burstDamage, emitEvent, random);
+        const burstTargets = abilityTargetsInRadius(state, player, player.x, player.y, biscuits.radius);
+        burstTargets.forEach(enemy => {
+          damageEnemy(state, enemy, biscuits.burstDamage, player.id, emitEvent, {
+            attackKind: moveKey,
+            angle: Math.atan2(enemy.y - player.y, enemy.x - player.x),
+            knockback: 130,
+            ignoreGodMode: true,
+          });
+          targetIds.push(enemy.id);
+        });
+        damageRivalsInRadius(state, player, player.x, player.y, biscuits.radius, biscuits.burstBaseDamage, emitEvent, moveKey, targetIds);
+        const healRatio = Math.min(
+          biscuits.healMaxHpRatioCap,
+          burstTargets.length * biscuits.healMaxHpRatioPerTarget,
+        );
+        if (healRatio > 0) {
+          const before = Number(player.hp || 0);
+          const heal = Number(player.maxHp || 100) * healRatio
+            * Math.max(0.05, Number(player.itemStats?.healingMultiplier || 1));
+          player.hp = Math.min(Number(player.maxHp || 100), before + heal);
+          if (player.hp > before) emitEvent('PLAYER_HEALED', {
+            playerId: player.id, roomId: player.roomId, source: moveKey,
+            healedAmount: player.hp - before, health: player.hp,
+          });
+        }
+        biscuits.biscuits.forEach(biscuit => {
+          projectileIds.push(createPlayerProjectile(state, player, {
+            kind: 'biscuit', attackKind: moveKey, damage: biscuit.damage,
+            speed: biscuit.speed, radius: biscuit.radius, lifeTicks: Math.round(biscuit.lifeSeconds * 20),
+            knockback: biscuit.knockback, hitOptions: biscuit.hitOptions,
+            homing: biscuit.homing, homingTarget: 'enemy', homingTargetId: biscuit.targetId,
+            homingRadius: biscuit.homingRadius, homingSpeed: biscuit.homingSpeed,
+            homingAccel: biscuit.homingAccel, homingTurnRate: biscuit.homingTurnRate,
+            ignoreGodMode: true,
+          }, biscuit.angle).id);
+        });
+        mode = 'aoe_projectile';
       } else if (moveKey === 'mooggy_hairball') {
         const hairball = resolveCampaignMooggyHairball({
           aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
@@ -7364,31 +7417,44 @@
           enemy.state = 'mirrorKickyKick';
           return true;
         }
-        if (enemy.type === 'rival' && enemy.mirrorPendingSmash === 'random_pounce') {
-          const pounceWeapon = (enemy.rivalLoadout || []).find(entry => entry.slot === 'smash' && entry.key === 'random_pounce');
+        if (enemy.type === 'rival' && ['random_pounce', 'intense_biscuits'].includes(enemy.mirrorPendingSmash)) {
+          const moveKey = enemy.mirrorPendingSmash;
+          const pounceWeapon = (enemy.rivalLoadout || []).find(entry => entry.slot === 'smash' && entry.key === moveKey);
           const pounceDamage = Math.max(1, Math.round(Number(enemy.contactDamage || 20) * Number(pounceWeapon?.damageMult || 1)));
           const service = combatRandomByState.get(state);
-          const pounce = planCampaignRandomPounce({
+          const pounce = (moveKey === 'intense_biscuits' ? planCampaignIntenseBiscuits : planCampaignRandomPounce)({
             originX: enemy.x, originY: enemy.y, entities: livingRoomPlayers(state, enemy.roomId),
-            burstBaseDamage: pounceDamage, fangBaseDamage: Math.round(pounceDamage * 0.5),
+            burstBaseDamage: pounceDamage, projectileBaseDamage: Math.round(pounceDamage * (moveKey === 'intense_biscuits' ? 0.4 : 0.5)),
             random: () => service ? service.next('encounter') : 0.5,
           });
+          let playersHit = 0;
           livingRoomPlayers(state, enemy.roomId).forEach(candidate => {
             const distance = Math.hypot(candidate.x - enemy.x, candidate.y - enemy.y);
             if (distance > pounce.radius + Number(candidate.radius || 18)) return;
-            damagePlayer(state, candidate, pounce.burstDamage, enemy.id, emitEvent, 'random_pounce', {
-              angle: Math.atan2(candidate.y - enemy.y, candidate.x - enemy.x), knockback: 260,
+            playersHit += 1;
+            damagePlayer(state, candidate, pounce.burstDamage, enemy.id, emitEvent, moveKey, {
+              angle: Math.atan2(candidate.y - enemy.y, candidate.x - enemy.x), knockback: moveKey === 'intense_biscuits' ? 130 : 260,
             });
           });
-          pounce.fangs.forEach(fang => createAuthorityMirrorProjectile(state, enemy, fang.angle, {
-            type: 'fang', attackKind: 'random_pounce', speed: fang.speed, radius: fang.radius,
-            life: fang.lifeSeconds, damage: fang.damage, knockback: fang.knockback,
-            homing: fang.homing, homingTargetId: fang.targetId, homingRadius: fang.homingRadius,
-            homingSpeed: fang.homingSpeed, homingAccel: fang.homingAccel, homingTurnRate: fang.homingTurnRate,
-            hitOptions: fang.hitOptions,
+          if (moveKey === 'intense_biscuits' && playersHit > 0) {
+            const ratio = Math.min(pounce.healMaxHpRatioCap, playersHit * pounce.healMaxHpRatioPerTarget);
+            const before = Number(enemy.health || 0);
+            enemy.health = Math.min(Number(enemy.maxHealth || 1), before + Number(enemy.maxHealth || 1) * ratio);
+            enemy.hp = enemy.health;
+            if (enemy.health > before) emitEvent('ENEMY_HEALED', {
+              enemyId: enemy.id, healerEnemyId: enemy.id, amount: enemy.health - before, health: enemy.health,
+            });
+          }
+          (moveKey === 'intense_biscuits' ? pounce.biscuits : pounce.fangs).forEach(projectile => createAuthorityMirrorProjectile(state, enemy, projectile.angle, {
+            type: moveKey === 'intense_biscuits' ? 'biscuit' : 'fang', attackKind: moveKey,
+            speed: projectile.speed, radius: projectile.radius,
+            life: projectile.lifeSeconds, damage: projectile.damage, knockback: projectile.knockback,
+            homing: projectile.homing, homingTargetId: projectile.targetId, homingRadius: projectile.homingRadius,
+            homingSpeed: projectile.homingSpeed, homingAccel: projectile.homingAccel, homingTurnRate: projectile.homingTurnRate,
+            hitOptions: projectile.hitOptions,
           }));
           enemy.attackCd = 0.52;
-          enemy.state = 'rivalRandomPounce';
+          enemy.state = moveKey === 'intense_biscuits' ? 'rivalIntenseBiscuits' : 'rivalRandomPounce';
           return true;
         }
         if (enemy.type === 'rival' && enemy.mirrorPendingSmash === 'death_ball') {

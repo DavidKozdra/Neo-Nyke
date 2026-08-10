@@ -385,6 +385,7 @@
   function deriveProjectileColor(projectile = {}, neo = {}) {
     const defs = neo.PROJECTILE_TYPE_DEFS || root.NeoNyke?.content?.PROJECTILE_TYPE_DEFS || {};
     const kind = projectile.kind || projectile.type;
+    if (kind === 'biscuit') return '#d99032';
     if (defs[kind]?.color) return defs[kind].color;
     if (projectile.hostile) return deriveEnemyProjectileColor(projectile.behavior);
     return '#9de9ff';

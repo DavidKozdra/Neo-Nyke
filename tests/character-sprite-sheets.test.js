@@ -105,6 +105,43 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, def.armFrame, def.frameWidth, def.frameHeight)).toBeGreaterThan(2);
   });
 
+  test('mooggy v2 wires the authored walk, dash, jump, beam, and idle rows', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.mooggy;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/Mooggy.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 35,
+      stepRate: 10,
+      actionRate: 10,
+      portraitFrame: 0,
+      armFrame: 2,
+      walkFrames: [3, 4, 5, 6],
+      dashFrames: [10, 11, 12, 13],
+      smashFrames: [17, 18, 19, 20],
+      beamFrames: [24, 25, 26, 27],
+      idleFrames: [31, 32, 33, 34],
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const columns = Math.floor(image.naturalWidth / def.frameWidth);
+    const rows = Math.floor(image.naturalHeight / def.frameHeight);
+    expect(columns).toBe(7);
+    expect(rows).toBe(5);
+    expect(columns * rows).toBe(def.frameCount);
+
+    [
+      ...def.walkFrames,
+      ...def.dashFrames,
+      ...def.smashFrames,
+      ...def.beamFrames,
+      ...def.idleFrames,
+    ].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
   test('golem uses the authored mini-golem walk and attack strip', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.golem;

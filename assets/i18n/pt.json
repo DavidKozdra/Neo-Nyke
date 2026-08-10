@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Ciclo Divino",
   "achievements.godloop.desc": "Complete 20 ciclos em uma única partida",
-  "achievementProgress.godloop.label": "Ciclos nesta partida"
+  "achievementProgress.godloop.label": "Ciclos nesta partida",
+  "moves.intense_biscuits.name": "Biscoitos Intensos",
+  "moves.intense_biscuits.desc": "Bombardeio de biscoitos, por assim dizer: um bote compacto dispara cinco biscoitos teleguiados e cura 2% da vida máxima por inimigo atingido, até 8%."
 }

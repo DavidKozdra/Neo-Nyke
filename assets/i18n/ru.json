@@ -516,5 +516,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Божественный цикл",
   "achievements.godloop.desc": "Завершите 20 циклов за один забег",
-  "achievementProgress.godloop.label": "Циклы в этом забеге"
+  "achievementProgress.godloop.label": "Циклы в этом забеге",
+  "moves.intense_biscuits.name": "Яростное печенье",
+  "moves.intense_biscuits.desc": "Печеньковый обстрел, если угодно: короткий наскок выпускает пять самонаводящихся печений и лечит на 2% макс. здоровья за каждого задетого врага, вплоть до 8%."
 }

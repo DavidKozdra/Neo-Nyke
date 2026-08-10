@@ -109,7 +109,7 @@ describe('rival full-kit tactical AI', () => {
   });
 
   test.each([
-    'kicky_kick', 'crimson_smash', 'chaos_burst', 'random_pounce',
+    'kicky_kick', 'crimson_smash', 'chaos_burst', 'random_pounce', 'intense_biscuits',
     'power_disks', 'nail_shot', 'death_ball', 'love_bomb_laser',
     'healing_zone', 'mooggy_hairball', 'holy_turrets', 'excalibur_strike',
     'potion_bath', 'turtle_powerup', 'warp', 'flying_unhitable',

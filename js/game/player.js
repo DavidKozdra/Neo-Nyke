@@ -403,7 +403,7 @@ export const KIT_ALTERNATIVES = {
   },
   mooggy: {
     laser: ['nail_shot', 'mooggy_blood_beam'],
-    smash: ['random_pounce', 'mooggy_hairball'],
+    smash: ['random_pounce', 'intense_biscuits', 'mooggy_hairball'],
   },
   turtle_boy: {
     laser: ['turtle_wave', 'ghost_ball'],

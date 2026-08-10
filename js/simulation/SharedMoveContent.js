@@ -15,12 +15,13 @@
     laser: Object.freeze([
       'blood_beam', 'love_beam', 'love_bomb_laser', 'turtle_wave', 'ghost_ball', 'power_disks',
       'hammer_throw', 'lightning_cross', 'blade_justice', 'holy_eye_beams', 'lightning_columns',
-      'god_sweep', 'laser_shockwave', 'nail_shot', 'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer',
+      'god_sweep', 'laser_shockwave', 'nail_shot', 'mooggy_blood_beam',
+      'thorn_blood_beams', 'wizard_lazer',
     ]),
     smash: Object.freeze([
       'crimson_smash', 'hammer_smash', 'titan_hammer', 'death_ball', 'turtle_powerup', 'mooggy_hairball',
       'potion_bath', 'excalibur_strike', 'holy_turrets', 'kicky_kick', 'chaos_burst', 'wall_of_toph',
-      'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
+      'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce', 'intense_biscuits',
     ]),
     dash: Object.freeze([
       'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'princess_shield',
@@ -62,6 +63,7 @@
     random_pounce: Object.freeze({ damage: 52, cooldown: 5.00, range: 160 }),
     mooggy_zoomies: Object.freeze({ cooldown: 20.00, duration: 12.0 }),
     mooggy_blood_beam: Object.freeze({ damage: 12, cooldown: 3.20, duration: 1.3 }),
+    intense_biscuits: Object.freeze({ damage: 28, cooldown: 4.20, range: 105 }),
     thorn_blood_beams: Object.freeze({ damage: 8, cooldown: 3.60, duration: 1.4 }),
     wizard_lazer: Object.freeze({ damage: 30, cooldown: 4.20, duration: 1.2 }),
     mooggy_hairball: Object.freeze({ damage: 34, cooldown: 4.80, range: 132 }),
@@ -124,6 +126,7 @@
     fire_circle: Object.freeze({ kind: 'aura', color: '#ff7b32', style: 'heavy', sound: 'fire_burn' }),
     floor_lava: Object.freeze({ kind: 'status', color: '#ff9f40', style: 'heavy', sound: 'fire_burn' }),
     random_pounce: Object.freeze({ kind: 'aoe', color: '#ff3070', style: 'heavy', sound: 'aoe' }),
+    intense_biscuits: Object.freeze({ kind: 'aoe', color: '#ffc95a', style: 'normal', sound: 'aoe' }),
 
     dash: Object.freeze({ kind: 'dash', color: '#fff06a', style: 'normal', sound: 'dash' }),
     nimrod_stomp: Object.freeze({ kind: 'dash_aoe', color: '#ffe67a', style: 'heavy', sound: 'aoe' }),
@@ -150,7 +153,7 @@
     thorn_knight: Object.freeze({ laser: Object.freeze(['blood_beam', 'thorn_blood_beams']), dash: Object.freeze(['dash', 'knight_slash_dash']) }),
     metao: Object.freeze({ laser: Object.freeze(['power_disks', 'wizard_lazer']), smash: Object.freeze(['chaos_burst', 'potion_bath']) }),
     gelleh: Object.freeze({ laser: Object.freeze(['blade_justice', 'holy_eye_beams']), smash: Object.freeze(['healing_zone', 'holy_turrets', 'excalibur_strike']) }),
-    mooggy: Object.freeze({ laser: Object.freeze(['nail_shot', 'mooggy_blood_beam']), smash: Object.freeze(['random_pounce', 'mooggy_hairball']) }),
+    mooggy: Object.freeze({ laser: Object.freeze(['nail_shot', 'mooggy_blood_beam']), smash: Object.freeze(['random_pounce', 'intense_biscuits', 'mooggy_hairball']) }),
     turtle_boy: Object.freeze({ laser: Object.freeze(['turtle_wave', 'ghost_ball']), smash: Object.freeze(['death_ball', 'turtle_powerup']) }),
     sarge: Object.freeze({ laser: Object.freeze(['hammer_throw', 'lightning_cross']), smash: Object.freeze(['hammer_smash', 'titan_hammer']) }),
     princess: Object.freeze({ laser: Object.freeze(['love_beam', 'love_bomb_laser']), dash: Object.freeze(['flying_unhitable', 'princess_shield']) }),
@@ -206,7 +209,8 @@
   const MOVE_EXCLUSIVE_CHARACTERS = Object.freeze({
     narwal_fight: 'princess', mooggy_swipe: 'mooggy', love_beam: 'princess', love_bomb_laser: 'princess',
     ghost_ball: 'turtle_boy', hammer_throw: 'sarge', lightning_cross: 'sarge', holy_eye_beams: 'gelleh',
-    nail_shot: 'mooggy', mooggy_blood_beam: 'mooggy', thorn_blood_beams: 'thorn_knight', wizard_lazer: 'metao',
+    nail_shot: 'mooggy', mooggy_blood_beam: 'mooggy', intense_biscuits: 'mooggy',
+    thorn_blood_beams: 'thorn_knight', wizard_lazer: 'metao',
     hammer_smash: 'sarge', titan_hammer: 'sarge', death_ball: 'turtle_boy', turtle_powerup: 'turtle_boy',
     mooggy_hairball: 'mooggy', potion_bath: 'metao', excalibur_strike: 'gelleh', holy_turrets: 'gelleh',
     kicky_kick: 'princess', random_pounce: 'mooggy', flying_unhitable: 'princess', princess_shield: 'princess',

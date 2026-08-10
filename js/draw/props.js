@@ -1854,6 +1854,7 @@
     sarges_hammer: { color: '#7da3ff', core: '#e7efff', trail: '#9bb8ff', shape: 'rock', length: 22 },
     death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
     love_bomb: { color: '#ff6fa8', core: '#ffe3f0', trail: '#ff9cc9', shape: 'heart', length: 20 },
+    biscuit: { color: '#d99032', core: '#ffe29a', trail: '#f0b64f', shape: 'disk', length: 18 },
   };
   Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
   Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);
