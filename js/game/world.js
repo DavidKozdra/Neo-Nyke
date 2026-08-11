@@ -2957,7 +2957,7 @@
       spawnBarrelExplosionFx(prop, hit);
     } else {
       spawnDestructibleBreakFx(prop, hit);
-      Neo.playSfx?.('break_furniture');
+      Neo.playSfx?.(prop.kind === 'pot' ? 'break_pot' : 'break_furniture');
     }
     // Green (post-loop "lying") items: once the player has completed at least one
     // loop, every barrel/pot ("broken wood") break has a flat 10% chance to drop a

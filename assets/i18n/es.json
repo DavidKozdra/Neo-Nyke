@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Rayos del Santo Ojo",
   "moves.holy_eye_beams.desc": "Canaliza rayos sagrados gemelos desde tus ojos. Cada lanzamiento tiene la posibilidad de curarte un 5% de HP máximo.",
   "sounds.break_furniture.label": "Romper muebles",
+  "sounds.break_pot.label": "Romper vasija",
   "moves.titan_hammer.name": "Martillo Titán",
   "moves.titan_hammer.desc": "Invoca un martillo gigante que sigue al cursor. Haz clic para aplastarlo y causar un fuerte daño en área. Dura 8s.",
   "difficulties.easy.name": "Fácil",

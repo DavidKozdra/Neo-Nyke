@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "圣眼光束",
   "moves.holy_eye_beams.desc": "从你的眼睛中引导出双神圣的光束。每次施放都有几率治愈你最大生命值的 5%。",
   "sounds.break_furniture.label": "打破家具",
+  "sounds.break_pot.label": "打破罐子",
   "moves.titan_hammer.name": "泰坦之锤",
   "moves.titan_hammer.desc": "召唤一把跟随光标移动的巨锤。点击将其砸下，造成大范围重击。持续8秒。",
   "difficulties.easy.name": "简单",

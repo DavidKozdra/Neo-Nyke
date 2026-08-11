@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "شعاع العين المقدسة",
   "moves.holy_eye_beams.desc": "قم بتوجيه الشعاعين المقدسين من عينيك. كل طاقم لديه فرصة لشفاءك بنسبة 5% كحد أقصى من الصحة.",
   "sounds.break_furniture.label": "كسر الأثاث",
+  "sounds.break_pot.label": "كسر الإناء",
   "moves.titan_hammer.name": "مطرقة تيتان",
   "moves.titan_hammer.desc": "استدعِ مطرقة عملاقة تتبع المؤشر. اضغط لتحطيمها لإحداث سحق منطقة واسعة. تدوم 8 ثوانٍ.",
   "difficulties.easy.name": "سهل",

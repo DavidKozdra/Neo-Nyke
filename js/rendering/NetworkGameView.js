@@ -1680,7 +1680,7 @@
             this.neo.spawnBarrelExplosionFx?.(prop, {});
           } else {
             this.neo.spawnDestructibleBreakFx?.(prop, {});
-            this._playNetworkSfx('break_furniture', event, authorityTick);
+            this._playNetworkSfx(data.obstacleKind === 'pot' ? 'break_pot' : 'break_furniture', event, authorityTick);
           }
         }
         // The provisional effect already began on the local input frame. Keep

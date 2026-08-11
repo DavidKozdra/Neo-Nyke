@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Sinar Mata Suci",
   "moves.holy_eye_beams.desc": "Salurkan pancaran sinar suci kembar dari matamu. Setiap pemain berpeluang memulihkan 5% HP maksimal Anda.",
   "sounds.break_furniture.label": "Hancurkan Furnitur",
+  "sounds.break_pot.label": "Hancurkan Pot",
   "moves.titan_hammer.name": "Palu Titan",
   "moves.titan_hammer.desc": "Panggil palu raksasa yang mengikuti kursor. Klik untuk menghantamkannya demi kerusakan area yang berat. Bertahan 8 detik.",
   "difficulties.easy.name": "Mudah",

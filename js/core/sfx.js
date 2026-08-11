@@ -144,8 +144,21 @@
       ],
     },
     { id: 'hud_confirm', path: 'assets/sounds/sfx_hud_confirm 6.wav', volume: 0.6, priority: priority.HIGH, mixDb: 0 },
-    // Breakable props (pots, crates, and other non-explosive furniture) shattering.
+    // Wooden props (cover walls, secret walls, crates) splintering. Barrels are
+    // excluded — they explode and use the bomb one-shot instead.
     { id: 'break_furniture', path: 'assets/sounds/sfx_break_funiture.wav', volume: 0.6, priority: priority.NORMAL, mixDb: 0 },
+    // Ceramic pots shattering. Kept separate from the wood break so clay props
+    // don't sound like splintering timber.
+    {
+      id: 'break_pot',
+      volume: 0.6,
+      priority: priority.NORMAL,
+      mixDb: 0,
+      paths: [
+        'assets/sounds/sfx_break vase 2.wav',
+        'assets/sounds/sfx_break vase 3.wav',
+      ],
+    },
   ];
 
   // Display metadata for the per-sound volume mixer (Settings → Volume). Each
@@ -176,6 +189,7 @@
     room_transition: { label: 'Room Transition',     category: 'World' },
     ladder:          { label: 'Ladder',              category: 'World' },
     break_furniture: { label: 'Break Furniture',     category: 'World' },
+    break_pot:       { label: 'Break Pot',           category: 'World' },
     // UI
     menu_click:      { label: 'Menu Click',          category: 'UI' },
     hud_confirm:     { label: 'Confirm',             category: 'UI' },

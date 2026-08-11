@@ -217,6 +217,8 @@ const KOZ_PWA_CONFIG = {
     "/assets/sounds/sfx_achievement 3.mp3",
     "/assets/sounds/sfx_AOE 4.wav",
     "/assets/sounds/sfx_bomb explosion.wav",
+    "/assets/sounds/sfx_break vase 2.wav",
+    "/assets/sounds/sfx_break vase 3.wav",
     "/assets/sounds/sfx_break_funiture.wav",
     "/assets/sounds/sfx_Buy-Sell 1.wav",
     "/assets/sounds/sfx_Buy-Sell 2.wav",
@@ -258,14 +260,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 245,
-    "bytes": 51701147,
+    "entries": 247,
+    "bytes": 52142244,
     "criticalEntries": 190,
-    "criticalBytes": 11976617,
-    "optionalEntries": 55,
-    "optionalBytes": 39724530
+    "criticalBytes": 11977798,
+    "optionalEntries": 57,
+    "optionalBytes": 40164446
   },
-  "version": "f8fdd12d84aedd52"
+  "version": "d9d35a646b2b5202"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

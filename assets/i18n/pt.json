@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Raios dos Olhos Sagrados",
   "moves.holy_eye_beams.desc": "Canalize raios sagrados gêmeos de seus olhos. Cada lançamento tem uma chance de curar 5% do HP máximo.",
   "sounds.break_furniture.label": "Quebrar móveis",
+  "sounds.break_pot.label": "Quebrar vaso",
   "moves.titan_hammer.name": "Martelo Titã",
   "moves.titan_hammer.desc": "Invoca um martelo gigante que segue o cursor. Clique para esmagá-lo, causando um forte impacto em área. Dura 8s.",
   "difficulties.easy.name": "Fácil",
