@@ -408,7 +408,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     }));
   });
 
-  test('Boss Rush authority grants its start, stage rewards, serialized next boss, and final victory', () => {
+  test('Boss Rush authority drafts five of ten starters before stage rewards, serialized next boss, and final victory', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
     state.matchRules.gameMode = 'boss_rush';
@@ -424,8 +424,25 @@ describe('authored campaign enemy behaviors on the authority', () => {
     simulation.updateGame({}, 0.05);
     expect(state.floorNumber).toBe(5);
     expect(player.coins).toBe(120);
-    expect(events.filter(event => event.eventType === 'BOSS_RUSH_STARTER_ITEM_GRANTED')).toHaveLength(5);
-    expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('queen_cult');
+    expect(player.pendingUpgrade).toEqual(expect.objectContaining({
+      kind: 'boss_rush_starter', picksRemaining: 5, choiceTotal: 10,
+    }));
+    expect(player.pendingUpgrade.optionIds).toHaveLength(10);
+    expect(new Set(player.pendingUpgrade.optionIds).size).toBe(10);
+    expect(Object.values(state.enemies).filter(enemy => !enemy.dead)).toHaveLength(0);
+
+    for (let pick = 0; pick < 5; pick += 1) {
+      const pending = player.pendingUpgrade;
+      simulation.updateGame({ p1: { actions: [{
+        action: 'UPGRADE', selectionEventId: pending.selectionEventId, optionId: pending.optionIds[0],
+      }] } }, 0.05);
+    }
+    expect(player.pendingUpgrade).toBeNull();
+    expect(events.filter(event => event.eventType === 'BOSS_RUSH_STARTER_ITEM_SELECTED')).toHaveLength(5);
+    simulation.updateGame({}, 0.05);
+    expect(Object.values(state.enemies).find(enemy => !enemy.dead)).toEqual(expect.objectContaining({
+      type: 'queen_cult', level: 2, bossRushBoss: true, bossRushStage: 0,
+    }));
     const firstBoss = Object.values(state.enemies).find(enemy => !enemy.dead);
     player.x = firstBoss.x - 12;
     player.y = firstBoss.y;
@@ -458,7 +475,9 @@ describe('authored campaign enemy behaviors on the authority', () => {
     expect(arena.bossRushIntermission).toBe(false);
     expect(state.bossRush).toEqual(expect.objectContaining({ stage: 1, active: true, intermission: false }));
     simulation.updateGame({}, 0.05);
-    expect(Object.values(state.enemies).find(enemy => !enemy.dead)?.type).toBe('bulk_golem');
+    expect(Object.values(state.enemies).find(enemy => !enemy.dead)).toEqual(expect.objectContaining({
+      type: 'bulk_golem', level: 3, bossRushBoss: true, bossRushStage: 1,
+    }));
 
     // Move beyond the first attack's cooldown before exercising the final-clear
     // branch; the old timer-based intermission advanced this clock implicitly.

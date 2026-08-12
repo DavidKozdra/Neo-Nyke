@@ -3618,6 +3618,9 @@
         });
         if (remainingAfterPick > 0) {
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.75, text: `${remainingAfterPick} PICK LEFT`, c: '#d7f6ff' });
+        } else if (pickup.source === 'boss_rush_starter' && Neo.gameMode === 'boss_rush') {
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.1, text: 'LOADOUT LOCKED', c: '#78ef9c' });
+          Neo.spawnBossRushBoss?.();
         }
         Neo.syncCurrentRoomState();
         Neo.scheduleRunSave();

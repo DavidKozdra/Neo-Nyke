@@ -54,10 +54,23 @@
   ]);
   const BOSS_ENEMY_TYPES = Object.freeze(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
   const ELITE_POWER_TYPES = Object.freeze(['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed']);
+  const BOSS_RUSH_START_LEVEL = 2;
+
+  function getBossRushBossLevel(stage) {
+    return BOSS_RUSH_START_LEVEL + Math.max(0, Math.floor(Number(stage) || 0));
+  }
 
   function getEnemyDefinition(type) {
     return ENEMY_CATALOG[type] || ENEMY_CATALOG.hunter;
   }
 
-  return { ENEMY_CATALOG, STANDARD_ENEMY_TYPES, BOSS_ENEMY_TYPES, ELITE_POWER_TYPES, getEnemyDefinition };
+  return {
+    ENEMY_CATALOG,
+    STANDARD_ENEMY_TYPES,
+    BOSS_ENEMY_TYPES,
+    ELITE_POWER_TYPES,
+    BOSS_RUSH_START_LEVEL,
+    getEnemyDefinition,
+    getBossRushBossLevel,
+  };
 });

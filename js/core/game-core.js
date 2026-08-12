@@ -1060,7 +1060,7 @@ export const CHARACTER_DEFS = {
     key: 'thorn_knight',
     name: 'Thorn Knight',
     rarity: 'knight',
-    damageMultiplier: 1,
+    damageMultiplier: 1.08,
     skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash', dash: 'Dash' },
   },
   metao: {
@@ -1097,7 +1097,7 @@ export const CHARACTER_DEFS = {
     key: 'turtle_boy',
     name: 'Turtle Boy',
     rarity: 'knight',
-    damageMultiplier: 1,
+    damageMultiplier: 0.8,
     hpMultiplier: 1.2,
     // Turtle Boy trades raw output for survivability: a thick shell, a draining
     // wave laser, and a free laser tier every 3 floors (see grantTurtleLaserStep).
@@ -1108,8 +1108,6 @@ export const CHARACTER_DEFS = {
     key: 'sarge',
     name: 'Sarge',
     rarity: 'knight',
-    // Damage/HP pinned relative to Thorn Knight (damageMultiplier 1, implicit
-    // hpMultiplier 1): +5% damage, -10% HP.
     damageMultiplier: 1.05,
     hpMultiplier: 0.9,
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god

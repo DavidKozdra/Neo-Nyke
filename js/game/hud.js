@@ -215,7 +215,12 @@
       return;
     }
     if (Neo.gameMode === 'boss_rush') {
-      if (Neo.bossRushActive) {
+      const starterChoices = (Neo.pickups || []).filter(pickup => pickup?.source === 'boss_rush_starter');
+      if (starterChoices.length > 0) {
+        const picksRemaining = Math.max(1, Number(starterChoices[0]?.picksRemaining || 1));
+        const choiceTotal = Math.max(starterChoices.length, Number(starterChoices[0]?.choiceTotal || 10));
+        setObjective(`Choose ${picksRemaining} more of ${choiceTotal} starter relics.`);
+      } else if (Neo.bossRushActive) {
         const bossName = Neo.getBossDisplayName(Neo.BOSS_RUSH_ORDER[Neo.bossRushStage] || Neo.BOSS_RUSH_ORDER[0]);
         setObjective(`Defeat ${bossName}.`);
       } else {

@@ -66,6 +66,7 @@
     STANDARD_ENEMY_TYPES = [],
     BOSS_ENEMY_TYPES = [],
     ELITE_POWER_TYPES = [],
+    getBossRushBossLevel = stage => 2 + Math.max(0, Math.floor(Number(stage) || 0)),
     resolveCampaignEliteProfile = base => base,
     resolveCampaignEliteCrit = () => ({ isCrit: false, multiplier: 1 }),
     resolveCampaignElitePlayerHitProcs = () => [],
@@ -91,6 +92,8 @@
     segmentHitsCircle = () => null,
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
     createCampaignItemChoices = () => [],
+    BOSS_RUSH_STARTER_OFFER_COUNT = 10,
+    BOSS_RUSH_STARTER_PICK_COUNT = 5,
     createBossRushStarterItemPlan = () => [],
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
@@ -456,12 +459,14 @@
     if (!rush.initialized) {
       rush.initialized = true;
       rush.stage = 0;
-      rush.active = true;
+      rush.active = false;
       rush.intermission = false;
       rush.nextSpawnTick = 0;
-      rush.grantedPlayerIds = {};
-      // The campaign starts Boss Rush at floor five so level/difficulty scaling
-      // and scoped reward streams share that baseline.
+      rush.starterDraftOpen = true;
+      rush.starterDraftPlayerIds = {};
+      rush.starterDraftCompletePlayerIds = {};
+      // Keep the campaign's floor-five economy/difficulty and reward-stream
+      // baseline. Boss levels advance independently from level two per stage.
       state.floorNumber = Math.max(5, Number(state.floorNumber || 1));
       const room = currentRoom(state);
       if (room) {
@@ -472,16 +477,45 @@
       }
     }
     activePlayers(state).forEach(player => {
-      if (rush.grantedPlayerIds[player.id]) return;
+      if (rush.starterDraftPlayerIds[player.id]) return;
       const stream = random?.scoped?.(`boss-rush:starting-items:${player.id}`);
-      createBossRushStarterItemPlan(() => stream?.next?.() ?? 0.5).forEach(({ itemKey, elite }) => {
-        if (!itemKey || !collectSharedCampaignItem(player, itemKey)?.ok) return;
-        emitEvent('BOSS_RUSH_STARTER_ITEM_GRANTED', { playerId: player.id, itemKey, elite });
-      });
+      const plan = createBossRushStarterItemPlan(() => stream?.next?.() ?? 0.5)
+        .filter(({ itemKey }) => !!itemKey)
+        .slice(0, BOSS_RUSH_STARTER_OFFER_COUNT);
+      const optionIds = plan.map(({ itemKey }) => itemKey);
+      const picksRemaining = Math.min(BOSS_RUSH_STARTER_PICK_COUNT, optionIds.length);
+      if (picksRemaining > 0) {
+        player.pendingUpgrade = {
+          kind: 'boss_rush_starter',
+          selectionEventId: `boss-rush:starter:${player.id}`,
+          optionIds: optionIds.slice(),
+          options: optionIds.map((optionId, slotIndex) => ({ id: optionId, slotIndex })),
+          picksRemaining,
+          choiceTotal: optionIds.length,
+          sourceX: Number(state.floorState?.width || 900) / 2,
+          sourceY: Number(state.floorState?.height || 700) / 2,
+        };
+      } else {
+        rush.starterDraftCompletePlayerIds[player.id] = true;
+      }
       player.coins = Math.max(0, Number(player.coins || 0)) + 120;
-      rush.grantedPlayerIds[player.id] = true;
-      emitEvent('BOSS_RUSH_STARTED', { playerId: player.id, stage: 1, coins: player.coins });
+      rush.starterDraftPlayerIds[player.id] = true;
+      emitEvent('BOSS_RUSH_STARTER_DRAFT_OFFERED', {
+        playerId: player.id, optionIds, picksRemaining, choiceTotal: optionIds.length, coins: player.coins,
+      });
     });
+    if (rush.starterDraftOpen) {
+      const players = activePlayers(state);
+      const draftComplete = players.length > 0
+        && players.every(player => rush.starterDraftCompletePlayerIds[player.id]);
+      if (draftComplete) {
+        rush.starterDraftOpen = false;
+        rush.active = true;
+        players.forEach(player => {
+          emitEvent('BOSS_RUSH_STARTED', { playerId: player.id, stage: 1, coins: player.coins });
+        });
+      }
+    }
     return rush;
   }
 
@@ -1298,11 +1332,13 @@
       const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
       const elite = !archetype.boss && room.type !== 'start' && stream.chance(room.type === 'challenge' ? 0.3 : 0.08);
-      const enemyLevel = Math.max(
-        1,
-        Number(state.floorNumber || 1),
-        ...activePlayers(state).map(player => Number(player.level || 1)),
-      );
+      const enemyLevel = gameMode === 'boss_rush'
+        ? getBossRushBossLevel(bossRush.stage)
+        : Math.max(
+          1,
+          Number(state.floorNumber || 1),
+          ...activePlayers(state).map(player => Number(player.level || 1)),
+        );
       const enemy = {
         id: enemyId,
         type,
@@ -1323,6 +1359,10 @@
         eliteTypes: [], elitePowers: [],
         patterns: archetype.patterns || [],
         boss: !!archetype.boss,
+        ...(gameMode === 'boss_rush' ? {
+          bossRushBoss: true,
+          bossRushStage: Number(bossRush.stage || 0),
+        } : {}),
         bleedImmune: !!archetype.bleedImmune,
         fireImmune: !!archetype.fireImmune,
         poisonImmune: !!archetype.poisonImmune,
@@ -5386,6 +5426,32 @@
   function resolveUpgradeSelection(state, player, action, emitEvent, random) {
     const pending = player?.pendingUpgrade;
     if (!pending || pending.selectionEventId !== action.selectionEventId || !pending.optionIds.includes(action.optionId)) return false;
+    if (pending.kind === 'boss_rush_starter') {
+      const loot = random?.stream?.('loot');
+      const acquisition = collectAuthorityCampaignPickup(state, player, action.optionId, {
+        duplicateChance: player.itemStats?.itemDuplicateChance,
+        canDuplicate: action.optionId !== 'artificer_charger',
+        random: loot ? () => loot.next() : authorityFallbackRandom,
+        rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+      }, emitEvent);
+      if (!acquisition.ok) return false;
+      pending.optionIds = pending.optionIds.filter(optionId => optionId !== action.optionId);
+      pending.options = pending.options.filter(option => option.id !== action.optionId);
+      pending.picksRemaining = Math.max(0, Number(pending.picksRemaining || 1) - 1);
+      emitEvent('BOSS_RUSH_STARTER_ITEM_SELECTED', {
+        playerId: player.id,
+        selectionEventId: action.selectionEventId,
+        itemKey: action.optionId,
+        picksRemaining: pending.picksRemaining,
+        amount: acquisition.amount,
+      });
+      if (pending.picksRemaining <= 0) {
+        state.bossRush.starterDraftCompletePlayerIds[player.id] = true;
+        player.pendingUpgrade = null;
+        emitEvent('BOSS_RUSH_STARTER_DRAFT_COMPLETED', { playerId: player.id });
+      }
+      return true;
+    }
     const source = state.interactables?.[pending.sourceEntityId];
     if (!source || source.opened) {
       player.pendingUpgrade = null;

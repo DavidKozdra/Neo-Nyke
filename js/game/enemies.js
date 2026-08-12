@@ -935,6 +935,10 @@
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
     const eliteAllowed = !!elite && (options.forceElite || canSpawnEliteEnemies());
+    const requestedLevel = Number(options.level);
+    const enemyLevel = options.level !== undefined && Number.isFinite(requestedLevel)
+      ? Math.max(1, Math.floor(requestedLevel))
+      : rollEnemyEncounterLevel(Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1));
     // Stable per-enemy identity, used by status tracking / achievements to tell
     // "4 statuses on one enemy" apart from "1 status on 4 enemies".
     Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
@@ -943,7 +947,7 @@
       type,
       x,
       y,
-      level: rollEnemyEncounterLevel(Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1)),
+      level: enemyLevel,
       vx: 0,
       vy: 0,
       r: 15,
@@ -1843,6 +1847,9 @@
   }
 
   function getEnemyProgressionLevel(enemy) {
+    if (enemy?.bossRushBoss) {
+      return Math.max(1, Math.floor(Number(enemy.level) || 1));
+    }
     return Math.max(
       1,
       Number(enemy?.level) || 0,

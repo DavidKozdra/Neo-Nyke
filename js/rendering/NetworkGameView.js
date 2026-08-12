@@ -1529,7 +1529,10 @@
       const playerId = this._sessionPlayerId();
       const pending = state?.players?.[playerId]?.pendingUpgrade;
       if (!pending?.options?.length) return [];
-      const source = state.interactables?.[pending.sourceEntityId];
+      const source = state.interactables?.[pending.sourceEntityId]
+        || (pending.kind === 'boss_rush_starter'
+          ? { roomId: state?.players?.[playerId]?.roomId, x: pending.sourceX, y: pending.sourceY }
+          : null);
       if (!source) return [];
       const count = pending.options.length;
       return pending.options.map((option, index) => ({
@@ -1542,14 +1545,22 @@
         optionId: option.id,
         selectionEventId: pending.selectionEventId,
         roomId: source.roomId,
-        x: Number(source.x || 0) + (index - (count - 1) / 2) * 144,
-        y: Number(source.y || 0) - 4,
+        x: pending.kind === 'boss_rush_starter'
+          ? Number(source.x || 0) + ((Number(option.slotIndex ?? index) % 5) - 2) * 140
+          : Number(source.x || 0) + (index - (count - 1) / 2) * 144,
+        y: pending.kind === 'boss_rush_starter'
+          ? Number(source.y || 0) - 82 + Math.floor(Number(option.slotIndex ?? index) / 5) * 150
+          : Number(source.y || 0) - 4,
         r: 20,
         dwellMode: true,
         dwell: this.upgradeDwell.selectionEventId === pending.selectionEventId
           && this.upgradeDwell.optionId === option.id ? this.upgradeDwell.seconds : 0,
-        side: index < count / 2 ? 'left' : 'right',
-        picksRemaining: 1,
+        side: pending.kind === 'boss_rush_starter'
+          ? ((Number(option.slotIndex ?? index) % 5) < 2.5 ? 'left' : 'right')
+          : (index < count / 2 ? 'left' : 'right'),
+        picksRemaining: Math.max(1, Number(pending.picksRemaining || 1)),
+        choiceTotal: Math.max(count, Number(pending.choiceTotal || count)),
+        source: pending.kind === 'boss_rush_starter' ? 'boss_rush_starter' : '',
         networkChoice: true,
       }));
     }

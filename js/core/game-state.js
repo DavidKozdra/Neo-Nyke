@@ -3521,8 +3521,8 @@ export function resumeGame() {
     Neo.lastDamageSourceSpriteKey = '';
     Neo.lastDamageSourceHazardIcon = '';
     resetScene();
-    // Boss rush builds its room manually (no generateFloor); match the floor count
-    // to the starting floor so enemy scaling stays consistent.
+    // Boss Rush builds its room manually (no generateFloor). Keep its floor-five
+    // economy/difficulty baseline; each boss gets its own stage level below.
     Neo.floorsEntered = Neo.floor;
     resetRngStreams();
     Neo.rooms = [];
@@ -3532,23 +3532,55 @@ export function resumeGame() {
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
-    // The shared five-item package is rolled from the entered run seed. Keeping
+    // The shared ten-offer draft is rolled from the entered run seed. Keeping
     // this scoped means unrelated world/FX draws cannot perturb starter loot.
     const bossRushStartRandom = createScopedRandom('boss-rush:starting-items');
-    globalThis.NeoNyke.content.createBossRushStarterItemPlan(bossRushStartRandom)
-      .forEach(({ itemKey }) => {
-        if (itemKey) Neo.collectItem(itemKey);
+    const starterPlan = globalThis.NeoNyke.content.createBossRushStarterItemPlan(bossRushStartRandom)
+      .filter(({ itemKey }) => !!itemKey);
+    const pickCount = Math.min(
+      Number(globalThis.NeoNyke.content.BOSS_RUSH_STARTER_PICK_COUNT || 5),
+      starterPlan.length,
+    );
+    const choiceTotal = starterPlan.length;
+    starterPlan.forEach(({ itemKey }, index) => {
+      const column = index % 5;
+      const rowIndex = Math.floor(index / 5);
+      Neo.pickups.push({
+        x: Neo.ROOM_W / 2 + (column - 2) * 140,
+        y: Neo.ROOM_H / 2 - 82 + rowIndex * 150,
+        type: 'rewardChoice',
+        key: itemKey,
+        groupId: 'boss-rush:starter',
+        picksRemaining: pickCount,
+        choiceTotal,
+        label: `${pickCount}/${choiceTotal}`,
+        source: 'boss_rush_starter',
       });
+    });
     Neo.addCoins(120);
+    Neo.syncCurrentRoomState?.();
+    Neo.scheduleRunSave?.();
     updateBossRushHud();
-    // Spawn first boss immediately
-    spawnBossRushBoss();
+    Neo.updateObjective?.();
+    if (pickCount > 0) {
+      Neo.spawnParticle({
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2 - 150,
+        life: 2.4,
+        text: `CHOOSE ${pickCount} OF ${choiceTotal} RELICS`,
+        c: '#d7f6ff',
+      });
+    } else {
+      // A malformed or unavailable content table must not strand the run.
+      spawnBossRushBoss();
+    }
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   function spawnBossRushBoss() {
     const bossType = BOSS_RUSH_ORDER[Neo.bossRushStage];
     if (!bossType) return;
+    const bossLevel = globalThis.NeoNyke.content.getBossRushBossLevel(Neo.bossRushStage);
     const safeSpawn = findBossRushSpawnPoint();
     if (!safeSpawn) {
       Neo.bossRushActive = false;
@@ -3563,8 +3595,9 @@ export function resumeGame() {
     let boss;
     if (bossType === 'artificer_knave') {
       // Step 1: Spawn as a regular knave
-      boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false, { level: bossLevel });
       boss.bossRushStage = Neo.bossRushStage;
+      boss.bossRushBoss = true;
       boss.isTransforming = true;
       // Visual cue: show particles or text
       Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
@@ -3610,8 +3643,9 @@ export function resumeGame() {
         }, 420); // transformation after animation
       }, 1200); // 1.2 seconds delay
     } else {
-      boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false, { level: bossLevel });
       boss.bossRushStage = Neo.bossRushStage;
+      boss.bossRushBoss = true;
       const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);

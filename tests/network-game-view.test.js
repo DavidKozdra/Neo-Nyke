@@ -1127,6 +1127,42 @@ describe('network multiplayer game view', () => {
     expect(sent).toEqual([['chest-1', 'titan_heart']]);
   });
 
+  test('lays out the Boss Rush five-of-ten starter draft without a chest source', () => {
+    const sent = [];
+    const session = {
+      playerId: 'p1',
+      snapshot: () => ({ playerId: 'p1' }),
+      sendUpgrade: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: { AB_CHEST_DWELL_SECONDS: 2.2, AB_CHEST_DWELL_RADIUS: 44 } });
+    const optionIds = Array.from({ length: 10 }, (_, index) => `relic_${index}`);
+    const state = {
+      players: {
+        p1: {
+          roomId: 'arena',
+          pendingUpgrade: {
+            kind: 'boss_rush_starter',
+            selectionEventId: 'boss-rush:starter:p1',
+            optionIds,
+            options: optionIds.map((id, slotIndex) => ({ id, slotIndex })),
+            picksRemaining: 5,
+            choiceTotal: 10,
+            sourceX: 450,
+            sourceY: 350,
+          },
+        },
+      },
+      interactables: {},
+    };
+
+    const choices = view._upgradePresentationPickups(state);
+    expect(choices).toHaveLength(10);
+    expect(choices[0]).toEqual(expect.objectContaining({ x: 170, y: 268, picksRemaining: 5, choiceTotal: 10 }));
+    expect(choices[9]).toEqual(expect.objectContaining({ x: 730, y: 418, picksRemaining: 5, choiceTotal: 10 }));
+    view._updateUpgradeDwell({ x: choices[0].x, y: choices[0].y }, state, 2.2);
+    expect(sent).toEqual([['boss-rush:starter:p1', 'relic_0']]);
+  });
+
   test('requests authority chest activation at the same proximity as single player', () => {
     const sent = [];
     const view = new NetworkGameView({

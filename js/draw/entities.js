@@ -582,8 +582,12 @@
       : enemy.bountyTarget
         ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
         : Neo.getEliteEnemyLabel(enemy);
-    // Enemy level = total floors entered this run, not the per-loop floor.
-    const level = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
+    // Ordinary encounters show cumulative floor depth. Boss Rush has an authored
+    // per-stage level sequence, so its boss nameplate uses the stored enemy level.
+    const displayedLevel = enemy.bossRushBoss
+      ? Math.max(1, Math.floor(Number(enemy.level) || 1))
+      : (Neo.floorsEntered ?? Neo.floor);
+    const level = `Lv.${displayedLevel}`;
     const hpText = `${Math.ceil(enemy.hp)}/${Math.ceil(enemy.max)}`;
     const accent = bountyReady ? '#83f0b0' : enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
       : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';

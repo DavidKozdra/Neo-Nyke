@@ -4,6 +4,8 @@ const {
   ITEM_DROP_ENTRIES,
   ITEM_DROP_WEIGHTS,
   ITEM_RARITY_BY_KEY,
+  BOSS_RUSH_STARTER_OFFER_COUNT,
+  BOSS_RUSH_STARTER_PICK_COUNT,
   BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS,
   rollCampaignItem,
   createCampaignItemChoices,
@@ -35,17 +37,23 @@ describe('shared campaign item content', () => {
     expect(rollCampaignItem(() => 0)).toBe('neo_knife');
   });
 
-  test('Boss Rush grants five starter rolls deterministically from its run seed', () => {
+  test('Boss Rush offers ten unique starter rolls and five picks deterministically from its run seed', () => {
     const createPlan = () => createBossRushStarterItemPlan(
       new RandomService({ matchSeed: 'repeatable-boss-rush' }).scoped('boss-rush:starting-items:p1'),
     );
     const first = createPlan();
     const second = createPlan();
 
-    expect(BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS).toEqual([false, false, true, false, false]);
-    expect(first).toHaveLength(5);
+    expect(BOSS_RUSH_STARTER_OFFER_COUNT).toBe(10);
+    expect(BOSS_RUSH_STARTER_PICK_COUNT).toBe(5);
+    expect(BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS).toEqual([
+      false, false, true, false, false,
+      false, false, true, false, false,
+    ]);
+    expect(first).toHaveLength(10);
     expect(second).toEqual(first);
     expect(first.map(entry => entry.elite)).toEqual(BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS);
+    expect(new Set(first.map(entry => entry.itemKey)).size).toBe(10);
     first.forEach(entry => expect(ITEM_RARITY_BY_KEY[entry.itemKey]).toBeDefined());
   });
 
@@ -58,6 +66,9 @@ describe('shared campaign item content', () => {
     expect(body).toContain('Neo.baseSeedStr = getConfiguredRunSeed();');
     expect(body).toContain("createScopedRandom('boss-rush:starting-items')");
     expect(body).toContain('createBossRushStarterItemPlan(bossRushStartRandom)');
+    expect(body).toContain("type: 'rewardChoice'");
+    expect(body).toContain("source: 'boss_rush_starter'");
+    expect(body).not.toContain('Neo.collectItem(itemKey)');
     expect(body).not.toContain('Neo.baseSeedStr = createRandomSeed();');
   });
 

@@ -3,7 +3,9 @@ const {
   STANDARD_ENEMY_TYPES,
   BOSS_ENEMY_TYPES,
   ELITE_POWER_TYPES,
+  BOSS_RUSH_START_LEVEL,
   getEnemyDefinition,
+  getBossRushBossLevel,
 } = require('../js/simulation/SharedEnemyContent');
 
 describe('shared Neo Nyke enemy content', () => {
@@ -21,5 +23,10 @@ describe('shared Neo Nyke enemy content', () => {
   test('shares all elite power rolls and authored boss patterns', () => {
     expect(ELITE_POWER_TYPES).toEqual(['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed']);
     BOSS_ENEMY_TYPES.forEach(type => expect(ENEMY_CATALOG[type].patterns.length).toBeGreaterThan(1));
+  });
+
+  test('Boss Rush bosses start at level two and rise one level per stage', () => {
+    expect(BOSS_RUSH_START_LEVEL).toBe(2);
+    expect([0, 1, 2, 3, 4, 5].map(getBossRushBossLevel)).toEqual([2, 3, 4, 5, 6, 7]);
   });
 });
