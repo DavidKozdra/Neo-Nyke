@@ -376,7 +376,10 @@ export function resumeGame() {
       items.churu_stick = 1;
     }
     if (characterKey === 'princess') items.princes_glasses = 1;
-    if (characterKey === 'metao') items.mateos_bag = 1;
+    if (characterKey === 'metao') {
+      items.mateos_bag = 1;
+      items.drink_master = 1;
+    }
     if (characterKey === 'gelleh') items.zap_to_extreme = 1;
     if (characterKey === 'turtle_boy') {
       // Turtle Boy starts with shell defense and dragon orb; his red stick and

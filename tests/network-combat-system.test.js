@@ -993,6 +993,13 @@ describe('authoritative network combat system', () => {
       darkDrainResistance: 0.2,
       damageReduction: 0.01,
     }));
+
+    applyNetworkHeroProfile(player, 'metao');
+    expect(player.items).toEqual({ mateos_bag: 1, drink_master: 1 });
+    expect(player.itemStats).toEqual(expect.objectContaining({
+      healingMultiplier: 1.2,
+      potionDoubleChance: 0.5,
+    }));
   });
 
   test('applies starter defensive item stats to authoritative multiplayer damage', () => {

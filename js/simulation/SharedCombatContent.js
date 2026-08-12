@@ -61,7 +61,7 @@
   const CHARACTER_STARTING_ITEMS = Object.freeze({
     princess: Object.freeze({ princes_glasses: 1 }),
     thorn_knight: Object.freeze({ neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 2 }),
-    metao: Object.freeze({ mateos_bag: 1 }),
+    metao: Object.freeze({ mateos_bag: 1, drink_master: 1 }),
     gelleh: Object.freeze({ zap_to_extreme: 1 }),
     mooggy: Object.freeze({ hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 }),
     turtle_boy: Object.freeze({ turtle_shell: 1, dragon_orb: 1 }),
