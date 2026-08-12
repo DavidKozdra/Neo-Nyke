@@ -13,7 +13,13 @@ describe('shared campaign item effects', () => {
       displayedCritChance: 0.025,
       attackSpeedMultiplier: 1.16,
       xpGainMultiplier: 1.15,
+      darkDrainResistance: 0.1,
     }));
+  });
+
+  test('Tough Bandaid reduces incoming Dark Drain effectiveness per stack', () => {
+    expect(itemEffects.deriveCampaignItemStats({ items: { tough_bandaid: 2 } }).darkDrainResistance).toBe(0.2);
+    expect(itemEffects.deriveCampaignItemStats({ items: { tough_bandaid: 20 } }).darkDrainResistance).toBe(0.8);
   });
 
   test('syncs every authoritative player before movement and combat', () => {
@@ -43,6 +49,17 @@ describe('shared campaign item effects', () => {
       items: { factor_of_elements: 2 },
     });
     expect(stats.factorOfElementsDamagePerStatusStack).toBe(0.1);
+  });
+
+  test('buffs Mateo\'s Bag potion pickups by 10% and stored potions by 20% per stack', () => {
+    expect(itemEffects.deriveCampaignItemStats({ items: { mateos_bag: 1 } })).toEqual(expect.objectContaining({
+      potionPickupHealingMultiplier: 1.1,
+      storedPotionHealingMultiplier: 1.2,
+    }));
+    expect(itemEffects.deriveCampaignItemStats({ items: { mateos_bag: 2 } })).toEqual(expect.objectContaining({
+      potionPickupHealingMultiplier: 1.2,
+      storedPotionHealingMultiplier: 1.4,
+    }));
   });
 
   test('plans Sweepy Box mines with campaign arm, blast, damage, and bleed scaling', () => {

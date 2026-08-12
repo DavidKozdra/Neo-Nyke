@@ -368,7 +368,7 @@ export function resumeGame() {
     if (characterKey === 'thorn_knight') {
       items.neo_knife = 1;
       items.tooth_of_thorn = 2;
-      items.tough_bandaid = 1;
+      items.tough_bandaid = 2;
     }
     if (characterKey === 'mooggy') {
       items.hemes_scarf = 1;
@@ -2503,6 +2503,12 @@ export function resumeGame() {
   }
 
   const killerSpriteMap = {
+    // Enemy types with no sprite of their own: they borrow a stand-in at draw
+    // time (see getEnemySpriteKey), so the killer portrait must borrow the same
+    // one or it falls through to the "unknown" question-mark hazard icon.
+    boss_spawner: 'laser',
+    healer: 'cult_follower',
+    shield_unit: 'golem',
     god_beam: 'god',
     mirror_beam: 'thorn_knight',
     mirror_lightning: 'thorn_knight',
@@ -2530,6 +2536,9 @@ export function resumeGame() {
     'Knave': 'knave',
     'Cult Mage': 'cult_mage',
     'Summoner': 'summoner',
+    'Boss Spawner': 'laser',
+    'Healer': 'cult_follower',
+    'Shield Unit': 'golem',
   };
 
   function resolveKillerSprite(key) {

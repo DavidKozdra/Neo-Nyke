@@ -763,6 +763,7 @@ export function getItemStats() {
       drainChance: toothOfThorn * 0.045 + toothOfThorn * toothOfThorn * 0.018,
       meleeDrainChance: toothOfThorn * 0.08 + toothOfThorn * toothOfThorn * 0.018,
       bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
+      darkDrainResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
       // Always-on base fire-damage reduction: the player takes ~50% less fire
       // DoT. Applied in the player fire tick (tickPlayerStatus 'fire').
       fireResistance: 0.5,
@@ -837,7 +838,8 @@ export function getItemStats() {
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.12,
       projectileLifeMultiplier: 1 + mooggyZoomies * 0.10,
       healingMultiplier: 1 + drinkMaster * 0.2,
-      storedPotionHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,
+      potionPickupHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,
+      storedPotionHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.20,
       overhealBarrierChance,
       overhealBarrierRatio: overhealUnlocked ? 0.35 : 0,
       overhealBarrierCapRatio: overhealUnlocked ? (healingTagStacks >= 6 ? 0.28 : 0.16) : 0,

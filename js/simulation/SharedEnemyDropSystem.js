@@ -8,6 +8,7 @@
   'use strict';
 
   const deterministicRandom = () => 0.5;
+  const CAMPAIGN_POTION_DROP_CHANCE = 0.11;
 
   function getCampaignItemDropChance(baseChance, maximumChance = 1, options = {}) {
     const difficultyMultiplier = Math.max(0, Number(options.difficultyMultiplier ?? 1));
@@ -69,7 +70,7 @@
     if (!enemy.elite && random() < getCampaignItemDropChance(0, 0.35, { itemDropChanceBonus, difficultyMultiplier })) {
       return { type: 'item', elite: false };
     }
-    const potionDropChance = 0.1 * Math.max(0, Number(options.potionDropMultiplier ?? 1));
+    const potionDropChance = CAMPAIGN_POTION_DROP_CHANCE * Math.max(0, Number(options.potionDropMultiplier ?? 1));
     return random() < potionDropChance ? { type: 'potion', source: 'enemy' } : null;
   }
 

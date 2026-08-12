@@ -19,11 +19,12 @@ describe('Neo-Knife and Tough Bandaid descriptions', () => {
     expect(input).toContain('on basic and bleed-focused melee attacks');
   });
 
-  test('Tough Bandaid accurately states bleed mitigation and caps', () => {
+  test('Tough Bandaid accurately states Bleed and Dark Drain mitigation and caps', () => {
     expect(player).toContain('bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8)');
+    expect(player).toContain('darkDrainResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8)');
     expect(player).toContain('bleedDurationDecayMultiplier: Neo.clamp(1 + toughBandaid * 0.2, 1, 3)');
-    expect(world).toContain("const resistance = statusKey === 'bleed'");
-    expect(input).toContain('Bleed tick damage taken -10% per stack (max -80%)');
+    expect(world).toContain('getCampaignPlayerStatusDamageMultiplier(statusKey, stats)');
+    expect(input).toContain('Bleed and Dark Drain tick damage taken -10% per stack (max -80%)');
     expect(input).toContain('20% faster per stack (max 3× speed)');
   });
 });

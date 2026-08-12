@@ -776,6 +776,10 @@ function applySharedSpecialChoice(choiceId) {
   }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });
   if (!result?.ok) return false;
   consumeService(Neo.currentRoom, result.result);
+  // Shared special-room rewards mutate inventory directly, so they do not pass
+  // through collectItem's browser presentation. Restore the standard item card
+  // for rewards such as Dark Covenant and Reliquary Ascend.
+  if (result.rewardKey) Neo.pushItemNotification?.(result.rewardKey, 1);
   if (result.transitionToRoomId) {
     const target = Neo.rooms.find(room => room.id === result.transitionToRoomId);
     if (target) Neo.enterRoom?.(target);

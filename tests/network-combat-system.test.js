@@ -986,11 +986,12 @@ describe('authoritative network combat system', () => {
       character: 'thorn_knight',
       equippedWeapon: 'thorns_bleed_blade',
       equippedMoves: expect.objectContaining({ laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
-      items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 },
+      items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 2 },
     }));
     expect(player.itemStats).toEqual(expect.objectContaining({
-      bleedResistance: 0.1,
-      damageReduction: 0.005,
+      bleedResistance: 0.2,
+      darkDrainResistance: 0.2,
+      damageReduction: 0.01,
     }));
   });
 

@@ -11,6 +11,7 @@ const {
   getCampaignBleedResistance,
   getCampaignGenericStatusResistance,
   getCampaignSlowMultiplier,
+  getCampaignPlayerStatusDamageMultiplier,
   tickCampaignStatuses,
   resolveCampaignOnHitStatusProcs,
 } = require('../js/simulation/SharedStatusSystem');
@@ -83,6 +84,14 @@ describe('shared campaign status system', () => {
     tickCampaignStatuses(enemy, 0.4, { maxHp: 100, dealDamage: () => { throw new Error('early tick'); } });
     tickCampaignStatuses(enemy, 0.05, { maxHp: 100, dealDamage: (key, raw) => ticks.push([key, raw]) });
     expect(ticks).toHaveLength(2);
+  });
+
+  test('applies item resistance only to matching incoming player statuses', () => {
+    const stats = { bleedResistance: 0.1, darkDrainResistance: 0.2 };
+    expect(getCampaignPlayerStatusDamageMultiplier('bleed', stats)).toBe(0.9);
+    expect(getCampaignPlayerStatusDamageMultiplier('dark_drain', stats)).toBe(0.8);
+    expect(getCampaignPlayerStatusDamageMultiplier('poison', stats)).toBe(1);
+    expect(getCampaignPlayerStatusDamageMultiplier('dark_drain', { darkDrainResistance: 99 })).toBe(0.2);
   });
 
   test('owns bleed and generic status resistance progression', () => {

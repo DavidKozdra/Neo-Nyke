@@ -30,10 +30,10 @@
     return stacks > 0 ? 3 + (stacks - 1) : 0;
   }
 
-  // Walk-over potions heal immediately when the hero is hurt. They are stored
-  // only at full health, only with Mateo's Bag, and never beyond its exact
-  // capacity. This differs intentionally from using a stored potion, which
-  // consumes one charge and applies Mateo's healing multiplier.
+  // Walk-over potions heal immediately when the hero is hurt. Mateo's Bag makes
+  // that immediate heal 10% stronger per stack; at full health the potion is
+  // stored instead, never beyond the bag's exact capacity. Stored potions use
+  // the separate, stronger stored-potion multiplier when consumed.
   function resolveCampaignPotionPickup(player, options = {}) {
     if (!player || player.downed) return { ok: false, reason: 'UNAVAILABLE' };
     const maximumHealth = Math.max(1, Number(player.maxHp || 100));
@@ -44,7 +44,8 @@
     const doubled = chance > 0 && Number(random()) < chance;
     const applications = doubled ? 2 : 1;
     if (healthBefore < maximumHealth) {
-      const requestedHeal = Math.max(0, Number(options.baseHeal ?? 40)) * applications;
+      const pickupMultiplier = Math.max(1, Number(stats.potionPickupHealingMultiplier || 1));
+      const requestedHeal = Math.max(0, Number(options.baseHeal ?? 40)) * pickupMultiplier * applications;
       let healedAmount;
       if (typeof options.heal === 'function') {
         healedAmount = Math.max(0, Number(options.heal(requestedHeal) || 0));

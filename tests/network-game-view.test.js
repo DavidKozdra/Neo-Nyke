@@ -1172,6 +1172,21 @@ describe('network multiplayer game view', () => {
     expect(pushItemNotification).toHaveBeenCalledWith('neo_knife', 1);
   });
 
+  test('shows the awarded item from Dark Covenant and Ascend special-room choices', () => {
+    const pushItemNotification = jest.fn();
+    const view = new NetworkGameView({
+      session: { snapshot: () => ({ playerId: 'p1' }) },
+      neo: { pushItemNotification, playSfx: jest.fn() },
+    });
+    view.currentSample = { state: { players: { p1: { id: 'p1', roomId: 'shrine' } } } };
+    view._consumeGameplayEvents([{
+      eventId: 'special-reward-1', eventType: 'SPECIAL_ROOM_CHOICE_APPLIED',
+      data: { playerId: 'p1', roomId: 'shrine', roomType: 'shrine', choiceId: 'covenant', rewardKey: 'titan_heart' },
+    }]);
+
+    expect(pushItemNotification).toHaveBeenCalledWith('titan_heart', 1);
+  });
+
   test('does not show another player\'s acquisition as the local player\'s item card', () => {
     const pushItemNotification = jest.fn();
     const view = new NetworkGameView({

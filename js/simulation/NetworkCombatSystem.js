@@ -132,6 +132,7 @@
     getCampaignPoisonDamageMultiplier = () => 1,
     getCampaignSlowMultiplier = () => 1,
     getCampaignBrittleDefenseMultiplier = () => 1,
+    getCampaignPlayerStatusDamageMultiplier = () => 1,
     getCampaignBleedResistance = () => 1,
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
@@ -6401,9 +6402,8 @@
         getDurationDecay: key => key === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
         isDead: () => !!player.downed,
         dealDamage: (key, rawDamage, status) => {
-          const resistance = key === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
           const severity = Number(stats.negativeStatusMultiplier || 1);
-          const damage = Math.max(0.25, rawDamage * Math.max(0.2, 1 - resistance) * severity);
+          const damage = Math.max(0.25, rawDamage * getCampaignPlayerStatusDamageMultiplier(key, stats) * severity);
           damagePlayer(state, player, damage, status.ownerId || key, emitEvent, key, {
             ignoreInv: true,
             noInvFrames: true,

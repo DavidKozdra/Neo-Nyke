@@ -1999,8 +1999,10 @@
       });
       const armFrame = sheet.armFrame ?? def.armFrame;
       if (Number.isInteger(armFrame)) lines.push(`    armFrame: ${armFrame},`);
-      const armBaseAngle = sheet.armBaseAngle ?? def.armBaseAngle;
-      if (armBaseAngle != null) lines.push(`    armBaseAngle: ${Number(armBaseAngle)},`);
+      const serializedArmBaseAngle = sheet.armBaseAngle ?? def.armBaseAngle;
+      if (serializedArmBaseAngle != null) {
+        lines.push(`    armBaseAngle: ${Number(serializedArmBaseAngle)},`);
+      }
       const armPivot = sheet.armPivot ?? def.armPivot;
       if (armPivot && Number.isFinite(Number(armPivot.x)) && Number.isFinite(Number(armPivot.y))) {
         lines.push(`    armPivot: { x: ${Number(armPivot.x)}, y: ${Number(armPivot.y)} },`);

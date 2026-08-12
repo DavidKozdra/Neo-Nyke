@@ -246,6 +246,15 @@
     return Math.max(0, 1 - applied * 0.25 * Math.max(0, Number(severity || 1)));
   }
 
+  function getCampaignPlayerStatusDamageMultiplier(key, itemStats = {}) {
+    const resistance = key === 'bleed'
+      ? Number(itemStats.bleedResistance || 0)
+      : key === 'dark_drain'
+        ? Number(itemStats.darkDrainResistance || 0)
+        : 0;
+    return Math.max(0.2, 1 - Math.max(0, Math.min(0.8, resistance || 0)));
+  }
+
   // The itemStats-driven on-hit status procs from the campaign's hitEnemy():
   // authored weapon bleed/fire, item bleed, Snake Knife poison, Weapon Fatigue
   // chill/freeze, Confuse Ray stun, Overstimulate stun and lightning Static.
@@ -328,6 +337,7 @@
     getCampaignSlowMultiplier,
     getCampaignPoisonDamageMultiplier,
     getCampaignBrittleDefenseMultiplier,
+    getCampaignPlayerStatusDamageMultiplier,
     resolveCampaignOnHitStatusProcs,
   };
 });

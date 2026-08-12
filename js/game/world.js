@@ -754,8 +754,7 @@
       getDurationDecay: statusKey => statusKey === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
       isDead: () => Number(Neo.player.hp || 0) <= 0,
       dealDamage: (statusKey, rawDamage, state) => {
-        const resistance = statusKey === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
-        const damageMultiplier = Math.max(0.2, 1 - resistance);
+        const damageMultiplier = globalThis.NeoNyke.simulation.getCampaignPlayerStatusDamageMultiplier(statusKey, stats);
         const statusSeverity = Number(stats.negativeStatusMultiplier || 1);
         const damage = Math.max(0.25, rawDamage * damageMultiplier * statusSeverity);
         // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),

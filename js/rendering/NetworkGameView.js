@@ -1660,6 +1660,12 @@
           this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
           this._playNetworkSfx('item_collect', event, authorityTick);
         }
+        if (event.eventType === 'SPECIAL_ROOM_CHOICE_APPLIED'
+          && event.data?.playerId === localPlayerId
+          && event.data?.rewardKey) {
+          this.neo.pushItemNotification?.(event.data.rewardKey, 1);
+          this._playNetworkSfx('item_collect', event, authorityTick);
+        }
         if (event.eventType === 'SHOP_PURCHASED' && event.data?.playerId === localPlayerId) {
           if (event.data?.kind === 'item' && event.data?.key) this.neo.pushItemNotification?.(event.data.key, 1);
           else if (event.data?.kind === 'move' && event.data?.key) this.neo.pushMoveNotification?.(event.data.key, 1);

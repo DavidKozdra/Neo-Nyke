@@ -73,6 +73,7 @@ describe('special service rooms', () => {
   test('Dark Covenant clouds both the current and following floor maps', () => {
     expect(specialSource).toContain('Neo.floorRivalCurses.obscureMap = true');
     expect(specialSource).toContain('Neo.pendingRivalCurses.obscureMap = true');
+    expect(specialSource).toContain('if (result.rewardKey) Neo.pushItemNotification?.(result.rewardKey, 1)');
   });
 
   test('Complete Map remains purchasable while Princess clouds explored rooms', () => {
