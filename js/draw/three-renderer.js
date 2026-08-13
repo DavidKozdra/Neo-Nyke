@@ -4684,6 +4684,15 @@ function getWeaponIconCanvas() {
 // to visible pixels); the viewmodel then draws every character's arm in the
 // same bottom-right slot at the same visual size.
 const fpArmCache = new Map();
+function invalidateSpriteTextureCache(characterKey = '') {
+  for (const [cacheKey, texture] of spriteTextureCache) {
+    if (characterKey && !cacheKey.startsWith(characterKey)) continue;
+    texture?.dispose?.();
+    spriteTextureCache.delete(cacheKey);
+  }
+  if (characterKey) fpArmCache.delete(characterKey);
+  else fpArmCache.clear();
+}
 function getFpArmSprite() {
   const key = playerSpriteKey();
   if (fpArmCache.has(key)) return fpArmCache.get(key);
@@ -4931,6 +4940,7 @@ Neo.hasPointerLockBlockingUi = hasPointerLockBlockingUi;
 
 Neo.getViewMode = getViewMode;
 Neo.setViewMode = setViewMode;
+Neo.invalidateSpriteTextureCache = invalidateSpriteTextureCache;
 
 Neo.threeRenderer = {
   render,

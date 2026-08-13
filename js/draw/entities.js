@@ -142,9 +142,13 @@
     return {};
   }
 
+  function getCharacterGameplaySpriteKey(characterKey) {
+    const spriteKey = Neo.getCharacterSpriteKey?.(characterKey) || characterKey;
+    return Neo.SPRITE_DEFS[spriteKey] || Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey] ? spriteKey : 'thorn_knight';
+  }
+
   function getPlayerSpriteKey() {
-    const key = Neo.getCharacterDef().key;
-    return Neo.SPRITE_DEFS[key] ? key : 'thorn_knight';
+    return getCharacterGameplaySpriteKey(Neo.getCharacterDef().key);
   }
 
   // Resolves a base sprite key to its dedicated portrait atlas frame (the
@@ -236,8 +240,9 @@
   function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
     const access = window.NeoSettings?.getAccess?.() || {};
     const def = Neo.SPRITE_DEFS[spriteKey];
-    const animations = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]?.animations || def?.animations || {};
-    if (!def || access.reduceMotion) return spriteKey;
+    const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey];
+    const animations = sheet?.animations || def?.animations || {};
+    if ((!def && !sheet) || access.reduceMotion) return spriteKey;
     const speedOverride = getSpriteAnimSpeedOverride(spriteKey);
 
     const atlasFrames = Neo.SPRITE_ATLAS?.frames || {};
@@ -1979,7 +1984,7 @@
     const aimAngle = Number.isFinite(Number(pn.aimDirection))
       ? Number(pn.aimDirection)
       : Math.atan2(pn.vy || 0, pn.vx || 1);
-    const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
+    const spriteKey = getCharacterGameplaySpriteKey(charKey);
     const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
     const slotActionState = getActorSpriteActionState(pn);
     const beamFacingAngle = Number.isFinite(Number(pn.beamChannel?.angle))

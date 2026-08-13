@@ -179,6 +179,7 @@ const KOZ_PWA_CONFIG = {
     "/js/tutorial/scenes.js",
     "/js/ui/controller.js",
     "/js/ui/credits.js",
+    "/js/ui/custom-sprite-editor.js",
     "/js/ui/input.js",
     "/js/ui/lazy-panels.js",
     "/js/ui/menu-background.js",
@@ -263,14 +264,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 250,
-    "bytes": 52160782,
-    "criticalEntries": 193,
-    "criticalBytes": 11996336,
+    "entries": 251,
+    "bytes": 52197743,
+    "criticalEntries": 194,
+    "criticalBytes": 12033297,
     "optionalEntries": 57,
     "optionalBytes": 40164446
   },
-  "version": "6705a9528a8427ed"
+  "version": "07719fed5b29fbba"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

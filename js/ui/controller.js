@@ -476,7 +476,7 @@ export function createUIController(view) {
         `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
       const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
       Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 168, {
-        tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
+        tint: Neo.isCustomCharacterKey?.(selected) && !Neo.hasCustomCharacterSprite?.(selected) ? '#83f3ff' : null,
       });
       detail.querySelectorAll('[data-hero-move]').forEach(el => {
         const move = Neo.MOVE_DEFS[el.dataset.heroMove];
@@ -2754,7 +2754,10 @@ export function createUIController(view) {
     function setCustomCharacterPanelOpen(open) {
       if (open) Neo.mountLazyPanel?.('customCharacterPanel');
       if (open) syncCustomCharacterPanelFieldsHook?.();
-      else blurIfFocusInside(view.customCharacterPanel);
+      else {
+        blurIfFocusInside(view.customCharacterPanel);
+        Neo.CustomSpriteEditor?.close?.().catch?.(error => console.warn('[CustomSprites] Close save failed.', error));
+      }
       view.customCharacterPanel?.classList.toggle('hidden', !open);
       view.customCharacterPanel?.classList.toggle('sandbox-panel--open', open);
       view.customCharacterPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -3265,6 +3268,7 @@ export function createUIController(view) {
             }).join('');
             Neo.drawItemIconCanvases?.(view.customCharacterRelicList, 'data-custom-relic-icon');
           }
+          void Neo.CustomSpriteEditor?.open?.(customKey);
         }
 
         function syncSandboxPanelFields() {
@@ -3585,6 +3589,7 @@ export function createUIController(view) {
           const customKey = getEditingCustomCharacterKey();
           const id = customKey.slice('custom_character_'.length);
           writeCustomCharacterSettings(customKey, { ...(Neo.normalizeCustomCharacterSettings?.({ id, active: true }, id) || {}), id, active: true });
+          void Neo.CustomSpriteEditor?.restoreTemplate?.();
           syncCustomCharacterPanelFields();
           Neo.persistMetaSoon();
           renderCustomRosterCards();
@@ -3600,19 +3605,27 @@ export function createUIController(view) {
           Neo.updateCharacterSelectionUI?.();
           handlers.onCloseCustomCharacterBuilder();
         });
-        view.customCharacterSaveClose?.addEventListener('click', () => {
-          if (Neo.metaProgress) {
-            const customKey = getEditingCustomCharacterKey();
-            const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
-            writeCustomCharacterSettings(customKey, {
-              ...custom,
-              name: String(view.customCharacterName?.value || custom.name || '').trim().slice(0, 24) || custom.name || 'Plus',
-            });
-            Neo.persistMetaSoon();
-            renderCustomRosterCards();
-            Neo.updateCharacterSelectionUI?.();
+        view.customCharacterSaveClose?.addEventListener('click', async () => {
+          view.customCharacterSaveClose.disabled = true;
+          try {
+            if (Neo.metaProgress) {
+              const customKey = getEditingCustomCharacterKey();
+              const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
+              writeCustomCharacterSettings(customKey, {
+                ...custom,
+                name: String(view.customCharacterName?.value || custom.name || '').trim().slice(0, 24) || custom.name || 'Plus',
+              });
+              Neo.persistMetaSoon();
+              await Neo.CustomSpriteEditor?.flush?.();
+              renderCustomRosterCards();
+              Neo.updateCharacterSelectionUI?.();
+            }
+            handlers.onCloseCustomCharacterBuilder();
+          } catch (error) {
+            console.warn('[CustomSprites] Save & Close failed.', error);
+          } finally {
+            view.customCharacterSaveClose.disabled = false;
           }
-          handlers.onCloseCustomCharacterBuilder();
         });
         view.customCharacterClose?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
         view.customCharacterBackdrop?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
@@ -4161,7 +4174,7 @@ export function createUIController(view) {
             const cardSpriteKey = Neo.getCharacterSpriteKey?.(itemKey) || itemKey;
             Neo.drawSpriteToCanvas(spriteCanvas, Neo.getPortraitSpriteKey?.(cardSpriteKey) || cardSpriteKey, 76, {
               alpha: isSelectable(itemKey) ? 1 : 0.42,
-              tint: Neo.isCustomCharacterKey?.(itemKey) ? '#83f3ff' : null,
+              tint: Neo.isCustomCharacterKey?.(itemKey) && !Neo.hasCustomCharacterSprite?.(itemKey) ? '#83f3ff' : null,
             });
           }
           button.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {

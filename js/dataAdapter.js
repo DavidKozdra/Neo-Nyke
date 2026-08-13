@@ -22,6 +22,47 @@
     try { db?.close?.(); } catch {}
   }
 
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('failed to encode stored blob'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function serializeStoreRecords(records) {
+    return Promise.all(records.map(async record => {
+      if (!(record?.value?.blob instanceof Blob)) return record;
+      return {
+        ...record,
+        value: {
+          ...record.value,
+          blob: {
+            __neoSerializedBlob: true,
+            type: record.value.blob.type,
+            dataUrl: await blobToDataUrl(record.value.blob),
+          },
+        },
+      };
+    }));
+  }
+
+  async function deserializeStoreRecords(records) {
+    return Promise.all((Array.isArray(records) ? records : []).map(async record => {
+      const encoded = record?.value?.blob;
+      if (!encoded?.__neoSerializedBlob || typeof encoded.dataUrl !== 'string') return record;
+      const response = await fetch(encoded.dataUrl);
+      return {
+        ...record,
+        value: {
+          ...record.value,
+          blob: await response.blob(),
+        },
+      };
+    }));
+  }
+
   function exportLocalStorage() {
     if (typeof localStorage === 'undefined') return {};
     const snapshot = {};
@@ -141,7 +182,7 @@
     try {
       const stores = {};
       await Promise.all(IDB_STORES.map(async storeName => {
-        stores[storeName] = await exportStore(db, storeName);
+        stores[storeName] = await serializeStoreRecords(await exportStore(db, storeName));
       }));
       const saves = stores.saves || [];
       return {
@@ -171,7 +212,10 @@
     importLocalStorage(payload.localStorage);
     const db = await openDB();
     try {
-      await Promise.all(IDB_STORES.map(storeName => importStore(db, storeName, payload.stores?.[storeName] || [])));
+      await Promise.all(IDB_STORES.map(async storeName => {
+        const records = await deserializeStoreRecords(payload.stores?.[storeName] || []);
+        await importStore(db, storeName, records);
+      }));
     } finally {
       closeDB(db);
     }

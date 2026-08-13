@@ -116,6 +116,7 @@ import './draw/hud.js';
 import './draw/three-loader.js';
 import './core/canvas-recovery.js';
 import './ui/sprite-editor.js';
+import './ui/custom-sprite-editor.js';
 import './ui/move-preview.js';
 import './ui/controller.js';
 import './core/save-store.js';

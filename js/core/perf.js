@@ -443,6 +443,7 @@ export async function boot() {
       fallbackSafePhaseAsync('preloadCharacterSheets', () => Neo.preloadCharacterSheets?.()),
       fallbackSafePhaseAsync('preloadEnvironmentImages', () => Neo.preloadEnvironmentImages?.()),
     ]);
+    await fallbackSafePhaseAsync('preloadCustomCharacterSprites', () => Neo.preloadCustomCharacterSprites?.());
     Neo.SPRITE_ATLAS = fallbackSafePhase('buildSpriteAtlas', () => Neo.buildSpriteAtlas?.());
     Neo.ENV_TILE_ATLAS = fallbackSafePhase('buildEnvironmentTileAtlas', () => Neo.buildEnvironmentTileAtlas?.());
     fallbackSafePhase('bindCanvasRecovery', () => Neo.bindCanvasRecovery?.());

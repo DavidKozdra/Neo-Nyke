@@ -166,6 +166,7 @@ export function resumeGame() {
   function removeCustomCharacter(characterKey) {
     if (!Neo.metaProgress || !isCustomCharacterKey(characterKey)) return;
     const id = getCustomCharacterId(characterKey);
+    void Neo.CustomSpriteEditor?.remove?.(characterKey);
     Neo.metaProgress.customCharacters = normalizeCustomCharactersSettings(Neo.metaProgress.customCharacters)
       .filter(entry => entry.id !== id);
     if (Neo.chosenCharacter === characterKey) {
@@ -176,7 +177,8 @@ export function resumeGame() {
   }
 
   function getCharacterSpriteKey(characterKey) {
-    return isCustomCharacterKey(characterKey) ? 'thorn_knight' : characterKey;
+    if (!isCustomCharacterKey(characterKey)) return characterKey;
+    return Neo.hasCustomCharacterSprite?.(characterKey) ? characterKey : 'thorn_knight';
   }
 
   function normalizeSandboxSettings(input) {

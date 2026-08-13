@@ -1848,6 +1848,48 @@
           </div>
         </div>
       </div>
+      <div class="sandbox-card sandbox-card--wide custom-sprite-card">
+        <div class="custom-sprite-card__head">
+          <div>
+            <h4>Sprite Sheet</h4>
+            <p class="sandbox-card__hint">Paint directly over the 8×4 Thorn Knight animation sheet. Every stroke saves to this browser automatically.</p>
+          </div>
+          <canvas id="customSpritePreview" class="custom-sprite-preview" width="96" height="96" aria-label="Animated custom character preview"></canvas>
+        </div>
+        <div class="custom-sprite-toolbar" role="toolbar" aria-label="Sprite drawing tools">
+          <label class="custom-sprite-color">Color <input id="customSpriteColor" type="color" value="#ef3340" aria-label="Brush color"></label>
+          <button id="customSpriteBrush" class="sandbox-mini-btn is-active" type="button" aria-pressed="true">Brush</button>
+          <button id="customSpriteEraser" class="sandbox-mini-btn" type="button" aria-pressed="false">Eraser</button>
+          <button id="customSpritePicker" class="sandbox-mini-btn" type="button" aria-pressed="false">Pick Color</button>
+          <label>Size
+            <select id="customSpriteBrushSize" class="custom-sprite-select" aria-label="Brush size">
+              <option value="1">1 px</option>
+              <option value="2">2 px</option>
+              <option value="3">3 px</option>
+              <option value="4">4 px</option>
+            </select>
+          </label>
+          <label>Zoom <input id="customSpriteZoom" type="range" min="1" max="8" step="1" value="3" aria-label="Sprite editor zoom"></label>
+          <button id="customSpriteUndo" class="sandbox-mini-btn" type="button" disabled>Undo</button>
+          <button id="customSpriteRedo" class="sandbox-mini-btn" type="button" disabled>Redo</button>
+        </div>
+        <div class="custom-sprite-stage" tabindex="0" aria-label="Editable custom character sprite sheet">
+          <canvas id="customSpriteCanvas" class="custom-sprite-canvas" width="576" height="288"></canvas>
+        </div>
+        <div class="custom-sprite-footer">
+          <div>
+            <strong id="customSpriteStatus" class="custom-sprite-status" aria-live="polite">Loading sprite…</strong>
+            <span id="customSpriteDimensions" class="custom-sprite-dimensions">192×96px · 24×24px frames</span>
+          </div>
+          <div class="custom-sprite-actions">
+            <input id="customSpriteUploadInput" class="hidden" type="file" accept="image/png,image/webp" aria-hidden="true" tabindex="-1">
+            <button id="customSpriteRestore" class="sandbox-mini-btn" type="button">Restore Template</button>
+            <button id="customSpriteUpload" class="sandbox-mini-btn" type="button">Import 8×4 PNG</button>
+            <button id="customSpriteDownload" class="sandbox-mini-btn" type="button">Download PNG</button>
+            <button id="customSpriteSave" class="sandbox-mini-btn" type="button">Save Sprite</button>
+          </div>
+        </div>
+      </div>
       <div class="sandbox-card">
         <h4>Move Set</h4>
         <p class="sandbox-card__hint">Pick one move per slot. Every defined move is available.</p>

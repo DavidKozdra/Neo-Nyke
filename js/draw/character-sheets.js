@@ -255,51 +255,52 @@ function resolveFrameRoles(def, frameCount) {
   return { idleFrames, walkFrames, armFrame, portraitFrame };
 }
 
+function createCharacterSheetFromImage(key, def, image) {
+  const sourceOffsetX = Math.max(0, Math.floor(Number(def.sourceOffsetX) || 0));
+  const sourceOffsetY = Math.max(0, Math.floor(Number(def.sourceOffsetY) || 0));
+  const columns = Math.floor((image.naturalWidth - sourceOffsetX) / def.frameWidth);
+  const rows = Math.floor((image.naturalHeight - sourceOffsetY) / def.frameHeight);
+  const availableFrames = columns * rows;
+  const frameCount = Math.min(def.frameCount, availableFrames);
+  if (frameCount < 1 || columns < 1 || rows < 1) {
+    console.warn(`[CharacterSprites] Invalid sprite sheet dimensions for "${key}".`);
+    return null;
+  }
+  const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
+  const animationFrames = {};
+  ['attack', 'dash', 'smash', 'beam'].forEach(action => {
+    const indices = Array.isArray(def[`${action}Frames`])
+      ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
+      : [];
+    if (indices.length) animationFrames[action] = indices;
+  });
+  return {
+    ...def,
+    image,
+    columns,
+    rows,
+    frameCount,
+    idleFrames,
+    walkFrames,
+    animationFrames,
+    armFrame,
+    portraitFrame,
+    animations: {
+      idle: idleFrames.map((_, index) => `idle${index}`),
+      walk: walkFrames.map((_, index) => `walk${index}`),
+      ...Object.fromEntries(
+        Object.entries(animationFrames).map(([action, indices]) => (
+          [action, indices.map((_, index) => `${action}${index}`)]
+        )),
+      ),
+    },
+  };
+}
+
 function loadCharacterSheet(key, def) {
   return new Promise(resolve => {
     const image = new Image();
-    image.onload = () => {
-      const sourceOffsetX = Math.max(0, Math.floor(Number(def.sourceOffsetX) || 0));
-      const sourceOffsetY = Math.max(0, Math.floor(Number(def.sourceOffsetY) || 0));
-      const columns = Math.floor((image.naturalWidth - sourceOffsetX) / def.frameWidth);
-      const rows = Math.floor((image.naturalHeight - sourceOffsetY) / def.frameHeight);
-      const availableFrames = columns * rows;
-      const frameCount = Math.min(def.frameCount, availableFrames);
-      if (frameCount < 1 || columns < 1 || rows < 1) {
-        console.warn(`[CharacterSprites] Invalid sprite sheet dimensions for "${key}".`);
-        resolve(null);
-        return;
-      }
-      const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
-      const animationFrames = {};
-      ['attack', 'dash', 'smash', 'beam'].forEach(action => {
-        const indices = Array.isArray(def[`${action}Frames`])
-          ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
-          : [];
-        if (indices.length) animationFrames[action] = indices;
-      });
-      resolve({
-        ...def,
-        image,
-        columns,
-        rows,
-        frameCount,
-        idleFrames,
-        walkFrames,
-        animationFrames,
-        armFrame,
-        portraitFrame,
-        animations: {
-          idle: idleFrames.map((_, index) => `idle${index}`),
-          walk: walkFrames.map((_, index) => `walk${index}`),
-          ...Object.fromEntries(
-            Object.entries(animationFrames).map(([action, indices]) => (
-              [action, indices.map((_, index) => `${action}${index}`)]
-            )),
-          ),
-        },
-      });
-    };
+    image.onload = () => resolve(createCharacterSheetFromImage(key, def, image));
     image.onerror = () => {
       console.warn(`[CharacterSprites] Failed to preload "${def.src}".`);
       resolve(null);
@@ -321,3 +322,4 @@ export async function preloadCharacterSheets() {
 Neo.CHARACTER_SHEET_DEFS = CHARACTER_SHEET_DEFS;
 Neo.preloadCharacterSheets = preloadCharacterSheets;
 Neo.resolveCharacterFrameRoles = resolveFrameRoles;
+Neo.createCharacterSheetFromImage = createCharacterSheetFromImage;
