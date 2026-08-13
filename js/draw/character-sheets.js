@@ -125,6 +125,52 @@ const CHARACTER_SHEET_DEFS = {
     attackFrames: [5, 6, 7],
     portraitFrame: 0,
   },
+  sniper: {
+    src: 'assets/sprites/chars/sniper.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    renderScale: 1.5,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    attackFrames: [5, 6, 7],
+    portraitFrame: 0,
+  },
+  knave: {
+    src: 'assets/sprites/chars/knave.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    // The authored strip is vertically centered in a 48 px export canvas.
+    // Crop that padding at load time so each atlas entry stays a square 24 px
+    // frame like the other combatants.
+    sourceOffsetY: 15,
+    renderScale: 1.5,
+    stepRate: 10,
+    idleRate: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 12, y: 19 },
+    armOffset: { x: 1, y: 3 },
+  },
+  cult_mage: {
+    src: 'assets/sprites/chars/cultMage.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 9,
+    renderScale: 1.5,
+    stepRate: 7,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [0, 1, 2, 3, 4],
+    attackFrames: [5, 6, 7, 8],
+    portraitFrame: 0,
+  },
   golem: {
     src: 'assets/sprites/chars/mini-golem.png',
     frameWidth: 24,
@@ -193,8 +239,10 @@ function loadCharacterSheet(key, def) {
   return new Promise(resolve => {
     const image = new Image();
     image.onload = () => {
-      const columns = Math.floor(image.naturalWidth / def.frameWidth);
-      const rows = Math.floor(image.naturalHeight / def.frameHeight);
+      const sourceOffsetX = Math.max(0, Math.floor(Number(def.sourceOffsetX) || 0));
+      const sourceOffsetY = Math.max(0, Math.floor(Number(def.sourceOffsetY) || 0));
+      const columns = Math.floor((image.naturalWidth - sourceOffsetX) / def.frameWidth);
+      const rows = Math.floor((image.naturalHeight - sourceOffsetY) / def.frameHeight);
       const availableFrames = columns * rows;
       const frameCount = Math.min(def.frameCount, availableFrames);
       if (frameCount < 1 || columns < 1 || rows < 1) {

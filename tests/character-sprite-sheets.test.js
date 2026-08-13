@@ -19,14 +19,14 @@ function extractCharacterSheetDefs() {
   return new Function(`return (${objectLiteral});`)();
 }
 
-function countOpaquePixels(image, frameIndex, frameWidth, frameHeight) {
+function countOpaquePixels(image, frameIndex, frameWidth, frameHeight, sourceOffsetX = 0, sourceOffsetY = 0) {
   const canvas = createCanvas(frameWidth, frameHeight);
   const ctx = canvas.getContext('2d');
-  const columns = Math.floor(image.naturalWidth / frameWidth);
+  const columns = Math.floor((image.naturalWidth - sourceOffsetX) / frameWidth);
   ctx.drawImage(
     image,
-    (frameIndex % columns) * frameWidth,
-    Math.floor(frameIndex / columns) * frameHeight,
+    sourceOffsetX + (frameIndex % columns) * frameWidth,
+    sourceOffsetY + Math.floor(frameIndex / columns) * frameHeight,
     frameWidth,
     frameHeight,
     0, 0, frameWidth, frameHeight,
@@ -184,6 +184,82 @@ describe('character sprite sheet assets', () => {
       * Math.floor(image.naturalHeight / def.frameHeight);
     expect(availableFrames).toBe(def.frameCount);
     [...def.idleFrames, ...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
+  test('sniper enemy uses the authored walk and attack strip', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.sniper;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/sniper.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 8,
+      idleFrames: [0],
+      walkFrames: [1, 2, 3, 4],
+      attackFrames: [5, 6, 7],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [...def.idleFrames, ...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
+  test('knave crops its padded export into portrait, arm, idle, and walk frames', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.knave;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/knave.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 8,
+      sourceOffsetY: 15,
+      idleFrames: [2, 3],
+      walkFrames: [4, 5, 6, 7],
+      armFrame: 1,
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor((image.naturalWidth - (def.sourceOffsetX || 0)) / def.frameWidth)
+      * Math.floor((image.naturalHeight - def.sourceOffsetY) / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [def.portraitFrame, def.armFrame, ...def.idleFrames, ...def.walkFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(
+        image,
+        frameIndex,
+        def.frameWidth,
+        def.frameHeight,
+        def.sourceOffsetX || 0,
+        def.sourceOffsetY,
+      )).toBeGreaterThan(15);
+    });
+  });
+
+  test('cult mage uses the authored walk and attack rows', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.cult_mage;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/cultMage.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 9,
+      idleFrames: [0],
+      walkFrames: [0, 1, 2, 3, 4],
+      attackFrames: [5, 6, 7, 8],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(Math.floor(image.naturalWidth / def.frameWidth)).toBe(5);
+    expect(Math.floor(image.naturalHeight / def.frameHeight)).toBe(2);
+    [...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });

@@ -210,15 +210,19 @@
   }
 
   function imageStripFrameSource(editor, frameIndex) {
-    const columns = Math.max(1, Math.floor(editor.master.width / editor.frameWidth));
+    const sourceOffsetX = Math.max(0, Math.floor(Number(editor.sourceOffsetX) || 0));
+    const sourceOffsetY = Math.max(0, Math.floor(Number(editor.sourceOffsetY) || 0));
+    const columns = Math.max(1, Math.floor((editor.master.width - sourceOffsetX) / editor.frameWidth));
     return {
-      x: (frameIndex % columns) * editor.frameWidth,
-      y: Math.floor(frameIndex / columns) * editor.frameHeight,
+      x: sourceOffsetX + (frameIndex % columns) * editor.frameWidth,
+      y: sourceOffsetY + Math.floor(frameIndex / columns) * editor.frameHeight,
     };
   }
 
-  function countImageStripFrames(width, height, frameWidth, frameHeight) {
-    return Math.max(1, Math.floor(width / frameWidth) * Math.floor(height / frameHeight));
+  function countImageStripFrames(width, height, frameWidth, frameHeight, sourceOffsetX = 0, sourceOffsetY = 0) {
+    return Math.max(1,
+      Math.floor((width - sourceOffsetX) / frameWidth)
+      * Math.floor((height - sourceOffsetY) / frameHeight));
   }
 
   function startImageStripPreview(canvas, editor) {
@@ -476,6 +480,8 @@
         entry.frameWidth = sheetDef.frameWidth;
         entry.frameHeight = sheetDef.frameHeight;
         entry.frameCount = sheetDef.frameCount;
+        entry.sourceOffsetX = sheetDef.sourceOffsetX || 0;
+        entry.sourceOffsetY = sheetDef.sourceOffsetY || 0;
         entry.savePath = sheetDef.src;
         entry.liveCharsetKey = key;
       }
@@ -849,6 +855,8 @@
       frameWidth: entry.frameWidth || (img ? Math.min(img.naturalWidth, img.naturalHeight) : 24),
       frameHeight: entry.frameHeight || (img ? img.naturalHeight : 24),
       frameCount: entry.frameCount || 1,
+      sourceOffsetX: entry.sourceOffsetX || 0,
+      sourceOffsetY: entry.sourceOffsetY || 0,
       currentFrame: 0,
       brushColor: '#ffffff',
       erasing: false,
@@ -879,6 +887,7 @@
         editor.frameWidth = editor.frameHeight;
         editor.frameCount = countImageStripFrames(
           img.naturalWidth, img.naturalHeight, editor.frameWidth, editor.frameHeight,
+          editor.sourceOffsetX, editor.sourceOffsetY,
         );
       }
     } else {
@@ -991,10 +1000,14 @@
       sheet.frameWidth = editor.frameWidth;
       sheet.frameHeight = editor.frameHeight;
       sheet.frameCount = editor.frameCount;
+      sheet.sourceOffsetX = editor.sourceOffsetX;
+      sheet.sourceOffsetY = editor.sourceOffsetY;
       sheet.idleFrames = [...editor.idleFrames];
       sheet.walkFrames = [...editor.walkFrames];
-      sheet.columns = Math.max(1, Math.floor(editor.master.width / editor.frameWidth));
-      sheet.rows = Math.max(1, Math.floor(editor.master.height / editor.frameHeight));
+      sheet.columns = Math.max(1,
+        Math.floor((editor.master.width - editor.sourceOffsetX) / editor.frameWidth));
+      sheet.rows = Math.max(1,
+        Math.floor((editor.master.height - editor.sourceOffsetY) / editor.frameHeight));
       sheet.animationFrames = Object.fromEntries(
         ['dash', 'smash', 'beam']
           .map(action => [action, [...(editor.actionFrames[action] || [])]])
@@ -1030,6 +1043,8 @@
         frameWidth: editor.frameWidth,
         frameHeight: editor.frameHeight,
         frameCount: editor.frameCount,
+        sourceOffsetX: editor.sourceOffsetX,
+        sourceOffsetY: editor.sourceOffsetY,
         currentFrame: editor.currentFrame,
         idleFrames: editor.idleFrames ? [...editor.idleFrames] : null,
         walkFrames: editor.walkFrames ? [...editor.walkFrames] : null,
@@ -1185,6 +1200,7 @@
     function finalizeFrameSize() {
       editor.frameCount = countImageStripFrames(
         editor.master.width, editor.master.height, editor.frameWidth, editor.frameHeight,
+        editor.sourceOffsetX, editor.sourceOffsetY,
       );
       editor.currentFrame = Math.min(editor.currentFrame, editor.frameCount - 1);
       if (isCharset) {
@@ -1310,6 +1326,7 @@
           editor.frameHeight = entry.frameHeight || img.naturalHeight;
           editor.frameCount = countImageStripFrames(
             img.naturalWidth, img.naturalHeight, editor.frameWidth, editor.frameHeight,
+            editor.sourceOffsetX, editor.sourceOffsetY,
           );
         }
         editor.currentFrame = 0;
@@ -1981,6 +1998,8 @@
       lines.push(`    frameWidth: ${def.frameWidth},`);
       lines.push(`    frameHeight: ${def.frameHeight},`);
       lines.push(`    frameCount: ${def.frameCount},`);
+      if (def.sourceOffsetX) lines.push(`    sourceOffsetX: ${def.sourceOffsetX},`);
+      if (def.sourceOffsetY) lines.push(`    sourceOffsetY: ${def.sourceOffsetY},`);
       lines.push(`    renderScale: ${def.renderScale ?? 1},`);
       const idleFrames = sheet.idleFrames ?? def.idleFrames ?? [0];
       if (JSON.stringify(idleFrames) !== JSON.stringify([0])) {

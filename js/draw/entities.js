@@ -30,12 +30,14 @@
         ? sheet.walkFrames
         : Array.from({ length: sheet.frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i));
       const columns = Math.max(1, Number(sheet.columns) || Math.floor(sheet.image.naturalWidth / sheet.frameWidth));
+      const sourceOffsetX = Math.max(0, Math.floor(Number(sheet.sourceOffsetX) || 0));
+      const sourceOffsetY = Math.max(0, Math.floor(Number(sheet.sourceOffsetY) || 0));
       const pushFrame = (sourceIndex, entryKey) => {
         entries.push({
           key: entryKey,
           image: sheet.image,
-          sourceX: (sourceIndex % columns) * sheet.frameWidth,
-          sourceY: Math.floor(sourceIndex / columns) * sheet.frameHeight,
+          sourceX: sourceOffsetX + (sourceIndex % columns) * sheet.frameWidth,
+          sourceY: sourceOffsetY + Math.floor(sourceIndex / columns) * sheet.frameHeight,
           width: sheet.frameWidth,
           height: sheet.frameHeight,
           renderScale: sheet.renderScale,
