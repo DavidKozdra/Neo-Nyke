@@ -1156,7 +1156,7 @@
 
   function tryPlaySharedBossIntro(enemy, enemyType, expectedKey = null) {
     if (!enemy || !enemyType || !Neo.player) return false;
-    const resolve = Neo.simulation?.resolveCampaignBossIntro;
+    const resolve = globalThis.NeoNyke?.simulation?.resolveCampaignBossIntro;
     if (typeof resolve !== 'function') return false;
     const intro = resolve({
       enemyType,
