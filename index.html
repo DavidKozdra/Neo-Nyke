@@ -1826,127 +1826,152 @@
       </div>
       <button id="customCharacterClose" class="panel-close" aria-label="Close custom character builder">X</button>
     </div>
-    <p class="sandbox-panel__desc">Name this saved custom character, choose any starting weapon and move set, and pick up to two starter relics.</p>
-    <div class="sandbox-grid custom-character-grid">
-      <div class="sandbox-card custom-character-card">
-        <h4>Name</h4>
-        <input id="customCharacterName" class="sandbox-search custom-character-name-input" type="text" maxlength="24" placeholder="Custom character name" autocomplete="off" spellcheck="false" aria-label="Custom character name">
-      </div>
-      <div class="sandbox-card custom-character-card custom-character-stats-card">
-        <h4>Stats</h4>
-        <p class="sandbox-card__hint">Tune this character's attack power and max HP relative to the default (100%).</p>
-        <div class="sandbox-rows">
-          <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="damageMultiplier">
-            <span>Attack Power</span>
-            <input type="range" name="custom-attack-power-range" aria-label="Custom character attack power" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
-            <input type="number" name="custom-attack-power-number" aria-label="Custom character attack power value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
-          </div>
-          <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="hpMultiplier">
-            <span>Max HP</span>
-            <input type="range" name="custom-max-hp-range" aria-label="Custom character maximum health" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
-            <input type="number" name="custom-max-hp-number" aria-label="Custom character maximum health value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
-          </div>
+    <p class="sandbox-panel__desc">Create your character in three steps. Changes save as you go.</p>
+    <nav class="custom-builder-progress" aria-label="Custom character creation steps">
+      <button class="custom-builder-progress__step is-active" type="button" data-custom-builder-step-button="1" aria-current="step">
+        <span>1</span><b>Identity</b><small>Name & power</small>
+      </button>
+      <button class="custom-builder-progress__step" type="button" data-custom-builder-step-button="2">
+        <span>2</span><b>Loadout</b><small>Moves & gear</small>
+      </button>
+      <button class="custom-builder-progress__step" type="button" data-custom-builder-step-button="3">
+        <span>3</span><b>Sprite</b><small>Draw each row</small>
+      </button>
+    </nav>
+    <div class="custom-builder-steps">
+      <section class="custom-builder-step is-active" data-custom-builder-step="1" aria-labelledby="customBuilderIdentityTitle">
+        <div class="custom-builder-step__head">
+          <span>STEP 1 OF 3</span>
+          <h4 id="customBuilderIdentityTitle">Name & Power</h4>
+          <p>Give the character an identity, then balance attack power and health.</p>
         </div>
-      </div>
-      <div class="sandbox-card sandbox-card--wide custom-sprite-card">
-        <div class="custom-sprite-card__head">
-          <div>
-            <h4>Sprite Sheet</h4>
-            <p class="sandbox-card__hint">Paint directly over the 8×4 Thorn Knight animation sheet. Every stroke saves to this browser automatically.</p>
+        <div class="sandbox-grid custom-character-grid custom-character-grid--identity">
+          <div class="sandbox-card custom-character-card">
+            <h4>Name</h4>
+            <input id="customCharacterName" class="sandbox-search custom-character-name-input" type="text" maxlength="24" placeholder="Custom character name" autocomplete="off" spellcheck="false" aria-label="Custom character name">
           </div>
-          <canvas id="customSpritePreview" class="custom-sprite-preview" width="96" height="96" aria-label="Animated custom character preview"></canvas>
-        </div>
-        <div class="custom-sprite-toolbar" role="toolbar" aria-label="Sprite drawing tools">
-          <label class="custom-sprite-color">Color <input id="customSpriteColor" type="color" value="#ef3340" aria-label="Brush color"></label>
-          <button id="customSpriteBrush" class="sandbox-mini-btn is-active" type="button" aria-pressed="true">Brush</button>
-          <button id="customSpriteEraser" class="sandbox-mini-btn" type="button" aria-pressed="false">Eraser</button>
-          <button id="customSpritePicker" class="sandbox-mini-btn" type="button" aria-pressed="false">Pick Color</button>
-          <label>Size
-            <select id="customSpriteBrushSize" class="custom-sprite-select" aria-label="Brush size">
-              <option value="1">1 px</option>
-              <option value="2">2 px</option>
-              <option value="3">3 px</option>
-              <option value="4">4 px</option>
-            </select>
-          </label>
-          <label>Zoom <input id="customSpriteZoom" type="range" min="1" max="8" step="1" value="3" aria-label="Sprite editor zoom"></label>
-          <button id="customSpriteUndo" class="sandbox-mini-btn" type="button" disabled>Undo</button>
-          <button id="customSpriteRedo" class="sandbox-mini-btn" type="button" disabled>Redo</button>
-        </div>
-        <div class="custom-sprite-stage" tabindex="0" aria-label="Editable custom character sprite sheet">
-          <canvas id="customSpriteCanvas" class="custom-sprite-canvas" width="576" height="288"></canvas>
-        </div>
-        <div class="custom-sprite-footer">
-          <div>
-            <strong id="customSpriteStatus" class="custom-sprite-status" aria-live="polite">Loading sprite…</strong>
-            <span id="customSpriteDimensions" class="custom-sprite-dimensions">192×96px · 24×24px frames</span>
-          </div>
-          <div class="custom-sprite-actions">
-            <input id="customSpriteUploadInput" class="hidden" type="file" accept="image/png,image/webp" aria-hidden="true" tabindex="-1">
-            <button id="customSpriteRestore" class="sandbox-mini-btn" type="button">Restore Template</button>
-            <button id="customSpriteUpload" class="sandbox-mini-btn" type="button">Import 8×4 PNG</button>
-            <button id="customSpriteDownload" class="sandbox-mini-btn" type="button">Download PNG</button>
-            <button id="customSpriteSave" class="sandbox-mini-btn" type="button">Save Sprite</button>
-          </div>
-        </div>
-      </div>
-      <div class="sandbox-card">
-        <h4>Move Set</h4>
-        <p class="sandbox-card__hint">Pick one move per slot. Every defined move is available.</p>
-        <div class="sandbox-move-slots" id="customCharacterMoveLoadout">
-          <div class="sandbox-move-slot" data-custom-move-slot="melee">
-            <div class="sandbox-move-slot__head">
-              <span class="sandbox-move-slot__label">Melee</span>
-              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="melee">Slash</span>
+          <div class="sandbox-card custom-character-card custom-character-stats-card">
+            <h4>Power</h4>
+            <p class="sandbox-card__hint">Tune attack power and max HP relative to the default (100%).</p>
+            <div class="sandbox-rows">
+              <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="damageMultiplier">
+                <span>Attack Power</span>
+                <input type="range" name="custom-attack-power-range" aria-label="Custom character attack power" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+                <input type="number" name="custom-attack-power-number" aria-label="Custom character attack power value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+              </div>
+              <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="hpMultiplier">
+                <span>Max HP</span>
+                <input type="range" name="custom-max-hp-range" aria-label="Custom character maximum health" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+                <input type="number" name="custom-max-hp-number" aria-label="Custom character maximum health value" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+              </div>
             </div>
-            <div class="sandbox-move-options" data-custom-move-options="melee" role="group" aria-label="Custom melee move"></div>
-          </div>
-          <div class="sandbox-move-slot" data-custom-move-slot="laser">
-            <div class="sandbox-move-slot__head">
-              <span class="sandbox-move-slot__label">Laser</span>
-              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="laser">Blood Beam</span>
-            </div>
-            <div class="sandbox-move-options" data-custom-move-options="laser" role="group" aria-label="Custom laser move"></div>
-          </div>
-          <div class="sandbox-move-slot" data-custom-move-slot="smash">
-            <div class="sandbox-move-slot__head">
-              <span class="sandbox-move-slot__label">Smash</span>
-              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="smash">Crimson Smash</span>
-            </div>
-            <div class="sandbox-move-options" data-custom-move-options="smash" role="group" aria-label="Custom smash move"></div>
-          </div>
-          <div class="sandbox-move-slot" data-custom-move-slot="dash">
-            <div class="sandbox-move-slot__head">
-              <span class="sandbox-move-slot__label">Dash</span>
-              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="dash">Dash</span>
-            </div>
-            <div class="sandbox-move-options" data-custom-move-options="dash" role="group" aria-label="Custom mobility move"></div>
           </div>
         </div>
-      </div>
-      <div class="sandbox-card">
-        <h4>Weapon</h4>
-        <p class="sandbox-card__hint">Pick the weapon this custom character starts with.</p>
-        <div class="sandbox-move-slots" id="customCharacterWeaponLoadout">
-          <div class="sandbox-move-slot" data-custom-weapon-slot="weapon">
-            <div class="sandbox-move-slot__head">
-              <span class="sandbox-move-slot__label">Weapon</span>
-              <span class="sandbox-move-slot__selected" data-custom-weapon-slot-selected="weapon">Thorn's Bleed Blade</span>
+      </section>
+
+      <section class="custom-builder-step" data-custom-builder-step="2" aria-labelledby="customBuilderLoadoutTitle" hidden>
+        <div class="custom-builder-step__head">
+          <span>STEP 2 OF 3</span>
+          <h4 id="customBuilderLoadoutTitle">Moves, Weapon & Relics</h4>
+          <p>Choose the abilities and equipment this character brings into a run.</p>
+        </div>
+        <div class="sandbox-grid custom-character-grid custom-character-grid--loadout">
+          <div class="sandbox-card sandbox-card--wide">
+            <h4>Move Set</h4>
+            <p class="sandbox-card__hint">Pick one move per slot. Every defined move is available.</p>
+            <div class="sandbox-move-slots" id="customCharacterMoveLoadout">
+              <div class="sandbox-move-slot" data-custom-move-slot="melee">
+                <div class="sandbox-move-slot__head"><span class="sandbox-move-slot__label">Melee</span><span class="sandbox-move-slot__selected" data-custom-move-slot-selected="melee">Slash</span></div>
+                <div class="sandbox-move-options" data-custom-move-options="melee" role="group" aria-label="Custom melee move"></div>
+              </div>
+              <div class="sandbox-move-slot" data-custom-move-slot="laser">
+                <div class="sandbox-move-slot__head"><span class="sandbox-move-slot__label">Laser</span><span class="sandbox-move-slot__selected" data-custom-move-slot-selected="laser">Blood Beam</span></div>
+                <div class="sandbox-move-options" data-custom-move-options="laser" role="group" aria-label="Custom laser move"></div>
+              </div>
+              <div class="sandbox-move-slot" data-custom-move-slot="smash">
+                <div class="sandbox-move-slot__head"><span class="sandbox-move-slot__label">Smash</span><span class="sandbox-move-slot__selected" data-custom-move-slot-selected="smash">Crimson Smash</span></div>
+                <div class="sandbox-move-options" data-custom-move-options="smash" role="group" aria-label="Custom smash move"></div>
+              </div>
+              <div class="sandbox-move-slot" data-custom-move-slot="dash">
+                <div class="sandbox-move-slot__head"><span class="sandbox-move-slot__label">Dash</span><span class="sandbox-move-slot__selected" data-custom-move-slot-selected="dash">Dash</span></div>
+                <div class="sandbox-move-options" data-custom-move-options="dash" role="group" aria-label="Custom mobility move"></div>
+              </div>
             </div>
-            <div class="sandbox-move-options" data-custom-weapon-options="weapon" role="group" aria-label="Custom starting weapon"></div>
+          </div>
+          <div class="sandbox-card">
+            <h4>Weapon</h4>
+            <p class="sandbox-card__hint">Pick the weapon this character starts with.</p>
+            <div class="sandbox-move-slots" id="customCharacterWeaponLoadout">
+              <div class="sandbox-move-slot" data-custom-weapon-slot="weapon">
+                <div class="sandbox-move-slot__head"><span class="sandbox-move-slot__label">Weapon</span><span class="sandbox-move-slot__selected" data-custom-weapon-slot-selected="weapon">Thorn's Bleed Blade</span></div>
+                <div class="sandbox-move-options" data-custom-weapon-options="weapon" role="group" aria-label="Custom starting weapon"></div>
+              </div>
+            </div>
+          </div>
+          <div class="sandbox-card">
+            <h4>Starter Relics</h4>
+            <p class="sandbox-card__hint">Choose up to two relics for this character.</p>
+            <div id="customCharacterRelicList" class="sandbox-token-grid sandbox-token-grid--items custom-character-relic-list"></div>
           </div>
         </div>
-      </div>
-      <div class="sandbox-card">
-        <h4>Starter Relics</h4>
-        <p class="sandbox-card__hint">Choose up to two relics for this saved custom character.</p>
-        <div id="customCharacterRelicList" class="sandbox-token-grid sandbox-token-grid--items custom-character-relic-list"></div>
-      </div>
+      </section>
+
+      <section class="custom-builder-step" data-custom-builder-step="3" aria-labelledby="customBuilderSpriteTitle" hidden>
+        <div class="custom-builder-step__head">
+          <span>STEP 3 OF 3</span>
+          <h4 id="customBuilderSpriteTitle">Draw the Sprite</h4>
+          <p>Edit one animation row at a time. The complete 8×4 sheet still saves as a single character sprite.</p>
+        </div>
+        <div class="sandbox-card custom-sprite-card">
+          <div class="custom-sprite-card__head">
+            <div>
+              <h4>Animation Rows</h4>
+              <p class="sandbox-card__hint">Choose a row, then paint its eight frames. Every stroke saves automatically.</p>
+            </div>
+            <canvas id="customSpritePreview" class="custom-sprite-preview" width="96" height="96" aria-label="Animated custom character preview"></canvas>
+          </div>
+          <div id="customSpriteRows" class="custom-sprite-rows" role="tablist" aria-label="Sprite animation rows">
+            <button type="button" class="custom-sprite-row is-active" data-custom-sprite-row="0" role="tab" aria-selected="true"><b>Row 1</b><span>Portrait, arm & walk</span></button>
+            <button type="button" class="custom-sprite-row" data-custom-sprite-row="1" role="tab" aria-selected="false"><b>Row 2</b><span>Dash</span></button>
+            <button type="button" class="custom-sprite-row" data-custom-sprite-row="2" role="tab" aria-selected="false"><b>Row 3</b><span>Smash</span></button>
+            <button type="button" class="custom-sprite-row" data-custom-sprite-row="3" role="tab" aria-selected="false"><b>Row 4</b><span>Beam</span></button>
+          </div>
+          <div class="custom-sprite-toolbar" role="toolbar" aria-label="Sprite drawing tools">
+            <label class="custom-sprite-color">Color <input id="customSpriteColor" type="color" value="#ef3340" aria-label="Brush color"></label>
+            <button id="customSpriteBrush" class="sandbox-mini-btn is-active" type="button" aria-pressed="true">Brush</button>
+            <button id="customSpriteEraser" class="sandbox-mini-btn" type="button" aria-pressed="false">Eraser</button>
+            <button id="customSpriteFill" class="sandbox-mini-btn" type="button" aria-pressed="false" title="Fill connected pixels inside one animation frame">Fill</button>
+            <button id="customSpritePicker" class="sandbox-mini-btn" type="button" aria-pressed="false">Pick Color</button>
+            <label>Size
+              <select id="customSpriteBrushSize" class="custom-sprite-select" aria-label="Brush size"><option value="1">1 px</option><option value="2">2 px</option><option value="3">3 px</option><option value="4">4 px</option></select>
+            </label>
+            <label>Zoom <input id="customSpriteZoom" type="range" min="1" max="8" step="1" value="3" aria-label="Sprite editor zoom"></label>
+            <button id="customSpriteUndo" class="sandbox-mini-btn" type="button" disabled>Undo</button>
+            <button id="customSpriteRedo" class="sandbox-mini-btn" type="button" disabled>Redo</button>
+          </div>
+          <div class="custom-sprite-stage" tabindex="0" aria-label="Editable custom character animation row">
+            <canvas id="customSpriteCanvas" class="custom-sprite-canvas" width="576" height="72"></canvas>
+          </div>
+          <div class="custom-sprite-footer">
+            <div><strong id="customSpriteStatus" class="custom-sprite-status" aria-live="polite">Loading sprite…</strong><span id="customSpriteDimensions" class="custom-sprite-dimensions">Row 1 · 192×24px · 8 frames</span></div>
+            <div class="custom-sprite-actions">
+              <input id="customSpriteUploadInput" class="hidden" type="file" accept="image/png,image/webp" aria-hidden="true" tabindex="-1">
+              <button id="customSpriteRestore" class="sandbox-mini-btn" type="button">Restore Template</button>
+              <button id="customSpriteUpload" class="sandbox-mini-btn" type="button">Import 8×4 PNG</button>
+              <button id="customSpriteDownload" class="sandbox-mini-btn" type="button">Download PNG</button>
+              <button id="customSpriteSave" class="sandbox-mini-btn" type="button">Save Sprite</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
-    <div class="sandbox-panel__actions">
+    <div class="sandbox-panel__actions custom-builder-actions">
       <button id="customCharacterReset" class="sandbox-mini-btn" type="button">Reset</button>
       <button id="customCharacterRemove" class="sandbox-mini-btn custom-character-remove-btn" type="button">Remove</button>
-      <button id="customCharacterSaveClose" class="nav-btn nav-btn--minor" type="button">Save & Close</button>
+      <span id="customBuilderStepStatus" class="custom-builder-step-status" aria-live="polite">Step 1 of 3</span>
+      <button id="customBuilderBack" class="nav-btn nav-btn--minor" type="button" disabled>Back</button>
+      <button id="customBuilderNext" class="nav-btn nav-btn--minor" type="button">Next: Loadout</button>
+      <button id="customCharacterSaveClose" class="nav-btn nav-btn--minor hidden" type="button">Save Character</button>
     </div>
   </div>
 </section>

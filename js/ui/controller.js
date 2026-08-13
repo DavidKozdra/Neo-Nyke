@@ -35,6 +35,7 @@ export function createUIController(view) {
     let runHistoryOpen = false;
     let syncSandboxPanelFieldsHook = null;
     let syncCustomCharacterPanelFieldsHook = null;
+    let activeCustomBuilderStep = 1;
     let selectedCarouselKey = '';
     let characterPage = 0;
     let programmaticCarouselScrollUntil = 0;
@@ -2751,10 +2752,44 @@ export function createUIController(view) {
       document.getElementById('altModeSandboxCard')?.classList.toggle('altmode-card--configuring', open);
     }
 
+    function setCustomBuilderStep(step) {
+      activeCustomBuilderStep = Neo.clamp(Math.round(Number(step) || 1), 1, 3);
+      const panel = view.customCharacterPanel;
+      panel?.querySelectorAll('[data-custom-builder-step]').forEach(section => {
+        const active = Number(section.dataset.customBuilderStep) === activeCustomBuilderStep;
+        section.hidden = !active;
+        section.classList.toggle('is-active', active);
+        section.setAttribute('aria-hidden', active ? 'false' : 'true');
+      });
+      panel?.querySelectorAll('[data-custom-builder-step-button]').forEach(button => {
+        const active = Number(button.dataset.customBuilderStepButton) === activeCustomBuilderStep;
+        button.classList.toggle('is-active', active);
+        if (active) button.setAttribute('aria-current', 'step');
+        else button.removeAttribute('aria-current');
+      });
+      const back = document.getElementById('customBuilderBack');
+      const next = document.getElementById('customBuilderNext');
+      const save = view.customCharacterSaveClose;
+      const status = document.getElementById('customBuilderStepStatus');
+      if (back) back.disabled = activeCustomBuilderStep === 1;
+      if (next) {
+        next.classList.toggle('hidden', activeCustomBuilderStep === 3);
+        next.textContent = activeCustomBuilderStep === 1 ? 'Next: Loadout' : 'Next: Sprite';
+      }
+      save?.classList.toggle('hidden', activeCustomBuilderStep !== 3);
+      if (status) status.textContent = `Step ${activeCustomBuilderStep} of 3`;
+      if (activeCustomBuilderStep === 3) {
+        void Neo.CustomSpriteEditor?.open?.(getEditingCustomCharacterKey());
+      }
+      panel?.querySelector('.sandbox-panel__dialog')?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    }
+
     function setCustomCharacterPanelOpen(open) {
       if (open) Neo.mountLazyPanel?.('customCharacterPanel');
-      if (open) syncCustomCharacterPanelFieldsHook?.();
-      else {
+      if (open) {
+        syncCustomCharacterPanelFieldsHook?.();
+        setCustomBuilderStep(1);
+      } else {
         blurIfFocusInside(view.customCharacterPanel);
         Neo.CustomSpriteEditor?.close?.().catch?.(error => console.warn('[CustomSprites] Close save failed.', error));
       }
@@ -2762,7 +2797,6 @@ export function createUIController(view) {
       view.customCharacterPanel?.classList.toggle('sandbox-panel--open', open);
       view.customCharacterPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
-
     function getEditingCustomCharacterKey() {
       const key = String(Neo.editingCustomCharacterKey || Neo.chosenCharacter || '');
       if (Neo.isCustomCharacterKey?.(key)) return key;
@@ -3594,6 +3628,15 @@ export function createUIController(view) {
           Neo.persistMetaSoon();
           renderCustomRosterCards();
           Neo.updateCharacterSelectionUI?.();
+        });
+        view.customCharacterPanel?.querySelectorAll('[data-custom-builder-step-button]').forEach(button => {
+          button.addEventListener('click', () => setCustomBuilderStep(button.dataset.customBuilderStepButton));
+        });
+        document.getElementById('customBuilderBack')?.addEventListener('click', () => {
+          setCustomBuilderStep(activeCustomBuilderStep - 1);
+        });
+        document.getElementById('customBuilderNext')?.addEventListener('click', () => {
+          setCustomBuilderStep(activeCustomBuilderStep + 1);
         });
         view.customCharacterRemove?.addEventListener('click', () => {
           if (!Neo.metaProgress) return;

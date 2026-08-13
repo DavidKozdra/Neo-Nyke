@@ -21,6 +21,7 @@
     openToken: 0,
     dirty: false,
     revision: 0,
+    activeRow: 0,
     history: [],
     future: [],
     tool: 'brush',
@@ -45,9 +46,11 @@
       panel: document.getElementById('customCharacterPanel'),
       display: document.getElementById('customSpriteCanvas'),
       preview: document.getElementById('customSpritePreview'),
+      rows: document.getElementById('customSpriteRows'),
       color: document.getElementById('customSpriteColor'),
       brush: document.getElementById('customSpriteBrush'),
       eraser: document.getElementById('customSpriteEraser'),
+      fill: document.getElementById('customSpriteFill'),
       picker: document.getElementById('customSpritePicker'),
       size: document.getElementById('customSpriteBrushSize'),
       zoom: document.getElementById('customSpriteZoom'),
@@ -326,19 +329,20 @@
     const height = frame.height * scale;
     ctx.drawImage(master, sourceX, sourceY, frame.width, frame.height, (preview.width - width) / 2, (preview.height - height) / 2, width, height);
   }
-
   function repaint() {
     const display = getElements().display;
     if (!display || !master.width) return;
     const zoom = Math.max(1, Number(state.zoom) || 1);
+    const frame = frameDimensions();
+    const row = Math.max(0, Math.min(ROWS - 1, state.activeRow));
+    const sourceY = row * frame.height;
     display.width = master.width * zoom;
-    display.height = master.height * zoom;
+    display.height = frame.height * zoom;
     const ctx = display.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, display.width, display.height);
-    ctx.drawImage(master, 0, 0, display.width, display.height);
+    ctx.drawImage(master, 0, sourceY, master.width, frame.height, 0, 0, display.width, display.height);
 
-    const frame = frameDimensions();
     ctx.strokeStyle = 'rgba(255, 211, 92, .72)';
     ctx.lineWidth = 1;
     for (let column = 1; column < COLUMNS; column += 1) {
@@ -346,13 +350,6 @@
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, display.height);
-      ctx.stroke();
-    }
-    for (let row = 1; row < ROWS; row += 1) {
-      const y = row * frame.height * zoom + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(display.width, y);
       ctx.stroke();
     }
     if (zoom >= 6) {
@@ -365,8 +362,7 @@
         ctx.lineTo(px, display.height);
         ctx.stroke();
       }
-      for (let y = 1; y < master.height; y += 1) {
-        if (y % frame.height === 0) continue;
+      for (let y = 1; y < frame.height; y += 1) {
         const py = y * zoom + 0.5;
         ctx.beginPath();
         ctx.moveTo(0, py);
@@ -375,14 +371,25 @@
       }
     }
     const dimensions = getElements().dimensions;
-    if (dimensions) dimensions.textContent = `${master.width}×${master.height}px · ${frame.width}×${frame.height}px frames`;
+    if (dimensions) dimensions.textContent = `Row ${row + 1} · ${master.width}×${frame.height}px · ${COLUMNS} frames at ${frame.width}×${frame.height}px`;
     repaintPreview();
+  }
+
+  function setActiveRow(row) {
+    state.activeRow = Math.max(0, Math.min(ROWS - 1, Math.round(Number(row) || 0)));
+    getElements().rows?.querySelectorAll('[data-custom-sprite-row]').forEach(button => {
+      const active = Number(button.dataset.customSpriteRow) === state.activeRow;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+      button.tabIndex = active ? 0 : -1;
+    });
+    repaint();
   }
 
   function setTool(tool) {
     state.tool = tool;
     const els = getElements();
-    for (const [name, button] of [['brush', els.brush], ['eraser', els.eraser], ['picker', els.picker]]) {
+    for (const [name, button] of [['brush', els.brush], ['eraser', els.eraser], ['fill', els.fill], ['picker', els.picker]]) {
       button?.classList.toggle('is-active', name === tool);
       button?.setAttribute('aria-pressed', name === tool ? 'true' : 'false');
     }
@@ -392,20 +399,29 @@
   function pointerToPixel(event) {
     const display = getElements().display;
     const rect = display.getBoundingClientRect();
+    const frame = frameDimensions();
     return {
       x: Math.max(0, Math.min(master.width - 1, Math.floor((event.clientX - rect.left) / rect.width * master.width))),
-      y: Math.max(0, Math.min(master.height - 1, Math.floor((event.clientY - rect.top) / rect.height * master.height))),
+      y: state.activeRow * frame.height
+        + Math.max(0, Math.min(frame.height - 1, Math.floor((event.clientY - rect.top) / rect.height * frame.height))),
     };
   }
-
   function paintPixel(x, y) {
     const size = Math.max(1, Math.min(8, Number(state.brushSize) || 1));
     const offset = Math.floor((size - 1) / 2);
+    const frame = frameDimensions();
+    const rowStart = state.activeRow * frame.height;
+    const rowEnd = rowStart + frame.height;
+    const left = Math.max(0, x - offset);
+    const top = Math.max(rowStart, y - offset);
+    const width = Math.max(0, Math.min(master.width, x - offset + size) - left);
+    const height = Math.max(0, Math.min(rowEnd, y - offset + size) - top);
+    if (!width || !height) return;
     if (state.tool === 'eraser') {
-      masterCtx.clearRect(x - offset, y - offset, size, size);
+      masterCtx.clearRect(left, top, width, height);
     } else {
       masterCtx.fillStyle = state.brushColor;
-      masterCtx.fillRect(x - offset, y - offset, size, size);
+      masterCtx.fillRect(left, top, width, height);
     }
   }
 
@@ -424,6 +440,61 @@
       if (twice >= dy) { error += dy; x += sx; }
       if (twice <= dx) { error += dx; y += sy; }
     }
+  }
+
+  function floodFill(point) {
+    const frame = frameDimensions();
+    const frameX = Math.floor(point.x / frame.width) * frame.width;
+    const frameY = Math.floor(point.y / frame.height) * frame.height;
+    const imageData = masterCtx.getImageData(frameX, frameY, frame.width, frame.height);
+    const pixels = imageData.data;
+    const localX = point.x - frameX;
+    const localY = point.y - frameY;
+    const start = (localY * frame.width + localX) * 4;
+    const target = [pixels[start], pixels[start + 1], pixels[start + 2], pixels[start + 3]];
+    const replacement = [
+      parseInt(state.brushColor.slice(1, 3), 16),
+      parseInt(state.brushColor.slice(3, 5), 16),
+      parseInt(state.brushColor.slice(5, 7), 16),
+      255,
+    ];
+    if (target.every((value, index) => value === replacement[index])) return false;
+
+    const matchesTarget = pixelIndex => (
+      pixels[pixelIndex] === target[0]
+      && pixels[pixelIndex + 1] === target[1]
+      && pixels[pixelIndex + 2] === target[2]
+      && pixels[pixelIndex + 3] === target[3]
+    );
+    const replacePixel = pixelIndex => {
+      pixels[pixelIndex] = replacement[0];
+      pixels[pixelIndex + 1] = replacement[1];
+      pixels[pixelIndex + 2] = replacement[2];
+      pixels[pixelIndex + 3] = replacement[3];
+    };
+    const queue = new Int32Array(frame.width * frame.height);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = localY * frame.width + localX;
+    replacePixel(start);
+    const visit = next => {
+      const pixelIndex = next * 4;
+      if (!matchesTarget(pixelIndex)) return;
+      replacePixel(pixelIndex);
+      queue[tail++] = next;
+    };
+    while (head < tail) {
+      const position = queue[head++];
+      const x = position % frame.width;
+      const y = Math.floor(position / frame.width);
+
+      if (x > 0) visit(position - 1);
+      if (x + 1 < frame.width) visit(position + 1);
+      if (y > 0) visit(position - frame.width);
+      if (y + 1 < frame.height) visit(position + frame.width);
+    }
+    masterCtx.putImageData(imageData, frameX, frameY);
+    return true;
   }
 
   function pickColor(point) {
@@ -578,6 +649,13 @@
         repaint();
         return;
       }
+      if (state.tool === 'fill') {
+        const before = captureSnapshot();
+        if (floodFill(point)) markChanged(before);
+        repaint();
+        event.preventDefault();
+        return;
+      }
       state.drawing = true;
       state.beforeStroke = captureSnapshot();
       state.lastPoint = point;
@@ -606,6 +684,11 @@
 
     els.brush?.addEventListener('click', () => setTool('brush'));
     els.eraser?.addEventListener('click', () => setTool('eraser'));
+    els.fill?.addEventListener('click', () => setTool('fill'));
+    els.rows?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-custom-sprite-row]') : null;
+      if (button) setActiveRow(button.dataset.customSpriteRow);
+    });
     els.picker?.addEventListener('click', () => setTool('picker'));
     els.color?.addEventListener('input', () => {
       state.brushColor = els.color.value;
@@ -658,6 +741,7 @@
       return;
     }
     const token = ++state.openToken;
+    setActiveRow(0);
     if (state.key && state.key !== characterKey) {
       try { await flush(); } catch {}
     }
