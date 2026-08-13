@@ -25,6 +25,13 @@ describe('shared Neo Nyke enemy content', () => {
     BOSS_ENEMY_TYPES.forEach(type => expect(ENEMY_CATALOG[type].patterns.length).toBeGreaterThan(1));
   });
 
+  test('Artificer Charged Knave reuses Knave art with a larger body', () => {
+    const knave = getEnemyDefinition('knave');
+    const artificer = getEnemyDefinition('artificer_knave');
+    expect(artificer.spriteKey).toBe('knave');
+    expect(artificer.radius).toBeGreaterThan(knave.radius);
+  });
+
   test('Boss Rush bosses start at level two and rise one level per stage', () => {
     expect(BOSS_RUSH_START_LEVEL).toBe(2);
     expect([0, 1, 2, 3, 4, 5].map(getBossRushBossLevel)).toEqual([2, 3, 4, 5, 6, 7]);

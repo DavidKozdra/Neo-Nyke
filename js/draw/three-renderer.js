@@ -1383,15 +1383,10 @@ function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const size = (player.r || 14) * SPRITE_SIZE_MULT * renderScale;
   const recoil = Math.max(0, Number(options.recoil || 0));
   const attackProgress = Math.max(0, Math.min(1, Number(options.attackProgress || 0)));
-  let angleOffset = 0;
-  let swingRecoil = recoil;
-  if (!window.NeoSettings?.getAccess?.()?.reduceMotion
-    && ['thorn_knight', 'sarge', 'mooggy'].includes(spriteKey) && attackProgress > 0) {
-    const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
-    const eased = 1 - (1 - attackProgress) ** 2;
-    angleOffset = -arc * (1 - eased * 2);
-    swingRecoil = Math.sin(attackProgress * Math.PI) * 0.2;
-  }
+  const armMotion = Neo.getArmSpriteMotion?.(spriteKey, { attackProgress, recoil })
+    || { angleOffset: 0, recoil };
+  const angleOffset = Number(armMotion.angleOffset || 0);
+  const swingRecoil = Number(armMotion.recoil || 0);
   const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
   const sourceAimAngle = flip ? Math.PI - baseAngle : baseAngle;
   const offset = sheet.armOffset || {};
@@ -2095,6 +2090,17 @@ function syncEnemies() {
       const transformTint = !hitFlash && transforming && Math.floor(performance.now() / 80) % 2 === 0 ? 0xffffb4 : tint;
       updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, {
         ...bob, tint: transformTint, hitFlash,
+      });
+      const knaveArm = enemy.type === 'knave' || enemy.type === 'artificer_knave';
+      const armAim = Number.isFinite(Number(enemy.swingA))
+        ? Number(enemy.swingA)
+        : Neo.player
+          ? Math.atan2(Number(Neo.player.y || 0) - Number(enemy.y || 0), Number(Neo.player.x || 0) - Number(enemy.x || 0))
+          : 0;
+      syncPlayerArm(group, baseKey, enemy, armAim, flip, {
+        hidden: !knaveArm,
+        attackProgress: Neo.getEnemyArmAttackProgress?.(enemy, attackProgress) ?? attackProgress,
+        hitFlash,
       });
       const groundShadow = group.getObjectByName('shadow');
       if (groundShadow) groundShadow.position.y = 0.6 - jumpHeight;

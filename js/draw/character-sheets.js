@@ -158,6 +158,26 @@ const CHARACTER_SHEET_DEFS = {
     armPivot: { x: 12, y: 19 },
     armOffset: { x: 1, y: 3 },
   },
+  // The charged Artificer is the same Knave transformed into a boss. Keep the
+  // exact authored sheet and animation roles; its larger enemy radius supplies
+  // the in-world size increase.
+  artificer_knave: {
+    src: 'assets/sprites/chars/knave.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    sourceOffsetY: 15,
+    renderScale: 1.5,
+    stepRate: 10,
+    idleRate: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 12, y: 19 },
+    armOffset: { x: 1, y: 3 },
+  },
   cult_mage: {
     src: 'assets/sprites/chars/cultMage.png',
     frameWidth: 24,

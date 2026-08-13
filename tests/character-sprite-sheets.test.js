@@ -240,6 +240,10 @@ describe('character sprite sheet assets', () => {
         def.sourceOffsetY,
       )).toBeGreaterThan(15);
     });
+
+    // The charged boss is the same character and must stay on the exact same
+    // authored art/animation definition. Enemy radius controls its larger size.
+    expect(defs.artificer_knave).toEqual(def);
   });
 
   test('cult mage uses the authored walk and attack rows', async () => {

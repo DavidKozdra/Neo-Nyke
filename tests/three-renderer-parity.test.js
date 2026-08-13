@@ -20,6 +20,12 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDeathPool(anim, size, fallEase)');
   });
 
+  test('shares the player arm swing with Knave enemies in 3D', () => {
+    expect(renderer).toContain('Neo.getArmSpriteMotion?.(spriteKey, { attackProgress, recoil })');
+    expect(renderer).toContain("const knaveArm = enemy.type === 'knave' || enemy.type === 'artificer_knave';");
+    expect(renderer).toContain('Neo.getEnemyArmAttackProgress?.(enemy, attackProgress)');
+  });
+
   test('uses actual health loss for a shared white sprite flash in 2D and 3D', () => {
     const entities = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
     expect(renderer).toContain('const actorDamageFeedback = new WeakMap();');

@@ -3233,6 +3233,7 @@
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
       if (distance < enemy.r + Neo.player.r + 14 && enemy.swingTime <= 0) {
         enemy.swingTime = 0.2;
+        enemy.swingA = Math.atan2(dy, dx);
       }
       if (enemy.swingTime > 0) {
         enemy.swingTime -= dt;
@@ -3254,8 +3255,9 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
+      enemy.swingA = Math.atan2(dy, dx);
       if (enemy.windup <= 0) {
-        const angle = Math.atan2(dy, dx);
+        const angle = enemy.swingA;
         if (distance < enemy.r + Neo.player.r + 54) {
           Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type, { attacker: enemy });
         }

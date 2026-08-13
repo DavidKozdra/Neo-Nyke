@@ -1477,6 +1477,7 @@
         steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
         if (distance < enemy.r + player.r + 14 && enemy.swingTime <= 0) {
           enemy.swingTime = 0.2;
+          enemy.swingA = Math.atan2(dy, dx);
         }
         if (enemy.swingTime > 0) {
           enemy.swingTime -= dt;
@@ -1499,8 +1500,9 @@
         enemy.windup -= dt;
         enemy.vx *= 0.74;
         enemy.vy *= 0.74;
+        enemy.swingA = Math.atan2(dy, dx);
         if (enemy.windup <= 0 && distance < enemy.r + player.r + 54) {
-          ctx.damagePlayer(enemy, player, enemy.dmg + 16, Math.atan2(dy, dx), 340, enemy.type);
+          ctx.damagePlayer(enemy, player, enemy.dmg + 16, enemy.swingA, 340, enemy.type);
         }
       }
     }

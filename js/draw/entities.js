@@ -451,7 +451,8 @@
     if (reduceMotion) return { angleOffset: 0, recoil: 0 };
     const attackProgress = Neo.clamp(Number(options.attackProgress || 0), 0, 1);
     const recoil = Neo.clamp(Number(options.recoil || 0), 0, 1);
-    if ((spriteKey === 'thorn_knight' || spriteKey === 'sarge' || spriteKey === 'mooggy') && attackProgress > 0) {
+    const swingsMeleeArm = ['thorn_knight', 'sarge', 'mooggy', 'knave', 'artificer_knave'].includes(spriteKey);
+    if (swingsMeleeArm && attackProgress > 0) {
       const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
       const eased = 1 - (1 - attackProgress) ** 2;
       const direction = -1;
@@ -467,6 +468,25 @@
       };
     }
     return { angleOffset: 0, recoil: 0 };
+  }
+
+  function getEnemyArmAttackProgress(enemy, fallbackProgress = 0) {
+    if (enemy?.type !== 'knave' && enemy?.type !== 'artificer_knave') return fallbackProgress;
+    const swingTime = Number(enemy.swingTime || 0);
+    if (swingTime > 0) {
+      // Regular/phase-one Knaves use the authored 0.26s blade swipe. The
+      // Artificer's phase-two close strike is a shorter 0.20s version.
+      const swingDuration = enemy.type === 'artificer_knave' && Number(enemy.phase || 1) === 2
+        ? 0.2
+        : 0.26;
+      return getAttackProgress(swingTime, swingDuration);
+    }
+    // Phase three resolves its heavy sword strike directly from windup instead
+    // of creating swingTime, so retain the generic attack progress for it.
+    if (enemy.type === 'artificer_knave' && enemy.state === 'phase3_swing') return fallbackProgress;
+    // A normal Knave's windup is a telegraph. Hold the sword at aim until the
+    // real swing begins, matching the player's melee-arm timing.
+    return 0;
   }
 
   function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1, options = {}) {
@@ -513,13 +533,19 @@
   }
 
   function getEnemyAimAngle(enemy) {
-    if (Number.isFinite(enemy?.beamAngle)) return enemy.beamAngle;
-    if (Number.isFinite(enemy?.dashAngle)) return enemy.dashAngle;
-    if (Number.isFinite(enemy?.swingA)) return enemy.swingA;
+    const beamActive = Number(enemy?.beamTime || 0) > 0
+      || !!enemy?.beamChannel
+      || (Number(enemy?.windup || 0) > 0 && (enemy?.state === 'mirrorLaser' || enemy?.state === 'elite_laser'));
+    if (beamActive && Number.isFinite(enemy?.beamAngle)) return enemy.beamAngle;
+    if (Number(enemy?.dashTime || 0) > 0 && Number.isFinite(enemy?.dashAngle)) return enemy.dashAngle;
+    const bladeWindup = Number(enemy?.windup || 0) > 0
+      && (enemy?.state === 'blade' || enemy?.state === 'phase3_swing');
+    if ((Number(enemy?.swingTime || 0) > 0 || bladeWindup) && Number.isFinite(enemy?.swingA)) return enemy.swingA;
     if (Neo.player) return Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     if (Math.hypot(Number(enemy?.vx || 0), Number(enemy?.vy || 0)) > 1) {
       return Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0));
     }
+    if (Number.isFinite(enemy?.swingA)) return enemy.swingA;
     return 0;
   }
 
@@ -1354,7 +1380,8 @@
       // enemyAttackProgress assumes — feed the arm indicator its own progress
       // scaled to its actual swing duration, same treatment as thorn_knight/sarge.
       const mooggyArmProgress = enemy.type === 'mooggy' ? getAttackProgress(enemy.swingTime, 0.22) : enemyAttackProgress;
-      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, mooggyArmProgress);
+      const enemyArmProgress = getEnemyArmAttackProgress(enemy, mooggyArmProgress);
+      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyArmProgress);
       Neo.ctx.restore();
       // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
       // streak, while a bladed enemy is mid-swing.
@@ -2377,6 +2404,8 @@
   Neo.getFacingDirection = getFacingDirection;
   Neo.getActorActionFacingDirection = getActorActionFacingDirection;
   Neo.shouldHideActorAimArm = shouldHideActorAimArm;
+  Neo.getArmSpriteMotion = getArmSpriteMotion;
+  Neo.getEnemyArmAttackProgress = getEnemyArmAttackProgress;
   Neo.getActorSpriteActionState = getActorSpriteActionState;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.isActorHitFlashActive = isActorHitFlashActive;
