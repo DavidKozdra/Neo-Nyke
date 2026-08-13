@@ -903,7 +903,8 @@
 
   function getReviveCost() {
     if (Neo.gameMode === 'practice') return 0;
-    return Neo.runRevivesUsed > 0 ? 3 : 1;
+    const reviveNumber = Math.max(0, Math.floor(Number(Neo.runRevivesUsed) || 0)) + 1;
+    return Math.floor(reviveNumber * 2.5);
   }
 
   function canReviveFromDeath() {
@@ -925,9 +926,12 @@
     }
     Neo.playerDeathAnim = null;
     globalThis.NeoNyke.simulation.applyCampaignRevive(Neo.player, {
-      healthFraction: 0.45,
-      invulnerabilitySeconds: 1.5,
+      healthFraction: 0.75,
+      invulnerabilitySeconds: 2,
     });
+    Neo.STATUS_KEYS.forEach(key => Neo.clearStatus(Neo.player, key));
+    Neo.player.potionRegenTime = Math.max(Number(Neo.player.potionRegenTime || 0), 3);
+    Neo.player.potionRegenAccum = 0;
     Neo.projectiles = [];
     Neo.hazards = [];
     Neo.skySwords = [];

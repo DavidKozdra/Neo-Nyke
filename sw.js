@@ -198,6 +198,7 @@ const KOZ_PWA_CONFIG = {
     "/manifest.json"
   ],
   "optional": [
+    "/assets/credits-images/bug.png",
     "/assets/credits-images/digits.png",
     "/assets/credits-images/Explorer2000.webp",
     "/assets/credits-images/forrest.gif",
@@ -264,14 +265,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 251,
-    "bytes": 52213647,
+    "entries": 252,
+    "bytes": 52217585,
     "criticalEntries": 194,
-    "criticalBytes": 12049201,
-    "optionalEntries": 57,
-    "optionalBytes": 40164446
+    "criticalBytes": 12049999,
+    "optionalEntries": 58,
+    "optionalBytes": 40167586
   },
-  "version": "fdf5419f55f56f69"
+  "version": "0b1127d243eb54e5"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

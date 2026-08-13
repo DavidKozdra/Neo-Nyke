@@ -90,6 +90,8 @@ function createAchievementHarness() {
   const window = {
     Neo: {
       gameMode: 'normal',
+      player: {},
+      godTimer: 0,
       CHARACTER_DEFS: {
         princess: {}, thorn_knight: {}, metao: {}, gelleh: {}, mooggy: {}, turtle_boy: {}, sarge: {}, custom_character: {},
       },
@@ -207,5 +209,21 @@ describe('expanded achievements', () => {
       runReliquaryServicesUsed: 3,
       heroWins: 7,
     });
+  });
+
+  test('grants five seconds of power only for a new achievement unlock', async () => {
+    const window = createAchievementHarness();
+
+    window.Neo.godTimer = 2;
+    await window.achievementManager.unlock('one_punch_man');
+    expect(window.Neo.godTimer).toBe(5);
+
+    window.Neo.godTimer = 9;
+    await window.achievementManager.unlock('the_avatar');
+    expect(window.Neo.godTimer).toBe(9);
+
+    window.Neo.godTimer = 1;
+    await window.achievementManager.unlock('one_punch_man');
+    expect(window.Neo.godTimer).toBe(1);
   });
 });
