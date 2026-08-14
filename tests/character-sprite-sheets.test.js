@@ -405,6 +405,33 @@ describe('character sprite sheet assets', () => {
     });
   });
 
+  test('Cult Queen uses authored portrait, staff arm, and movement frames', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.queen_cult;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/queen_1.png',
+      frameWidth: 36,
+      frameHeight: 45,
+      frameCount: 5,
+      idleFrames: [2],
+      walkFrames: [2, 3, 4],
+      armFrame: 1,
+      portraitFrame: 0,
+      armBaseAngle: -Math.PI / 4,
+      armPivot: { x: 16, y: 27 },
+      armOffset: { x: 3, y: -3 },
+      mirrorFacing: false,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(Math.floor(image.naturalWidth / def.frameWidth)).toBe(6);
+    expect(Math.floor(image.naturalHeight / def.frameHeight)).toBe(1);
+    [def.portraitFrame, def.armFrame, ...def.idleFrames, ...def.walkFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(15);
+    });
+    expect(countOpaquePixels(image, 5, def.frameWidth, def.frameHeight)).toBe(0);
+  });
+
 
   test('bulk golem uses the authored large walk, punch, and smash strip', async () => {
     const defs = extractCharacterSheetDefs();

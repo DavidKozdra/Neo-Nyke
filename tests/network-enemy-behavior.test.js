@@ -1361,6 +1361,7 @@ describe('authored boss behaviors on the authority', () => {
     expect(missiles[0]).toEqual(expect.objectContaining({ homing: true, drainHeal: expect.any(Number) }));
     expect(Object.values(state.enemies).some(enemy => enemy.summonedBy === queen.id)).toBe(true);
     expect(events.some(event => event.eventType === 'ENEMY_SPOKE' && event.data.enemyId === queen.id)).toBe(true);
+    expect(queen.attackAnimT).toBeGreaterThan(0);
 
     // Drop her to the finisher threshold: she roots, telegraphs, detonates, dies.
     // Stand inside her 190px telegraph so the blast connects.

@@ -20,10 +20,12 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDeathPool(anim, size, fallEase)');
   });
 
-  test('shares the player arm swing with Knave enemies in 3D', () => {
+  test('shares authored enemy arms with Knaves and the Cult Queen in 3D', () => {
     expect(renderer).toContain('Neo.getArmSpriteMotion?.(spriteKey, { attackProgress, recoil })');
-    expect(renderer).toContain("const knaveArm = enemy.type === 'knave' || enemy.type === 'artificer_knave';");
+    expect(renderer).toContain("const authoredEnemyArm = enemy.type === 'knave' || enemy.type === 'artificer_knave' || enemy.type === 'queen_cult';");
     expect(renderer).toContain('Neo.getEnemyArmAttackProgress?.(enemy, attackProgress)');
+    expect(renderer).toContain('arm.center.set(flip ? 1 - centerX : centerX, centerY);');
+    expect(renderer).toContain('const flip = spriteSheet.mirrorFacing === false ? false : directionalFlip;');
   });
 
   test('uses actual health loss for a shared white sprite flash in 2D and 3D', () => {
@@ -154,7 +156,8 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function rasterizeDestructible2D');
     expect(renderer).toContain("statePlate.name = 'state-art'");
     expect(renderer).toContain('Math.sin(shakeRatio * Math.PI * 3)');
-    expect(renderer).toContain('statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT + 0.8;');
+    expect(renderer).toContain("const furnitureScale = prop._furniture === 'table' ? 0.75 : 1;");
+    expect(renderer).toContain('statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT * furnitureScale + 0.8;');
   });
 
   test('renders local split-screen and alternate modes through the 3D path', () => {

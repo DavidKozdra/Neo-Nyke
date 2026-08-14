@@ -7,7 +7,10 @@ describe('rival and mirror arm sprites', () => {
   test('draws character sheet arm frames for enemy character copies', () => {
     expect(source).toContain('function drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, attackProgress)');
     expect(source).toContain('Neo.SPRITE_ATLAS?.frames?.[`${spriteKey}:arm`]');
-    expect(source).toContain('drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyArmProgress);');
+    // The call site passes spriteFacing, not the raw facing: sheets flagged
+    // mirrorFacing: false (queen_cult) never flip, so the arm must use the same
+    // resolved facing the body sprite was drawn with.
+    expect(source).toContain('drawEnemyArmIndicator(enemy, spriteKey, drawSize, spriteFacing, enemyArmProgress);');
   });
 
   test('swings Knave and charged Artificer arms only during their actual melee strike', () => {

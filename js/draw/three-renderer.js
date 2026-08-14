@@ -1390,9 +1390,23 @@ function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const swingRecoil = Number(armMotion.recoil || 0);
   const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
   const sourceAimAngle = flip ? Math.PI - baseAngle : baseAngle;
+  const sourceWidth = Math.max(1, Number(texture.image?.width || 24));
+  const sourceHeight = Math.max(1, Number(texture.image?.height || 24));
+  const pivot = sheet.armPivot || {};
+  const usesAuthoredPivot = spriteKey === 'queen_cult'
+    && Number.isFinite(Number(pivot.x))
+    && Number.isFinite(Number(pivot.y));
+  if (usesAuthoredPivot) {
+    const centerX = Math.max(0, Math.min(1, Number(pivot.x) / sourceWidth));
+    const centerY = Math.max(0, Math.min(1, 1 - Number(pivot.y) / sourceHeight));
+    arm.center.set(flip ? 1 - centerX : centerX, centerY);
+  } else {
+    arm.center.set(0.5, 0.5);
+  }
   const offset = sheet.armOffset || {};
-  const offsetX = Number(offset.x || 0) * size / Math.max(1, Number(texture.image?.width || 24)) * (flip ? -1 : 1);
-  const offsetY = Number(offset.y || 0) * size / Math.max(1, Number(texture.image?.width || 24));
+  const sourceScale = size / (usesAuthoredPivot ? sourceHeight : sourceWidth);
+  const offsetX = Number(offset.x || 0) * sourceScale * (flip ? -1 : 1);
+  const offsetY = Number(offset.y || 0) * sourceScale;
   const reach = Math.max(8, (player.r || 14) * 0.68 - swingRecoil * 18);
   arm.visible = true;
   arm.material.map = texture;
@@ -2059,6 +2073,7 @@ function syncEnemies() {
       group.visible = Number(enemy.spawnT || 0) <= 0;
       if (!group.visible) return;
       const baseKey = enemySpriteKey(enemy);
+      const spriteSheet = Neo.CHARACTER_SPRITE_SHEETS?.[baseKey] || Neo.CHARACTER_SHEET_DEFS?.[baseKey] || {};
       const facingAngle = Number.isFinite(Number(enemy.beamAngle)) && Number(enemy.beamTime || 0) > 0
         ? Number(enemy.beamAngle)
         : Number.isFinite(Number(enemy.dashAngle)) && Number(enemy.dashTime || 0) > 0
@@ -2066,9 +2081,10 @@ function syncEnemies() {
           : Number.isFinite(Number(enemy.swingA)) && Number(enemy.swingTime || 0) > 0
             ? Number(enemy.swingA)
             : null;
-      const flip = facingAngle == null
+      const directionalFlip = facingAngle == null
         ? (Math.abs(Number(enemy.vx || 0)) > 6 ? Number(enemy.vx) < 0 : Number(enemy.facing || 1) < 0)
         : Math.cos(facingAngle) < 0;
+      const flip = spriteSheet.mirrorFacing === false ? false : directionalFlip;
       const bob = walkBob(enemy, enemy.x);
       const stunned = Number(enemy.stun || 0) > 0;
       const tint = stunned ? 0xaad4ff : enemy.elite ? 0xffe2a8 : 0xffffff;
@@ -2092,14 +2108,14 @@ function syncEnemies() {
       updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, {
         ...bob, tint: transformTint, hitFlash,
       });
-      const knaveArm = enemy.type === 'knave' || enemy.type === 'artificer_knave';
+      const authoredEnemyArm = enemy.type === 'knave' || enemy.type === 'artificer_knave' || enemy.type === 'queen_cult';
       const armAim = Number.isFinite(Number(enemy.swingA))
         ? Number(enemy.swingA)
         : Neo.player
           ? Math.atan2(Number(Neo.player.y || 0) - Number(enemy.y || 0), Number(Neo.player.x || 0) - Number(enemy.x || 0))
           : 0;
       syncPlayerArm(group, baseKey, enemy, armAim, flip, {
-        hidden: !knaveArm,
+        hidden: !authoredEnemyArm,
         attackProgress: Neo.getEnemyArmAttackProgress?.(enemy, attackProgress) ?? attackProgress,
         hitFlash,
       });
@@ -2704,7 +2720,17 @@ function syncDestructibles() {
       if (showStateArt) {
         const worldSize = Math.max(72, Number(prop.w || 52) * 1.5, Number(prop.h || 52) * 1.5);
         rasterizeDestructible2D(ensureBakeSurface(statePlate, worldSize), prop, worldSize);
-        statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT + 0.8;
+        const furnitureScale = prop._furniture === 'table' ? 0.75 : 1;
+        if (intact && !intact.isSprite && prop.kind === 'cover_wall' && !prop.reinforced) {
+          const height = BLOCK_HEIGHT * furnitureScale;
+          intact.scale.set(
+            Math.max(24, Number(prop.w || 50)) * furnitureScale,
+            height,
+            Math.max(24, Number(prop.h || 50)) * furnitureScale,
+          );
+          intact.position.y = height / 2;
+        }
+        statePlate.position.y = prop.broken ? 2.2 : BLOCK_HEIGHT * furnitureScale + 0.8;
       }
     },
   );

@@ -24,7 +24,7 @@ function extractFunction(source, functionName, dependencies = {}) {
 describe('authored table sprite rendering', () => {
   const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
 
-  test('preserves the sprite aspect ratio over a wide collision footprint', () => {
+  test('preserves the sprite aspect ratio at 75% of the collision-footprint scale', () => {
     const drawImage = jest.fn();
     const authored = { naturalWidth: 24, naturalHeight: 24 };
     const Neo = {
@@ -39,8 +39,8 @@ describe('authored table sprite rendering', () => {
 
     drawWoodTable({ x: 0, y: 0, w: 120, h: 30, hitFlash: 0 });
 
-    expect(drawImage).toHaveBeenCalledWith(authored, -60, -60, 120, 120);
-    expect(furnitureHitFlash).toHaveBeenCalledWith(expect.any(Object), 120, 120);
+    expect(drawImage).toHaveBeenCalledWith(authored, -45, -45, 90, 90);
+    expect(furnitureHitFlash).toHaveBeenCalledWith(expect.any(Object), 90, 90);
     expect(Neo.ctx.imageSmoothingEnabled).toBe(false);
   });
 });

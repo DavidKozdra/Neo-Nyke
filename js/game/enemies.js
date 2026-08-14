@@ -2890,6 +2890,7 @@
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
       enemy.summonCd = 4.6 * Math.max(0.74, tuning.rangedCadence);
+      enemy.attackAnimT = 0.24;
       if (!enemy.queenSummonLineShown) {
         enemy.queenSummonLineShown = true;
         sayOverEntity(enemy, 'Come forth, faithful.', { holdTime: 1.7 });
@@ -2933,6 +2934,7 @@
 
   function spawnCultQueenMissile(enemy, tuning = Neo.getEnemyDifficultyTuning()) {
     if (!enemy || !Neo.player) return;
+    enemy.attackAnimT = 0.24;
     const tier = getBossTier(enemy);
     const count = Math.min(6, (tuning.supportPower >= 1.22 ? 2 : 1) + tier);
     // Missiles get faster with each floor (the Queen's "level"), capped so they

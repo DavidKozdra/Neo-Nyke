@@ -1278,6 +1278,7 @@
     function spawnCultQueenMissile(enemy, tuning) {
       const player = ctx.getPlayer(enemy);
       if (!player) return;
+      enemy.attackAnimT = 0.24;
       const floor = ctx.getFloor?.() || 1;
       const floorBonus = Math.max(0, Math.floor((floor - 5) / 2));
       const count = (tuning.supportPower >= 1.22 ? 2 : 1) + floorBonus;
@@ -1352,6 +1353,7 @@
       enemy.summonCd = Math.max(0, Number(enemy.summonCd || 0) - dt);
       if (enemy.summonCd <= 0) {
         enemy.summonCd = 4.6 * Math.max(0.74, tuning.rangedCadence);
+        enemy.attackAnimT = 0.24;
         if (!enemy.queenSummonLineShown) {
           enemy.queenSummonLineShown = true;
           ctx.speak?.(enemy, 'Come forth, faithful.');

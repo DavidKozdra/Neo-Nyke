@@ -1568,19 +1568,20 @@
     Neo.ctx.fillRect(-w / 2, -h / 2, w, h);
   }
 
-  // Top-down wooden table: a plank top with a darker rim and four corner legs
-  // peeking out. Fills the prop footprint so it still reads as the obstacle.
+  // Top-down wooden table. Keep the authored square aspect ratio, but render
+  // tables at 75% of their cover-wall footprint scale so they do not dominate
+  // the surrounding room furniture.
   function drawWoodTable(prop) {
     const ctx = Neo.ctx;
-    const w = Math.max(20, Number(prop.w || prop.r * 2 || 64));
-    const h = Math.max(20, Number(prop.h || prop.r * 2 || 64));
+    const renderScale = 0.75;
+    const w = Math.max(20, Number(prop.w || prop.r * 2 || 64)) * renderScale;
+    const h = Math.max(20, Number(prop.h || prop.r * 2 || 64)) * renderScale;
     const variant = Math.abs(Math.sin((prop.x || 0) * 0.17 + (prop.y || 0) * 0.13)) < 0.5 ? 'table_0' : 'table_1';
     const authored = Neo.ENVIRONMENT_IMAGES?.[variant]?.image;
     if (authored) {
       // The authored tables are square 24px sprites, while their collision
-      // footprints are often long rectangles (for example 120x30). Stretching
-      // the image directly to that footprint crushes the legs and tabletop.
-      // Scale it uniformly until it covers the footprint instead.
+      // footprints are often long rectangles (for example 120x30). Preserve
+      // the image aspect ratio instead of crushing the legs and tabletop.
       const sourceW = Math.max(1, Number(authored.naturalWidth || authored.width || 24));
       const sourceH = Math.max(1, Number(authored.naturalHeight || authored.height || 24));
       const scale = Math.max(w / sourceW, h / sourceH);

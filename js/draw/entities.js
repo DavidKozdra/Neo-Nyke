@@ -456,6 +456,7 @@
     if (reduceMotion) return { angleOffset: 0, recoil: 0 };
     const attackProgress = Neo.clamp(Number(options.attackProgress || 0), 0, 1);
     const recoil = Neo.clamp(Number(options.recoil || 0), 0, 1);
+    if (spriteKey === 'queen_cult') return { angleOffset: 0, recoil: 0 };
     const swingsMeleeArm = ['thorn_knight', 'sarge', 'mooggy', 'knave', 'artificer_knave'].includes(spriteKey);
     if (swingsMeleeArm && attackProgress > 0) {
       const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
@@ -1324,6 +1325,8 @@
       }
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
+      const spriteSheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey] || Neo.CHARACTER_SHEET_DEFS?.[spriteKey] || {};
+      const spriteFacing = spriteSheet.mirrorFacing === false ? 1 : facing;
       const drawSize = Math.max(30, enemy.r * 2.4);
       let scale = 1;
       let flash = false;
@@ -1373,7 +1376,7 @@
       Neo.ctx.scale(scale, scale);
       drawSpriteFrame(enemyFrameKey, 0, 0, drawSize, {
         alpha: enemy.stun > 0 ? 0.68 : 1,
-        flipX: facing < 0,
+        flipX: spriteFacing < 0,
         shadowColor: enemy.type === 'mooggy' ? 'rgba(255,30,52,0.55)' : enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
         shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : denseEnemyFx ? 0 : 4,
         tint: hitFlash ? null : flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
@@ -1386,7 +1389,7 @@
       // scaled to its actual swing duration, same treatment as thorn_knight/sarge.
       const mooggyArmProgress = enemy.type === 'mooggy' ? getAttackProgress(enemy.swingTime, 0.22) : enemyAttackProgress;
       const enemyArmProgress = getEnemyArmAttackProgress(enemy, mooggyArmProgress);
-      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyArmProgress);
+      drawEnemyArmIndicator(enemy, spriteKey, drawSize, spriteFacing, enemyArmProgress);
       Neo.ctx.restore();
       // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
       // streak, while a bladed enemy is mid-swing.

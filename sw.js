@@ -48,6 +48,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/mini-golem.png",
     "/assets/sprites/chars/Mooggy.png",
     "/assets/sprites/chars/princess.png",
+    "/assets/sprites/chars/queen_1.png",
     "/assets/sprites/chars/Sarge.png",
     "/assets/sprites/chars/shield_unit.png",
     "/assets/sprites/chars/sniper.png",
@@ -274,14 +275,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 261,
-    "bytes": 52239504,
-    "criticalEntries": 203,
-    "criticalBytes": 12071918,
+    "entries": 262,
+    "bytes": 52243359,
+    "criticalEntries": 204,
+    "criticalBytes": 12075773,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "a2afdeb76f73717a"
+  "version": "d75a9c0c0d74ceb6"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
