@@ -123,6 +123,13 @@
   }
 
   function getEnemySpriteActionOptions(enemy) {
+    if (enemy?.type === 'handsome_devil') {
+      const firingLightning = enemy.state === 'devilLaser' || enemy.state === 'devilGiantLaser';
+      if (firingLightning && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)) {
+        return { action: 'beam' };
+      }
+      return {};
+    }
     if (enemy?.type !== 'bulk_golem') return {};
     const jumpDuration = Math.max(0.01, Number(enemy.bulkJumpDuration || 0.82));
     if (Number(enemy.bulkJumpTime || 0) > 0) {

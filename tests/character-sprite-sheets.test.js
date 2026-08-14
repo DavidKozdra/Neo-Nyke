@@ -432,6 +432,42 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, 5, def.frameWidth, def.frameHeight)).toBe(0);
   });
 
+  test('Handsome Devil uses the authored idle, walk, lightning, and kick strips', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.handsome_devil;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/HandsomeDevil.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 18,
+      renderScale: 1,
+      stepRate: 10,
+      idleRate: 10,
+      actionRate: 10,
+      idleFrames: [1, 2],
+      walkFrames: [3, 4, 5, 6],
+      beamFrames: [7, 8, 9, 10, 11],
+      attackFrames: [12, 13, 14, 15, 16, 17],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    expect(image.naturalWidth).toBe(432);
+    expect(image.naturalHeight).toBe(24);
+    [
+      def.portraitFrame,
+      ...def.idleFrames,
+      ...def.walkFrames,
+      ...def.beamFrames,
+      ...def.attackFrames,
+    ].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
+    });
+  });
+
 
   test('bulk golem uses the authored large walk, punch, and smash strip', async () => {
     const defs = extractCharacterSheetDefs();
