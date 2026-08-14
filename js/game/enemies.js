@@ -2596,6 +2596,7 @@
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
       enemy.summonCd = (Neo.floor >= 4 ? 4.2 : 5) * Math.max(0.72, tuning.rangedCadence);
+      enemy.attackAnimT = 0.24;
       const summonCount = Neo.floor >= 4 && tuning.supportPower >= 1.22 ? 3 : 2;
       for (let index = 0; index < summonCount; index += 1) {
         const angle = Neo.nextRandom('encounter') * Math.PI * 2;

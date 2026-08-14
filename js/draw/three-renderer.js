@@ -1035,10 +1035,10 @@ function enemySpriteKey(enemy) {
   }
   if (enemy.type === 'mirror_knight') return enemy.spriteKey || playerSpriteKey();
   if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner || Neo.CHARACTER_SPRITE_SHEETS?.machine_gunner ? 'machine_gunner' : 'sniper';
-  if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
+  if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner || Neo.CHARACTER_SPRITE_SHEETS?.summoner ? 'summoner' : 'cult_mage';
   if (enemy.type === 'shield_unit') return 'shield_unit';
   if (enemy.type === 'healer') return 'healer';
-  if (enemy.type === 'boss_spawner') return 'laser';
+  if (enemy.type === 'laser' || enemy.type === 'boss_spawner') return 'cult_mage';
   return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
 }
 

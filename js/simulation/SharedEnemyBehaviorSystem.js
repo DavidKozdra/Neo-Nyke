@@ -714,6 +714,7 @@
       if (enemy.summonCd <= 0) {
         const floor = ctx.getFloor?.() || 1;
         enemy.summonCd = (floor >= 4 ? 4.2 : 5) * Math.max(0.72, tuning.rangedCadence);
+        enemy.attackAnimT = 0.24;
         const summonCount = floor >= 4 && tuning.supportPower >= 1.22 ? 3 : 2;
         for (let index = 0; index < summonCount; index += 1) {
           const angle = random('encounter') * Math.PI * 2;

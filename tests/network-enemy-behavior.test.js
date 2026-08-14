@@ -188,6 +188,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     const followers = Object.values(state.enemies).filter(enemy => enemy.summonedBy === summoner.id && !enemy.dead);
     expect(followers.length).toBeGreaterThanOrEqual(2);
     expect(followers.every(enemy => enemy.type === 'cult_follower')).toBe(true);
+    expect(summoner.attackAnimT).toBeGreaterThan(0);
   });
 
   test('healers mend wounded allies on the campaign cadence', () => {

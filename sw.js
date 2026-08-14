@@ -48,6 +48,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/Sarge.png",
     "/assets/sprites/chars/shield_unit.png",
     "/assets/sprites/chars/sniper.png",
+    "/assets/sprites/chars/summoner.png",
     "/assets/sprites/chars/Thorn Knight.png",
     "/assets/sprites/chars/turtle_boy.png",
     "/assets/sprites/chars/TurtleBoy.png",
@@ -270,14 +271,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 257,
-    "bytes": 52230395,
-    "criticalEntries": 199,
-    "criticalBytes": 12062809,
+    "entries": 258,
+    "bytes": 52232342,
+    "criticalEntries": 200,
+    "criticalBytes": 12064756,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "11dc963b2e029ee5"
+  "version": "c097f31756d0b90b"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

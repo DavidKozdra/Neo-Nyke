@@ -233,6 +233,30 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+  test('charger uses its wind-up and gallop strips', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.charger;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/charger.png',
+      frameWidth: 32,
+      frameHeight: 32,
+      frameCount: 12,
+      idleFrames: [0],
+      walkFrames: [7, 8, 9, 10, 11],
+      attackFrames: [1, 2, 3, 4, 5, 6],
+      dashFrames: [7, 8, 9, 10, 11],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [...def.idleFrames, ...def.walkFrames, ...def.attackFrames, ...def.dashFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
+    });
+  });
+
   test('cult follower uses the authored walk and attack rows', async () => {
     const key = 'cult_follower';
     const src = 'assets/sprites/chars/follower.png';
@@ -359,6 +383,28 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+  test('summoner uses the authored walk and summoning rows', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.summoner;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/summoner.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 9,
+      idleFrames: [0],
+      walkFrames: [1, 2, 3, 4],
+      attackFrames: [5, 6, 7, 8],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(Math.floor(image.naturalWidth / def.frameWidth)).toBe(5);
+    expect(Math.floor(image.naturalHeight / def.frameHeight)).toBe(2);
+    [...def.idleFrames, ...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
 
   test('bulk golem uses the authored large walk, punch, and smash strip', async () => {
     const defs = extractCharacterSheetDefs();

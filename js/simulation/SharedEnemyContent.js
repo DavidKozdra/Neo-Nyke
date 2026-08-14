@@ -25,7 +25,7 @@
   const ENEMY_CATALOG = Object.freeze({
     hunter: enemy('hunter', 'chaser'),
     charger: enemy('charger', 'charger'),
-    laser: enemy('laser', 'beam'),
+    laser: enemy('laser', 'beam', {}, { spriteKey: 'cult_mage' }),
     knave: enemy('knave', 'skirmisher', { radius: 16, maxHealth: 68, moveSpeed: 118, contactDamage: 14, attackCooldown: 1.3 }),
     sniper: enemy('sniper', 'sniper', { radius: 15, maxHealth: 58, moveSpeed: 104, contactDamage: 12, attackCooldown: 1.55 }),
     machine_gunner: enemy('machine_gunner', 'burst', { radius: 17, maxHealth: 96, moveSpeed: 112, contactDamage: 8, attackCooldown: 1.15 }),
@@ -35,7 +35,7 @@
     summoner: enemy('summoner', 'summoner', { radius: 18, maxHealth: 120, moveSpeed: 66, contactDamage: 12, attackCooldown: 1.5 }),
     shield_unit: enemy('shield_unit', 'shield', { radius: 22, maxHealth: 210, moveSpeed: 52, contactDamage: 10, attackCooldown: 1.4 }, { spriteKey: 'shield_unit', bleedImmune: true }),
     healer: enemy('healer', 'healer', { radius: 19, maxHealth: 150, moveSpeed: 64, contactDamage: 10, attackCooldown: 1.2 }, { spriteKey: 'healer' }),
-    boss_spawner: enemy('boss_spawner', 'boss_spawner', { radius: 24, maxHealth: 300, moveSpeed: 96, contactDamage: 8, attackCooldown: 1.8 }, { spriteKey: 'laser', bleedImmune: true }),
+    boss_spawner: enemy('boss_spawner', 'boss_spawner', { radius: 24, maxHealth: 300, moveSpeed: 96, contactDamage: 8, attackCooldown: 1.8 }, { spriteKey: 'cult_mage', bleedImmune: true }),
     queen_cult: enemy('queen_cult', 'boss', { radius: 38, maxHealth: 912, moveSpeed: 96, contactDamage: 20, attackCooldown: 1.2 }, { boss: true, patterns: Object.freeze(['summon', 'beam', 'nova']) }),
     bulk_golem: enemy('bulk_golem', 'boss', { radius: 58, maxHealth: 1280, moveSpeed: 88, contactDamage: 31, attackCooldown: 1.6 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['jump', 'aoe', 'split']) }),
     artificer_knave: enemy('artificer_knave', 'boss', { radius: 30, maxHealth: 1880, moveSpeed: 124, contactDamage: 20, attackCooldown: 1.2 }, { spriteKey: 'knave', boss: true, patterns: Object.freeze(['blade', 'dash', 'turrets']) }),

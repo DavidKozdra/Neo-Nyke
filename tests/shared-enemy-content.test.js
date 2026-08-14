@@ -31,6 +31,11 @@ describe('shared Neo Nyke enemy content', () => {
     expect(artificer.spriteKey).toBe('knave');
     expect(artificer.radius).toBeGreaterThan(knave.radius);
   });
+  test('temporarily shares Cult Mage art with Laser Units and Boss Spawners', () => {
+    expect(getEnemyDefinition('laser').spriteKey).toBe('cult_mage');
+    expect(getEnemyDefinition('boss_spawner').spriteKey).toBe('cult_mage');
+  });
+
 
   test('Boss Rush bosses start at level two and rise one level per stage', () => {
     expect(BOSS_RUSH_START_LEVEL).toBe(2);
