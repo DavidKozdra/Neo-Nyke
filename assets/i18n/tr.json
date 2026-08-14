@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Kutsal Göz Işınları",
   "moves.holy_eye_beams.desc": "Gözlerinizden ikiz kutsal ışınları kanalize edin. Her kullanımın sizi maksimum HP'nin %5'i kadar iyileştirme şansı vardır.",
   "sounds.break_furniture.label": "Mobilyayı Kır",
+  "sounds.break_pot.label": "Küpü Kır",
   "moves.titan_hammer.name": "Titan Çekici",
   "moves.titan_hammer.desc": "İmleci takip eden dev bir çekiç çağır. Ağır bir alan hasarı için yere çakmak üzere tıkla. 8 saniye sürer.",
   "difficulties.easy.name": "Kolay",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Tanrı Döngüsü",
   "achievements.godloop.desc": "Tek bir koşuda 20 döngü tamamla",
-  "achievementProgress.godloop.label": "Bu koşudaki döngüler"
+  "achievementProgress.godloop.label": "Bu koşudaki döngüler",
+  "moves.intense_biscuits.name": "Yoğun Bisküviler",
+  "moves.intense_biscuits.desc": "Bisküvi bombardımanı diyelim: küçük bir atlayış beş güdümlü bisküvi fırlatır ve yakalanan düşman başına azami canın %2'sini, en fazla %8'e kadar iyileştirir."
 }

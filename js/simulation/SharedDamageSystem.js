@@ -15,6 +15,12 @@
     return eliteFactor * (1 - Math.min(0.95, completedLoops * reductionPerLoop));
   }
 
+  function getCampaignTotalStatusStacks(entity) {
+    return Object.values(entity?.statuses || {}).reduce((total, status) => (
+      total + Math.max(0, Number(status?.stacks || 0))
+    ), 0);
+  }
+
   function scaleCampaignDamage(options = {}) {
     const enemy = options.enemy || {};
     const stats = options.itemStats || {};
@@ -28,6 +34,9 @@
     const bossMultiplier = options.isBoss ? Math.max(0, Number(stats.kronosBossDamageMultiplier || 1)) : 1;
     const bleedMultiplier = options.applyBleedBonus !== false && options.hasBleed
       ? Math.max(1, Number(stats.bleedDamageMultiplier || 1)) : 1;
+    const factorOfElementsMultiplier = 1
+      + getCampaignTotalStatusStacks(enemy)
+        * Math.max(0, Number(stats.factorOfElementsDamagePerStatusStack || 0));
     const powered = (rawDamage + Math.max(0, Number(options.attackPower || 0)))
       * Math.max(0, Number(options.attackerDamageMultiplier || 1))
       * Math.max(0, Number(options.poisonDamageMultiplier || 1))
@@ -36,9 +45,10 @@
       * bossMultiplier
       * Math.max(0, Number(options.bountyWeaknessMultiplier || 1))
       * (options.glassCannon ? 1.25 : 1)
-      * bleedMultiplier;
+      * bleedMultiplier
+      * factorOfElementsMultiplier;
     return Math.max(0, Math.round(powered * damageTakenMultiplier / defenseMultiplier - flatReduction));
   }
 
-  return { getCampaignEnemyDamageTakenMultiplier, scaleCampaignDamage };
+  return { getCampaignEnemyDamageTakenMultiplier, getCampaignTotalStatusStacks, scaleCampaignDamage };
 });

@@ -166,6 +166,7 @@ export function resumeGame() {
   function removeCustomCharacter(characterKey) {
     if (!Neo.metaProgress || !isCustomCharacterKey(characterKey)) return;
     const id = getCustomCharacterId(characterKey);
+    void Neo.CustomSpriteEditor?.remove?.(characterKey);
     Neo.metaProgress.customCharacters = normalizeCustomCharactersSettings(Neo.metaProgress.customCharacters)
       .filter(entry => entry.id !== id);
     if (Neo.chosenCharacter === characterKey) {
@@ -176,7 +177,8 @@ export function resumeGame() {
   }
 
   function getCharacterSpriteKey(characterKey) {
-    return isCustomCharacterKey(characterKey) ? 'thorn_knight' : characterKey;
+    if (!isCustomCharacterKey(characterKey)) return characterKey;
+    return Neo.hasCustomCharacterSprite?.(characterKey) ? characterKey : 'thorn_knight';
   }
 
   function normalizeSandboxSettings(input) {
@@ -368,7 +370,7 @@ export function resumeGame() {
     if (characterKey === 'thorn_knight') {
       items.neo_knife = 1;
       items.tooth_of_thorn = 2;
-      items.tough_bandaid = 1;
+      items.tough_bandaid = 2;
     }
     if (characterKey === 'mooggy') {
       items.hemes_scarf = 1;
@@ -376,7 +378,10 @@ export function resumeGame() {
       items.churu_stick = 1;
     }
     if (characterKey === 'princess') items.princes_glasses = 1;
-    if (characterKey === 'metao') items.mateos_bag = 1;
+    if (characterKey === 'metao') {
+      items.mateos_bag = 1;
+      items.drink_master = 1;
+    }
     if (characterKey === 'gelleh') items.zap_to_extreme = 1;
     if (characterKey === 'turtle_boy') {
       // Turtle Boy starts with shell defense and dragon orb; his red stick and
@@ -922,6 +927,7 @@ export function resumeGame() {
       moggys_coat: 0,
       veggys_pendant: 0,
       procy_pickle: 0,
+      factor_of_elements: 0,
       princes_glasses: 0,
       mateos_bag: 0,
       extra_battery: 0,
@@ -1416,10 +1422,12 @@ export function resumeGame() {
       .slice(0, Neo.RUN_HISTORY_LIMIT)
       .map(entry => {
         const challengeKeys = normalizeRunHistoryChallengeKeys(entry);
+        const result = String(entry.result || '').replace(/^Neo\./, '') === 'win' ? 'win' : 'dead';
+        const killer = resolveKillerPresentation(entry);
         return {
           id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
           endedAt: String(entry.endedAt || ''),
-          result: String(entry.result || '').replace(/^Neo\./, '') === 'win' ? 'win' : 'dead',
+          result,
           mode: normalizeGameMode(entry.mode),
           character: String(entry.character || 'thorn_knight'),
           characterName: String(entry.characterName || Neo.CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
@@ -1437,8 +1445,10 @@ export function resumeGame() {
           elapsedSeconds: Math.max(0, Number(entry.elapsedSeconds || 0)),
           seed: String(entry.seed || ''),
           roomType: String(entry.roomType || ''),
-          killedBy: String(entry.killedBy || ''),
-          killerKey: String(entry.killerKey || ''),
+          killedBy: result === 'win' ? '' : killer.label,
+          killerKey: result === 'win' ? '' : killer.sourceKey,
+          killerSpriteKey: result === 'win' ? '' : killer.spriteKey,
+          killerHazardIcon: result === 'win' ? '' : killer.hazardIcon,
           challengeBonusCrystals: Math.max(0, Number(entry.challengeBonusCrystals || 0)),
           totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
           challengeKeys,
@@ -2359,6 +2369,12 @@ export function resumeGame() {
     const difficulty = normalizeDifficulty(Neo.selectedDifficulty);
     const historyItems = captureRunItemSnapshot(Neo.player);
     const totalItemStacks = historyItems.reduce((sum, item) => sum + item.count, 0);
+    const killer = resolveKillerPresentation({
+      killerKey: extra.killerKey,
+      killedBy: extra.killedBy,
+      killerSpriteKey: extra.killerSpriteKey,
+      killerHazardIcon: extra.killerHazardIcon,
+    });
     return {
       id: `${Date.now()}:${Neo.baseSeedStr}:${Neo.runLoopIndex}:${Neo.floor}:${result}`,
       endedAt: new Date().toISOString(),
@@ -2384,8 +2400,10 @@ export function resumeGame() {
       elapsedSeconds: Math.max(0, Number(Neo.gameElapsedTime || 0)),
       seed: Neo.baseSeedStr,
       roomType: Neo.currentRoom?.type || '',
-      killedBy: getDamageSourceLabel(extra.killedBy || ''),
-      killerKey: String(extra.killerKey || ''),
+      killedBy: result === 'win' ? '' : killer.label,
+      killerKey: result === 'win' ? '' : killer.sourceKey,
+      killerSpriteKey: result === 'win' ? '' : killer.spriteKey,
+      killerHazardIcon: result === 'win' ? '' : killer.hazardIcon,
       challengeBonusCrystals: Math.max(0, Number(extra.challengeBonusCrystals || 0)),
       loopCrystalsEarned: Math.max(0, Number(Neo.runCrystalsEarned || 0)),
       challengeKeys: normalizeChallengeSelection(Neo.selectedChallenges),
@@ -2402,12 +2420,13 @@ export function resumeGame() {
   }
 
   function renderRunHistoryListEntry(entry, selected = false) {
-    const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
+    const killer = resolveKillerPresentation(entry);
+    const cause = entry.result === 'win' ? 'Cleared' : killer.label;
     const modeLabel = getRunModeLabel(entry.mode);
     const progressLabel = entry.mode === 'endless' ? `Wave ${entry.endlessWave || 0}` : `Fl.${entry.floor}`;
-    const killerLookup = entry.killerKey || entry.killedBy || '';
+    const killerLookup = killer.spriteKey || killer.sourceKey || killer.label;
     const killerCanvas = entry.result !== 'win' && killerLookup
-      ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(entry.killedBy || '')}"></canvas>`
+      ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" data-run-killer-hazard="${escapeHtml(killer.hazardIcon)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(killer.label)}"></canvas>`
       : '';
     return `<button class="rh-row${selected ? ' active' : ''}" data-run-id="${escapeHtml(entry.id)}" data-result="${entry.result}" type="button">
       <canvas class="rh-row-portrait" data-run-character="${escapeHtml(entry.character)}" width="40" height="40" aria-hidden="true"></canvas>
@@ -2424,13 +2443,14 @@ export function resumeGame() {
 
   function renderRunHistoryHero(entry) {
     const win = entry.result === 'win';
-    const killerLookup = entry.killerKey || entry.killedBy || '';
+    const killer = resolveKillerPresentation(entry);
+    const killerLookup = killer.spriteKey || killer.sourceKey || killer.label;
     const killerSection = !win && killerLookup
       ? `<div class="rh-hero-killer">
-           <canvas class="rh-hero-killer-portrait" data-run-killer="${escapeHtml(killerLookup)}" width="48" height="48" aria-hidden="true"></canvas>
+           <canvas class="rh-hero-killer-portrait" data-run-killer="${escapeHtml(killerLookup)}" data-run-killer-hazard="${escapeHtml(killer.hazardIcon)}" width="48" height="48" aria-hidden="true"></canvas>
            <div class="rh-hero-killer-info">
              <span class="rh-hero-killer-label">KILLED BY</span>
-             <span class="rh-hero-killer-name">${escapeHtml(entry.killedBy || 'Unknown')}</span>
+             <span class="rh-hero-killer-name">${escapeHtml(killer.label)}</span>
            </div>
          </div>`
       : '';
@@ -2458,13 +2478,14 @@ export function resumeGame() {
       if (!entry.equippedMoves.length) return '<p class="rh-empty-inner">No move data recorded.</p>';
       return `<div class="rh-moves-grid">${entry.equippedMoves.map(m => `<div class="rh-move-slot" data-slot="${escapeHtml(m.slot)}"><canvas class="rh-move-icon" data-move-icon="${escapeHtml(m.key)}" width="36" height="36" aria-hidden="true"></canvas><div class="rh-move-text"><span class="rh-move-label">${escapeHtml(m.slot.toUpperCase())}</span><span class="rh-move-name">${escapeHtml(m.name)}</span></div></div>`).join('')}</div>`;
     }
-    const killerBannerKey = entry.killerKey || entry.killedBy || '';
-    const killerBanner = entry.result !== 'win' && entry.killedBy
+    const killer = resolveKillerPresentation(entry);
+    const killerBannerKey = killer.spriteKey || killer.sourceKey || killer.label;
+    const killerBanner = entry.result !== 'win' && killer.label
       ? `<div class="rh-killer-banner">
-           ${killerBannerKey ? `<canvas class="rh-killer-banner-portrait" data-run-killer="${escapeHtml(killerBannerKey)}" width="48" height="48" aria-hidden="true"></canvas>` : ''}
+           ${killerBannerKey ? `<canvas class="rh-killer-banner-portrait" data-run-killer="${escapeHtml(killerBannerKey)}" data-run-killer-hazard="${escapeHtml(killer.hazardIcon)}" width="48" height="48" aria-hidden="true"></canvas>` : ''}
            <div class="rh-killer-banner-text">
              <span class="rh-killer-banner-label">KILLED BY</span>
-             <span class="rh-killer-banner-name">${escapeHtml(entry.killedBy)}</span>
+             <span class="rh-killer-banner-name">${escapeHtml(killer.label)}</span>
            </div>
          </div>`
       : '';
@@ -2487,24 +2508,20 @@ export function resumeGame() {
   }
 
   const killerSpriteMap = {
-    lava: 'golem',
-    storm: 'cult_mage',
-    challenge_bomb: 'knave',
-    enemy_projectile: 'sniper',
-    enemy_beam: 'laser',
+    // Enemy types with no sprite of their own: they borrow a stand-in at draw
+    // time (see getEnemySpriteKey), so the killer portrait must borrow the same
+    // one or it falls through to the "unknown" question-mark hazard icon.
+    boss_spawner: 'laser',
     god_beam: 'god',
     mirror_beam: 'thorn_knight',
-    elite_blade_justice: 'knave',
-    no_hit: 'hunter',
+    mirror_lightning: 'thorn_knight',
+    antony_death_ball: 'antony_blemmye',
+    justice_of_sonichu: 'bowman_bane',
+    blood_thorn: 'mooggy',
     // label string fallbacks for old history entries without killerKey
-    'Lava': 'golem',
-    'Storm Trial': 'cult_mage',
-    'Trial Bomb': 'knave',
-    'Enemy Projectile': 'sniper',
-    'Enemy Beam': 'laser',
     'GOD Beam': 'god',
     'Mirror Beam': 'thorn_knight',
-    'Never Get Hit': 'hunter',
+    "Mooggy's Blood Thorn": 'mooggy',
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
@@ -2522,33 +2539,109 @@ export function resumeGame() {
     'Knave': 'knave',
     'Cult Mage': 'cult_mage',
     'Summoner': 'summoner',
+    'Boss Spawner': 'laser',
+    'Healer': 'cult_follower',
+    'Shield Unit': 'golem',
   };
 
   function resolveKillerSprite(key) {
-    if (!key) return 'hunter';
-    if (String(key).endsWith('_projectile')) return resolveKillerSprite(String(key).slice(0, -'_projectile'.length));
+    if (!key) return '';
+    const rawKey = String(key).trim();
+    if (rawKey.endsWith('_projectile')) return resolveKillerSprite(rawKey.slice(0, -'_projectile'.length));
+    if (rawKey.endsWith('_blind_shot')) return resolveKillerSprite(rawKey.slice(0, -'_blind_shot'.length));
     if (Neo.SPRITE_DEFS[key]) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
-    const normalized = String(key).trim().toLowerCase();
-    const rivalCharacterKey = normalized.replace(/^rival[\s_-]+/, '').replace(/\s+/g, '_');
+    const normalized = rawKey.toLowerCase();
+    if (Neo.SPRITE_DEFS[normalized]) return normalized;
+    if (killerSpriteMap[normalized]) return killerSpriteMap[normalized];
+    const normalizedKey = normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    if (Neo.SPRITE_DEFS[normalizedKey]) return normalizedKey;
+    const rivalCharacterKey = normalizedKey.replace(/^rival_+/, '');
     if (Neo.RIVAL_DEFS?.[rivalCharacterKey] && Neo.SPRITE_DEFS[rivalCharacterKey]) return rivalCharacterKey;
     const legacyRival = Object.entries(Neo.RIVAL_DEFS || {}).find(([, def]) => String(def?.name || '').trim().toLowerCase() === normalized);
     if (legacyRival && Neo.SPRITE_DEFS[legacyRival[0]]) return legacyRival[0];
-    if (normalized.startsWith('mirror_') || normalized.startsWith('mirror ')) return 'thorn_knight';
-    return 'hunter';
+    if (normalized.startsWith('mirror_') || normalized.startsWith('mirror ')) return Neo.SPRITE_DEFS.mirror_knight ? 'mirror_knight' : 'thorn_knight';
+    return '';
   }
 
-  // Environmental killers have no enemy sprite, so they draw a dedicated hazard icon.
-  // Accepts either the source key (explosive_trap) or an old label ("Explosive Trap").
+  // Environmental killers have no enemy sprite, so they draw dedicated cause art
+  // instead of borrowing an unrelated enemy portrait.
   const killerHazardIconMap = {
     explosive_trap: 'explosive_trap',
+    lava: 'lava',
+    thorn_mine: 'thorn_mine',
+    challenge_bomb: 'challenge_bomb',
+    bomb_aoe: 'challenge_bomb',
+    collapse_rock: 'collapse_rock',
+    dungeon_collapse: 'collapse_rock',
+    storm: 'storm',
+    enemy_projectile: 'enemy_projectile',
+    enemy_beam: 'enemy_projectile',
+    fire: 'lava',
+    poison: 'poison',
+    bleed: 'thorn_mine',
     'Explosive Trap': 'explosive_trap',
+    'Lava': 'lava',
+    'Thorn Trap': 'thorn_mine',
+    'Trial Bomb': 'challenge_bomb',
+    'Falling Rock': 'collapse_rock',
+    'Dungeon Collapse': 'collapse_rock',
+    'Storm Trial': 'storm',
+    'Enemy Projectile': 'enemy_projectile',
+    'Enemy Beam': 'enemy_projectile',
   };
 
   function resolveKillerHazardIcon(key) {
     if (!key) return '';
     if (killerHazardIconMap[key]) return killerHazardIconMap[key];
     return '';
+  }
+
+  function getAttackerSpriteKey(attacker) {
+    if (!attacker || typeof attacker !== 'object') return '';
+    if (attacker.type === 'rival') {
+      return String(attacker.rivalData?.characterKey || attacker.rivalKey || attacker.characterKey || '');
+    }
+    return String(attacker.spriteKey || attacker.type || '');
+  }
+
+  // Text, portrait, and hazard art must all come from this one resolution pass.
+  // New deaths persist its output; old run-history records are repaired on read.
+  function resolveKillerPresentation(sourceInput = '', sourceLabelInput = '', attackerInput = null) {
+    const entry = sourceInput && typeof sourceInput === 'object' && !Array.isArray(sourceInput)
+      ? sourceInput
+      : null;
+    const sourceKey = String(entry?.killerKey ?? entry?.sourceKey ?? sourceInput ?? '').trim();
+    const sourceLabel = String(entry?.killedBy ?? entry?.sourceLabel ?? entry?.label ?? sourceLabelInput ?? '').trim();
+    const attacker = entry?.attacker || attackerInput;
+    const explicitSpriteKey = String(entry?.killerSpriteKey || entry?.spriteKey || '').trim();
+    const attackerSpriteKey = getAttackerSpriteKey(attacker);
+    const spriteKey = resolveKillerSprite(explicitSpriteKey)
+      || resolveKillerSprite(attackerSpriteKey)
+      || resolveKillerSprite(sourceKey)
+      || resolveKillerSprite(sourceLabel);
+    const explicitHazardIcon = String(entry?.killerHazardIcon || entry?.hazardIcon || '').trim();
+    const hazardIcon = spriteKey ? '' : (
+      resolveKillerHazardIcon(explicitHazardIcon)
+      || resolveKillerHazardIcon(sourceKey)
+      || resolveKillerHazardIcon(sourceLabel)
+      || 'unknown'
+    );
+    const label = sourceLabel || getDamageSourceLabel(sourceKey) || 'Unknown';
+    return { sourceKey, label, spriteKey, hazardIcon };
+  }
+
+  function drawKillerPresentation(canvas, sourceInput, size = canvas?.width || 96) {
+    if (!(canvas instanceof HTMLCanvasElement)) return resolveKillerPresentation(sourceInput);
+    const killer = resolveKillerPresentation(sourceInput);
+    const ctx = canvas.getContext('2d');
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    if (killer.spriteKey && typeof Neo.drawSpriteToCanvas === 'function') {
+      Neo.drawSpriteToCanvas(canvas, killer.spriteKey, size);
+    } else if (killer.hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
+      Neo.drawHazardKillerIcon(canvas, killer.hazardIcon);
+    }
+    return killer;
   }
 
   function hydrateRunHistorySprites(root = Neo.ui.runHistoryList) {
@@ -2559,12 +2652,10 @@ export function resumeGame() {
     });
     root.querySelectorAll('[data-run-killer]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
-      const hazardIcon = resolveKillerHazardIcon(el.dataset.runKiller);
-      if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
-        Neo.drawHazardKillerIcon(el, hazardIcon);
-        return;
-      }
-      Neo.drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
+      drawKillerPresentation(el, {
+        killerKey: el.dataset.runKiller,
+        killerHazardIcon: el.dataset.runKillerHazard || '',
+      }, el.width);
     });
     Neo.drawItemIconCanvases?.(root, 'data-item-icon');
     root.querySelectorAll('[data-move-icon]').forEach(el => {
@@ -2985,6 +3076,8 @@ export function resumeGame() {
       applyRunChallengeStartModifiers();
       Neo.lastDamageSource = '';
       Neo.lastDamageSourceKey = '';
+      Neo.lastDamageSourceSpriteKey = '';
+      Neo.lastDamageSourceHazardIcon = '';
       resetScene();
       Neo.generateFloor();
       if (shouldRunGuidedFloor) Neo.tutorialController?.start?.();
@@ -3031,6 +3124,8 @@ export function resumeGame() {
     Neo.p1DeadInCoop = false; Neo.p2DeadInCoop = false; Neo.p3DeadInCoop = false; Neo.p4DeadInCoop = false;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     Neo.generateFloor();
     const p2Row = document.getElementById('p2HpRow');
@@ -3069,6 +3164,8 @@ export function resumeGame() {
     Neo.pvpState = { p1Kills: 0, p2Kills: 0, killsToWin: 3, respawnTimer: null };
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     Neo.generateFloor();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
@@ -3113,6 +3210,8 @@ export function resumeGame() {
     resetMultiplayerState();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     Neo.generateFloor();
     Neo.persistMetaSoon();
@@ -3153,6 +3252,8 @@ export function resumeGame() {
     Neo.player = createDefaultPlayer();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     // Endless builds rooms via startEndlessRoom (no generateFloor) and scales off
     // the wave counter, so pin the cumulative floor count to the (fixed) floor.
@@ -3188,6 +3289,8 @@ export function resumeGame() {
     Neo.player.hp = Neo.player.maxHp;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     // Practice builds its room manually (no generateFloor), so set the cumulative
     // floor count to match the practice floor directly.
@@ -3415,9 +3518,11 @@ export function resumeGame() {
     Neo.player = createDefaultPlayer();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
-    // Boss rush builds its room manually (no generateFloor); match the floor count
-    // to the starting floor so enemy scaling stays consistent.
+    // Boss Rush builds its room manually (no generateFloor). Keep its floor-five
+    // economy/difficulty baseline; each boss gets its own stage level below.
     Neo.floorsEntered = Neo.floor;
     resetRngStreams();
     Neo.rooms = [];
@@ -3427,23 +3532,55 @@ export function resumeGame() {
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
-    // The shared five-item package is rolled from the entered run seed. Keeping
+    // The shared ten-offer draft is rolled from the entered run seed. Keeping
     // this scoped means unrelated world/FX draws cannot perturb starter loot.
     const bossRushStartRandom = createScopedRandom('boss-rush:starting-items');
-    globalThis.NeoNyke.content.createBossRushStarterItemPlan(bossRushStartRandom)
-      .forEach(({ itemKey }) => {
-        if (itemKey) Neo.collectItem(itemKey);
+    const starterPlan = globalThis.NeoNyke.content.createBossRushStarterItemPlan(bossRushStartRandom)
+      .filter(({ itemKey }) => !!itemKey);
+    const pickCount = Math.min(
+      Number(globalThis.NeoNyke.content.BOSS_RUSH_STARTER_PICK_COUNT || 5),
+      starterPlan.length,
+    );
+    const choiceTotal = starterPlan.length;
+    starterPlan.forEach(({ itemKey }, index) => {
+      const column = index % 5;
+      const rowIndex = Math.floor(index / 5);
+      Neo.pickups.push({
+        x: Neo.ROOM_W / 2 + (column - 2) * 140,
+        y: Neo.ROOM_H / 2 - 82 + rowIndex * 150,
+        type: 'rewardChoice',
+        key: itemKey,
+        groupId: 'boss-rush:starter',
+        picksRemaining: pickCount,
+        choiceTotal,
+        label: `${pickCount}/${choiceTotal}`,
+        source: 'boss_rush_starter',
       });
+    });
     Neo.addCoins(120);
+    Neo.syncCurrentRoomState?.();
+    Neo.scheduleRunSave?.();
     updateBossRushHud();
-    // Spawn first boss immediately
-    spawnBossRushBoss();
+    Neo.updateObjective?.();
+    if (pickCount > 0) {
+      Neo.spawnParticle({
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2 - 150,
+        life: 2.4,
+        text: `CHOOSE ${pickCount} OF ${choiceTotal} RELICS`,
+        c: '#d7f6ff',
+      });
+    } else {
+      // A malformed or unavailable content table must not strand the run.
+      spawnBossRushBoss();
+    }
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   function spawnBossRushBoss() {
     const bossType = BOSS_RUSH_ORDER[Neo.bossRushStage];
     if (!bossType) return;
+    const bossLevel = globalThis.NeoNyke.content.getBossRushBossLevel(Neo.bossRushStage);
     const safeSpawn = findBossRushSpawnPoint();
     if (!safeSpawn) {
       Neo.bossRushActive = false;
@@ -3458,8 +3595,9 @@ export function resumeGame() {
     let boss;
     if (bossType === 'artificer_knave') {
       // Step 1: Spawn as a regular knave
-      boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false, { level: bossLevel });
       boss.bossRushStage = Neo.bossRushStage;
+      boss.bossRushBoss = true;
       boss.isTransforming = true;
       // Visual cue: show particles or text
       Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
@@ -3505,8 +3643,9 @@ export function resumeGame() {
         }, 420); // transformation after animation
       }, 1200); // 1.2 seconds delay
     } else {
-      boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false, { level: bossLevel });
       boss.bossRushStage = Neo.bossRushStage;
+      boss.bossRushBoss = true;
       const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
@@ -3651,6 +3790,8 @@ export function resumeGame() {
     Neo.player = createDefaultPlayer();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     resetScene();
     // resetScene() zeroes rivalRumbleOrder/Stage/Active, so the tournament
     // order must be rolled after it, not before.
@@ -4091,6 +4232,8 @@ export function resumeGame() {
     Neo.mouse.right = false;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
   }
 
   function sanitizePickupList(source) {
@@ -4115,6 +4258,8 @@ export function resumeGame() {
     Neo.baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     Neo.runLoopIndex = Number(snapshot.runLoopIndex || 0);
     Neo.runRevivesUsed = Math.max(0, Number(snapshot.runRevivesUsed || 0));
     Neo.runCrystalsEarned = Math.max(0, Number(snapshot.runCrystalsEarned || 0));
@@ -4428,6 +4573,8 @@ export function resumeGame() {
   Neo.renderRunHistoryTabContent = renderRunHistoryTabContent;
   Neo.resolveKillerSprite = resolveKillerSprite;
   Neo.resolveKillerHazardIcon = resolveKillerHazardIcon;
+  Neo.resolveKillerPresentation = resolveKillerPresentation;
+  Neo.drawKillerPresentation = drawKillerPresentation;
   Neo.hydrateRunHistorySprites = hydrateRunHistorySprites;
   Neo.refreshMenuState = refreshMenuState;
   Neo.updateCharacterSelectionUI = updateCharacterSelectionUI;

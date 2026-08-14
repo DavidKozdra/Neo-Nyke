@@ -4,8 +4,18 @@ export const canvas = document.getElementById('c');
 export const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-const SHARED_ROOM_GEOMETRY = globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY;
-if (!SHARED_ROOM_GEOMETRY) throw new Error('Shared campaign room geometry is unavailable');
+const SHARED_ROOM_GEOMETRY = globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY || {
+  width: 900,
+  height: 700,
+  wallThickness: 28,
+  doorWidth: 140,
+};
+if (!globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY) {
+  console.warn('[Neo Nyke] Shared campaign room geometry was unavailable; using fallback defaults.');
+}
+if (!SHARED_ROOM_GEOMETRY || SHARED_ROOM_GEOMETRY.width == null || SHARED_ROOM_GEOMETRY.height == null) {
+  throw new Error('Shared campaign room geometry is invalid');
+}
 export const ROOM_W = SHARED_ROOM_GEOMETRY.width;
 export const ROOM_H = SHARED_ROOM_GEOMETRY.height;
 export const WALL = SHARED_ROOM_GEOMETRY.wallThickness;
@@ -703,20 +713,22 @@ export const DIFFICULTY_DEFS = {
     miniBossChanceMultiplier: 1,
     roomWeightBonus: 0,
     statMultiplier: 1,
-    bossStatMultiplier: 1,
-    bossHpGrowthMultiplier: 0.75,
+    // Boss-only baseline: 20% less health/damage, with a softer level/time HP
+    // curve. Every named boss goes through this shared multiplier.
+    bossStatMultiplier: 0.8,
+    bossHpGrowthMultiplier: 0.65,
     // Easy's HP curve is the gentlest: a NEGATIVE hpFloorScaleBonus drops the
     // per-floor HP slope below the 0.14 base down to ~0.095/floor (~60% of Hard's
-    // 0.16). Combined with the flat 1.0 multiplier this keeps even the loop-1 boss
-    // very beatable, and only bites if you grind deep into loops — never an early
-    // wall. This is the lever that makes "hard to die, even on the boss" true.
+    // 0.16). Combined with the reduced boss baseline this keeps even the loop-1
+    // boss very beatable, and only bites if you grind deep into loops — never an
+    // early wall. This is the lever that makes "hard to die, even on the boss" true.
     hpFloorScaleBonus: -0.045,
     // Easy elites keep their traits but are far less of a max-HP wall: the base
     // elite durability boost in applyEliteTraits is scaled down by this.
     eliteHpMultiplier: 0.6,
     itemDropChanceMultiplier: 1.15,
     speedMultiplier: 1,
-    bossProjectileSpeedMultiplier: 0.8,
+    bossProjectileSpeedMultiplier: 0.75,
     enemyReactionMultiplier: 1,
     rangedCadenceMultiplier: 1,
     supportPowerMultiplier: 1,
@@ -740,8 +752,10 @@ export const DIFFICULTY_DEFS = {
     miniBossChanceMultiplier: 1.18,
     roomWeightBonus: 0.05,
     statMultiplier: 1.06,
-    bossStatMultiplier: 1.08,
-    bossHpGrowthMultiplier: 1,
+    // Bosses stay above Easy but sit below the old Medium baseline: about 12%
+    // less base health/damage plus a gentler level/time HP curve.
+    bossStatMultiplier: 0.95,
+    bossHpGrowthMultiplier: 0.9,
     itemDropChanceMultiplier: 1.1,
     // Per-floor HP slope offset on top of ENEMY_SCALING.floor (0.14). Medium lands
     // at ~0.12/floor — a touch gentler than the 0.14 base, clearly above Easy and
@@ -749,7 +763,7 @@ export const DIFFICULTY_DEFS = {
     // (not a flat wall) is what separates the difficulties.
     hpFloorScaleBonus: -0.02,
     speedMultiplier: 1.03,
-    bossProjectileSpeedMultiplier: 1,
+    bossProjectileSpeedMultiplier: 0.9,
     enemyReactionMultiplier: 1.06,
     rangedCadenceMultiplier: 0.95,
     supportPowerMultiplier: 1.08,
@@ -1046,7 +1060,7 @@ export const CHARACTER_DEFS = {
     key: 'thorn_knight',
     name: 'Thorn Knight',
     rarity: 'knight',
-    damageMultiplier: 1,
+    damageMultiplier: 1.08,
     skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash', dash: 'Dash' },
   },
   metao: {
@@ -1083,7 +1097,7 @@ export const CHARACTER_DEFS = {
     key: 'turtle_boy',
     name: 'Turtle Boy',
     rarity: 'knight',
-    damageMultiplier: 1,
+    damageMultiplier: 0.8,
     hpMultiplier: 1.2,
     // Turtle Boy trades raw output for survivability: a thick shell, a draining
     // wave laser, and a free laser tier every 3 floors (see grantTurtleLaserStep).
@@ -1094,8 +1108,6 @@ export const CHARACTER_DEFS = {
     key: 'sarge',
     name: 'Sarge',
     rarity: 'knight',
-    // Damage/HP pinned relative to Thorn Knight (damageMultiplier 1, implicit
-    // hpMultiplier 1): +5% damage, -10% HP.
     damageMultiplier: 1.05,
     hpMultiplier: 0.9,
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god

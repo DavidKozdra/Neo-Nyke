@@ -215,7 +215,12 @@
       return;
     }
     if (Neo.gameMode === 'boss_rush') {
-      if (Neo.bossRushActive) {
+      const starterChoices = (Neo.pickups || []).filter(pickup => pickup?.source === 'boss_rush_starter');
+      if (starterChoices.length > 0) {
+        const picksRemaining = Math.max(1, Number(starterChoices[0]?.picksRemaining || 1));
+        const choiceTotal = Math.max(starterChoices.length, Number(starterChoices[0]?.choiceTotal || 10));
+        setObjective(`Choose ${picksRemaining} more of ${choiceTotal} starter relics.`);
+      } else if (Neo.bossRushActive) {
         const bossName = Neo.getBossDisplayName(Neo.BOSS_RUSH_ORDER[Neo.bossRushStage] || Neo.BOSS_RUSH_ORDER[0]);
         setObjective(`Defeat ${bossName}.`);
       } else {
@@ -898,7 +903,8 @@
 
   function getReviveCost() {
     if (Neo.gameMode === 'practice') return 0;
-    return Neo.runRevivesUsed > 0 ? 3 : 1;
+    const reviveNumber = Math.max(0, Math.floor(Number(Neo.runRevivesUsed) || 0)) + 1;
+    return Math.floor(reviveNumber * 2.5);
   }
 
   function canReviveFromDeath() {
@@ -920,9 +926,12 @@
     }
     Neo.playerDeathAnim = null;
     globalThis.NeoNyke.simulation.applyCampaignRevive(Neo.player, {
-      healthFraction: 0.45,
-      invulnerabilitySeconds: 1.5,
+      healthFraction: 0.75,
+      invulnerabilitySeconds: 2,
     });
+    Neo.STATUS_KEYS.forEach(key => Neo.clearStatus(Neo.player, key));
+    Neo.player.potionRegenTime = Math.max(Number(Neo.player.potionRegenTime || 0), 3);
+    Neo.player.potionRegenAccum = 0;
     Neo.projectiles = [];
     Neo.hazards = [];
     Neo.skySwords = [];
@@ -933,6 +942,8 @@
     Neo.beamStruggle = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     Neo.setGameState('play');
     const reviveText = cost > 0 ? `REVIVED -${cost} LC` : 'REVIVED';
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1, text: reviveText, c: '#8dd4ff' });
@@ -974,7 +985,12 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 44, life: 2.0, text: `${killerRival.name.toUpperCase()} LOOTS YOUR BODY`, c: killerRival.color });
     }
     updateHud();
-    const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
+    const entry = finalizeRun('dead', {
+      killedBy: Neo.lastDamageSource,
+      killerKey: Neo.lastDamageSourceKey,
+      killerSpriteKey: Neo.lastDamageSourceSpriteKey,
+      killerHazardIcon: Neo.lastDamageSourceHazardIcon,
+    });
     Neo.lastDeathEntryId = entry.id;
     const aimAngle = Neo.player ? Neo.angleToMouse() : 0;
     // Carry the killing blow's residual velocity into the corpse so it gets a
@@ -1054,6 +1070,8 @@
     Neo.activeRun = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
     const clearPromise = Promise.all([
       Neo.saveStore.delete('run'),
       Neo.saveStore.put('meta', Neo.metaProgress),

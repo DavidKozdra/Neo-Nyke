@@ -14,9 +14,44 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run precache:check
       - run: npm test
       # Proves the shippable output actually contains every precached URL. The
       # critical install is atomic, so a file the copy step misses would leave
       # every visitor stuck on the previous service worker.
       - run: npm run build
+      - run: npx playwright install chromium
+      - name: Mobile PWA smoke
+        run: |
+          set +e
+          npm start > /tmp/neonyke-server.log 2>&1 &
+          SERVER_PID=$!
+
+          CLEANUP() {
+            if [ -n "$SERVER_PID" ]; then
+              kill $SERVER_PID 2>/dev/null || true
+              wait $SERVER_PID 2>/dev/null || true
+            fi
+          }
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ > /dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "[verify] server did not start"
+              CLEANUP
+              tail -n 80 /tmp/neonyke-server.log
+              set -e
+              exit 1
+            fi
+            sleep 1
+          done
+
+          npm run mobile:pwa-smoke http://127.0.0.1:5173/ 30000
+          SMOKE_STATUS=$?
+          CLEANUP
+          set -e
+
+          if [ "$SMOKE_STATUS" -ne 0 ]; then
+            exit "$SMOKE_STATUS"
+          fi

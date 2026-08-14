@@ -1034,12 +1034,12 @@ function enemySpriteKey(enemy) {
     return Neo.SPRITE_DEFS?.[key] || Neo.CHARACTER_SPRITE_SHEETS?.[key] ? key : 'thorn_knight';
   }
   if (enemy.type === 'mirror_knight') return enemy.spriteKey || playerSpriteKey();
-  if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
+  if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner || Neo.CHARACTER_SPRITE_SHEETS?.machine_gunner ? 'machine_gunner' : 'sniper';
   if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
-  if (enemy.type === 'shield_unit') return 'golem';
-  if (enemy.type === 'healer') return 'cult_follower';
+  if (enemy.type === 'shield_unit') return 'shield_unit';
+  if (enemy.type === 'healer') return 'healer';
   if (enemy.type === 'boss_spawner') return 'laser';
-  return Neo.SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
+  return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
 }
 
 function playerSpriteKey() {
@@ -1310,7 +1310,8 @@ function syncEnemyWindup(group, enemy) {
     : enemy.type === 'bowman_bane' ? '#8dd4ff'
       : enemy.type === 'handsome_devil' ? '#ff3348'
         : enemy.type === 'antony_blemmye' ? '#ffcf8a'
-          : '#aa66ff';
+          : enemy.type === 'healer' ? '#79f7bf'
+            : '#aa66ff';
   const radius = (enemy.r || 12) + 10 + Math.sin(Date.now() / 120) * 2;
   windup.material.color.set(color);
   windup.material.opacity = 0.8;
@@ -1383,15 +1384,10 @@ function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
   const size = (player.r || 14) * SPRITE_SIZE_MULT * renderScale;
   const recoil = Math.max(0, Number(options.recoil || 0));
   const attackProgress = Math.max(0, Math.min(1, Number(options.attackProgress || 0)));
-  let angleOffset = 0;
-  let swingRecoil = recoil;
-  if (!window.NeoSettings?.getAccess?.()?.reduceMotion
-    && ['thorn_knight', 'sarge', 'mooggy'].includes(spriteKey) && attackProgress > 0) {
-    const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
-    const eased = 1 - (1 - attackProgress) ** 2;
-    angleOffset = -arc * (1 - eased * 2);
-    swingRecoil = Math.sin(attackProgress * Math.PI) * 0.2;
-  }
+  const armMotion = Neo.getArmSpriteMotion?.(spriteKey, { attackProgress, recoil })
+    || { angleOffset: 0, recoil };
+  const angleOffset = Number(armMotion.angleOffset || 0);
+  const swingRecoil = Number(armMotion.recoil || 0);
   const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
   const sourceAimAngle = flip ? Math.PI - baseAngle : baseAngle;
   const offset = sheet.armOffset || {};
@@ -2096,6 +2092,17 @@ function syncEnemies() {
       updateActorSprite(group, frameKey, (enemy.r || 12) * transformPulse, flip, {
         ...bob, tint: transformTint, hitFlash,
       });
+      const knaveArm = enemy.type === 'knave' || enemy.type === 'artificer_knave';
+      const armAim = Number.isFinite(Number(enemy.swingA))
+        ? Number(enemy.swingA)
+        : Neo.player
+          ? Math.atan2(Number(Neo.player.y || 0) - Number(enemy.y || 0), Number(Neo.player.x || 0) - Number(enemy.x || 0))
+          : 0;
+      syncPlayerArm(group, baseKey, enemy, armAim, flip, {
+        hidden: !knaveArm,
+        attackProgress: Neo.getEnemyArmAttackProgress?.(enemy, attackProgress) ?? attackProgress,
+        hitFlash,
+      });
       const groundShadow = group.getObjectByName('shadow');
       if (groundShadow) groundShadow.position.y = 0.6 - jumpHeight;
       syncEnemyWindup(group, enemy);
@@ -2422,6 +2429,10 @@ const BAKED_PICKUP_FLOOR_LIFT = {
 // Lift them enough to clear the arena floor while leaving dwell-choice circles
 // anchored to the ground.
 const BOSS_REWARD_CHOICE_FLOOR_LIFT = 24;
+// A/B chest choices add a second instruction line down at y=44 in their baked
+// art. Put the bottom of that 90-unit billboard just above the floor so the
+// item name and dwell prompt stay readable in perspective.
+const AB_CHEST_REWARD_CHOICE_FLOOR_LIFT = 46;
 // World height baked per type. The altar art runs about y=-63 (top of screen)
 // to y=+39 (below the label); the switch is a small floor pad.
 // Sized from each type's actual draw extents in drawPickups, doubled (the bake
@@ -2555,13 +2566,16 @@ function syncPickups() {
         const bob = floating ? 7 + Math.sin(performance.now() / 330 + pickup.x * 0.04) * 3 : 0;
         const isBossRewardChoice = pickup.type === 'rewardChoice'
           && String(pickup.groupId || '').startsWith('boss:');
+        const isAbChestRewardChoice = pickup.type === 'rewardChoice' && pickup.dwellMode;
         const mappedFloorLift = roomGeometry3d.resolveElevation?.(
           { kind: pickup.type },
           { kindOffsets: BAKED_PICKUP_FLOOR_LIFT },
         );
-        const floorLift = isBossRewardChoice
-          ? BOSS_REWARD_CHOICE_FLOOR_LIFT
-          : Number(mappedFloorLift) > 0 ? mappedFloorLift : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
+        const floorLift = isAbChestRewardChoice
+          ? AB_CHEST_REWARD_CHOICE_FLOOR_LIFT
+          : isBossRewardChoice
+            ? BOSS_REWARD_CHOICE_FLOOR_LIFT
+            : Number(mappedFloorLift) > 0 ? mappedFloorLift : BAKED_PICKUP_FLOOR_LIFT[pickup.type] || 1;
         obj.position.y = obj.name === 'baked2dFlat' ? 2 : floating ? worldSize * 0.5 + bob : floorLift;
         return;
       }
@@ -4671,6 +4685,15 @@ function getWeaponIconCanvas() {
 // to visible pixels); the viewmodel then draws every character's arm in the
 // same bottom-right slot at the same visual size.
 const fpArmCache = new Map();
+function invalidateSpriteTextureCache(characterKey = '') {
+  for (const [cacheKey, texture] of spriteTextureCache) {
+    if (characterKey && !cacheKey.startsWith(characterKey)) continue;
+    texture?.dispose?.();
+    spriteTextureCache.delete(cacheKey);
+  }
+  if (characterKey) fpArmCache.delete(characterKey);
+  else fpArmCache.clear();
+}
 function getFpArmSprite() {
   const key = playerSpriteKey();
   if (fpArmCache.has(key)) return fpArmCache.get(key);
@@ -4918,6 +4941,7 @@ Neo.hasPointerLockBlockingUi = hasPointerLockBlockingUi;
 
 Neo.getViewMode = getViewMode;
 Neo.setViewMode = setViewMode;
+Neo.invalidateSpriteTextureCache = invalidateSpriteTextureCache;
 
 Neo.threeRenderer = {
   render,

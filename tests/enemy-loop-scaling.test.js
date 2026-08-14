@@ -19,6 +19,7 @@ function extractFunction(source, functionName) {
 describe('enemy loop scaling', () => {
   const enemiesPath = path.join(__dirname, '../js/game/enemies.js');
   const source = fs.readFileSync(enemiesPath, 'utf8');
+  const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
   const declarations = [
     'const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;',
     extractFunction(source, 'softCapEnemyScale'),
@@ -115,8 +116,8 @@ describe('enemy loop scaling', () => {
       getActiveSandboxSettings: () => null,
       getDifficultyDef: () => ({
         statMultiplier: 1.06,
-        bossStatMultiplier: 1.08,
-        bossHpGrowthMultiplier: 1,
+        bossStatMultiplier: 0.95,
+        bossHpGrowthMultiplier: 0.9,
         hpFloorScaleBonus: -0.02,
         speedMultiplier: 1.03,
         ...difficulty,
@@ -184,7 +185,7 @@ describe('enemy loop scaling', () => {
     const mediumHighLevelBoss = scaleBossAtDepth(2, 15);
 
     expect(mediumHighLevelBoss.hp).toBeGreaterThan(mediumLowLevelBoss.hp);
-    expect(mediumHighLevelBoss.hp / mediumLowLevelBoss.hp).toBeGreaterThan(1.9);
+    expect(mediumHighLevelBoss.hp / mediumLowLevelBoss.hp).toBeGreaterThan(1.8);
     expect(mediumHighLevelBoss.max).toBe(mediumHighLevelBoss.hp);
     expect(mediumHighLevelBoss.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.02, 14));
   });
@@ -194,8 +195,8 @@ describe('enemy loop scaling', () => {
     const fiveMinuteBoss = scaleBossAtDepth(2, 15, {}, 5);
     const tenMinuteBoss = scaleBossAtDepth(2, 15, {}, 10);
 
-    expect(fiveMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.27);
-    expect(tenMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.54);
+    expect(fiveMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.23);
+    expect(tenMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.48);
     expect(tenMinuteBoss.max).toBe(tenMinuteBoss.hp);
   });
 
@@ -215,5 +216,48 @@ describe('enemy loop scaling', () => {
 
     expect(harderBoss.hp).toBeGreaterThan(mediumBoss.hp);
     expect(harderLateBoss.hp / harderBoss.hp).toBeGreaterThan(mediumLateBoss.hp / mediumBoss.hp);
+  });
+
+  test('keeps the Easy and Medium boss nerfs in the shared difficulty table', () => {
+    const difficultySource = coreSource.slice(
+      coreSource.indexOf('export const DIFFICULTY_DEFS'),
+      coreSource.indexOf('export const CHALLENGE_DEFS'),
+    );
+    const easyBlock = difficultySource.slice(difficultySource.indexOf('  easy: {'), difficultySource.indexOf('  medium: {'));
+    const mediumBlock = difficultySource.slice(difficultySource.indexOf('  medium: {'), difficultySource.indexOf('  hard: {'));
+    const hardBlock = difficultySource.slice(difficultySource.indexOf('  hard: {'), difficultySource.indexOf('  impossible: {'));
+
+    expect(easyBlock).toContain('bossStatMultiplier: 0.8');
+    expect(easyBlock).toContain('bossHpGrowthMultiplier: 0.65');
+    expect(easyBlock).toContain('bossProjectileSpeedMultiplier: 0.75');
+    expect(mediumBlock).toContain('bossStatMultiplier: 0.95');
+    expect(mediumBlock).toContain('bossHpGrowthMultiplier: 0.9');
+    expect(mediumBlock).toContain('bossProjectileSpeedMultiplier: 0.9');
+    expect(hardBlock).toContain('bossStatMultiplier: 1.16');
+    expect(hardBlock).toContain('bossHpGrowthMultiplier: 1.15');
+    expect(hardBlock).toContain('bossProjectileSpeedMultiplier: 1.2');
+  });
+
+  test('reduces Easy and Medium boss health and damage from their previous profiles', () => {
+    const easyBoss = scaleBossAtDepth(5, 8, {
+      bossStatMultiplier: 0.8,
+      bossHpGrowthMultiplier: 0.65,
+      hpFloorScaleBonus: -0.045,
+    }, 8);
+    const previousEasyBoss = scaleBossAtDepth(5, 8, {
+      bossStatMultiplier: 1,
+      bossHpGrowthMultiplier: 0.75,
+      hpFloorScaleBonus: -0.045,
+    }, 8);
+    const mediumBoss = scaleBossAtDepth(5, 8, {}, 8);
+    const previousMediumBoss = scaleBossAtDepth(5, 8, {
+      bossStatMultiplier: 1.08,
+      bossHpGrowthMultiplier: 1,
+    }, 8);
+
+    expect(easyBoss.hp).toBeLessThan(previousEasyBoss.hp);
+    expect(easyBoss.dmg).toBeLessThan(previousEasyBoss.dmg);
+    expect(mediumBoss.hp).toBeLessThan(previousMediumBoss.hp);
+    expect(mediumBoss.dmg).toBeLessThan(previousMediumBoss.dmg);
   });
 });

@@ -379,7 +379,7 @@
       const dx = Neo.player2.x - enemy.x;
       const dy = Neo.player2.y - enemy.y;
       if (Math.hypot(dx, dy) < Neo.player2.r + enemy.r + 2 && Neo.player2.inv <= 0) {
-        damagePlayer2(enemy.dmg || 10, Math.atan2(dy, dx), 220, 'contact');
+        damagePlayer2(enemy.dmg || 10, Math.atan2(dy, dx), 220, enemy.type, { attacker: enemy });
       }
     }
   }
@@ -429,7 +429,7 @@
     for (const enemy of Neo.enemies) {
       if (enemy.dead) continue;
       if (Math.hypot(pn.x - enemy.x, pn.y - enemy.y) < pn.r + enemy.r + 2 && pn.inv <= 0)
-        damagePlayerN(pn, n, enemy.dmg || 10, Neo.angleBetween(enemy, pn), 220);
+        damagePlayerN(pn, n, enemy.dmg || 10, Neo.angleBetween(enemy, pn), 220, enemy.type, { attacker: enemy });
     }
   }
 
@@ -443,6 +443,7 @@
     if (amount >= 1) spawnDamagePopup(pn.x, pn.y - 18, amount, { color: '#a8d8ff', size: 16 });
     if (pn.hp <= 0) {
       pn.hp = 0;
+      recordLastDamageSource(source, options);
       const slot = getLocalCoopSlots().find(candidate => candidate.id === n);
       downLocalCoopPlayer(slot);
     }
@@ -503,6 +504,7 @@
     if (amount >= 1) spawnDamagePopup(Neo.player2.x, Neo.player2.y - 18, amount, { color: '#4ca8ff', size: 16 });
     if (Neo.player2.hp <= 0) {
       Neo.player2.hp = 0;
+      recordLastDamageSource(source, options);
       if (Neo.gameMode === 'pvp' && Neo.pvpState) {
         Neo.pvpState.p1Kills = (Neo.pvpState.p1Kills || 0) + 1;
         Neo.spawnParticle({ x: Neo.player2.x, y: Neo.player2.y - 30, life: 1.5, text: `P1 KILL ${Neo.pvpState.p1Kills}/${Neo.pvpState.killsToWin}`, c: '#ff6b6b' });
@@ -526,6 +528,20 @@
     setTimeout(() => { Neo.die(); }, 3000);
   }
 
+  function recordLastDamageSource(source = '', options = null) {
+    options = options || {};
+    const sourceKey = String(options.sourceKey || source || '').trim();
+    const sourceLabel = options.sourceLabel
+      ? String(options.sourceLabel).trim()
+      : Neo.getDamageSourceLabel(source || sourceKey);
+    const killer = Neo.resolveKillerPresentation(sourceKey, sourceLabel, options.attacker);
+    Neo.lastDamageSource = killer.label;
+    Neo.lastDamageSourceKey = killer.sourceKey;
+    Neo.lastDamageSourceSpriteKey = killer.spriteKey;
+    Neo.lastDamageSourceHazardIcon = killer.hazardIcon;
+    return killer;
+  }
+
   function damagePlayer(amount, angle, knockback, source = '', options = {}) {
     const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox?.godMode) return;
@@ -545,8 +561,7 @@
       return;
     }
     if (Neo.isChallengeActive('no_hit')) {
-      Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source || 'no_hit');
-      Neo.lastDamageSourceKey = String(options.sourceKey || source || 'no_hit');
+      recordLastDamageSource(source || 'no_hit', options);
       Neo.player.hp = 0;
       Neo.player.inv = 0;
       Neo.shake = 10;
@@ -643,8 +658,7 @@
       if (Neo.player.hp <= 0) Neo.die();
       return;
     }
-    Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source);
-    Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
+    recordLastDamageSource(source, options);
 
     Neo.player.hp = resolvedDamage.health;
     const duringGodFight = Neo.currentRoom?.type === 'god'
@@ -740,8 +754,7 @@
       getDurationDecay: statusKey => statusKey === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
       isDead: () => Number(Neo.player.hp || 0) <= 0,
       dealDamage: (statusKey, rawDamage, state) => {
-        const resistance = statusKey === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
-        const damageMultiplier = Math.max(0.2, 1 - resistance);
+        const damageMultiplier = globalThis.NeoNyke.simulation.getCampaignPlayerStatusDamageMultiplier(statusKey, stats);
         const statusSeverity = Number(stats.negativeStatusMultiplier || 1);
         const damage = Math.max(0.25, rawDamage * damageMultiplier * statusSeverity);
         // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
@@ -2353,7 +2366,14 @@
           const inside = globalThis.NeoNyke?.simulation?.campaignLavaHitsEntity?.(hazard, actor);
           if (inside == null) throw new Error('Shared lava-contact geometry is unavailable');
           if (!inside) return;
-          damagePlayerSlot(slot, lavaContact.damage, 0, 0, 'lava', { ignoreInv: true, noInvFrames: true, applyDamageCaps: false });
+          const lavaSource = String(hazard.source || 'lava');
+          damagePlayerSlot(slot, lavaContact.damage, 0, 0, lavaSource, {
+            ignoreInv: true,
+            noInvFrames: true,
+            applyDamageCaps: false,
+            sourceKey: lavaSource,
+            sourceLabel: lavaSource === 'lava' ? 'Lava' : `${Neo.getDamageSourceLabel(lavaSource)} Lava`,
+          });
           if (lavaContact.applyFire) Neo.applyFire(actor, Math.max(1, Number(hazard.statusStacks || 1)), 2.6, hazard.source || 'lava');
         });
       }
@@ -2936,7 +2956,7 @@
       spawnBarrelExplosionFx(prop, hit);
     } else {
       spawnDestructibleBreakFx(prop, hit);
-      Neo.playSfx?.('break_furniture');
+      Neo.playSfx?.(prop.kind === 'pot' ? 'break_pot' : 'break_furniture');
     }
     // Green (post-loop "lying") items: once the player has completed at least one
     // loop, every barrel/pot ("broken wood") break has a flat 10% chance to drop a
@@ -3598,6 +3618,9 @@
         });
         if (remainingAfterPick > 0) {
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.75, text: `${remainingAfterPick} PICK LEFT`, c: '#d7f6ff' });
+        } else if (pickup.source === 'boss_rush_starter' && Neo.gameMode === 'boss_rush') {
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.1, text: 'LOADOUT LOCKED', c: '#78ef9c' });
+          Neo.spawnBossRushBoss?.();
         }
         Neo.syncCurrentRoomState();
         Neo.scheduleRunSave();

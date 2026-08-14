@@ -29,4 +29,18 @@ describe('shared campaign damage operation', () => {
       enemyLoopDamageReduction: 0.1,
     })).toBe(33);
   });
+
+  test('Factor of Elements adds 5% damage per active enemy status stack per relic stack', () => {
+    expect(scaleCampaignDamage({
+      damage: 100,
+      enemy: {
+        statuses: {
+          bleed: { stacks: 2 },
+          fire: { stacks: 3 },
+          poison: { stacks: 0 },
+        },
+      },
+      itemStats: { factorOfElementsDamagePerStatusStack: 0.1 },
+    })).toBe(150);
+  });
 });

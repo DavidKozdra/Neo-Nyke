@@ -66,6 +66,7 @@
     STANDARD_ENEMY_TYPES = [],
     BOSS_ENEMY_TYPES = [],
     ELITE_POWER_TYPES = [],
+    getBossRushBossLevel = stage => 2 + Math.max(0, Math.floor(Number(stage) || 0)),
     resolveCampaignEliteProfile = base => base,
     resolveCampaignEliteCrit = () => ({ isCrit: false, multiplier: 1 }),
     resolveCampaignElitePlayerHitProcs = () => [],
@@ -91,6 +92,8 @@
     segmentHitsCircle = () => null,
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
     createCampaignItemChoices = () => [],
+    BOSS_RUSH_STARTER_OFFER_COUNT = 10,
+    BOSS_RUSH_STARTER_PICK_COUNT = 5,
     createBossRushStarterItemPlan = () => [],
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
@@ -132,10 +135,14 @@
     getCampaignPoisonDamageMultiplier = () => 1,
     getCampaignSlowMultiplier = () => 1,
     getCampaignBrittleDefenseMultiplier = () => 1,
+    getCampaignPlayerStatusDamageMultiplier = () => 1,
     getCampaignBleedResistance = () => 1,
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
     deriveCampaignItemStats = () => ({}),
+    MIRROR_ITEM_EFFECT_STRENGTH = 0.88,
+    scaleCampaignItemEffects = stats => ({ ...(stats || {}) }),
+    resolveFractionalItemEffectCount = value => Math.max(0, Math.floor(Number(value || 0))),
     planCampaignThornMine = () => ({ count: 1, durationSeconds: 5, armSeconds: 0.18, triggerRadius: 34, blastRadius: 62, damage: 18, knockback: 170, bleedStacks: 1, bleedDuration: 4.5 }),
     planCampaignElBartoGraffiti = () => ({ spawn: false }),
     resolveCampaignPlayerDamage = () => ({ health: 0, dealt: 0, absorbed: 0, barrier: 0 }),
@@ -252,6 +259,7 @@
     advanceCampaignTitanHammer = hammer => hammer,
     resolveCampaignFloorLava = () => ({ durationSeconds: 7.5, trailIntervalSeconds: 0.22, puddleRadius: 24, puddleDurationSeconds: 1.8, damagePerSecond: 14, pulseIntervalSeconds: 0.05, statusIntervalSeconds: 0.45, fireDurationSeconds: 2.8 }),
     planCampaignRandomPounce = () => ({ radius: 160, burstBaseDamage: 52, bleedStacks: 2, bleedDurationSeconds: 5, fangs: [] }),
+    planCampaignIntenseBiscuits = () => ({ radius: 105, burstBaseDamage: 28, burstDamage: 28, healMaxHpRatioPerTarget: 0.02, healMaxHpRatioCap: 0.08, biscuits: [] }),
     planCampaignNailShot = () => [],
     planCampaignLaserShockwave = () => ({ spikes: [] }),
     resolveCampaignChaosBurst = () => ({ fieldRadius: 180, durationSeconds: 1.8, intervalSeconds: 0.22, initialBurstCount: 4, burstRadius: 52, burstDamage: 18, poisonDurationSeconds: 4.8, fireDurationSeconds: 3.5 }),
@@ -454,12 +462,14 @@
     if (!rush.initialized) {
       rush.initialized = true;
       rush.stage = 0;
-      rush.active = true;
+      rush.active = false;
       rush.intermission = false;
       rush.nextSpawnTick = 0;
-      rush.grantedPlayerIds = {};
-      // The campaign starts Boss Rush at floor five so level/difficulty scaling
-      // and scoped reward streams share that baseline.
+      rush.starterDraftOpen = true;
+      rush.starterDraftPlayerIds = {};
+      rush.starterDraftCompletePlayerIds = {};
+      // Keep the campaign's floor-five economy/difficulty and reward-stream
+      // baseline. Boss levels advance independently from level two per stage.
       state.floorNumber = Math.max(5, Number(state.floorNumber || 1));
       const room = currentRoom(state);
       if (room) {
@@ -470,16 +480,45 @@
       }
     }
     activePlayers(state).forEach(player => {
-      if (rush.grantedPlayerIds[player.id]) return;
+      if (rush.starterDraftPlayerIds[player.id]) return;
       const stream = random?.scoped?.(`boss-rush:starting-items:${player.id}`);
-      createBossRushStarterItemPlan(() => stream?.next?.() ?? 0.5).forEach(({ itemKey, elite }) => {
-        if (!itemKey || !collectSharedCampaignItem(player, itemKey)?.ok) return;
-        emitEvent('BOSS_RUSH_STARTER_ITEM_GRANTED', { playerId: player.id, itemKey, elite });
-      });
+      const plan = createBossRushStarterItemPlan(() => stream?.next?.() ?? 0.5)
+        .filter(({ itemKey }) => !!itemKey)
+        .slice(0, BOSS_RUSH_STARTER_OFFER_COUNT);
+      const optionIds = plan.map(({ itemKey }) => itemKey);
+      const picksRemaining = Math.min(BOSS_RUSH_STARTER_PICK_COUNT, optionIds.length);
+      if (picksRemaining > 0) {
+        player.pendingUpgrade = {
+          kind: 'boss_rush_starter',
+          selectionEventId: `boss-rush:starter:${player.id}`,
+          optionIds: optionIds.slice(),
+          options: optionIds.map((optionId, slotIndex) => ({ id: optionId, slotIndex })),
+          picksRemaining,
+          choiceTotal: optionIds.length,
+          sourceX: Number(state.floorState?.width || 900) / 2,
+          sourceY: Number(state.floorState?.height || 700) / 2,
+        };
+      } else {
+        rush.starterDraftCompletePlayerIds[player.id] = true;
+      }
       player.coins = Math.max(0, Number(player.coins || 0)) + 120;
-      rush.grantedPlayerIds[player.id] = true;
-      emitEvent('BOSS_RUSH_STARTED', { playerId: player.id, stage: 1, coins: player.coins });
+      rush.starterDraftPlayerIds[player.id] = true;
+      emitEvent('BOSS_RUSH_STARTER_DRAFT_OFFERED', {
+        playerId: player.id, optionIds, picksRemaining, choiceTotal: optionIds.length, coins: player.coins,
+      });
     });
+    if (rush.starterDraftOpen) {
+      const players = activePlayers(state);
+      const draftComplete = players.length > 0
+        && players.every(player => rush.starterDraftCompletePlayerIds[player.id]);
+      if (draftComplete) {
+        rush.starterDraftOpen = false;
+        rush.active = true;
+        players.forEach(player => {
+          emitEvent('BOSS_RUSH_STARTED', { playerId: player.id, stage: 1, coins: player.coins });
+        });
+      }
+    }
     return rush;
   }
 
@@ -992,10 +1031,28 @@
   // combat state; reducing it to just damage/range made the mirror challenge a
   // generic boss whenever an item, forge upgrade, or wounded source mattered.
   function createAuthorityMirrorKit(state, source) {
-    const itemStats = { ...(source.itemStats || {}) };
-    const attackSpeed = getNetworkCampaignAttackSpeed(state, source);
+    const rawItemStats = { ...(source.itemStats || {}) };
+    const level = Math.max(1, Number(source.level || 1));
+    const levelSpeedBonus = (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
+    const itemStats = scaleCampaignItemEffects(
+      rawItemStats,
+      MIRROR_ITEM_EFFECT_STRENGTH,
+      {
+        aoeRadiusMultiplier: Number(source.aoeRadiusMultiplier || 1),
+        aoeDamageMultiplier: Number(source.aoeDamageMultiplier || 1),
+        moveSpeedMultiplier: 1 + levelSpeedBonus,
+        weaponBleedChance: Number(rawItemStats.weaponBleedChance || 0),
+        weaponCritChance: Number(rawItemStats.weaponCritChance || 0),
+      },
+    );
+    const attackSpeed = Math.max(
+      0.2,
+      Number(source.attackSpeed || 1)
+        * Number(itemStats.attackSpeedMultiplier || 1)
+        * getCampaignTurtlePowerUpMultiplier(source, state?.tick),
+    );
     const damageMultiplier = Math.max(0.1, Number(source.damageMultiplier || 1));
-    const baseDamage = Math.max(1, (24 + Number(source.attackPower || 0)) * damageMultiplier);
+    const baseDamage = Math.max(1, (24 + Number(source.attackPower || 0) + Number(itemStats.flatHitDamageBonus || 0)) * damageMultiplier);
     const equippedMoves = { ...(source.equippedMoves || {}) };
     const moveStats = {};
     Object.entries(equippedMoves).forEach(([slot, moveKey]) => {
@@ -1029,7 +1086,8 @@
       attackSpeed: Number(source.attackSpeed || 1), items: { ...(source.items || {}) },
       ownedMoves: { ...(source.ownedMoves || {}) }, ownedWeapons: { ...(source.ownedWeapons || {}) },
       equippedMoves, equippedWeapon: weaponKey, anvilUpgrades: { ...(source.anvilUpgrades || {}) },
-      statuses: { ...(source.statuses || {}) }, barrier: Math.max(0, Number(source.barrier || 0)),
+      statuses: { ...(source.statuses || {}) },
+      barrier: Math.max(0, Number(source.barrier || 0)) * MIRROR_ITEM_EFFECT_STRENGTH,
       moveStackOverrides: { ...(source.moveStackOverrides || {}) }, weaponChargeOverrides: { ...(source.weaponChargeOverrides || {}) },
     };
     return {
@@ -1296,11 +1354,13 @@
       const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
       const elite = !archetype.boss && room.type !== 'start' && stream.chance(room.type === 'challenge' ? 0.3 : 0.08);
-      const enemyLevel = Math.max(
-        1,
-        Number(state.floorNumber || 1),
-        ...activePlayers(state).map(player => Number(player.level || 1)),
-      );
+      const enemyLevel = gameMode === 'boss_rush'
+        ? getBossRushBossLevel(bossRush.stage)
+        : Math.max(
+          1,
+          Number(state.floorNumber || 1),
+          ...activePlayers(state).map(player => Number(player.level || 1)),
+        );
       const enemy = {
         id: enemyId,
         type,
@@ -1321,6 +1381,10 @@
         eliteTypes: [], elitePowers: [],
         patterns: archetype.patterns || [],
         boss: !!archetype.boss,
+        ...(gameMode === 'boss_rush' ? {
+          bossRushBoss: true,
+          bossRushStage: Number(bossRush.stage || 0),
+        } : {}),
         bleedImmune: !!archetype.bleedImmune,
         fireImmune: !!archetype.fireImmune,
         poisonImmune: !!archetype.poisonImmune,
@@ -4936,6 +5000,58 @@
           }, fang.angle).id);
         });
         mode = 'aoe_projectile';
+      } else if (moveKey === 'intense_biscuits') {
+        const base = MOVE_BASE_STATS.intense_biscuits || {};
+        const biscuits = planCampaignIntenseBiscuits({
+          originX: player.x,
+          originY: player.y,
+          entities: livingEncounterEnemies(state, player.roomId),
+          aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
+          aoeDamageMultiplier: player.itemStats?.aoeDamageMultiplier,
+          anvilDamage: Number(stats.damage || 0) - Number(base.damage || 28),
+          anvilRange: Number(stats.range || 0) - Number(base.range || 105),
+          godMode: godModeActive(state, player),
+          random: () => random?.next?.('encounter') ?? 0.5,
+        });
+        effectRadius = biscuits.radius;
+        chipDestructiblesInRadius(state, player, player.x, player.y, biscuits.radius, biscuits.burstDamage, emitEvent, random);
+        const burstTargets = abilityTargetsInRadius(state, player, player.x, player.y, biscuits.radius);
+        burstTargets.forEach(enemy => {
+          damageEnemy(state, enemy, biscuits.burstDamage, player.id, emitEvent, {
+            attackKind: moveKey,
+            angle: Math.atan2(enemy.y - player.y, enemy.x - player.x),
+            knockback: 130,
+            ignoreGodMode: true,
+          });
+          targetIds.push(enemy.id);
+        });
+        damageRivalsInRadius(state, player, player.x, player.y, biscuits.radius, biscuits.burstBaseDamage, emitEvent, moveKey, targetIds);
+        const healRatio = Math.min(
+          biscuits.healMaxHpRatioCap,
+          burstTargets.length * biscuits.healMaxHpRatioPerTarget,
+        );
+        if (healRatio > 0) {
+          const before = Number(player.hp || 0);
+          const heal = Number(player.maxHp || 100) * healRatio
+            * Math.max(0.05, Number(player.itemStats?.healingMultiplier || 1));
+          player.hp = Math.min(Number(player.maxHp || 100), before + heal);
+          if (player.hp > before) emitEvent('PLAYER_HEALED', {
+            playerId: player.id, roomId: player.roomId, source: moveKey,
+            healedAmount: player.hp - before, health: player.hp,
+          });
+        }
+        biscuits.biscuits.forEach(biscuit => {
+          projectileIds.push(createPlayerProjectile(state, player, {
+            kind: 'biscuit', attackKind: moveKey, damage: biscuit.damage,
+            speed: biscuit.speed, radius: biscuit.radius, lifeTicks: Math.round(biscuit.lifeSeconds * 20),
+            knockback: biscuit.knockback, hitOptions: biscuit.hitOptions,
+            homing: biscuit.homing, homingTarget: 'enemy', homingTargetId: biscuit.targetId,
+            homingRadius: biscuit.homingRadius, homingSpeed: biscuit.homingSpeed,
+            homingAccel: biscuit.homingAccel, homingTurnRate: biscuit.homingTurnRate,
+            ignoreGodMode: true,
+          }, biscuit.angle).id);
+        });
+        mode = 'aoe_projectile';
       } else if (moveKey === 'mooggy_hairball') {
         const hairball = resolveCampaignMooggyHairball({
           aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
@@ -5332,6 +5448,32 @@
   function resolveUpgradeSelection(state, player, action, emitEvent, random) {
     const pending = player?.pendingUpgrade;
     if (!pending || pending.selectionEventId !== action.selectionEventId || !pending.optionIds.includes(action.optionId)) return false;
+    if (pending.kind === 'boss_rush_starter') {
+      const loot = random?.stream?.('loot');
+      const acquisition = collectAuthorityCampaignPickup(state, player, action.optionId, {
+        duplicateChance: player.itemStats?.itemDuplicateChance,
+        canDuplicate: action.optionId !== 'artificer_charger',
+        random: loot ? () => loot.next() : authorityFallbackRandom,
+        rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+      }, emitEvent);
+      if (!acquisition.ok) return false;
+      pending.optionIds = pending.optionIds.filter(optionId => optionId !== action.optionId);
+      pending.options = pending.options.filter(option => option.id !== action.optionId);
+      pending.picksRemaining = Math.max(0, Number(pending.picksRemaining || 1) - 1);
+      emitEvent('BOSS_RUSH_STARTER_ITEM_SELECTED', {
+        playerId: player.id,
+        selectionEventId: action.selectionEventId,
+        itemKey: action.optionId,
+        picksRemaining: pending.picksRemaining,
+        amount: acquisition.amount,
+      });
+      if (pending.picksRemaining <= 0) {
+        state.bossRush.starterDraftCompletePlayerIds[player.id] = true;
+        player.pendingUpgrade = null;
+        emitEvent('BOSS_RUSH_STARTER_DRAFT_COMPLETED', { playerId: player.id });
+      }
+      return true;
+    }
     const source = state.interactables?.[pending.sourceEntityId];
     if (!source || source.opened) {
       player.pendingUpgrade = null;
@@ -6348,9 +6490,8 @@
         getDurationDecay: key => key === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
         isDead: () => !!player.downed,
         dealDamage: (key, rawDamage, status) => {
-          const resistance = key === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
           const severity = Number(stats.negativeStatusMultiplier || 1);
-          const damage = Math.max(0.25, rawDamage * Math.max(0.2, 1 - resistance) * severity);
+          const damage = Math.max(0.25, rawDamage * getCampaignPlayerStatusDamageMultiplier(key, stats) * severity);
           damagePlayer(state, player, damage, status.ownerId || key, emitEvent, key, {
             ignoreInv: true,
             noInvFrames: true,
@@ -6934,6 +7075,11 @@
     const explicitHoming = Object.prototype.hasOwnProperty.call(options, 'homing');
     const homingStrength = Math.max(0, Number(mirrorStats.projectileHomingStrength || 0));
     const grantedHoming = !explicitHoming && homingStrength > 0;
+    const bounceRandom = combatRandomByState.get(state)?.scoped(`${enemy.id}|mirror-bounce:${state.tick}:${projectileId}`);
+    const itemBounces = resolveFractionalItemEffectCount(
+      mirrorStats.projectileBounces,
+      () => bounceRandom?.next() ?? 1,
+    );
     const genericStatusEffects = () => {
       const effects = [];
       const bleedChance = Number(mirrorStats.bleedChance || 0) + Math.min(0.35, Number(mirrorStats.scarfBleedsOnHit || 0) * 0.08);
@@ -6962,7 +7108,7 @@
       hitOptions: options.hitOptions ? { ...options.hitOptions } : null,
       statusEffects: Array.isArray(options.statusEffects) ? options.statusEffects.map(effect => ({ ...effect })) : genericStatusEffects(),
       enemyBlast: options.enemyBlast ? { ...options.enemyBlast } : null,
-      bouncesRemaining: Math.max(0, Math.floor(Number(options.bouncesRemaining || 0))) + Math.max(0, Math.floor(Number(mirrorStats.projectileBounces || 0))),
+      bouncesRemaining: Math.max(0, Math.floor(Number(options.bouncesRemaining || 0))) + itemBounces,
       homing: explicitHoming ? !!options.homing : grantedHoming, homingTargetId: options.homingTargetId || null,
       homingRadius: Math.max(0, Number(options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : 0))),
       homingSpeed: Math.max(0, Number(options.homingSpeed ?? (grantedHoming ? speed : 0))),
@@ -7364,31 +7510,44 @@
           enemy.state = 'mirrorKickyKick';
           return true;
         }
-        if (enemy.type === 'rival' && enemy.mirrorPendingSmash === 'random_pounce') {
-          const pounceWeapon = (enemy.rivalLoadout || []).find(entry => entry.slot === 'smash' && entry.key === 'random_pounce');
+        if (enemy.type === 'rival' && ['random_pounce', 'intense_biscuits'].includes(enemy.mirrorPendingSmash)) {
+          const moveKey = enemy.mirrorPendingSmash;
+          const pounceWeapon = (enemy.rivalLoadout || []).find(entry => entry.slot === 'smash' && entry.key === moveKey);
           const pounceDamage = Math.max(1, Math.round(Number(enemy.contactDamage || 20) * Number(pounceWeapon?.damageMult || 1)));
           const service = combatRandomByState.get(state);
-          const pounce = planCampaignRandomPounce({
+          const pounce = (moveKey === 'intense_biscuits' ? planCampaignIntenseBiscuits : planCampaignRandomPounce)({
             originX: enemy.x, originY: enemy.y, entities: livingRoomPlayers(state, enemy.roomId),
-            burstBaseDamage: pounceDamage, fangBaseDamage: Math.round(pounceDamage * 0.5),
+            burstBaseDamage: pounceDamage, projectileBaseDamage: Math.round(pounceDamage * (moveKey === 'intense_biscuits' ? 0.4 : 0.5)),
             random: () => service ? service.next('encounter') : 0.5,
           });
+          let playersHit = 0;
           livingRoomPlayers(state, enemy.roomId).forEach(candidate => {
             const distance = Math.hypot(candidate.x - enemy.x, candidate.y - enemy.y);
             if (distance > pounce.radius + Number(candidate.radius || 18)) return;
-            damagePlayer(state, candidate, pounce.burstDamage, enemy.id, emitEvent, 'random_pounce', {
-              angle: Math.atan2(candidate.y - enemy.y, candidate.x - enemy.x), knockback: 260,
+            playersHit += 1;
+            damagePlayer(state, candidate, pounce.burstDamage, enemy.id, emitEvent, moveKey, {
+              angle: Math.atan2(candidate.y - enemy.y, candidate.x - enemy.x), knockback: moveKey === 'intense_biscuits' ? 130 : 260,
             });
           });
-          pounce.fangs.forEach(fang => createAuthorityMirrorProjectile(state, enemy, fang.angle, {
-            type: 'fang', attackKind: 'random_pounce', speed: fang.speed, radius: fang.radius,
-            life: fang.lifeSeconds, damage: fang.damage, knockback: fang.knockback,
-            homing: fang.homing, homingTargetId: fang.targetId, homingRadius: fang.homingRadius,
-            homingSpeed: fang.homingSpeed, homingAccel: fang.homingAccel, homingTurnRate: fang.homingTurnRate,
-            hitOptions: fang.hitOptions,
+          if (moveKey === 'intense_biscuits' && playersHit > 0) {
+            const ratio = Math.min(pounce.healMaxHpRatioCap, playersHit * pounce.healMaxHpRatioPerTarget);
+            const before = Number(enemy.health || 0);
+            enemy.health = Math.min(Number(enemy.maxHealth || 1), before + Number(enemy.maxHealth || 1) * ratio);
+            enemy.hp = enemy.health;
+            if (enemy.health > before) emitEvent('ENEMY_HEALED', {
+              enemyId: enemy.id, healerEnemyId: enemy.id, amount: enemy.health - before, health: enemy.health,
+            });
+          }
+          (moveKey === 'intense_biscuits' ? pounce.biscuits : pounce.fangs).forEach(projectile => createAuthorityMirrorProjectile(state, enemy, projectile.angle, {
+            type: moveKey === 'intense_biscuits' ? 'biscuit' : 'fang', attackKind: moveKey,
+            speed: projectile.speed, radius: projectile.radius,
+            life: projectile.lifeSeconds, damage: projectile.damage, knockback: projectile.knockback,
+            homing: projectile.homing, homingTargetId: projectile.targetId, homingRadius: projectile.homingRadius,
+            homingSpeed: projectile.homingSpeed, homingAccel: projectile.homingAccel, homingTurnRate: projectile.homingTurnRate,
+            hitOptions: projectile.hitOptions,
           }));
           enemy.attackCd = 0.52;
-          enemy.state = 'rivalRandomPounce';
+          enemy.state = moveKey === 'intense_biscuits' ? 'rivalIntenseBiscuits' : 'rivalRandomPounce';
           return true;
         }
         if (enemy.type === 'rival' && enemy.mirrorPendingSmash === 'death_ball') {

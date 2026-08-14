@@ -385,6 +385,7 @@
   function deriveProjectileColor(projectile = {}, neo = {}) {
     const defs = neo.PROJECTILE_TYPE_DEFS || root.NeoNyke?.content?.PROJECTILE_TYPE_DEFS || {};
     const kind = projectile.kind || projectile.type;
+    if (kind === 'biscuit') return '#d99032';
     if (defs[kind]?.color) return defs[kind].color;
     if (projectile.hostile) return deriveEnemyProjectileColor(projectile.behavior);
     return '#9de9ff';
@@ -1528,7 +1529,10 @@
       const playerId = this._sessionPlayerId();
       const pending = state?.players?.[playerId]?.pendingUpgrade;
       if (!pending?.options?.length) return [];
-      const source = state.interactables?.[pending.sourceEntityId];
+      const source = state.interactables?.[pending.sourceEntityId]
+        || (pending.kind === 'boss_rush_starter'
+          ? { roomId: state?.players?.[playerId]?.roomId, x: pending.sourceX, y: pending.sourceY }
+          : null);
       if (!source) return [];
       const count = pending.options.length;
       return pending.options.map((option, index) => ({
@@ -1541,14 +1545,22 @@
         optionId: option.id,
         selectionEventId: pending.selectionEventId,
         roomId: source.roomId,
-        x: Number(source.x || 0) + (index - (count - 1) / 2) * 144,
-        y: Number(source.y || 0) - 4,
+        x: pending.kind === 'boss_rush_starter'
+          ? Number(source.x || 0) + ((Number(option.slotIndex ?? index) % 5) - 2) * 140
+          : Number(source.x || 0) + (index - (count - 1) / 2) * 144,
+        y: pending.kind === 'boss_rush_starter'
+          ? Number(source.y || 0) - 82 + Math.floor(Number(option.slotIndex ?? index) / 5) * 150
+          : Number(source.y || 0) - 4,
         r: 20,
         dwellMode: true,
         dwell: this.upgradeDwell.selectionEventId === pending.selectionEventId
           && this.upgradeDwell.optionId === option.id ? this.upgradeDwell.seconds : 0,
-        side: index < count / 2 ? 'left' : 'right',
-        picksRemaining: 1,
+        side: pending.kind === 'boss_rush_starter'
+          ? ((Number(option.slotIndex ?? index) % 5) < 2.5 ? 'left' : 'right')
+          : (index < count / 2 ? 'left' : 'right'),
+        picksRemaining: Math.max(1, Number(pending.picksRemaining || 1)),
+        choiceTotal: Math.max(count, Number(pending.choiceTotal || count)),
+        source: pending.kind === 'boss_rush_starter' ? 'boss_rush_starter' : '',
         networkChoice: true,
       }));
     }
@@ -1659,6 +1671,12 @@
           this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
           this._playNetworkSfx('item_collect', event, authorityTick);
         }
+        if (event.eventType === 'SPECIAL_ROOM_CHOICE_APPLIED'
+          && event.data?.playerId === localPlayerId
+          && event.data?.rewardKey) {
+          this.neo.pushItemNotification?.(event.data.rewardKey, 1);
+          this._playNetworkSfx('item_collect', event, authorityTick);
+        }
         if (event.eventType === 'SHOP_PURCHASED' && event.data?.playerId === localPlayerId) {
           if (event.data?.kind === 'item' && event.data?.key) this.neo.pushItemNotification?.(event.data.key, 1);
           else if (event.data?.kind === 'move' && event.data?.key) this.neo.pushMoveNotification?.(event.data.key, 1);
@@ -1679,7 +1697,7 @@
             this.neo.spawnBarrelExplosionFx?.(prop, {});
           } else {
             this.neo.spawnDestructibleBreakFx?.(prop, {});
-            this._playNetworkSfx('break_furniture', event, authorityTick);
+            this._playNetworkSfx(data.obstacleKind === 'pot' ? 'break_pot' : 'break_furniture', event, authorityTick);
           }
         }
         // The provisional effect already began on the local input frame. Keep

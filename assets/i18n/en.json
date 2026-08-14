@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Holy Eye Beams",
   "moves.holy_eye_beams.desc": "Channel twin holy beams from your eyes. Each cast has a chance to heal you 5% max HP.",
   "sounds.break_furniture.label": "Break Furniture",
+  "sounds.break_pot.label": "Break Pot",
   "moves.titan_hammer.name": "Titan Hammer",
   "moves.titan_hammer.desc": "Summon a giant hammer that follows the cursor. Click to smash it down for a heavy AOE crush. Lasts 8s.",
   "difficulties.easy.name": "Easy",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Godloop",
   "achievements.godloop.desc": "Complete 20 loops in a single run",
-  "achievementProgress.godloop.label": "Loops this run"
+  "achievementProgress.godloop.label": "Loops this run",
+  "moves.intense_biscuits.name": "Intense Biscuits",
+  "moves.intense_biscuits.desc": "Biscuit blasting, if you will: a compact pounce fires five homing biscuits and heals 2% max HP per enemy caught, up to 8%."
 }

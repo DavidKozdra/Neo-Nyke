@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { getCampaignEnemyDamageTakenMultiplier } = require('../js/simulation/SharedDamageSystem');
+const itemEffects = require('../js/simulation/SharedItemEffectSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -17,15 +18,16 @@ function extractFunction(source, functionName) {
   return source.slice(start, end + 1);
 }
 
-describe('mirror champion exact copy', () => {
+describe('mirror champion copy', () => {
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
 
-  test('copies current player stats instead of applying champion boosts', () => {
+  test('copies current player state while weakening item effects by twelve percent', () => {
     const declarations = [
       'clonePlainObject',
       'createMirrorInventorySnapshot',
       'getMirrorInventoryItemStats',
+      'scaleMirrorItemStats',
       'getMirrorAnvilBonus',
       'getMirrorWeaponCooldown',
       'getMirrorBaseDamage',
@@ -83,10 +85,11 @@ describe('mirror champion exact copy', () => {
       getItemStats: () => ({
         moveSpeedMultiplier: 1.5,
         attackSpeedMultiplier: 1.2,
-        beamDamageMultiplier: 1,
+        beamDamageMultiplier: 1.35,
         aoeDamageMultiplier: 1,
         damageReduction: 0.25,
         stunResistance: 2,
+        scarfBleedsOnHit: 1,
       }),
       getAttackSpeedValue: () => 1.8,
       getPlayerBaseDamage: () => 36,
@@ -96,17 +99,24 @@ describe('mirror champion exact copy', () => {
       godTimer: 0,
       laserActive: false,
     };
+    const previousNeoNyke = globalThis.NeoNyke;
+    globalThis.NeoNyke = { simulation: itemEffects };
     const getStats = new Function('Neo', `${declarations}; return getMirrorChampionStats;`)(Neo);
-
     const stats = getStats();
+    globalThis.NeoNyke = previousNeoNyke;
 
     expect(stats.hp).toBe(37);
     expect(stats.maxHp).toBe(100);
-    expect(stats.speed).toBe(684);
-    expect(stats.attackSpeed).toBe(1.8);
+    expect(stats.speed).toBeCloseTo(656.64);
+    expect(stats.attackSpeed).toBeCloseTo(1.764);
     expect(stats.attackCd).toBe(0.7);
     expect(stats.mirrorCooldowns).toEqual(cooldowns);
     expect(stats.currentCooldowns).toEqual(current);
+    expect(stats.itemStats).toEqual(expect.objectContaining({
+      scarfBleedsOnHit: 0.88,
+      beamDamageMultiplier: 1.308,
+      damageReduction: 0.22,
+    }));
     expect(stats.inventory.playerState).toEqual(player);
   });
 
@@ -137,6 +147,7 @@ describe('mirror champion exact copy', () => {
 
     expect(spawnBlock).toContain('max: stats.maxHp');
     expect(spawnBlock).toContain('barrier: stats.inventory.overhealBarrier');
+    expect(spawnBlock).toContain('MIRROR_ITEM_EFFECT_STRENGTH || 0.88');
     expect(spawnBlock).toContain('statuses: { ...Neo.createStatusMap(), ...stats.inventory.statuses }');
     expect(spawnBlock).toContain('mirrorLaserCd: stats.currentCooldowns.laser');
     expect(spawnBlock).toContain('mirrorExactCopy: true');

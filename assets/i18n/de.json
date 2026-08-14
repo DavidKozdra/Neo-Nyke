@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Strahlen des Heiligen Auges",
   "moves.holy_eye_beams.desc": "Kanalisiere zwei heilige Strahlen aus deinen Augen. Bei jedem Zauber besteht die Chance, dich um 5 % deiner maximalen HP zu heilen.",
   "sounds.break_furniture.label": "Möbel kaputt machen",
+  "sounds.break_pot.label": "Topf zerbrechen",
   "moves.titan_hammer.name": "Titanenhammer",
   "moves.titan_hammer.desc": "Beschwöre einen riesigen Hammer, der dem Cursor folgt. Klicken, um ihn für einen schweren Flächenschaden herabzuschmettern. Hält 8s.",
   "difficulties.easy.name": "Leicht",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Götterschleife",
   "achievements.godloop.desc": "Schließe 20 Schleifen in einem einzigen Lauf ab",
-  "achievementProgress.godloop.label": "Schleifen in diesem Lauf"
+  "achievementProgress.godloop.label": "Schleifen in diesem Lauf",
+  "moves.intense_biscuits.name": "Heftige Kekse",
+  "moves.intense_biscuits.desc": "Keks-Bombardement, wenn man so will: Ein kompakter Sprung feuert fünf zielsuchende Kekse ab und heilt 2 % der maximalen LP pro erfasstem Gegner, bis zu 8 %."
 }

@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "पवित्र नेत्र किरणें",
   "moves.holy_eye_beams.desc": "अपनी आंखों से जुड़वां पवित्र किरणें प्रवाहित करें। प्रत्येक कास्ट के पास आपको 5% अधिकतम एचपी तक ठीक करने का मौका है।",
   "sounds.break_furniture.label": "फर्नीचर तोड़ो",
+  "sounds.break_pot.label": "मटका तोड़ो",
   "moves.titan_hammer.name": "टाइटन हैमर",
   "moves.titan_hammer.desc": "एक विशाल हथौड़ा बुलाएं जो कर्सर का पीछा करता है। भारी क्षेत्रीय प्रहार के लिए क्लिक करके इसे पटकें। 8 सेकंड तक रहता है।",
   "difficulties.easy.name": "आसान",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "ईश्वरीय चक्र",
   "achievements.godloop.desc": "एक ही दौड़ में 20 चक्र पूरे करें",
-  "achievementProgress.godloop.label": "इस दौड़ के चक्र"
+  "achievementProgress.godloop.label": "इस दौड़ के चक्र",
+  "moves.intense_biscuits.name": "ज़बरदस्त बिस्कुट",
+  "moves.intense_biscuits.desc": "इसे बिस्कुट बमबारी कहें: एक छोटी झपट पाँच लक्ष्य-साधक बिस्कुट छोड़ती है और हर फँसे दुश्मन पर अधिकतम HP का 2%, कुल 8% तक, ठीक करती है।"
 }

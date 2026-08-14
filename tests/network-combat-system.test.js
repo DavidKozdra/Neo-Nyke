@@ -986,11 +986,19 @@ describe('authoritative network combat system', () => {
       character: 'thorn_knight',
       equippedWeapon: 'thorns_bleed_blade',
       equippedMoves: expect.objectContaining({ laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
-      items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 },
+      items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 2 },
     }));
     expect(player.itemStats).toEqual(expect.objectContaining({
-      bleedResistance: 0.1,
-      damageReduction: 0.005,
+      bleedResistance: 0.2,
+      darkDrainResistance: 0.2,
+      damageReduction: 0.01,
+    }));
+
+    applyNetworkHeroProfile(player, 'metao');
+    expect(player.items).toEqual({ mateos_bag: 1, drink_master: 1 });
+    expect(player.itemStats).toEqual(expect.objectContaining({
+      healingMultiplier: 1.2,
+      potionDoubleChance: 0.5,
     }));
   });
 
@@ -1816,6 +1824,32 @@ describe('authoritative network combat system', () => {
     expect(fangs.every(fang => fang.kind === 'fang' && fang.homingTargetId === enemy.id)).toBe(true);
     expect(fangs.every(fang => fang.homingRadius === 380 && fang.ignoreGodMode)).toBe(true);
     expect(fangs[0].hitOptions).toEqual(expect.objectContaining({ critBonus: 0.35, bleedChance: 0.55 }));
+  });
+
+  test('Intense Biscuits is a compact healing smash with five locked-target biscuit shots', () => {
+    const { state, simulation, events } = combatHarness('mooggy');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'mooggy', { smash: 'intense_biscuits' });
+    player.hp = 50;
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    Object.assign(enemy, { x: player.x + 90, y: player.y, health: 1000, maxHealth: 1000, moveSpeed: 0 });
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'intense_biscuits', aimDirection: 0 }] } }, 0.05);
+
+    const biscuits = Object.values(state.projectiles).filter(projectile => projectile.attackKind === 'intense_biscuits');
+    expect(player.beamChannel).toBeFalsy();
+    expect(enemy.health).toBeLessThan(1000);
+    expect(player.hp).toBeCloseTo(50 + player.maxHp * 0.02);
+    expect(biscuits).toHaveLength(5);
+    expect(biscuits.every(projectile => projectile.kind === 'biscuit' && projectile.homingTargetId === enemy.id)).toBe(true);
+    const healEvent = events.find(event => event.eventType === 'PLAYER_HEALED'
+      && event.data.source === 'intense_biscuits');
+    expect(healEvent.data.healedAmount).toBeCloseTo(player.maxHp * 0.02);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_ABILITY_USED',
+      data: expect.objectContaining({ abilityId: 'intense_biscuits', slot: 'smash', effectRadius: 105 }),
+    }));
   });
 
   test('Mooggy Hairball uses its campaign AOE, poison, and freeze descriptor', () => {

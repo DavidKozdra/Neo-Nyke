@@ -88,6 +88,7 @@ export const MOVE_DEFS = {
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
     random_pounce: { key: 'random_pounce', slot: 'smash', name: 'Random Pounce', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
+    intense_biscuits: { key: 'intense_biscuits', slot: 'smash', name: 'Intense Biscuits', desc: 'Biscuit blasting, if you will: a compact pounce fires five homing biscuits and heals 2% max HP per enemy caught, up to 8%.', exclusiveCharacter: 'mooggy' },
 
     dash: {
       key: 'dash',
@@ -174,7 +175,7 @@ export const SHOP_MOVE_POOL = [
     'god_sweep', 'nail_shot', 'laser_shockwave',
     'crimson_smash', 'wall_of_toph', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
-    // NOTE: the alternative kit moves (mooggy_blood_beam, thorn_blood_beams,
+    // NOTE: the alternative kit moves (mooggy_blood_beam, intense_biscuits, thorn_blood_beams,
     // wizard_lazer, mooggy_hairball, potion_bath, excalibur_strike, holy_turrets,
     // knight_slash_dash) are intentionally NOT sold here — they are chosen on the
     // pick-character screen via the alt-kit picker, not bought in the shop.
@@ -545,8 +546,9 @@ export const RIVAL_LOADOUT_ALTERNATIVES = {
       { key: 'holy_turrets', slot: 'smash', class: 'burst', range: 360, preferredRange: 240, damageMult: 0.8, cooldownMult: 1.0 },
     ],
     mooggy: [
-      // mooggy_blood_beam (alt laser) + mooggy_hairball (alt smash → burst)
+      // Mooggy's alt laser and alternate smashes.
       { key: 'mooggy_blood_beam', slot: 'laser', class: 'ranged', range: 480, preferredRange: 250, damageMult: 0.95, cooldownMult: 1.1, projectileCount: 1, spread: 0.02, projectileSpeed: 480 },
+      { key: 'intense_biscuits', slot: 'smash', class: 'burst', range: 210, preferredRange: 145, damageMult: 0.78, cooldownMult: 1.05, projectileCount: 5, projectileSpeed: 520 },
       { key: 'mooggy_hairball', slot: 'smash', class: 'burst', range: 330, preferredRange: 200, damageMult: 0.9, cooldownMult: 1.1, projectileCount: 4, spread: 0.2, projectileSpeed: 360 },
     ],
     turtle_boy: [
@@ -1311,6 +1313,7 @@ export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
     random_pounce:   { damage: 52,  cooldown: 5.00, range: 160 },
     mooggy_zoomies:   { cooldown: 20.00, duration: 12.0 },
     mooggy_blood_beam:{ damage: 12,  cooldown: 3.20, duration: 1.3 },
+    intense_biscuits: { damage: 28,  cooldown: 4.20, range: 105 },
     thorn_blood_beams:{ damage: 8,   cooldown: 3.60, duration: 1.4 },
     wizard_lazer:     { damage: 30,  cooldown: 4.20, duration: 1.2 },
     mooggy_hairball:  { damage: 34,  cooldown: 4.80, range: 132 },

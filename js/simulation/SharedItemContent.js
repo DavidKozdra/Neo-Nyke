@@ -33,6 +33,7 @@
     ['shield_of_aegis', 4, 'god'], ['pendant_of_kronos', 5, 'god'],
     ['robot_arm', 3, 'god'], ['rich_mans_luck', 5, 'god'],
     ['princes_glasses', 14, 'wizard'], ['procy_pickle', 5, 'god'],
+    ['factor_of_elements', 5, 'god'],
     ['veggys_pendant', 0, 'wizard'], ['mateos_bag', 10, 'wizard'],
     ['extra_battery', 10, 'wizard'], ['mooggy_zoomies', 14, 'wizard'],
     ['el_bartos_cape', 6, 'god'], ['voucher_white', 5, 'knight'],
@@ -42,10 +43,15 @@
   const ITEM_RARITY_BY_KEY = Object.freeze(Object.fromEntries(ITEM_DROP_ENTRIES.map(([key, , rarity]) => [key, rarity])));
   const ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 80, wizard: 15, god: 5 });
   const ELITE_ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 65, wizard: 25, god: 10 });
-  // Preserve the original three starter rolls (including the third-roll elite
-  // boost) and append two normal rolls. Both local and authoritative Boss Rush
-  // consume this shared plan from a run-seeded random stream.
-  const BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS = Object.freeze([false, false, true, false, false]);
+  // Boss Rush opens with a seeded relic draft. The first half preserves the
+  // original five-roll rarity pattern; the second half adds five more offers so
+  // players can build a five-relic loadout from ten distinct choices.
+  const BOSS_RUSH_STARTER_OFFER_COUNT = 10;
+  const BOSS_RUSH_STARTER_PICK_COUNT = 5;
+  const BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS = Object.freeze([
+    false, false, true, false, false,
+    false, false, true, false, false,
+  ]);
 
   function nextRandom(random) {
     if (typeof random === 'function') return random();
@@ -90,11 +96,12 @@
   }
 
   function createBossRushStarterItemPlan(random) {
-    return BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS.map((elite, index) => ({
-      index,
-      elite,
-      itemKey: rollCampaignItem(random, { elite }),
-    }));
+    const seen = new Set();
+    return BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS.map((elite, index) => {
+      const itemKey = rollCampaignItem(random, { elite, excludeKeys: [...seen] });
+      if (itemKey) seen.add(itemKey);
+      return { index, elite, itemKey };
+    });
   }
 
   function rollCampaignScroll(random) {
@@ -153,6 +160,8 @@
     ITEM_RARITY_BY_KEY,
     ITEM_RARITY_DROP_WEIGHTS,
     ELITE_ITEM_RARITY_DROP_WEIGHTS,
+    BOSS_RUSH_STARTER_OFFER_COUNT,
+    BOSS_RUSH_STARTER_PICK_COUNT,
     BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS,
     rollCampaignItem,
     createCampaignItemChoices,

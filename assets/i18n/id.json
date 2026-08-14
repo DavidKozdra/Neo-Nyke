@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Sinar Mata Suci",
   "moves.holy_eye_beams.desc": "Salurkan pancaran sinar suci kembar dari matamu. Setiap pemain berpeluang memulihkan 5% HP maksimal Anda.",
   "sounds.break_furniture.label": "Hancurkan Furnitur",
+  "sounds.break_pot.label": "Hancurkan Pot",
   "moves.titan_hammer.name": "Palu Titan",
   "moves.titan_hammer.desc": "Panggil palu raksasa yang mengikuti kursor. Klik untuk menghantamkannya demi kerusakan area yang berat. Bertahan 8 detik.",
   "difficulties.easy.name": "Mudah",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Putaran Dewa",
   "achievements.godloop.desc": "Selesaikan 20 putaran dalam satu permainan",
-  "achievementProgress.godloop.label": "Putaran dalam permainan ini"
+  "achievementProgress.godloop.label": "Putaran dalam permainan ini",
+  "moves.intense_biscuits.name": "Biskuit Intens",
+  "moves.intense_biscuits.desc": "Hujan biskuit, kalau boleh dibilang: terjangan kecil menembakkan lima biskuit pelacak dan memulihkan 2% HP maksimum per musuh yang terkena, hingga 8%."
 }

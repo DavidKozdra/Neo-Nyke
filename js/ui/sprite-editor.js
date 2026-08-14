@@ -210,15 +210,19 @@
   }
 
   function imageStripFrameSource(editor, frameIndex) {
-    const columns = Math.max(1, Math.floor(editor.master.width / editor.frameWidth));
+    const sourceOffsetX = Math.max(0, Math.floor(Number(editor.sourceOffsetX) || 0));
+    const sourceOffsetY = Math.max(0, Math.floor(Number(editor.sourceOffsetY) || 0));
+    const columns = Math.max(1, Math.floor((editor.master.width - sourceOffsetX) / editor.frameWidth));
     return {
-      x: (frameIndex % columns) * editor.frameWidth,
-      y: Math.floor(frameIndex / columns) * editor.frameHeight,
+      x: sourceOffsetX + (frameIndex % columns) * editor.frameWidth,
+      y: sourceOffsetY + Math.floor(frameIndex / columns) * editor.frameHeight,
     };
   }
 
-  function countImageStripFrames(width, height, frameWidth, frameHeight) {
-    return Math.max(1, Math.floor(width / frameWidth) * Math.floor(height / frameHeight));
+  function countImageStripFrames(width, height, frameWidth, frameHeight, sourceOffsetX = 0, sourceOffsetY = 0) {
+    return Math.max(1,
+      Math.floor((width - sourceOffsetX) / frameWidth)
+      * Math.floor((height - sourceOffsetY) / frameHeight));
   }
 
   function startImageStripPreview(canvas, editor) {
@@ -476,6 +480,8 @@
         entry.frameWidth = sheetDef.frameWidth;
         entry.frameHeight = sheetDef.frameHeight;
         entry.frameCount = sheetDef.frameCount;
+        entry.sourceOffsetX = sheetDef.sourceOffsetX || 0;
+        entry.sourceOffsetY = sheetDef.sourceOffsetY || 0;
         entry.savePath = sheetDef.src;
         entry.liveCharsetKey = key;
       }
@@ -849,6 +855,8 @@
       frameWidth: entry.frameWidth || (img ? Math.min(img.naturalWidth, img.naturalHeight) : 24),
       frameHeight: entry.frameHeight || (img ? img.naturalHeight : 24),
       frameCount: entry.frameCount || 1,
+      sourceOffsetX: entry.sourceOffsetX || 0,
+      sourceOffsetY: entry.sourceOffsetY || 0,
       currentFrame: 0,
       brushColor: '#ffffff',
       erasing: false,
@@ -856,10 +864,10 @@
       idleFrames: liveSheet?.idleFrames ? [...liveSheet.idleFrames] : null,
       walkFrames: liveSheet?.walkFrames ? [...liveSheet.walkFrames] : null,
       armFrame: Number.isInteger(liveSheet?.armFrame) ? liveSheet.armFrame : null,
-      portraitFrame: Number.isInteger(liveSheet?.portraitFrame) ? liveSheet.portraitFrame : null,
       armBaseAngle: liveSheet?.armBaseAngle ?? entry.armBaseAngle ?? 0,
       armPivot: liveSheet?.armPivot ? { ...liveSheet.armPivot } : (entry.armPivot ? { ...entry.armPivot } : null),
       armOffset: liveSheet?.armOffset ? { ...liveSheet.armOffset } : (entry.armOffset ? { ...entry.armOffset } : null),
+      portraitFrame: Number.isInteger(liveSheet?.portraitFrame) ? liveSheet.portraitFrame : null,
       actionFrames: Object.fromEntries(
         ['dash', 'smash', 'beam'].map(action => [
           action,
@@ -879,6 +887,7 @@
         editor.frameWidth = editor.frameHeight;
         editor.frameCount = countImageStripFrames(
           img.naturalWidth, img.naturalHeight, editor.frameWidth, editor.frameHeight,
+          editor.sourceOffsetX, editor.sourceOffsetY,
         );
       }
     } else {
@@ -976,11 +985,11 @@
       else delete def[`${action}Frames`];
     });
     if (editor.armFrame != null) def.armFrame = editor.armFrame; else delete def.armFrame;
-    if (editor.portraitFrame != null && editor.portraitFrame !== editor.idleFrames[0]) def.portraitFrame = editor.portraitFrame;
-    else delete def.portraitFrame;
     def.armBaseAngle = Number(editor.armBaseAngle || 0);
     if (editor.armPivot) def.armPivot = { ...editor.armPivot }; else delete def.armPivot;
     if (editor.armOffset) def.armOffset = { ...editor.armOffset }; else delete def.armOffset;
+    if (editor.portraitFrame != null && editor.portraitFrame !== editor.idleFrames[0]) def.portraitFrame = editor.portraitFrame;
+    else delete def.portraitFrame;
     if (editor.stepRate !== '' && editor.stepRate != null) def.stepRate = Number(editor.stepRate);
     else delete def.stepRate;
     if (editor.idleRate !== '' && editor.idleRate != null) def.idleRate = Number(editor.idleRate);
@@ -991,20 +1000,24 @@
       sheet.frameWidth = editor.frameWidth;
       sheet.frameHeight = editor.frameHeight;
       sheet.frameCount = editor.frameCount;
+      sheet.sourceOffsetX = editor.sourceOffsetX;
+      sheet.sourceOffsetY = editor.sourceOffsetY;
       sheet.idleFrames = [...editor.idleFrames];
       sheet.walkFrames = [...editor.walkFrames];
-      sheet.columns = Math.max(1, Math.floor(editor.master.width / editor.frameWidth));
-      sheet.rows = Math.max(1, Math.floor(editor.master.height / editor.frameHeight));
+      sheet.columns = Math.max(1,
+        Math.floor((editor.master.width - editor.sourceOffsetX) / editor.frameWidth));
+      sheet.rows = Math.max(1,
+        Math.floor((editor.master.height - editor.sourceOffsetY) / editor.frameHeight));
       sheet.animationFrames = Object.fromEntries(
         ['dash', 'smash', 'beam']
           .map(action => [action, [...(editor.actionFrames[action] || [])]])
           .filter(([, frames]) => frames.length),
       );
       sheet.armFrame = editor.armFrame != null ? editor.armFrame : null;
-      sheet.portraitFrame = editor.portraitFrame != null ? editor.portraitFrame : editor.idleFrames[0];
       sheet.armBaseAngle = Number(editor.armBaseAngle || 0);
       sheet.armPivot = editor.armPivot ? { ...editor.armPivot } : undefined;
       sheet.armOffset = editor.armOffset ? { ...editor.armOffset } : undefined;
+      sheet.portraitFrame = editor.portraitFrame != null ? editor.portraitFrame : editor.idleFrames[0];
       sheet.animations = {
         idle: sheet.idleFrames.map((_, i) => `idle${i}`),
         walk: sheet.walkFrames.map((_, i) => `walk${i}`),
@@ -1030,14 +1043,16 @@
         frameWidth: editor.frameWidth,
         frameHeight: editor.frameHeight,
         frameCount: editor.frameCount,
+        sourceOffsetX: editor.sourceOffsetX,
+        sourceOffsetY: editor.sourceOffsetY,
         currentFrame: editor.currentFrame,
         idleFrames: editor.idleFrames ? [...editor.idleFrames] : null,
         walkFrames: editor.walkFrames ? [...editor.walkFrames] : null,
         armFrame: editor.armFrame,
-        portraitFrame: editor.portraitFrame,
         armBaseAngle: Number(editor.armBaseAngle || 0),
         armPivot: editor.armPivot ? { ...editor.armPivot } : null,
         armOffset: editor.armOffset ? { ...editor.armOffset } : null,
+        portraitFrame: editor.portraitFrame,
         stepRate: editor.stepRate,
         idleRate: editor.idleRate,
       },
@@ -1185,6 +1200,7 @@
     function finalizeFrameSize() {
       editor.frameCount = countImageStripFrames(
         editor.master.width, editor.master.height, editor.frameWidth, editor.frameHeight,
+        editor.sourceOffsetX, editor.sourceOffsetY,
       );
       editor.currentFrame = Math.min(editor.currentFrame, editor.frameCount - 1);
       if (isCharset) {
@@ -1310,6 +1326,7 @@
           editor.frameHeight = entry.frameHeight || img.naturalHeight;
           editor.frameCount = countImageStripFrames(
             img.naturalWidth, img.naturalHeight, editor.frameWidth, editor.frameHeight,
+            editor.sourceOffsetX, editor.sourceOffsetY,
           );
         }
         editor.currentFrame = 0;
@@ -1981,6 +1998,8 @@
       lines.push(`    frameWidth: ${def.frameWidth},`);
       lines.push(`    frameHeight: ${def.frameHeight},`);
       lines.push(`    frameCount: ${def.frameCount},`);
+      if (def.sourceOffsetX) lines.push(`    sourceOffsetX: ${def.sourceOffsetX},`);
+      if (def.sourceOffsetY) lines.push(`    sourceOffsetY: ${def.sourceOffsetY},`);
       lines.push(`    renderScale: ${def.renderScale ?? 1},`);
       const idleFrames = sheet.idleFrames ?? def.idleFrames ?? [0];
       if (JSON.stringify(idleFrames) !== JSON.stringify([0])) {
@@ -1999,10 +2018,10 @@
       });
       const armFrame = sheet.armFrame ?? def.armFrame;
       if (Number.isInteger(armFrame)) lines.push(`    armFrame: ${armFrame},`);
-      const portraitFrame = sheet.portraitFrame ?? def.portraitFrame;
-      if (Number.isInteger(portraitFrame) && portraitFrame !== idleFrames[0]) lines.push(`    portraitFrame: ${portraitFrame},`);
-      const armBaseAngle = sheet.armBaseAngle ?? def.armBaseAngle;
-      if (armBaseAngle != null) lines.push(`    armBaseAngle: ${Number(armBaseAngle)},`);
+      const serializedArmBaseAngle = sheet.armBaseAngle ?? def.armBaseAngle;
+      if (serializedArmBaseAngle != null) {
+        lines.push(`    armBaseAngle: ${Number(serializedArmBaseAngle)},`);
+      }
       const armPivot = sheet.armPivot ?? def.armPivot;
       if (armPivot && Number.isFinite(Number(armPivot.x)) && Number.isFinite(Number(armPivot.y))) {
         lines.push(`    armPivot: { x: ${Number(armPivot.x)}, y: ${Number(armPivot.y)} },`);
@@ -2011,6 +2030,8 @@
       if (armOffset && Number.isFinite(Number(armOffset.x)) && Number.isFinite(Number(armOffset.y))) {
         lines.push(`    armOffset: { x: ${Number(armOffset.x)}, y: ${Number(armOffset.y)} },`);
       }
+      const portraitFrame = sheet.portraitFrame ?? def.portraitFrame;
+      if (Number.isInteger(portraitFrame) && portraitFrame !== idleFrames[0]) lines.push(`    portraitFrame: ${portraitFrame},`);
       const stepRate = sheet.stepRate ?? def.stepRate;
       if (stepRate != null) lines.push(`    stepRate: ${stepRate},`);
       const idleRate = sheet.idleRate ?? def.idleRate;

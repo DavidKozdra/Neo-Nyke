@@ -403,7 +403,7 @@ export const KIT_ALTERNATIVES = {
   },
   mooggy: {
     laser: ['nail_shot', 'mooggy_blood_beam'],
-    smash: ['random_pounce', 'mooggy_hairball'],
+    smash: ['random_pounce', 'intense_biscuits', 'mooggy_hairball'],
   },
   turtle_boy: {
     laser: ['turtle_wave', 'ghost_ball'],
@@ -660,6 +660,7 @@ export function getItemStats() {
     const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
     const procyPickle = getItemCount('procy_pickle');
+    const factorOfElements = getItemCount('factor_of_elements');
     const ironLung = getItemCount('iron_lung');
     const pendantOfRock = getItemCount('pendant_of_rock');
     // Foley's Irish NewYork Charm (GREEN): really +1 flat on-hit damage per stack
@@ -762,6 +763,7 @@ export function getItemStats() {
       drainChance: toothOfThorn * 0.045 + toothOfThorn * toothOfThorn * 0.018,
       meleeDrainChance: toothOfThorn * 0.08 + toothOfThorn * toothOfThorn * 0.018,
       bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
+      darkDrainResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
       // Always-on base fire-damage reduction: the player takes ~50% less fire
       // DoT. Applied in the player fire tick (tickPlayerStatus 'fire').
       fireResistance: 0.5,
@@ -802,6 +804,7 @@ export function getItemStats() {
       critMultiplier,
       kronosDamageMultiplier,
       kronosBossDamageMultiplier,
+      factorOfElementsDamagePerStatusStack: factorOfElements * 0.05,
       // Pendant of Rock: +2% damage per stack to any rock-kind projectile. Applied
       // in spawnProjectile when props.kind === 'rock' (see world.js).
       rockDamageMultiplier: 1 + pendantOfRock * 0.02,
@@ -835,7 +838,8 @@ export function getItemStats() {
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.12,
       projectileLifeMultiplier: 1 + mooggyZoomies * 0.10,
       healingMultiplier: 1 + drinkMaster * 0.2,
-      storedPotionHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,
+      potionPickupHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,
+      storedPotionHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.20,
       overhealBarrierChance,
       overhealBarrierRatio: overhealUnlocked ? 0.35 : 0,
       overhealBarrierCapRatio: overhealUnlocked ? (healingTagStacks >= 6 ? 0.28 : 0.16) : 0,

@@ -35,6 +35,7 @@ export function createUIController(view) {
     let runHistoryOpen = false;
     let syncSandboxPanelFieldsHook = null;
     let syncCustomCharacterPanelFieldsHook = null;
+    let activeCustomBuilderStep = 1;
     let selectedCarouselKey = '';
     let characterPage = 0;
     let programmaticCarouselScrollUntil = 0;
@@ -476,7 +477,7 @@ export function createUIController(view) {
         `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
       const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
       Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 168, {
-        tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
+        tint: Neo.isCustomCharacterKey?.(selected) && !Neo.hasCustomCharacterSprite?.(selected) ? '#83f3ff' : null,
       });
       detail.querySelectorAll('[data-hero-move]').forEach(el => {
         const move = Neo.MOVE_DEFS[el.dataset.heroMove];
@@ -2751,15 +2752,51 @@ export function createUIController(view) {
       document.getElementById('altModeSandboxCard')?.classList.toggle('altmode-card--configuring', open);
     }
 
+    function setCustomBuilderStep(step) {
+      activeCustomBuilderStep = Neo.clamp(Math.round(Number(step) || 1), 1, 3);
+      const panel = view.customCharacterPanel;
+      panel?.querySelectorAll('[data-custom-builder-step]').forEach(section => {
+        const active = Number(section.dataset.customBuilderStep) === activeCustomBuilderStep;
+        section.hidden = !active;
+        section.classList.toggle('is-active', active);
+        section.setAttribute('aria-hidden', active ? 'false' : 'true');
+      });
+      panel?.querySelectorAll('[data-custom-builder-step-button]').forEach(button => {
+        const active = Number(button.dataset.customBuilderStepButton) === activeCustomBuilderStep;
+        button.classList.toggle('is-active', active);
+        if (active) button.setAttribute('aria-current', 'step');
+        else button.removeAttribute('aria-current');
+      });
+      const back = document.getElementById('customBuilderBack');
+      const next = document.getElementById('customBuilderNext');
+      const save = view.customCharacterSaveClose;
+      const status = document.getElementById('customBuilderStepStatus');
+      if (back) back.disabled = activeCustomBuilderStep === 1;
+      if (next) {
+        next.classList.toggle('hidden', activeCustomBuilderStep === 3);
+        next.textContent = activeCustomBuilderStep === 1 ? 'Next: Loadout' : 'Next: Sprite';
+      }
+      save?.classList.toggle('hidden', activeCustomBuilderStep !== 3);
+      if (status) status.textContent = `Step ${activeCustomBuilderStep} of 3`;
+      if (activeCustomBuilderStep === 3) {
+        void Neo.CustomSpriteEditor?.open?.(getEditingCustomCharacterKey());
+      }
+      panel?.querySelector('.sandbox-panel__dialog')?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    }
+
     function setCustomCharacterPanelOpen(open) {
       if (open) Neo.mountLazyPanel?.('customCharacterPanel');
-      if (open) syncCustomCharacterPanelFieldsHook?.();
-      else blurIfFocusInside(view.customCharacterPanel);
+      if (open) {
+        syncCustomCharacterPanelFieldsHook?.();
+        setCustomBuilderStep(1);
+      } else {
+        blurIfFocusInside(view.customCharacterPanel);
+        Neo.CustomSpriteEditor?.close?.().catch?.(error => console.warn('[CustomSprites] Close save failed.', error));
+      }
       view.customCharacterPanel?.classList.toggle('hidden', !open);
       view.customCharacterPanel?.classList.toggle('sandbox-panel--open', open);
       view.customCharacterPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
-
     function getEditingCustomCharacterKey() {
       const key = String(Neo.editingCustomCharacterKey || Neo.chosenCharacter || '');
       if (Neo.isCustomCharacterKey?.(key)) return key;
@@ -3265,6 +3302,7 @@ export function createUIController(view) {
             }).join('');
             Neo.drawItemIconCanvases?.(view.customCharacterRelicList, 'data-custom-relic-icon');
           }
+          void Neo.CustomSpriteEditor?.open?.(customKey);
         }
 
         function syncSandboxPanelFields() {
@@ -3585,10 +3623,20 @@ export function createUIController(view) {
           const customKey = getEditingCustomCharacterKey();
           const id = customKey.slice('custom_character_'.length);
           writeCustomCharacterSettings(customKey, { ...(Neo.normalizeCustomCharacterSettings?.({ id, active: true }, id) || {}), id, active: true });
+          void Neo.CustomSpriteEditor?.restoreTemplate?.();
           syncCustomCharacterPanelFields();
           Neo.persistMetaSoon();
           renderCustomRosterCards();
           Neo.updateCharacterSelectionUI?.();
+        });
+        view.customCharacterPanel?.querySelectorAll('[data-custom-builder-step-button]').forEach(button => {
+          button.addEventListener('click', () => setCustomBuilderStep(button.dataset.customBuilderStepButton));
+        });
+        document.getElementById('customBuilderBack')?.addEventListener('click', () => {
+          setCustomBuilderStep(activeCustomBuilderStep - 1);
+        });
+        document.getElementById('customBuilderNext')?.addEventListener('click', () => {
+          setCustomBuilderStep(activeCustomBuilderStep + 1);
         });
         view.customCharacterRemove?.addEventListener('click', () => {
           if (!Neo.metaProgress) return;
@@ -3600,19 +3648,27 @@ export function createUIController(view) {
           Neo.updateCharacterSelectionUI?.();
           handlers.onCloseCustomCharacterBuilder();
         });
-        view.customCharacterSaveClose?.addEventListener('click', () => {
-          if (Neo.metaProgress) {
-            const customKey = getEditingCustomCharacterKey();
-            const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
-            writeCustomCharacterSettings(customKey, {
-              ...custom,
-              name: String(view.customCharacterName?.value || custom.name || '').trim().slice(0, 24) || custom.name || 'Plus',
-            });
-            Neo.persistMetaSoon();
-            renderCustomRosterCards();
-            Neo.updateCharacterSelectionUI?.();
+        view.customCharacterSaveClose?.addEventListener('click', async () => {
+          view.customCharacterSaveClose.disabled = true;
+          try {
+            if (Neo.metaProgress) {
+              const customKey = getEditingCustomCharacterKey();
+              const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
+              writeCustomCharacterSettings(customKey, {
+                ...custom,
+                name: String(view.customCharacterName?.value || custom.name || '').trim().slice(0, 24) || custom.name || 'Plus',
+              });
+              Neo.persistMetaSoon();
+              await Neo.CustomSpriteEditor?.flush?.();
+              renderCustomRosterCards();
+              Neo.updateCharacterSelectionUI?.();
+            }
+            handlers.onCloseCustomCharacterBuilder();
+          } catch (error) {
+            console.warn('[CustomSprites] Save & Close failed.', error);
+          } finally {
+            view.customCharacterSaveClose.disabled = false;
           }
-          handlers.onCloseCustomCharacterBuilder();
         });
         view.customCharacterClose?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
         view.customCharacterBackdrop?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
@@ -4161,7 +4217,7 @@ export function createUIController(view) {
             const cardSpriteKey = Neo.getCharacterSpriteKey?.(itemKey) || itemKey;
             Neo.drawSpriteToCanvas(spriteCanvas, Neo.getPortraitSpriteKey?.(cardSpriteKey) || cardSpriteKey, 76, {
               alpha: isSelectable(itemKey) ? 1 : 0.42,
-              tint: Neo.isCustomCharacterKey?.(itemKey) ? '#83f3ff' : null,
+              tint: Neo.isCustomCharacterKey?.(itemKey) && !Neo.hasCustomCharacterSprite?.(itemKey) ? '#83f3ff' : null,
             });
           }
           button.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
@@ -4494,6 +4550,7 @@ export function createUIController(view) {
         }
       },
       setDeadScreen(entry) {
+        const killer = Neo.resolveKillerPresentation(entry);
         const fmt = (n) => String(n ?? '—');
         const fmtTime = (s) => {
           const m = Math.floor(s / 60);
@@ -4501,15 +4558,9 @@ export function createUIController(view) {
           return `${m}:${sec.toString().padStart(2, '0')}`;
         };
         if (view.deadKillerCanvas) {
-          const killerLookup = entry.killerKey || entry.killedBy || '';
-          const hazardIcon = Neo.resolveKillerHazardIcon?.(killerLookup);
-          if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
-            Neo.drawHazardKillerIcon(view.deadKillerCanvas, hazardIcon);
-          } else {
-            Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(killerLookup), 120);
-          }
+          Neo.drawKillerPresentation(view.deadKillerCanvas, killer, 120);
         }
-        if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
+        if (view.deadKillerName) view.deadKillerName.textContent = killer.label;
         // Endless mode is single-floor, so the FLOOR stat is repurposed to show
         // the wave reached — the meaningful score for that mode.
         const isEndlessEntry = entry.mode === 'endless';

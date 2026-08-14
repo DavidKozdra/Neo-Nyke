@@ -20,19 +20,6 @@ const CHARACTER_SHEET_DEFS = {
     armPivot: { x: 10, y: 17 },
     armOffset: { x: 1, y: 3 },
   },
-  princess: {
-    src: 'assets/sprites/chars/princess.png',
-    frameWidth: 24,
-    frameHeight: 24,
-    frameCount: 7,
-    renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
-    armBaseAngle: 0,
-    armPivot: { x: 7, y: 15 },
-    armOffset: { x: 2, y: 2 },
-  },
   sarge: {
     src: 'assets/sprites/chars/Sarge.png',
     frameWidth: 24,
@@ -60,9 +47,12 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 2,
     portraitFrame: 0,
     idleRate: 1.5,
+    armBaseAngle: -Math.PI / 4,
+    armPivot: { x: 6, y: 19 },
+    armOffset: { x: 3, y: 3 },
   },
   princess: {
-    src: 'assets/sprites/chars/Princess.png',
+    src: 'assets/sprites/chars/princess.png',
     frameWidth: 24,
     frameHeight: 24,
     frameCount: 8,
@@ -71,6 +61,9 @@ const CHARACTER_SHEET_DEFS = {
     walkFrames: [4, 5, 6, 7],
     armFrame: 1,
     portraitFrame: 0,
+    armBaseAngle: 0,
+    armPivot: { x: 7, y: 15 },
+    armOffset: { x: 2, y: 2 },
   },
   metao: {
     src: 'assets/sprites/chars/Metao.png',
@@ -87,15 +80,24 @@ const CHARACTER_SHEET_DEFS = {
     beamFrames: [26, 27, 28, 29, 30, 31],
     armFrame: 1,
     portraitFrame: 0,
+    idleRate: 1.5,
+    armBaseAngle: 0,
+    armPivot: { x: 10, y: 15 },
+    armOffset: { x: 4, y: 2 },
   },
   mooggy: {
     src: 'assets/sprites/chars/Mooggy.png',
     frameWidth: 24,
     frameHeight: 24,
-    frameCount: 11,
+    frameCount: 35,
     renderScale: 1.5,
-    idleFrames: [3, 4, 5, 6],
-    walkFrames: [7, 8, 9, 10],
+    stepRate: 10,
+    actionRate: 10,
+    idleFrames: [31, 32, 33, 34],
+    walkFrames: [3, 4, 5, 6],
+    dashFrames: [10, 11, 12, 13],
+    smashFrames: [17, 18, 19, 20],
+    beamFrames: [24, 25, 26, 27],
     armFrame: 2,
     portraitFrame: 0,
   },
@@ -108,7 +110,125 @@ const CHARACTER_SHEET_DEFS = {
     idleFrames: [2, 3],
     walkFrames: [4, 5, 6, 7],
     armFrame: 1,
+    portraitFrame: 0,
+  },
+  hunter: {
+    src: 'assets/sprites/chars/hunter.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    renderScale: 1.5,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    attackFrames: [5, 6, 7],
+    portraitFrame: 0,
+  },
+  charger: {
+    src: 'assets/sprites/chars/charger.png',
+    frameWidth: 24,
+    frameHeight: 48,
+    frameCount: 5,
+    renderScale: 1,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    dashFrames: [1, 2, 3, 4],
+    portraitFrame: 0,
+  },
+  cult_follower: {
+    src: 'assets/sprites/chars/follower.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 9,
+    renderScale: 1.5,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    attackFrames: [5, 6, 7, 8],
+    portraitFrame: 0,
+  },
+  healer: {
+    src: 'assets/sprites/chars/healer.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 9,
+    renderScale: 1.5,
+    stepRate: 7,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    attackFrames: [5, 6, 7, 8],
+    portraitFrame: 0,
+  },
+  sniper: {
+    src: 'assets/sprites/chars/sniper.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    renderScale: 1.5,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4],
+    attackFrames: [5, 6, 7],
+    portraitFrame: 0,
+  },
+  knave: {
+    src: 'assets/sprites/chars/knave.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    // The authored strip is vertically centered in a 48 px export canvas.
+    // Crop that padding at load time so each atlas entry stays a square 24 px
+    // frame like the other combatants.
+    sourceOffsetY: 15,
+    renderScale: 1.5,
+    stepRate: 10,
     idleRate: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 12, y: 19 },
+    armOffset: { x: 1, y: 3 },
+  },
+  // The charged Artificer is the same Knave transformed into a boss. Keep the
+  // exact authored sheet and animation roles; its larger enemy radius supplies
+  // the in-world size increase.
+  artificer_knave: {
+    src: 'assets/sprites/chars/knave.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    sourceOffsetY: 15,
+    renderScale: 1.5,
+    stepRate: 10,
+    idleRate: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 12, y: 19 },
+    armOffset: { x: 1, y: 3 },
+  },
+  cult_mage: {
+    src: 'assets/sprites/chars/cultMage.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 9,
+    renderScale: 1.5,
+    stepRate: 7,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [0, 1, 2, 3, 4],
+    attackFrames: [5, 6, 7, 8],
+    portraitFrame: 0,
   },
   golem: {
     src: 'assets/sprites/chars/mini-golem.png',
@@ -123,12 +243,38 @@ const CHARACTER_SHEET_DEFS = {
     attackFrames: [5, 6, 7, 8, 9],
     portraitFrame: 0,
   },
+  shield_unit: {
+    src: 'assets/sprites/chars/shield_unit.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 10,
+    renderScale: 1,
+    stepRate: 7,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4, 5, 6],
+    attackFrames: [7, 8, 9],
+    portraitFrame: 0,
+  },
+  machine_gunner: {
+    src: 'assets/sprites/chars/machine_gunner.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 10,
+    renderScale: 1.5,
+    stepRate: 9,
+    actionRate: 12,
+    idleFrames: [0],
+    walkFrames: [1, 2, 3, 4, 5, 6],
+    attackFrames: [7, 8, 9],
+    portraitFrame: 0,
+  },
   bulk_golem: {
     src: 'assets/sprites/chars/large-golem.png',
     frameWidth: 128,
     frameHeight: 128,
     frameCount: 16,
-    renderScale: 1,
+    renderScale: 2,
     stepRate: 7,
     actionRate: 10,
     idleFrames: [0],
@@ -174,49 +320,52 @@ function resolveFrameRoles(def, frameCount) {
   return { idleFrames, walkFrames, armFrame, portraitFrame };
 }
 
+function createCharacterSheetFromImage(key, def, image) {
+  const sourceOffsetX = Math.max(0, Math.floor(Number(def.sourceOffsetX) || 0));
+  const sourceOffsetY = Math.max(0, Math.floor(Number(def.sourceOffsetY) || 0));
+  const columns = Math.floor((image.naturalWidth - sourceOffsetX) / def.frameWidth);
+  const rows = Math.floor((image.naturalHeight - sourceOffsetY) / def.frameHeight);
+  const availableFrames = columns * rows;
+  const frameCount = Math.min(def.frameCount, availableFrames);
+  if (frameCount < 1 || columns < 1 || rows < 1) {
+    console.warn(`[CharacterSprites] Invalid sprite sheet dimensions for "${key}".`);
+    return null;
+  }
+  const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
+  const animationFrames = {};
+  ['attack', 'dash', 'smash', 'beam'].forEach(action => {
+    const indices = Array.isArray(def[`${action}Frames`])
+      ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
+      : [];
+    if (indices.length) animationFrames[action] = indices;
+  });
+  return {
+    ...def,
+    image,
+    columns,
+    rows,
+    frameCount,
+    idleFrames,
+    walkFrames,
+    animationFrames,
+    armFrame,
+    portraitFrame,
+    animations: {
+      idle: idleFrames.map((_, index) => `idle${index}`),
+      walk: walkFrames.map((_, index) => `walk${index}`),
+      ...Object.fromEntries(
+        Object.entries(animationFrames).map(([action, indices]) => (
+          [action, indices.map((_, index) => `${action}${index}`)]
+        )),
+      ),
+    },
+  };
+}
+
 function loadCharacterSheet(key, def) {
   return new Promise(resolve => {
     const image = new Image();
-    image.onload = () => {
-      const columns = Math.floor(image.naturalWidth / def.frameWidth);
-      const rows = Math.floor(image.naturalHeight / def.frameHeight);
-      const availableFrames = columns * rows;
-      const frameCount = Math.min(def.frameCount, availableFrames);
-      if (frameCount < 1 || columns < 1 || rows < 1) {
-        console.warn(`[CharacterSprites] Invalid sprite sheet dimensions for "${key}".`);
-        resolve(null);
-        return;
-      }
-      const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
-      const animationFrames = {};
-      ['attack', 'dash', 'smash', 'beam'].forEach(action => {
-        const indices = Array.isArray(def[`${action}Frames`])
-          ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
-          : [];
-        if (indices.length) animationFrames[action] = indices;
-      });
-      resolve({
-        ...def,
-        image,
-        columns,
-        rows,
-        frameCount,
-        idleFrames,
-        walkFrames,
-        animationFrames,
-        armFrame,
-        portraitFrame,
-        animations: {
-          idle: idleFrames.map((_, index) => `idle${index}`),
-          walk: walkFrames.map((_, index) => `walk${index}`),
-          ...Object.fromEntries(
-            Object.entries(animationFrames).map(([action, indices]) => (
-              [action, indices.map((_, index) => `${action}${index}`)]
-            )),
-          ),
-        },
-      });
-    };
+    image.onload = () => resolve(createCharacterSheetFromImage(key, def, image));
     image.onerror = () => {
       console.warn(`[CharacterSprites] Failed to preload "${def.src}".`);
       resolve(null);
@@ -238,3 +387,4 @@ export async function preloadCharacterSheets() {
 Neo.CHARACTER_SHEET_DEFS = CHARACTER_SHEET_DEFS;
 Neo.preloadCharacterSheets = preloadCharacterSheets;
 Neo.resolveCharacterFrameRoles = resolveFrameRoles;
+Neo.createCharacterSheetFromImage = createCharacterSheetFromImage;

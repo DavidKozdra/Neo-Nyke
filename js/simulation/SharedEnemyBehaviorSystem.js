@@ -565,6 +565,7 @@
         if (enemy.burstDelay <= 0) {
           enemy.burstDelay = 0.085 * Math.max(0.72, tuning.rangedCadence);
           enemy.burstShots -= 1;
+          enemy.attackAnimT = 0.24;
           const baseAngle = angleBetween(enemy, player);
           enemy.burstAngle = turnAngleToward(Number(enemy.burstAngle ?? baseAngle), baseAngle, 0.22 * tuning.reaction);
           const spread = ((random('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
@@ -760,6 +761,7 @@
         enemy.supportCd = Math.max(enemy.supportCd, 0.5);
       } else if (enemy.supportCd <= 0) {
         enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
+        enemy.attackAnimT = 0.24;
         (ctx.getAllies?.(enemy) || []).forEach(other => {
           if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
           ctx.grantBarrier(enemy, other, Math.round(other.max * 0.22 * tuning.supportPower));
@@ -769,6 +771,7 @@
       }
 
       if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 22) {
+        enemy.attackAnimT = 0.24;
         ctx.damagePlayer(enemy, player, enemy.dmg, Math.atan2(dy, dx), 170, enemy.type);
         enemy.attackCd = 1.05 * tuning.rangedCadence;
       }
@@ -814,7 +817,10 @@
           const heal = Math.max(8, Math.round(other.max * (floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
           if (ctx.healEnemy(enemy, other, heal) > 0) healedAny = true;
         });
-        if (healedAny) ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'healer' });
+        if (healedAny) {
+          enemy.attackAnimT = 0.24;
+          ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'healer' });
+        }
       }
 
       if (enemy.attackCd <= 0 && !nearestWounded && player && distance < 350) {
@@ -1477,6 +1483,7 @@
         steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
         if (distance < enemy.r + player.r + 14 && enemy.swingTime <= 0) {
           enemy.swingTime = 0.2;
+          enemy.swingA = Math.atan2(dy, dx);
         }
         if (enemy.swingTime > 0) {
           enemy.swingTime -= dt;
@@ -1499,8 +1506,9 @@
         enemy.windup -= dt;
         enemy.vx *= 0.74;
         enemy.vy *= 0.74;
+        enemy.swingA = Math.atan2(dy, dx);
         if (enemy.windup <= 0 && distance < enemy.r + player.r + 54) {
-          ctx.damagePlayer(enemy, player, enemy.dmg + 16, Math.atan2(dy, dx), 340, enemy.type);
+          ctx.damagePlayer(enemy, player, enemy.dmg + 16, enemy.swingA, 340, enemy.type);
         }
       }
     }

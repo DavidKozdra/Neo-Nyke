@@ -41,6 +41,14 @@ describe('SharedEnemyDropSystem', () => {
     expect(resolveCampaignEnemyDrop({ type: 'hunter', elite: false }, { random: rolls([0.5, 0.05]), potionDropMultiplier: 0.4 })).toBeNull();
   });
 
+  test('makes ordinary potion drops ten percent more common while preserving modifiers', () => {
+    const rolls = values => () => values.shift();
+    const enemy = { type: 'hunter', elite: false };
+    expect(resolveCampaignEnemyDrop(enemy, { random: rolls([0.5, 0.105]) })).toEqual({ type: 'potion', source: 'enemy' });
+    expect(resolveCampaignEnemyDrop(enemy, { random: rolls([0.5, 0.115]) })).toBeNull();
+    expect(resolveCampaignEnemyDrop(enemy, { random: rolls([0.5, 0.045]), potionDropMultiplier: 0.4 })).toBeNull();
+  });
+
   test('uses the campaign boss voucher gate before its optional god-relic roll', () => {
     const rolls = values => () => values.shift();
     const boss = { type: 'queen_cult', boss: true };

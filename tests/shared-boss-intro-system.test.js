@@ -55,7 +55,8 @@ describe('shared boss intro system', () => {
     const enemies = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
     const authority = fs.readFileSync(path.join(__dirname, '../js/simulation/NetworkCombatSystem.js'), 'utf8');
     const view = fs.readFileSync(path.join(__dirname, '../js/rendering/NetworkGameView.js'), 'utf8');
-    expect(enemies).toContain('resolveCampaignBossIntro');
+    expect(enemies).toContain('globalThis.NeoNyke?.simulation?.resolveCampaignBossIntro');
+    expect(enemies).not.toContain('Neo.simulation?.resolveCampaignBossIntro');
     expect(authority).toContain('announceAuthorityBossIntro');
     expect(view).toContain("event.eventType === 'BOSS_INTRO'");
   });

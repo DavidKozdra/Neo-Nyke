@@ -30,12 +30,14 @@
         ? sheet.walkFrames
         : Array.from({ length: sheet.frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i));
       const columns = Math.max(1, Number(sheet.columns) || Math.floor(sheet.image.naturalWidth / sheet.frameWidth));
+      const sourceOffsetX = Math.max(0, Math.floor(Number(sheet.sourceOffsetX) || 0));
+      const sourceOffsetY = Math.max(0, Math.floor(Number(sheet.sourceOffsetY) || 0));
       const pushFrame = (sourceIndex, entryKey) => {
         entries.push({
           key: entryKey,
           image: sheet.image,
-          sourceX: (sourceIndex % columns) * sheet.frameWidth,
-          sourceY: Math.floor(sourceIndex / columns) * sheet.frameHeight,
+          sourceX: sourceOffsetX + (sourceIndex % columns) * sheet.frameWidth,
+          sourceY: sourceOffsetY + Math.floor(sourceIndex / columns) * sheet.frameHeight,
           width: sheet.frameWidth,
           height: sheet.frameHeight,
           renderScale: sheet.renderScale,
@@ -112,12 +114,12 @@
   function getEnemySpriteKey(enemy) {
     if (enemy.type === 'rival') return enemy.rivalKey;
     if (enemy.type === 'mirror_knight') return enemy.spriteKey || getPlayerSpriteKey();
-    if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
+    if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner || Neo.CHARACTER_SPRITE_SHEETS?.machine_gunner ? 'machine_gunner' : 'sniper';
     if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
-    if (enemy.type === 'shield_unit') return 'golem';
-    if (enemy.type === 'healer') return 'cult_follower';
+    if (enemy.type === 'shield_unit') return 'shield_unit';
+    if (enemy.type === 'healer') return 'healer';
     if (enemy.type === 'boss_spawner') return 'laser';
-    return Neo.SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
+    return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
   }
 
   function getEnemySpriteActionOptions(enemy) {
@@ -140,9 +142,13 @@
     return {};
   }
 
+  function getCharacterGameplaySpriteKey(characterKey) {
+    const spriteKey = Neo.getCharacterSpriteKey?.(characterKey) || characterKey;
+    return Neo.SPRITE_DEFS[spriteKey] || Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey] ? spriteKey : 'thorn_knight';
+  }
+
   function getPlayerSpriteKey() {
-    const key = Neo.getCharacterDef().key;
-    return Neo.SPRITE_DEFS[key] ? key : 'thorn_knight';
+    return getCharacterGameplaySpriteKey(Neo.getCharacterDef().key);
   }
 
   // Resolves a base sprite key to its dedicated portrait atlas frame (the
@@ -234,8 +240,9 @@
   function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
     const access = window.NeoSettings?.getAccess?.() || {};
     const def = Neo.SPRITE_DEFS[spriteKey];
-    const animations = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]?.animations || def?.animations || {};
-    if (!def || access.reduceMotion) return spriteKey;
+    const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey];
+    const animations = sheet?.animations || def?.animations || {};
+    if ((!def && !sheet) || access.reduceMotion) return spriteKey;
     const speedOverride = getSpriteAnimSpeedOverride(spriteKey);
 
     const atlasFrames = Neo.SPRITE_ATLAS?.frames || {};
@@ -449,7 +456,8 @@
     if (reduceMotion) return { angleOffset: 0, recoil: 0 };
     const attackProgress = Neo.clamp(Number(options.attackProgress || 0), 0, 1);
     const recoil = Neo.clamp(Number(options.recoil || 0), 0, 1);
-    if ((spriteKey === 'thorn_knight' || spriteKey === 'sarge' || spriteKey === 'mooggy') && attackProgress > 0) {
+    const swingsMeleeArm = ['thorn_knight', 'sarge', 'mooggy', 'knave', 'artificer_knave'].includes(spriteKey);
+    if (swingsMeleeArm && attackProgress > 0) {
       const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
       const eased = 1 - (1 - attackProgress) ** 2;
       const direction = -1;
@@ -465,6 +473,25 @@
       };
     }
     return { angleOffset: 0, recoil: 0 };
+  }
+
+  function getEnemyArmAttackProgress(enemy, fallbackProgress = 0) {
+    if (enemy?.type !== 'knave' && enemy?.type !== 'artificer_knave') return fallbackProgress;
+    const swingTime = Number(enemy.swingTime || 0);
+    if (swingTime > 0) {
+      // Regular/phase-one Knaves use the authored 0.26s blade swipe. The
+      // Artificer's phase-two close strike is a shorter 0.20s version.
+      const swingDuration = enemy.type === 'artificer_knave' && Number(enemy.phase || 1) === 2
+        ? 0.2
+        : 0.26;
+      return getAttackProgress(swingTime, swingDuration);
+    }
+    // Phase three resolves its heavy sword strike directly from windup instead
+    // of creating swingTime, so retain the generic attack progress for it.
+    if (enemy.type === 'artificer_knave' && enemy.state === 'phase3_swing') return fallbackProgress;
+    // A normal Knave's windup is a telegraph. Hold the sword at aim until the
+    // real swing begins, matching the player's melee-arm timing.
+    return 0;
   }
 
   function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1, options = {}) {
@@ -511,13 +538,19 @@
   }
 
   function getEnemyAimAngle(enemy) {
-    if (Number.isFinite(enemy?.beamAngle)) return enemy.beamAngle;
-    if (Number.isFinite(enemy?.dashAngle)) return enemy.dashAngle;
-    if (Number.isFinite(enemy?.swingA)) return enemy.swingA;
+    const beamActive = Number(enemy?.beamTime || 0) > 0
+      || !!enemy?.beamChannel
+      || (Number(enemy?.windup || 0) > 0 && (enemy?.state === 'mirrorLaser' || enemy?.state === 'elite_laser'));
+    if (beamActive && Number.isFinite(enemy?.beamAngle)) return enemy.beamAngle;
+    if (Number(enemy?.dashTime || 0) > 0 && Number.isFinite(enemy?.dashAngle)) return enemy.dashAngle;
+    const bladeWindup = Number(enemy?.windup || 0) > 0
+      && (enemy?.state === 'blade' || enemy?.state === 'phase3_swing');
+    if ((Number(enemy?.swingTime || 0) > 0 || bladeWindup) && Number.isFinite(enemy?.swingA)) return enemy.swingA;
     if (Neo.player) return Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     if (Math.hypot(Number(enemy?.vx || 0), Number(enemy?.vy || 0)) > 1) {
       return Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0));
     }
+    if (Number.isFinite(enemy?.swingA)) return enemy.swingA;
     return 0;
   }
 
@@ -582,8 +615,12 @@
       : enemy.bountyTarget
         ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
         : Neo.getEliteEnemyLabel(enemy);
-    // Enemy level = total floors entered this run, not the per-loop floor.
-    const level = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
+    // Ordinary encounters show cumulative floor depth. Boss Rush has an authored
+    // per-stage level sequence, so its boss nameplate uses the stored enemy level.
+    const displayedLevel = enemy.bossRushBoss
+      ? Math.max(1, Math.floor(Number(enemy.level) || 1))
+      : (Neo.floorsEntered ?? Neo.floor);
+    const level = `Lv.${displayedLevel}`;
     const hpText = `${Math.ceil(enemy.hp)}/${Math.ceil(enemy.max)}`;
     const accent = bountyReady ? '#83f0b0' : enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
       : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';
@@ -788,7 +825,7 @@
       if (enemy.windup > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, enemy.y);
-        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'antony_blemmye' ? '#ffcf8a' : '#aa66ff';
+        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'antony_blemmye' ? '#ffcf8a' : enemy.type === 'healer' ? '#79f7bf' : '#aa66ff';
         Neo.ctx.lineWidth = 2;
         Neo.ctx.globalAlpha = 0.8;
         Neo.ctx.beginPath();
@@ -1348,7 +1385,8 @@
       // enemyAttackProgress assumes — feed the arm indicator its own progress
       // scaled to its actual swing duration, same treatment as thorn_knight/sarge.
       const mooggyArmProgress = enemy.type === 'mooggy' ? getAttackProgress(enemy.swingTime, 0.22) : enemyAttackProgress;
-      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, mooggyArmProgress);
+      const enemyArmProgress = getEnemyArmAttackProgress(enemy, mooggyArmProgress);
+      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyArmProgress);
       Neo.ctx.restore();
       // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
       // streak, while a bladed enemy is mid-swing.
@@ -1946,7 +1984,7 @@
     const aimAngle = Number.isFinite(Number(pn.aimDirection))
       ? Number(pn.aimDirection)
       : Math.atan2(pn.vy || 0, pn.vx || 1);
-    const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
+    const spriteKey = getCharacterGameplaySpriteKey(charKey);
     const slotSize = Math.max(34, pn.r * 2.5) * getActorSpriteScale(pn);
     const slotActionState = getActorSpriteActionState(pn);
     const beamFacingAngle = Number.isFinite(Number(pn.beamChannel?.angle))
@@ -2371,6 +2409,8 @@
   Neo.getFacingDirection = getFacingDirection;
   Neo.getActorActionFacingDirection = getActorActionFacingDirection;
   Neo.shouldHideActorAimArm = shouldHideActorAimArm;
+  Neo.getArmSpriteMotion = getArmSpriteMotion;
+  Neo.getEnemyArmAttackProgress = getEnemyArmAttackProgress;
   Neo.getActorSpriteActionState = getActorSpriteActionState;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.isActorHitFlashActive = isActorHitFlashActive;

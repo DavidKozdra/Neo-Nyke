@@ -3563,21 +3563,40 @@
         ttl: chaos.durationSeconds, tick: 0, interval: chaos.intervalSeconds, damage: chaos.burstDamage,
         poisonDurationSeconds: chaos.poisonDurationSeconds,
       });
-    } else if (key === 'random_pounce') {
-      const pounce = globalThis.NeoNyke?.simulation?.planCampaignRandomPounce?.({
-        originX: enemy.x, originY: enemy.y, burstBaseDamage: damage, fangBaseDamage: Math.round(damage * 0.5),
+    } else if (key === 'random_pounce' || key === 'intense_biscuits') {
+      const biscuitCast = key === 'intense_biscuits';
+      const planner = biscuitCast
+        ? globalThis.NeoNyke?.simulation?.planCampaignIntenseBiscuits
+        : globalThis.NeoNyke?.simulation?.planCampaignRandomPounce;
+      const pounce = planner?.({
+        originX: enemy.x, originY: enemy.y, burstBaseDamage: damage,
+        projectileBaseDamage: Math.round(damage * (biscuitCast ? 0.4 : 0.5)),
         entities: [Neo.player], random: () => Neo.nextRandom('encounter'),
-      }) || { radius: 160, burstDamage: damage, fangs: [] };
+      }) || { radius: biscuitCast ? 105 : 160, burstDamage: damage, fangs: [], biscuits: [] };
       const radius = pounce.radius;
-      Neo.ringBurst(enemy.x, enemy.y, radius - 24, '#ff3070', 0.5);
-      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff3070', 'heavy');
-      damagePlayerInRivalRadius(enemy, rival, radius, pounce.burstDamage, 260, key);
-      pounce.fangs.forEach(fang => {
+      const color = biscuitCast ? '#ffc95a' : '#ff3070';
+      Neo.ringBurst(enemy.x, enemy.y, radius - (biscuitCast ? 18 : 24), color, biscuitCast ? 0.42 : 0.5);
+      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, color, biscuitCast ? 'normal' : 'heavy');
+      const playerHit = damagePlayerInRivalRadius(enemy, rival, radius, pounce.burstDamage, biscuitCast ? 130 : 260, key);
+      if (biscuitCast && playerHit) {
+        const healRatio = Math.min(
+          Number(pounce.healMaxHpRatioCap || 0.08),
+          Number(pounce.healMaxHpRatioPerTarget || 0.02),
+        );
+        const before = Number(enemy.hp || 0);
+        enemy.hp = Math.min(Number(enemy.max || 1), before + Number(enemy.max || 1) * healRatio);
+        rival.hp = enemy.hp;
+        const gained = enemy.hp - before;
+        if (gained > 0) Neo.spawnHealPopup?.(enemy.x, enemy.y - 20, gained, { color });
+      }
+      (biscuitCast ? pounce.biscuits : pounce.fangs).forEach(projectile => {
         spawnRivalMoveProjectile(enemy, rival, {
-          vx: Math.cos(fang.angle) * fang.speed, vy: Math.sin(fang.angle) * fang.speed,
-          r: fang.radius, life: fang.lifeSeconds, kind: 'fang', color: '#ff5090', damage: fang.damage, knockback: fang.knockback,
-          homing: fang.homing, homingSpeed: fang.homingSpeed, homingAccel: fang.homingAccel, homingTurnRate: fang.homingTurnRate, homingRadius: fang.homingRadius,
-          statusEffects: [{ key: 'bleed', chance: fang.hitOptions?.bleedChance, stacks: fang.hitOptions?.bleedStacks, duration: fang.hitOptions?.bleedDuration }],
+          vx: Math.cos(projectile.angle) * projectile.speed, vy: Math.sin(projectile.angle) * projectile.speed,
+          r: projectile.radius, life: projectile.lifeSeconds, kind: biscuitCast ? 'biscuit' : 'fang',
+          color: biscuitCast ? '#d99032' : '#ff5090', damage: projectile.damage, knockback: projectile.knockback,
+          homing: projectile.homing, homingSpeed: projectile.homingSpeed, homingAccel: projectile.homingAccel,
+          homingTurnRate: projectile.homingTurnRate, homingRadius: projectile.homingRadius,
+          statusEffects: biscuitCast ? [] : [{ key: 'bleed', chance: projectile.hitOptions?.bleedChance, stacks: projectile.hitOptions?.bleedStacks, duration: projectile.hitOptions?.bleedDuration }],
         });
       });
     } else if (key === 'power_disks') {

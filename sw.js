@@ -34,15 +34,19 @@ const KOZ_PWA_CONFIG = {
     "/assets/itch/neo-nyke-itch-background.png",
     "/assets/sprites/chars/charger.png",
     "/assets/sprites/chars/cultMage.png",
+    "/assets/sprites/chars/follower.png",
     "/assets/sprites/chars/Gelleh.png",
+    "/assets/sprites/chars/healer.png",
     "/assets/sprites/chars/hunter.png",
     "/assets/sprites/chars/knave.png",
     "/assets/sprites/chars/large-golem.png",
+    "/assets/sprites/chars/machine_gunner.png",
     "/assets/sprites/chars/Metao.png",
     "/assets/sprites/chars/mini-golem.png",
     "/assets/sprites/chars/Mooggy.png",
     "/assets/sprites/chars/princess.png",
     "/assets/sprites/chars/Sarge.png",
+    "/assets/sprites/chars/shield_unit.png",
     "/assets/sprites/chars/sniper.png",
     "/assets/sprites/chars/Thorn Knight.png",
     "/assets/sprites/chars/turtle_boy.png",
@@ -180,6 +184,7 @@ const KOZ_PWA_CONFIG = {
     "/js/tutorial/scenes.js",
     "/js/ui/controller.js",
     "/js/ui/credits.js",
+    "/js/ui/custom-sprite-editor.js",
     "/js/ui/input.js",
     "/js/ui/lazy-panels.js",
     "/js/ui/menu-background.js",
@@ -198,6 +203,7 @@ const KOZ_PWA_CONFIG = {
     "/manifest.json"
   ],
   "optional": [
+    "/assets/credits-images/bug.png",
     "/assets/credits-images/digits.png",
     "/assets/credits-images/Explorer2000.webp",
     "/assets/credits-images/forrest.gif",
@@ -221,6 +227,8 @@ const KOZ_PWA_CONFIG = {
     "/assets/sounds/sfx_achievement 3.mp3",
     "/assets/sounds/sfx_AOE 4.wav",
     "/assets/sounds/sfx_bomb explosion.wav",
+    "/assets/sounds/sfx_break vase 2.wav",
+    "/assets/sounds/sfx_break vase 3.wav",
     "/assets/sounds/sfx_break_funiture.wav",
     "/assets/sounds/sfx_Buy-Sell 1.wav",
     "/assets/sounds/sfx_Buy-Sell 2.wav",
@@ -262,14 +270,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 249,
-    "bytes": 51664880,
-    "criticalEntries": 194,
-    "criticalBytes": 11940350,
-    "optionalEntries": 55,
-    "optionalBytes": 39724530
+    "entries": 257,
+    "bytes": 52230395,
+    "criticalEntries": 199,
+    "criticalBytes": 12062809,
+    "optionalEntries": 58,
+    "optionalBytes": 40167586
   },
-  "version": "d5cb14c68d557375"
+  "version": "11dc963b2e029ee5"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

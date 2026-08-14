@@ -33,7 +33,7 @@ const ITEM_DEFS = {
       key: 'tough_bandaid',
       name: 'Tough Bandaid',
       shortName: 'Patch + Resist',
-      description: 'Per stack: defense +0.5% and +2% Bleed chance on basic and bleed-focused melee attacks. Bleed tick damage taken -10% per stack (max -80%); your Bleed timers decay 20% faster per stack (max 3× speed).',
+      description: 'Per stack: defense +0.5% and +2% Bleed chance on basic and bleed-focused melee attacks. Bleed and Dark Drain tick damage taken -10% per stack (max -80%); your Bleed timers decay 20% faster per stack (max 3× speed).',
       rarity: 'knight',
       color: '#f0e2cf',
       accent: '#a87555',
@@ -605,6 +605,17 @@ const ITEM_DEFS = {
       category: 'god',
       tags: ['poison', 'status', 'spread', 'tools', 'crit', 'god'],
     },
+    factor_of_elements: {
+      key: 'factor_of_elements',
+      name: 'Factor of Elements',
+      shortName: 'Status +5%',
+      description: 'Each stack: deal 5% more damage for every status stack on the enemy.',
+      rarity: 'god',
+      color: '#ffd85a',
+      accent: '#6fe7ff',
+      category: 'god',
+      tags: ['status', 'damage', 'god'],
+    },
     princes_glasses: {
       key: 'princes_glasses',
       name: "Prince's Glasses",
@@ -621,7 +632,7 @@ const ITEM_DEFS = {
       tool: true,
       name: "Mateo's Bag",
       shortName: 'Bag',
-      description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Stored potions heal +10% per stack and auto-trigger below 10% health. If empty, entering a shop stores 1 minor potion once per floor.',
+      description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Potion pickups heal +10% per stack; stored potions heal +20% per stack and auto-trigger below 10% health. If empty, entering a shop stores 1 minor potion once per floor.',
       rarity: 'wizard',
       color: '#b49cff',
       category: 'wizard',
@@ -761,7 +772,7 @@ const ITEM_DEFS = {
 const ITEM_SHORT_DESCRIPTIONS = Object.freeze({
   neo_knife: '+10% melee Bleed chance per stack.',
   tooth_of_thorn: 'Hits can drain enemy life and heal you.',
-  tough_bandaid: 'Gain defense, Bleed chance, and Bleed resistance.',
+  tough_bandaid: 'Gain defense, Bleed chance, and Bleed/Dark Drain resistance.',
   orb_of_blood: 'Bleeding enemies take +100% damage per stack.',
   hemes_scarf: 'Bleed nearby enemies; charged blood restores low HP.',
   insurance: 'Survive a hit below half HP, then recharge with kills.',
@@ -815,8 +826,9 @@ const ITEM_SHORT_DESCRIPTIONS = Object.freeze({
   moggys_coat: 'Hidden kills prime an opening Dark Drain ambush.',
   veggys_pendant: 'Gain max HP now and every three rooms.',
   procy_pickle: 'Crits, status procs, and tools can spread statuses.',
+  factor_of_elements: 'Deal +5% damage per enemy status stack per relic stack.',
   princes_glasses: 'Upgrade the minimap and gain crit and defense.',
-  mateos_bag: 'Store potions for stronger healing and emergency use.',
+  mateos_bag: 'Potion pickups heal +10% and stored potions heal +20% per stack.',
   extra_battery: 'Choose one move to gain +1 max stack.',
   mooggy_zoomies: 'Projectiles gain speed, range, and magnetism.',
   el_bartos_cape: 'Tool: turn invisible, move faster, and empower your first hit.',
@@ -925,4 +937,3 @@ const SCROLL_KEYS = Object.keys(SCROLL_DEFS);
 
   return { ITEM_DEFS, ITEM_SHORT_DESCRIPTIONS, getItemShortDescription, SCROLL_DEFS, SCROLL_KEYS };
 });
-

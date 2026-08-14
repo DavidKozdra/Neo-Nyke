@@ -33,12 +33,12 @@
     cult_mage: enemy('cult_mage', 'beam', { radius: 17, maxHealth: 84, moveSpeed: 58, contactDamage: 18, attackCooldown: 1.8 }),
     cult_follower: enemy('cult_follower', 'chaser', { radius: 12, maxHealth: 34, moveSpeed: 138, contactDamage: 8, attackCooldown: 0.85 }),
     summoner: enemy('summoner', 'summoner', { radius: 18, maxHealth: 120, moveSpeed: 66, contactDamage: 12, attackCooldown: 1.5 }),
-    shield_unit: enemy('shield_unit', 'shield', { radius: 22, maxHealth: 210, moveSpeed: 52, contactDamage: 10, attackCooldown: 1.4 }, { spriteKey: 'golem', bleedImmune: true }),
-    healer: enemy('healer', 'healer', { radius: 19, maxHealth: 150, moveSpeed: 64, contactDamage: 10, attackCooldown: 1.2 }, { spriteKey: 'cult_follower' }),
+    shield_unit: enemy('shield_unit', 'shield', { radius: 22, maxHealth: 210, moveSpeed: 52, contactDamage: 10, attackCooldown: 1.4 }, { spriteKey: 'shield_unit', bleedImmune: true }),
+    healer: enemy('healer', 'healer', { radius: 19, maxHealth: 150, moveSpeed: 64, contactDamage: 10, attackCooldown: 1.2 }, { spriteKey: 'healer' }),
     boss_spawner: enemy('boss_spawner', 'boss_spawner', { radius: 24, maxHealth: 300, moveSpeed: 96, contactDamage: 8, attackCooldown: 1.8 }, { spriteKey: 'laser', bleedImmune: true }),
     queen_cult: enemy('queen_cult', 'boss', { radius: 38, maxHealth: 912, moveSpeed: 96, contactDamage: 20, attackCooldown: 1.2 }, { boss: true, patterns: Object.freeze(['summon', 'beam', 'nova']) }),
     bulk_golem: enemy('bulk_golem', 'boss', { radius: 58, maxHealth: 1280, moveSpeed: 88, contactDamage: 31, attackCooldown: 1.6 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['jump', 'aoe', 'split']) }),
-    artificer_knave: enemy('artificer_knave', 'boss', { radius: 30, maxHealth: 1880, moveSpeed: 124, contactDamage: 20, attackCooldown: 1.2 }, { boss: true, patterns: Object.freeze(['blade', 'dash', 'turrets']) }),
+    artificer_knave: enemy('artificer_knave', 'boss', { radius: 30, maxHealth: 1880, moveSpeed: 124, contactDamage: 20, attackCooldown: 1.2 }, { spriteKey: 'knave', boss: true, patterns: Object.freeze(['blade', 'dash', 'turrets']) }),
     bowman_bane: enemy('bowman_bane', 'boss', { radius: 36, maxHealth: 2400, moveSpeed: 80, contactDamage: 50, attackCooldown: 1.4 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['columns', 'burst', 'warp', 'thunder_smash']) }),
     antony_blemmye: enemy('antony_blemmye', 'boss', { radius: 42, maxHealth: 1250, moveSpeed: 78, contactDamage: 24, attackCooldown: 1.35 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['hammer', 'bite', 'slash', 'death_ball']) }),
     handsome_devil: enemy('handsome_devil', 'boss', { radius: 34, maxHealth: 1700, moveSpeed: 104, contactDamage: 50, attackCooldown: 1.1 }, { boss: true, fireImmune: true, patterns: Object.freeze(['spikes', 'lava_grid', 'laser', 'claw']) }),
@@ -54,10 +54,23 @@
   ]);
   const BOSS_ENEMY_TYPES = Object.freeze(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
   const ELITE_POWER_TYPES = Object.freeze(['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed']);
+  const BOSS_RUSH_START_LEVEL = 2;
+
+  function getBossRushBossLevel(stage) {
+    return BOSS_RUSH_START_LEVEL + Math.max(0, Math.floor(Number(stage) || 0));
+  }
 
   function getEnemyDefinition(type) {
     return ENEMY_CATALOG[type] || ENEMY_CATALOG.hunter;
   }
 
-  return { ENEMY_CATALOG, STANDARD_ENEMY_TYPES, BOSS_ENEMY_TYPES, ELITE_POWER_TYPES, getEnemyDefinition };
+  return {
+    ENEMY_CATALOG,
+    STANDARD_ENEMY_TYPES,
+    BOSS_ENEMY_TYPES,
+    ELITE_POWER_TYPES,
+    BOSS_RUSH_START_LEVEL,
+    getEnemyDefinition,
+    getBossRushBossLevel,
+  };
 });

@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "شعاع العين المقدسة",
   "moves.holy_eye_beams.desc": "قم بتوجيه الشعاعين المقدسين من عينيك. كل طاقم لديه فرصة لشفاءك بنسبة 5% كحد أقصى من الصحة.",
   "sounds.break_furniture.label": "كسر الأثاث",
+  "sounds.break_pot.label": "كسر الإناء",
   "moves.titan_hammer.name": "مطرقة تيتان",
   "moves.titan_hammer.desc": "استدعِ مطرقة عملاقة تتبع المؤشر. اضغط لتحطيمها لإحداث سحق منطقة واسعة. تدوم 8 ثوانٍ.",
   "difficulties.easy.name": "سهل",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "حلقة الآلهة",
   "achievements.godloop.desc": "أكمل 20 حلقة في جولة واحدة",
-  "achievementProgress.godloop.label": "الحلقات في هذه الجولة"
+  "achievementProgress.godloop.label": "الحلقات في هذه الجولة",
+  "moves.intense_biscuits.name": "بسكويت جامح",
+  "moves.intense_biscuits.desc": "قصف بالبسكويت، إن شئت: انقضاضة صغيرة تطلق خمس قطع بسكويت موجهة وتشفي 2٪ من أقصى الصحة لكل عدو تصيبه، حتى 8٪."
 }

@@ -13,6 +13,7 @@ const {
 } = require('../js/simulation/SharedMoveContent');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 describe('shared Neo Nyke move content', () => {
   test('caps Flying Untouchable at five seconds', () => {
@@ -33,7 +34,7 @@ describe('shared Neo Nyke move content', () => {
 
   test('catalogs every authored move exactly once for headless authorities', () => {
     const catalog = Object.values(MOVE_SLOT_KEYS).flat();
-    expect(catalog).toHaveLength(47);
+    expect(catalog).toHaveLength(48);
     expect(new Set(catalog).size).toBe(catalog.length);
     expect(Object.keys(MOVE_BASE_STATS).sort()).toEqual(catalog.slice().sort());
     expect(Object.keys(MOVE_PRESENTATION_DEFS).sort()).toEqual(catalog.slice().sort());
@@ -57,13 +58,33 @@ describe('shared Neo Nyke move content', () => {
         options.forEach(moveKey => expect(getMoveSlot(moveKey)).toBe(slot));
       });
     });
+    expect(KIT_ALTERNATIVES.mooggy.laser).toEqual(['nail_shot', 'mooggy_blood_beam']);
+    expect(KIT_ALTERNATIVES.mooggy.smash).toEqual([
+      'random_pounce', 'intense_biscuits', 'mooggy_hairball',
+    ]);
   });
 
   test('distinguishes channelled beams from other laser-slot moves', () => {
     ['blood_beam', 'love_beam', 'turtle_wave', 'holy_eye_beams', 'mooggy_blood_beam', 'thorn_blood_beams', 'wizard_lazer']
       .forEach(moveKey => expect(isContinuousBeamMove(moveKey)).toBe(true));
-    ['power_disks', 'blade_justice', 'nail_shot', 'hammer_throw', 'love_bomb_laser', 'ghost_ball']
+    ['power_disks', 'blade_justice', 'nail_shot', 'hammer_throw', 'love_bomb_laser', 'ghost_ball', 'intense_biscuits']
       .forEach(moveKey => expect(isContinuousBeamMove(moveKey)).toBe(false));
+  });
+
+  test('defines Intense Biscuits as Mooggy\'s compact alternative smash with its own drawn icon', () => {
+    expect(MOVE_BASE_STATS.intense_biscuits).toEqual({
+      damage: 28, cooldown: 4.2, range: 105,
+    });
+    expect(MOVE_SLOT_KEYS.smash).toContain('intense_biscuits');
+    expect(MOVE_SLOT_KEYS.laser).not.toContain('intense_biscuits');
+    expect(MOVE_PRESENTATION_DEFS.intense_biscuits).toEqual(expect.objectContaining({
+      kind: 'aoe', color: '#ffc95a', style: 'normal',
+    }));
+    const context = { window: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/sprites/icons.js'), 'utf8'), context);
+    expect(context.window.NeoNykeIconDefs.moves.intense_biscuits).toEqual(expect.objectContaining({
+      color: '#d99032', accent: '#ffe29a', pixels: expect.any(Array), accentPixels: expect.any(Array),
+    }));
   });
 
   test('defines Power Disks once as the campaign radial burst with shard emitters', () => {

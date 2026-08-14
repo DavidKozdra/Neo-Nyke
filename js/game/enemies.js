@@ -935,6 +935,10 @@
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
     const eliteAllowed = !!elite && (options.forceElite || canSpawnEliteEnemies());
+    const requestedLevel = Number(options.level);
+    const enemyLevel = options.level !== undefined && Number.isFinite(requestedLevel)
+      ? Math.max(1, Math.floor(requestedLevel))
+      : rollEnemyEncounterLevel(Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1));
     // Stable per-enemy identity, used by status tracking / achievements to tell
     // "4 statuses on one enemy" apart from "1 status on 4 enemies".
     Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
@@ -943,7 +947,7 @@
       type,
       x,
       y,
-      level: rollEnemyEncounterLevel(Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1)),
+      level: enemyLevel,
       vx: 0,
       vy: 0,
       r: 15,
@@ -1152,7 +1156,7 @@
 
   function tryPlaySharedBossIntro(enemy, enemyType, expectedKey = null) {
     if (!enemy || !enemyType || !Neo.player) return false;
-    const resolve = Neo.simulation?.resolveCampaignBossIntro;
+    const resolve = globalThis.NeoNyke?.simulation?.resolveCampaignBossIntro;
     if (typeof resolve !== 'function') return false;
     const intro = resolve({
       enemyType,
@@ -1332,6 +1336,27 @@
     };
   }
 
+  function scaleMirrorItemStats(inventory, itemStats) {
+    const simulation = globalThis.NeoNyke?.simulation;
+    if (typeof simulation?.scaleCampaignItemEffects !== 'function') {
+      throw new Error('Shared mirror item scaling is unavailable');
+    }
+    const level = Math.max(1, Number(inventory?.level || 1));
+    const levelSpeedBonus = (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
+    const characterDef = Neo.CHARACTER_DEFS?.[inventory?.character] || {};
+    return simulation.scaleCampaignItemEffects(
+      itemStats,
+      simulation.MIRROR_ITEM_EFFECT_STRENGTH,
+      {
+        aoeRadiusMultiplier: Number(characterDef.aoeRadiusMultiplier || 1),
+        aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
+        moveSpeedMultiplier: 1 + levelSpeedBonus,
+        weaponBleedChance: Number(itemStats?.weaponBleedChance || 0),
+        weaponCritChance: Number(itemStats?.weaponCritChance || 0),
+      },
+    );
+  }
+
   function getMirrorAnvilBonus(inventory, itemType, itemKey, statKey) {
     return Number(inventory?.anvilUpgrades?.[itemType]?.[itemKey]?.[statKey] || 0)
       * Number((itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS)?.[statKey]?.step || 0);
@@ -1342,20 +1367,27 @@
     return Math.max(base * 0.5, base + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'cooldown'));
   }
 
-  function getMirrorBaseDamage(inventory) {
+  function getMirrorBaseDamage(inventory, itemStats) {
     const characterMultiplier = Number(Neo.CHARACTER_DEFS?.[inventory?.character]?.damageMultiplier || 1);
-    return Math.max(1, (Neo.ATTACKS.melee.damage + Number(inventory?.attackPower || 0)) * characterMultiplier);
+    const flatHitBonus = Math.max(0, Number(itemStats?.flatHitDamageBonus || 0));
+    const poisonMultiplier = Neo.getPoisonDamageMultiplier?.(Neo.player) ?? 1;
+    return Math.max(1, (Neo.ATTACKS.melee.damage + Number(inventory?.attackPower || 0) + flatHitBonus) * characterMultiplier * poisonMultiplier);
   }
 
   function getMirrorAttackSpeed(inventory, itemStats) {
-    return Math.max(0.2, Number(inventory?.attackSpeed || 1) * Number(itemStats.attackSpeedMultiplier || 1));
+    const simulation = globalThis.NeoNyke?.simulation || {};
+    const robotArmMultiplier = itemStats?.hasRobotArm && inventory?.robotArmReady
+      ? 1 + 7 * Number(simulation.MIRROR_ITEM_EFFECT_STRENGTH || 0.88)
+      : 1;
+    return Math.max(0.2, Number(inventory?.attackSpeed || 1) * Number(itemStats.attackSpeedMultiplier || 1) * robotArmMultiplier);
   }
 
   function getMirrorChampionStats() {
     const inventory = createMirrorInventorySnapshot();
-    const itemStats = clonePlainObject(Neo.getItemStats?.() || getMirrorInventoryItemStats(inventory));
-    const attackSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || getMirrorAttackSpeed(inventory, itemStats)));
-    const baseDamage = Math.max(1, Number(Neo.getPlayerBaseDamage?.() || getMirrorBaseDamage(inventory)));
+    const rawItemStats = clonePlainObject(Neo.getItemStats?.() || getMirrorInventoryItemStats(inventory));
+    const itemStats = scaleMirrorItemStats(inventory, rawItemStats);
+    const attackSpeed = getMirrorAttackSpeed(inventory, itemStats);
+    const baseDamage = getMirrorBaseDamage(inventory, itemStats);
     const equippedMoves = { ...inventory.equippedMoves };
     const meleeMove = equippedMoves.melee || 'slash';
     const laserMove = equippedMoves.laser || 'blood_beam';
@@ -1488,7 +1520,7 @@
       swingTime: 0,
       summonCd: 0,
       supportCd: 0,
-      barrier: stats.inventory.overhealBarrier,
+      barrier: stats.inventory.overhealBarrier * Number(globalThis.NeoNyke.simulation.MIRROR_ITEM_EFFECT_STRENGTH || 0.88),
       bossSpawnTimer: 0,
       bossSpawnWarnAt: 0,
       aoeTime: 0,
@@ -1620,6 +1652,7 @@
   function spawnBombFailAoe(x = Neo.ROOM_W / 2, y = Neo.ROOM_H / 2) {
     Neo.hazards.push({
       kind: 'bomb_aoe',
+      source: 'challenge_bomb',
       x,
       y,
       r: BOMB_FAIL_AOE_RADIUS,
@@ -1842,6 +1875,9 @@
   }
 
   function getEnemyProgressionLevel(enemy) {
+    if (enemy?.bossRushBoss) {
+      return Math.max(1, Math.floor(Number(enemy.level) || 1));
+    }
     return Math.max(
       1,
       Number(enemy?.level) || 0,
@@ -2412,6 +2448,7 @@
       if (enemy.burstDelay <= 0) {
         enemy.burstDelay = 0.085 * Math.max(0.72, tuning.rangedCadence);
         enemy.burstShots -= 1;
+        enemy.attackAnimT = 0.24;
         const baseAngle = Neo.angleBetween(enemy, Neo.player);
         enemy.burstAngle = Neo.turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
         const spread = ((Neo.nextRandom('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
@@ -2606,6 +2643,7 @@
       enemy.supportCd = Math.max(enemy.supportCd, 0.5);
     } else if (enemy.supportCd <= 0) {
       enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
+      enemy.attackAnimT = 0.24;
       Neo.enemies.forEach(other => {
         if (!other || other === enemy) return;
         if (Neo.dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
@@ -2617,6 +2655,7 @@
     }
 
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 22) {
+      enemy.attackAnimT = 0.24;
       Neo.damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type, { attacker: enemy });
       enemy.attackCd = 1.05 * tuning.rangedCadence;
     }
@@ -2667,6 +2706,7 @@
         }
       });
       if (healedAny) {
+        enemy.attackAnimT = 0.24;
         Neo.ringBurst(enemy.x, enemy.y, 76, '#79f7bf', 0.55);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.65, text: 'HEAL', c: '#79f7bf' });
       }
@@ -3225,6 +3265,7 @@
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
       if (distance < enemy.r + Neo.player.r + 14 && enemy.swingTime <= 0) {
         enemy.swingTime = 0.2;
+        enemy.swingA = Math.atan2(dy, dx);
       }
       if (enemy.swingTime > 0) {
         enemy.swingTime -= dt;
@@ -3246,8 +3287,9 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
+      enemy.swingA = Math.atan2(dy, dx);
       if (enemy.windup <= 0) {
-        const angle = Math.atan2(dy, dx);
+        const angle = enemy.swingA;
         if (distance < enemy.r + Neo.player.r + 54) {
           Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type, { attacker: enemy });
         }
@@ -4376,7 +4418,6 @@
   function fireMirrorProjectiles(enemy, angle, count, spread, speed, damage, options = {}) {
     const projectileSpeedMultiplier = Math.max(0.1, Number(enemy?.mirrorItemStats?.projectileSpeedMultiplier || 1));
     const projectileSpeed = speed * projectileSpeedMultiplier;
-    const projectileBounces = Math.max(0, Math.floor(Number(enemy?.mirrorItemStats?.projectileBounces || 0)));
     const homingStrength = Math.max(0, Number(enemy?.mirrorItemStats?.projectileHomingStrength || 0));
     const grantedHoming = homingStrength > 0 && !Object.prototype.hasOwnProperty.call(options, 'homing');
     for (let index = 0; index < count; index += 1) {
@@ -4402,7 +4443,10 @@
         homingTurnRate: options.homingTurnRate ?? (grantedHoming ? 0.75 + homingStrength * 3.5 : undefined),
         homingAccel: options.homingAccel ?? (grantedHoming ? 1.2 + homingStrength * 6 : undefined),
         homingRadius: options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : undefined),
-        bouncesRemaining: projectileBounces,
+        bouncesRemaining: globalThis.NeoNyke.simulation.resolveFractionalItemEffectCount(
+          enemy?.mirrorItemStats?.projectileBounces,
+          () => Neo.nextRandom('encounter'),
+        ),
       });
     }
   }

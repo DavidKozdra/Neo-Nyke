@@ -257,6 +257,9 @@
     if (enemy.type === 'rival') return enemy.rivalBeamColor || '#ff00aa';
     if (enemy.type === 'mooggy' || enemy.type === 'handsome_devil') return '#ff3348';
     if (enemy.type === 'bowman_bane') return '#8dd4ff';
+    // Healers fire in the same green they heal in, so the support unit reads as
+    // one colour whether it is beaming the player or topping up its allies.
+    if (enemy.type === 'healer') return '#79f7bf';
     return '#aa66ff';
   }
 
@@ -344,6 +347,7 @@
     kicky_kick:       { base: 184 },
     wall_of_toph:     { base: 46, mult: 'aoeDamageMultiplier' },
     random_pounce:    { base: 52, mult: 'aoeDamageMultiplier' },
+    intense_biscuits: { base: 28, mult: 'aoeDamageMultiplier', hits: 6 },
     mooggy_hairball:  { base: 34, mult: 'aoeDamageMultiplier' },
     excalibur_strike: { base: 46, mult: 'aoeDamageMultiplier', hits: 5 },
     holy_turrets:     { base: 17, mult: 'aoeDamageMultiplier' },
@@ -1702,6 +1706,10 @@
       castRandomPounce();
       return;
     }
+    if (move === 'intense_biscuits') {
+      castIntenseBiscuits();
+      return;
+    }
     if (move === 'mooggy_hairball') {
       castMooggyHairball();
       return;
@@ -2401,6 +2409,66 @@
         // instead of making eight projectiles repeat both searches every 0.16s.
         homingTargetRef: target,
         homingTargetTimer: 1.1,
+        homingPathRefreshInterval: 0.45,
+      });
+    });
+  }
+
+  function castIntenseBiscuits() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('smash');
+    const biscuits = globalThis.NeoNyke?.simulation?.planCampaignIntenseBiscuits?.({
+      originX: Neo.player.x,
+      originY: Neo.player.y,
+      entities: Neo.enemies,
+      aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
+      aoeDamageMultiplier: itemStats.aoeDamageMultiplier,
+      anvilDamage: Neo.getAnvilMoveBonus(move, 'damage'),
+      anvilRange: Neo.getAnvilMoveBonus(move, 'range'),
+      godMode: Neo.godTimer > 0,
+      random: Neo.rng,
+    });
+    if (!biscuits) throw new Error('Shared Intense Biscuits policy is unavailable');
+
+    const burstTargets = (Neo.enemies || []).filter(enemy => !enemy?.dead
+      && Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) <= biscuits.radius + Number(enemy.r || 0));
+    Neo.addTrauma?.(0.48, Math.PI / 2, 18);
+    Neo.addHitstop?.(0.035);
+    Neo.blastRadius(Neo.player.x, Neo.player.y, biscuits.radius, biscuits.burstDamage, '#ffc95a', null, 130);
+    Neo.ringBurst(Neo.player.x, Neo.player.y, Math.max(18, biscuits.radius - 18), '#ffe29a', 0.42);
+
+    const healRatio = Math.min(
+      biscuits.healMaxHpRatioCap,
+      burstTargets.length * biscuits.healMaxHpRatioPerTarget,
+    );
+    if (healRatio > 0) {
+      const gained = Neo.applyPlayerHealing(Neo.scalePlayerHealing(Neo.player.maxHp * healRatio));
+      if (gained > 0) Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 24, gained, { color: '#ffc95a' });
+    }
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.4, text: 'BISCUITS!', c: '#ffc95a' });
+
+    biscuits.biscuits.forEach(biscuit => {
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(biscuit.angle) * biscuit.speed,
+        vy: Math.sin(biscuit.angle) * biscuit.speed,
+        r: biscuit.radius,
+        life: biscuit.lifeSeconds,
+        enemy: false,
+        kind: 'biscuit',
+        damage: biscuit.damage,
+        knockback: biscuit.knockback,
+        color: '#d99032',
+        hitOptions: biscuit.hitOptions,
+        homing: biscuit.homing,
+        homingTarget: 'enemy',
+        homingRadius: biscuit.homingRadius,
+        homingSpeed: biscuit.homingSpeed,
+        homingAccel: biscuit.homingAccel,
+        homingTurnRate: biscuit.homingTurnRate,
+        homingTargetRef: biscuit.target,
+        homingTargetTimer: biscuit.lifeSeconds,
         homingPathRefreshInterval: 0.45,
       });
     });

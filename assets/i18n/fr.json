@@ -476,6 +476,7 @@
   "moves.holy_eye_beams.name": "Faisceaux du Saint-Œil",
   "moves.holy_eye_beams.desc": "Canalisez les rayons sacrés jumeaux de vos yeux. Chaque lancer a une chance de vous soigner de 5 % de vos PV maximum.",
   "sounds.break_furniture.label": "Casser les meubles",
+  "sounds.break_pot.label": "Casser le pot",
   "moves.titan_hammer.name": "Marteau Titan",
   "moves.titan_hammer.desc": "Invoque un marteau géant qui suit le curseur. Cliquez pour l'abattre et infliger un lourd impact de zone. Dure 8s.",
   "difficulties.easy.name": "Facile",
@@ -516,5 +517,7 @@
   "characters.sarge.name": "Sarge",
   "achievements.godloop.name": "Boucle divine",
   "achievements.godloop.desc": "Terminez 20 boucles en une seule partie",
-  "achievementProgress.godloop.label": "Boucles dans cette partie"
+  "achievementProgress.godloop.label": "Boucles dans cette partie",
+  "moves.intense_biscuits.name": "Biscuits intenses",
+  "moves.intense_biscuits.desc": "Un déluge de biscuits, si vous voulez : un bond compact lance cinq biscuits à tête chercheuse et soigne 2 % des PV max par ennemi touché, jusqu’à 8 %."
 }

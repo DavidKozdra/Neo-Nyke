@@ -42,6 +42,7 @@ const achievementManager = (() => {
   const DB_NAME = 'NeoNykeDB';
   const STORE = 'achievements';
   let db = null;
+  const ACHIEVEMENT_BUFF_SECONDS = 5;
   const cumulativeCounts = new Map();
   // Synchronous in-flight guard so two async unlock() calls for the same id
   // (fired close together) can't both pass the isUnlocked() check before either
@@ -206,6 +207,12 @@ const achievementManager = (() => {
     return next;
   }
 
+  function grantAchievementBuff() {
+    const neo = window.Neo;
+    if (!neo?.player) return;
+    neo.godTimer = Math.max(Number(neo.godTimer) || 0, ACHIEVEMENT_BUFF_SECONDS);
+  }
+
   async function unlock(id) {
     // Set synchronously (before any await) so concurrent calls bail out here.
     if (unlockingInFlight.has(id)) return;
@@ -222,6 +229,7 @@ const achievementManager = (() => {
       const def = ACHIEVEMENTS.find(a => a.id === id);
       if (def) {
         pushAchievementToast(def);
+        grantAchievementBuff();
         window.Neo?.recordAchievementUnlock?.(def);
         window.dispatchEvent(new CustomEvent('achievement:unlocked', { detail: { id } }));
       }

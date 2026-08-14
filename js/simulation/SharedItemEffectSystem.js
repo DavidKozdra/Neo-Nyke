@@ -12,6 +12,37 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
   const count = (player, key) => Math.max(0, Number(player?.items?.[key] || 0));
 
+  const MIRROR_ITEM_EFFECT_STRENGTH = 0.88;
+  const ITEM_STAT_NEUTRALS = Object.freeze({
+    critChance: 0.01,
+    displayedCritChance: 0.01,
+    critMultiplier: 1.606,
+    fireResistance: 0.5,
+  });
+
+  function scaleCampaignItemEffects(stats, strength = 1, neutralOverrides = {}) {
+    const factor = Math.max(0, Number(strength) || 0);
+    const scaled = { ...(stats || {}) };
+    Object.entries(stats || {}).forEach(([key, value]) => {
+      if (!Number.isFinite(Number(value)) || typeof value === 'boolean') return;
+      const neutral = Object.prototype.hasOwnProperty.call(neutralOverrides, key)
+        ? Number(neutralOverrides[key])
+        : Object.prototype.hasOwnProperty.call(ITEM_STAT_NEUTRALS, key)
+          ? ITEM_STAT_NEUTRALS[key]
+          : key.endsWith('Multiplier')
+            ? 1
+            : 0;
+      scaled[key] = neutral + (Number(value) - neutral) * factor;
+    });
+    return scaled;
+  }
+
+  function resolveFractionalItemEffectCount(value, random = () => 1) {
+    const amount = Math.max(0, Number(value) || 0);
+    const whole = Math.floor(amount);
+    return whole + (Number(random()) < amount - whole ? 1 : 0);
+  }
+
   function getItemTagCounts(player) {
     const counts = {};
     Object.keys(ITEM_DEFS).forEach(key => {
@@ -93,6 +124,7 @@
       drainChance: stacks('tooth_of_thorn') * 0.045 + stacks('tooth_of_thorn') ** 2 * 0.018,
       meleeDrainChance: stacks('tooth_of_thorn') * 0.08 + stacks('tooth_of_thorn') ** 2 * 0.018,
       bleedResistance: clamp(stacks('tough_bandaid') * 0.1, 0, 0.8),
+      darkDrainResistance: clamp(stacks('tough_bandaid') * 0.1, 0, 0.8),
       fireResistance: 0.5,
       bleedDurationDecayMultiplier: clamp(1 + stacks('tough_bandaid') * 0.2, 1, 3),
       weaponFatigueChance: stacks('weapon_fatigue') * 0.05,
@@ -120,6 +152,7 @@
       critChance, critMultiplier: rollback.critMultiplier,
       kronosDamageMultiplier: 1 + stacks('pendant_of_kronos') * godItemStacks * 0.025,
       kronosBossDamageMultiplier: 1 + stacks('pendant_of_kronos') * 0.05,
+      factorOfElementsDamagePerStatusStack: stacks('factor_of_elements') * 0.05,
       rockDamageMultiplier: 1 + stacks('pendant_of_rock') * 0.02,
       flatHitDamageBonus: stacks('foleys_irish_newyork_charm'),
       attackSpeedMultiplier: 1 + stacks('attack_servo') * 0.08 + (chronoActive ? stacks('chrono_spring') * 0.16 : 0),
@@ -143,7 +176,8 @@
       projectileSpeedMultiplier: 1 + stacks('mooggy_zoomies') * 0.12,
       projectileLifeMultiplier: 1 + stacks('mooggy_zoomies') * 0.10,
       healingMultiplier: 1 + stacks('drink_master') * 0.2,
-      storedPotionHealingMultiplier: 1 + stacks('mateos_bag') * 0.10,
+      potionPickupHealingMultiplier: 1 + stacks('mateos_bag') * 0.10,
+      storedPotionHealingMultiplier: 1 + stacks('mateos_bag') * 0.20,
       overhealBarrierChance: overhealUnlocked ? clamp(0.15 * healingTagStacks, 0, 0.75) : 0,
       overhealBarrierRatio: overhealUnlocked ? 0.35 : 0,
       overhealBarrierCapRatio: overhealUnlocked ? (healingTagStacks >= 6 ? 0.28 : 0.16) : 0,
@@ -199,5 +233,16 @@
     return { spawn, radius: 44 + (count - 1) * 4, durationSeconds: 12, intervalSeconds: 0.65, damage: 18 + (count - 1) * 6, knockback: 55 };
   }
 
-  return { getItemTagCounts, getActiveBuildTags, applyCritRollback, deriveCampaignItemStats, syncCampaignItemStats, planCampaignThornMine, planCampaignElBartoGraffiti };
+  return {
+    MIRROR_ITEM_EFFECT_STRENGTH,
+    getItemTagCounts,
+    getActiveBuildTags,
+    applyCritRollback,
+    deriveCampaignItemStats,
+    scaleCampaignItemEffects,
+    resolveFractionalItemEffectCount,
+    syncCampaignItemStats,
+    planCampaignThornMine,
+    planCampaignElBartoGraffiti,
+  };
 });

@@ -24,11 +24,12 @@ describe('run time lifecycle', () => {
   test('reviving preserves the elapsed run time', () => {
     const Neo = {
       gameElapsedTime: 93.5,
-      metaProgress: { loopCrystals: 2 },
+      metaProgress: { loopCrystals: 10 },
       runRevivesUsed: 0,
       runHistory: [{ id: 'death-entry' }],
       lastDeathEntryId: 'death-entry',
       playerDeathAnim: {},
+      STATUS_KEYS: ['bleed', 'fire'],
       player: {
         x: 10,
         y: 20,
@@ -39,6 +40,12 @@ describe('run time lifecycle', () => {
         vx: 4,
         vy: 5,
         dashTime: 1,
+        potionRegenTime: 0,
+        potionRegenAccum: 0.4,
+        statuses: {
+          bleed: { stacks: 3 },
+          fire: { stacks: 2 },
+        },
       },
       projectiles: [{}],
       hazards: [{}],
@@ -52,8 +59,9 @@ describe('run time lifecycle', () => {
       setGameState: jest.fn(),
       spawnParticle: jest.fn(),
       uiController: { setDeadScreen: jest.fn() },
+      clearStatus: jest.fn((entity, key) => { entity.statuses[key].stacks = 0; }),
     };
-    const getReviveCost = () => 1;
+    const getReviveCost = () => 2;
     const canReviveFromDeath = () => true;
     const persistMetaSoon = jest.fn();
     const scheduleRunSave = jest.fn();
@@ -74,6 +82,30 @@ describe('run time lifecycle', () => {
     globalThis.NeoNyke = previousNeoNyke;
     expect(Neo.gameElapsedTime).toBe(93.5);
     expect(Neo.setGameState).toHaveBeenCalledWith('play');
+    expect(Neo.metaProgress.loopCrystals).toBe(8);
+    expect(Neo.runRevivesUsed).toBe(1);
+    expect(Neo.player).toEqual(expect.objectContaining({
+      hp: 75,
+      inv: 2,
+      potionRegenTime: 3,
+      potionRegenAccum: 0,
+    }));
+    expect(Neo.player.statuses.bleed.stacks).toBe(0);
+    expect(Neo.player.statuses.fire.stacks).toBe(0);
+    expect(Neo.clearStatus).toHaveBeenCalledTimes(2);
+  });
+
+  test('revive cost scales by 2.5 crystals per revive and rounds down', () => {
+    const Neo = { gameMode: 'normal', runRevivesUsed: 0 };
+    const getReviveCost = new Function('Neo', `${extractFunction(hudSource, 'getReviveCost')}; return getReviveCost;`)(Neo);
+
+    expect([0, 1, 2, 3].map(used => {
+      Neo.runRevivesUsed = used;
+      return getReviveCost();
+    })).toEqual([2, 5, 7, 10]);
+
+    Neo.gameMode = 'practice';
+    expect(getReviveCost()).toBe(0);
   });
 
   test('looping to floor one preserves the cumulative run time', () => {
