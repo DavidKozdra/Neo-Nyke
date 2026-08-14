@@ -2512,8 +2512,6 @@ export function resumeGame() {
     // time (see getEnemySpriteKey), so the killer portrait must borrow the same
     // one or it falls through to the "unknown" question-mark hazard icon.
     boss_spawner: 'laser',
-    healer: 'cult_follower',
-    shield_unit: 'golem',
     god_beam: 'god',
     mirror_beam: 'thorn_knight',
     mirror_lightning: 'thorn_knight',

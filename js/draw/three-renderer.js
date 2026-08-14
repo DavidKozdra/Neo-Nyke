@@ -1034,12 +1034,12 @@ function enemySpriteKey(enemy) {
     return Neo.SPRITE_DEFS?.[key] || Neo.CHARACTER_SPRITE_SHEETS?.[key] ? key : 'thorn_knight';
   }
   if (enemy.type === 'mirror_knight') return enemy.spriteKey || playerSpriteKey();
-  if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
+  if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner || Neo.CHARACTER_SPRITE_SHEETS?.machine_gunner ? 'machine_gunner' : 'sniper';
   if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
-  if (enemy.type === 'shield_unit') return 'golem';
-  if (enemy.type === 'healer') return 'cult_follower';
+  if (enemy.type === 'shield_unit') return 'shield_unit';
+  if (enemy.type === 'healer') return 'healer';
   if (enemy.type === 'boss_spawner') return 'laser';
-  return Neo.SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
+  return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
 }
 
 function playerSpriteKey() {

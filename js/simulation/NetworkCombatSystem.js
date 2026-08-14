@@ -140,6 +140,9 @@
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
     deriveCampaignItemStats = () => ({}),
+    MIRROR_ITEM_EFFECT_STRENGTH = 0.88,
+    scaleCampaignItemEffects = stats => ({ ...(stats || {}) }),
+    resolveFractionalItemEffectCount = value => Math.max(0, Math.floor(Number(value || 0))),
     planCampaignThornMine = () => ({ count: 1, durationSeconds: 5, armSeconds: 0.18, triggerRadius: 34, blastRadius: 62, damage: 18, knockback: 170, bleedStacks: 1, bleedDuration: 4.5 }),
     planCampaignElBartoGraffiti = () => ({ spawn: false }),
     resolveCampaignPlayerDamage = () => ({ health: 0, dealt: 0, absorbed: 0, barrier: 0 }),
@@ -1028,10 +1031,28 @@
   // combat state; reducing it to just damage/range made the mirror challenge a
   // generic boss whenever an item, forge upgrade, or wounded source mattered.
   function createAuthorityMirrorKit(state, source) {
-    const itemStats = { ...(source.itemStats || {}) };
-    const attackSpeed = getNetworkCampaignAttackSpeed(state, source);
+    const rawItemStats = { ...(source.itemStats || {}) };
+    const level = Math.max(1, Number(source.level || 1));
+    const levelSpeedBonus = (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
+    const itemStats = scaleCampaignItemEffects(
+      rawItemStats,
+      MIRROR_ITEM_EFFECT_STRENGTH,
+      {
+        aoeRadiusMultiplier: Number(source.aoeRadiusMultiplier || 1),
+        aoeDamageMultiplier: Number(source.aoeDamageMultiplier || 1),
+        moveSpeedMultiplier: 1 + levelSpeedBonus,
+        weaponBleedChance: Number(rawItemStats.weaponBleedChance || 0),
+        weaponCritChance: Number(rawItemStats.weaponCritChance || 0),
+      },
+    );
+    const attackSpeed = Math.max(
+      0.2,
+      Number(source.attackSpeed || 1)
+        * Number(itemStats.attackSpeedMultiplier || 1)
+        * getCampaignTurtlePowerUpMultiplier(source, state?.tick),
+    );
     const damageMultiplier = Math.max(0.1, Number(source.damageMultiplier || 1));
-    const baseDamage = Math.max(1, (24 + Number(source.attackPower || 0)) * damageMultiplier);
+    const baseDamage = Math.max(1, (24 + Number(source.attackPower || 0) + Number(itemStats.flatHitDamageBonus || 0)) * damageMultiplier);
     const equippedMoves = { ...(source.equippedMoves || {}) };
     const moveStats = {};
     Object.entries(equippedMoves).forEach(([slot, moveKey]) => {
@@ -1065,7 +1086,8 @@
       attackSpeed: Number(source.attackSpeed || 1), items: { ...(source.items || {}) },
       ownedMoves: { ...(source.ownedMoves || {}) }, ownedWeapons: { ...(source.ownedWeapons || {}) },
       equippedMoves, equippedWeapon: weaponKey, anvilUpgrades: { ...(source.anvilUpgrades || {}) },
-      statuses: { ...(source.statuses || {}) }, barrier: Math.max(0, Number(source.barrier || 0)),
+      statuses: { ...(source.statuses || {}) },
+      barrier: Math.max(0, Number(source.barrier || 0)) * MIRROR_ITEM_EFFECT_STRENGTH,
       moveStackOverrides: { ...(source.moveStackOverrides || {}) }, weaponChargeOverrides: { ...(source.weaponChargeOverrides || {}) },
     };
     return {
@@ -7053,6 +7075,11 @@
     const explicitHoming = Object.prototype.hasOwnProperty.call(options, 'homing');
     const homingStrength = Math.max(0, Number(mirrorStats.projectileHomingStrength || 0));
     const grantedHoming = !explicitHoming && homingStrength > 0;
+    const bounceRandom = combatRandomByState.get(state)?.scoped(`${enemy.id}|mirror-bounce:${state.tick}:${projectileId}`);
+    const itemBounces = resolveFractionalItemEffectCount(
+      mirrorStats.projectileBounces,
+      () => bounceRandom?.next() ?? 1,
+    );
     const genericStatusEffects = () => {
       const effects = [];
       const bleedChance = Number(mirrorStats.bleedChance || 0) + Math.min(0.35, Number(mirrorStats.scarfBleedsOnHit || 0) * 0.08);
@@ -7081,7 +7108,7 @@
       hitOptions: options.hitOptions ? { ...options.hitOptions } : null,
       statusEffects: Array.isArray(options.statusEffects) ? options.statusEffects.map(effect => ({ ...effect })) : genericStatusEffects(),
       enemyBlast: options.enemyBlast ? { ...options.enemyBlast } : null,
-      bouncesRemaining: Math.max(0, Math.floor(Number(options.bouncesRemaining || 0))) + Math.max(0, Math.floor(Number(mirrorStats.projectileBounces || 0))),
+      bouncesRemaining: Math.max(0, Math.floor(Number(options.bouncesRemaining || 0))) + itemBounces,
       homing: explicitHoming ? !!options.homing : grantedHoming, homingTargetId: options.homingTargetId || null,
       homingRadius: Math.max(0, Number(options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : 0))),
       homingSpeed: Math.max(0, Number(options.homingSpeed ?? (grantedHoming ? speed : 0))),

@@ -211,6 +211,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     expect(ally.barrier).toBeGreaterThan(0);
     expect(shieldUnit.barrier).toBeGreaterThan(0);
     expect(events.some(event => event.eventType === 'ENEMY_SUPPORT_USED' && event.data.supportKind === 'shield')).toBe(true);
+    expect(shieldUnit.attackAnimT).toBeGreaterThan(0);
 
     // A fresh hit lockout holds the next re-shield back.
     ally.barrier = 0;
@@ -1340,6 +1341,7 @@ describe('shared behavior module in isolation', () => {
     }
     expect(shots.length).toBeGreaterThanOrEqual(5);
     expect(shots.every(shot => shot.kind === 'machine_round')).toBe(true);
+    expect(enemy.attackAnimT).toBeGreaterThan(0);
   });
 });
 

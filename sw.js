@@ -32,16 +32,21 @@ const KOZ_PWA_CONFIG = {
     "/assets/icons/neo-nyke_Icon.png",
     "/assets/icons/NeoNykeTitle.png",
     "/assets/itch/neo-nyke-itch-background.png",
+    "/assets/sprites/chars/charger.png",
     "/assets/sprites/chars/cultMage.png",
+    "/assets/sprites/chars/follower.png",
     "/assets/sprites/chars/Gelleh.png",
+    "/assets/sprites/chars/healer.png",
     "/assets/sprites/chars/hunter.png",
     "/assets/sprites/chars/knave.png",
     "/assets/sprites/chars/large-golem.png",
+    "/assets/sprites/chars/machine_gunner.png",
     "/assets/sprites/chars/Metao.png",
     "/assets/sprites/chars/mini-golem.png",
     "/assets/sprites/chars/Mooggy.png",
     "/assets/sprites/chars/princess.png",
     "/assets/sprites/chars/Sarge.png",
+    "/assets/sprites/chars/shield_unit.png",
     "/assets/sprites/chars/sniper.png",
     "/assets/sprites/chars/Thorn Knight.png",
     "/assets/sprites/chars/turtle_boy.png",
@@ -265,14 +270,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 252,
-    "bytes": 52217585,
-    "criticalEntries": 194,
-    "criticalBytes": 12049999,
+    "entries": 257,
+    "bytes": 52229091,
+    "criticalEntries": 199,
+    "criticalBytes": 12061505,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "0b1127d243eb54e5"
+  "version": "ac326677610ff3db"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

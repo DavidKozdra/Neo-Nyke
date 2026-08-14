@@ -12,6 +12,37 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
   const count = (player, key) => Math.max(0, Number(player?.items?.[key] || 0));
 
+  const MIRROR_ITEM_EFFECT_STRENGTH = 0.88;
+  const ITEM_STAT_NEUTRALS = Object.freeze({
+    critChance: 0.01,
+    displayedCritChance: 0.01,
+    critMultiplier: 1.606,
+    fireResistance: 0.5,
+  });
+
+  function scaleCampaignItemEffects(stats, strength = 1, neutralOverrides = {}) {
+    const factor = Math.max(0, Number(strength) || 0);
+    const scaled = { ...(stats || {}) };
+    Object.entries(stats || {}).forEach(([key, value]) => {
+      if (!Number.isFinite(Number(value)) || typeof value === 'boolean') return;
+      const neutral = Object.prototype.hasOwnProperty.call(neutralOverrides, key)
+        ? Number(neutralOverrides[key])
+        : Object.prototype.hasOwnProperty.call(ITEM_STAT_NEUTRALS, key)
+          ? ITEM_STAT_NEUTRALS[key]
+          : key.endsWith('Multiplier')
+            ? 1
+            : 0;
+      scaled[key] = neutral + (Number(value) - neutral) * factor;
+    });
+    return scaled;
+  }
+
+  function resolveFractionalItemEffectCount(value, random = () => 1) {
+    const amount = Math.max(0, Number(value) || 0);
+    const whole = Math.floor(amount);
+    return whole + (Number(random()) < amount - whole ? 1 : 0);
+  }
+
   function getItemTagCounts(player) {
     const counts = {};
     Object.keys(ITEM_DEFS).forEach(key => {
@@ -202,5 +233,16 @@
     return { spawn, radius: 44 + (count - 1) * 4, durationSeconds: 12, intervalSeconds: 0.65, damage: 18 + (count - 1) * 6, knockback: 55 };
   }
 
-  return { getItemTagCounts, getActiveBuildTags, applyCritRollback, deriveCampaignItemStats, syncCampaignItemStats, planCampaignThornMine, planCampaignElBartoGraffiti };
+  return {
+    MIRROR_ITEM_EFFECT_STRENGTH,
+    getItemTagCounts,
+    getActiveBuildTags,
+    applyCritRollback,
+    deriveCampaignItemStats,
+    scaleCampaignItemEffects,
+    resolveFractionalItemEffectCount,
+    syncCampaignItemStats,
+    planCampaignThornMine,
+    planCampaignElBartoGraffiti,
+  };
 });

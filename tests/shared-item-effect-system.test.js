@@ -1,5 +1,7 @@
 const itemEffects = require('../js/simulation/SharedItemEffectSystem');
 
+const MIRROR_STRENGTH = itemEffects.MIRROR_ITEM_EFFECT_STRENGTH;
+
 describe('shared campaign item effects', () => {
   test('derives the campaign HUD and gameplay values from the canonical item definitions', () => {
     const stats = itemEffects.deriveCampaignItemStats({
@@ -60,6 +62,41 @@ describe('shared campaign item effects', () => {
       potionPickupHealingMultiplier: 1.2,
       storedPotionHealingMultiplier: 1.4,
     }));
+  });
+
+  test('weakens every numeric mirror item effect by twelve percent from its neutral value', () => {
+    const scaled = itemEffects.scaleCampaignItemEffects({
+      scarfBleedsOnHit: 1,
+      bleedChance: 0.2,
+      beamDamageMultiplier: 1.35,
+      damageReduction: 0.25,
+      flatDamageReduction: 10,
+      critChance: 0.01,
+      critMultiplier: 1.606,
+      fireResistance: 0.5,
+      hasRobotArm: true,
+    }, MIRROR_STRENGTH);
+
+    expect(MIRROR_STRENGTH).toBe(0.88);
+    expect(scaled).toEqual(expect.objectContaining({
+      scarfBleedsOnHit: 0.88,
+      beamDamageMultiplier: 1.308,
+      damageReduction: 0.22,
+      flatDamageReduction: 8.8,
+      critChance: 0.01,
+      critMultiplier: 1.606,
+      fireResistance: 0.5,
+      hasRobotArm: true,
+    }));
+    expect(scaled.bleedChance).toBeCloseTo(0.176);
+  });
+
+  test('preserves fractional mirror item counts as proportional proc chances', () => {
+    expect(itemEffects.resolveFractionalItemEffectCount(0.88, () => 0.87)).toBe(1);
+    expect(itemEffects.resolveFractionalItemEffectCount(0.88, () => 0.88)).toBe(0);
+    expect(itemEffects.resolveFractionalItemEffectCount(1.76, () => 0.75)).toBe(2);
+    expect(itemEffects.resolveFractionalItemEffectCount(1.76, () => 0.8)).toBe(1);
+    expect(itemEffects.resolveFractionalItemEffectCount(0.88)).toBe(0);
   });
 
   test('plans Sweepy Box mines with campaign arm, blast, damage, and bleed scaling', () => {
