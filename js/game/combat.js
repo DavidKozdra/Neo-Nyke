@@ -257,6 +257,9 @@
     if (enemy.type === 'rival') return enemy.rivalBeamColor || '#ff00aa';
     if (enemy.type === 'mooggy' || enemy.type === 'handsome_devil') return '#ff3348';
     if (enemy.type === 'bowman_bane') return '#8dd4ff';
+    // Healers fire in the same green they heal in, so the support unit reads as
+    // one colour whether it is beaming the player or topping up its allies.
+    if (enemy.type === 'healer') return '#79f7bf';
     return '#aa66ff';
   }
 

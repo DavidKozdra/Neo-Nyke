@@ -1310,7 +1310,8 @@ function syncEnemyWindup(group, enemy) {
     : enemy.type === 'bowman_bane' ? '#8dd4ff'
       : enemy.type === 'handsome_devil' ? '#ff3348'
         : enemy.type === 'antony_blemmye' ? '#ffcf8a'
-          : '#aa66ff';
+          : enemy.type === 'healer' ? '#79f7bf'
+            : '#aa66ff';
   const radius = (enemy.r || 12) + 10 + Math.sin(Date.now() / 120) * 2;
   windup.material.color.set(color);
   windup.material.opacity = 0.8;

@@ -193,12 +193,13 @@ describe('authored campaign enemy behaviors on the authority', () => {
   test('healers mend wounded allies on the campaign cadence', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
-    injectEnemy(state, 'healer', player.x + 400, player.y, { supportCd: 0.01, attackCd: 9 });
+    const healer = injectEnemy(state, 'healer', player.x + 400, player.y, { supportCd: 0.01, attackCd: 9 });
     const wounded = injectEnemy(state, 'golem', player.x + 420, player.y + 40, { health: 40, attackCd: 9 });
 
     tick(simulation, 2);
     expect(wounded.health).toBeGreaterThan(40);
     expect(events.some(event => event.eventType === 'ENEMY_HEALED' && event.data.enemyId === wounded.id)).toBe(true);
+    expect(healer.attackAnimT).toBeGreaterThan(0);
   });
 
   test('shield units barrier nearby allies but stay locked out after being hit', () => {

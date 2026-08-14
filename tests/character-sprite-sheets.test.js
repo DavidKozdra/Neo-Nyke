@@ -233,6 +233,29 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+  test('charger uses complete 24x48 frames for walking and dashing', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.charger;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/charger.png',
+      frameWidth: 24,
+      frameHeight: 48,
+      frameCount: 5,
+      idleFrames: [0],
+      walkFrames: [1, 2, 3, 4],
+      dashFrames: [1, 2, 3, 4],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBe(def.frameCount);
+    [...def.idleFrames, ...def.walkFrames, ...def.dashFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
+    });
+  });
+
   test('cult follower uses the authored walk and attack rows', async () => {
     const key = 'cult_follower';
     const src = 'assets/sprites/chars/follower.png';
@@ -256,6 +279,28 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+  test('healer uses the authored walk and healing-action rows', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.healer;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/healer.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 9,
+      idleFrames: [0],
+      walkFrames: [1, 2, 3, 4],
+      attackFrames: [5, 6, 7, 8],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(Math.floor(image.naturalWidth / def.frameWidth)).toBe(5);
+    expect(Math.floor(image.naturalHeight / def.frameHeight)).toBe(2);
+    [...def.idleFrames, ...def.walkFrames, ...def.attackFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
+
 
 
   test('sniper enemy uses the authored walk and attack strip', async () => {

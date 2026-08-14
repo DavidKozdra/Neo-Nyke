@@ -825,7 +825,7 @@
       if (enemy.windup > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, enemy.y);
-        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'antony_blemmye' ? '#ffcf8a' : '#aa66ff';
+        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'antony_blemmye' ? '#ffcf8a' : enemy.type === 'healer' ? '#79f7bf' : '#aa66ff';
         Neo.ctx.lineWidth = 2;
         Neo.ctx.globalAlpha = 0.8;
         Neo.ctx.beginPath();
