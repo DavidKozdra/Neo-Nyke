@@ -32,8 +32,11 @@ const KOZ_PWA_CONFIG = {
     "/assets/icons/neo-nyke_Icon.png",
     "/assets/icons/NeoNykeTitle.png",
     "/assets/itch/neo-nyke-itch-background.png",
+    "/assets/sprites/chars/Anthony.png",
+    "/assets/sprites/chars/bowman.png",
     "/assets/sprites/chars/charger.png",
     "/assets/sprites/chars/cultMage.png",
+    "/assets/sprites/chars/devil.png",
     "/assets/sprites/chars/follower.png",
     "/assets/sprites/chars/Gelleh.png",
     "/assets/sprites/chars/healer.png",
@@ -271,14 +274,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 258,
-    "bytes": 52232342,
-    "criticalEntries": 200,
-    "criticalBytes": 12064756,
+    "entries": 261,
+    "bytes": 52239504,
+    "criticalEntries": 203,
+    "criticalBytes": 12071918,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "c097f31756d0b90b"
+  "version": "a2afdeb76f73717a"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
