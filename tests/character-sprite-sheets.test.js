@@ -391,6 +391,9 @@ describe('character sprite sheet assets', () => {
     sheetCtx.drawImage(image, 0, 0);
     const { data } = sheetCtx.getImageData(0, 0, image.naturalWidth, image.naturalHeight);
     const alphaAt = (x, y) => data[(y * image.naturalWidth + x) * 4 + 3];
+    // The first column of the arm cell used to catch one disconnected gold
+    // pixel from the portrait, widening the sword's opaque bounds.
+    expect(alphaAt(def.frameWidth, 21)).toBe(0);
     const contentRows = [];
     for (let y = 0; y < image.naturalHeight; y += 1) {
       for (let x = 0; x < image.naturalWidth; x += 1) {
