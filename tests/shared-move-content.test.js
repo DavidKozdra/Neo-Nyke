@@ -34,7 +34,7 @@ describe('shared Neo Nyke move content', () => {
 
   test('catalogs every authored move exactly once for headless authorities', () => {
     const catalog = Object.values(MOVE_SLOT_KEYS).flat();
-    expect(catalog).toHaveLength(64);
+    expect(catalog).toHaveLength(67);
     expect(new Set(catalog).size).toBe(catalog.length);
     expect(Object.keys(MOVE_BASE_STATS).sort()).toEqual(catalog.slice().sort());
     expect(Object.keys(MOVE_PRESENTATION_DEFS).sort()).toEqual(catalog.slice().sort());

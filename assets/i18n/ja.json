@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "重いノックバックと内蔵の前面カバーを備えた幅広のシールド バッシュ。",
   "weapons.stone_fists.name": "ストーンフィスト",
   "weapons.stone_fists.description": "巨大な衝撃とノックバックを伴う砕石パンチ。",
-  "difficulties.knave.name": "ナイブ"
+  "difficulties.knave.name": "ナイブ",
+  "moves.antony_bite.name": "祝福の噛みつき",
+  "moves.antony_bite.desc": "アンソニーの近距離噛みつき。35%の確率でダークドレインを2スタック付与し、与えたダメージの35%分だけ自身を回復する。",
+  "moves.antony_knife_throw.name": "ナイフ投げ",
+  "moves.antony_knife_throw.desc": "アンソニーの狙いを定めたナイフを、最も近い敵の列へ一直線に投げて貫通させる。",
+  "moves.antony_freeze_ball.name": "フリーズボール",
+  "moves.antony_freeze_ball.desc": "アンソニーの巨大な追尾する氷結オーブを放つ。命中時に爆発し、爆風に巻き込まれたすべてを鈍足にする。"
 }

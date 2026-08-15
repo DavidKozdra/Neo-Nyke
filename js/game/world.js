@@ -1533,6 +1533,9 @@
     p.fireStacks = props.fireStacks ?? 0;
     p.splashFireStacks = props.splashFireStacks ?? 0;
     p.fireDuration = props.fireDuration ?? 0;
+    p.splashStatusKey = props.splashStatusKey ?? null;
+    p.splashStatusStacks = Math.max(0, Number(props.splashStatusStacks || 0));
+    p.splashStatusDuration = Math.max(0, Number(props.splashStatusDuration || 0));
     const baseProjectileSpeed = Math.hypot(p.vx, p.vy) || 180;
     const grantedHoming = !enemyProjectile && projectileHomingStrength > 0 && !hasExplicitHoming;
     p.homing = hasExplicitHoming ? !!props.homing : grantedHoming;
@@ -2041,6 +2044,24 @@
     Neo.playSfx?.('item_collect');
   }
 
+  function detonatePlayerStatusSplash(projectile, x, y) {
+    if (projectile?.enemy || !projectile?.splashStatusKey || !(Number(projectile.splash || 0) > 0)) return false;
+    const radius = Number(projectile.splash);
+    const damage = Math.max(0, Number(projectile.splashDamage || 0));
+    if (damage > 0) blastRadius(x, y, radius, damage, projectile.color || '#9fe8ff');
+    Neo.applyStatusInRadius?.(
+      x,
+      y,
+      radius,
+      projectile.splashStatusKey,
+      Number(projectile.splashStatusStacks || 1),
+      Number(projectile.splashStatusDuration || 3),
+      null,
+    );
+    Neo.ringBurst?.(x, y, radius, projectile.color || '#9fe8ff', 0.4);
+    return true;
+  }
+
   function updateProjectiles(dt) {
     rebuildEnemySpatialIndex();
     ensureDestructibleSpatialIndex();
@@ -2080,6 +2101,7 @@
         }
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
+        detonatePlayerStatusSplash(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -2089,6 +2111,7 @@
         if (tryBounceProjectileAtSweepHit(projectile, sweepBlockHit)) continue;
         detonateEnemyProjectileBlast(projectile, sweepBlockHit.x, sweepBlockHit.y);
         if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, sweepBlockHit.x, sweepBlockHit.y);
+        detonatePlayerStatusSplash(projectile, sweepBlockHit.x, sweepBlockHit.y);
         spawnProjectileImpact(projectile, sweepBlockHit.x, sweepBlockHit.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -2112,6 +2135,7 @@
         });
         if (impact.blast) blastRadius(projectile.x, projectile.y, impact.blast.radius, impact.blast.damage, '#ff8844');
         if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
+        detonatePlayerStatusSplash(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -2120,6 +2144,7 @@
         if (tryBounceProjectile(projectile, prevX, prevY)) continue;
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
+        detonatePlayerStatusSplash(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -2183,6 +2208,7 @@
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
             Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', projectile.splashFireStacks || 1, projectile.fireDuration || 3, null);
           }
+          detonatePlayerStatusSplash(projectile, projectile.x, projectile.y);
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
           if (projectile.boomerang) {
             // Track the foe so it isn't struck twice, then either keep piercing on

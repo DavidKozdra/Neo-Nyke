@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "भारी नॉकबैक और बिल्ट-इन फ्रंटल कवर के साथ एक चौड़ा शील्ड बैश।",
   "weapons.stone_fists.name": "पत्थर की मुट्ठी",
   "weapons.stone_fists.description": "बड़े पैमाने पर प्रभाव और प्रहार के साथ कुचलने वाला पत्थर का मुक्का।",
-  "difficulties.knave.name": "गुंडागर्दी"
+  "difficulties.knave.name": "गुंडागर्दी",
+  "moves.antony_bite.name": "पवित्र दंश",
+  "moves.antony_bite.desc": "एंथनी का कम दूरी का दंश। इसके पास डार्क ड्रेन के दो स्टैक लगाने और वार से हुए नुकसान के 35% के बराबर उसे ठीक करने की 35% संभावना है।",
+  "moves.antony_knife_throw.name": "चाकू फेंक",
+  "moves.antony_knife_throw.desc": "एंथनी का निशाना लगाया हुआ चाकू दुश्मनों की सबसे नज़दीकी कतार के आर-पार सीधा फेंको।",
+  "moves.antony_freeze_ball.name": "हिम गोला",
+  "moves.antony_freeze_ball.desc": "एंथनी का विशाल लक्ष्य का पीछा करने वाला हिम गोला दागो। टकराते ही यह फटता है और विस्फोट में फँसी हर चीज़ को धीमा करता है।"
 }

@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Ein breiter Schildschlag mit starkem Rückstoß und integrierter Frontabdeckung.",
   "weapons.stone_fists.name": "Steinfäuste",
   "weapons.stone_fists.description": "Ein zerschmetternder Steinschlag mit massiver Wirkung und Rückstoß.",
-  "difficulties.knave.name": "Schurke"
+  "difficulties.knave.name": "Schurke",
+  "moves.antony_bite.name": "Gesegneter Biss",
+  "moves.antony_bite.desc": "Anthonys Biss auf kurze Distanz. Er hat eine Chance von 35 %, zwei Stapel Dunkler Entzug zu verursachen und ihn um 35 % des Trefferschadens zu heilen.",
+  "moves.antony_knife_throw.name": "Messerwurf",
+  "moves.antony_knife_throw.desc": "Wirf Anthonys gezieltes Messer gerade durch die nächstgelegene Reihe von Gegnern.",
+  "moves.antony_freeze_ball.name": "Frostkugel",
+  "moves.antony_freeze_ball.desc": "Feuere Anthonys riesige zielsuchende Frostkugel ab. Beim Aufprall explodiert sie und verlangsamt alles im Explosionsradius."
 }

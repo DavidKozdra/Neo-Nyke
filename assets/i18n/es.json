@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Un amplio golpe de escudo con fuerte retroceso y cobertura frontal incorporada.",
   "weapons.stone_fists.name": "Puños de piedra",
   "weapons.stone_fists.description": "Un puñetazo de piedra aplastante con impacto y retroceso masivos.",
-  "difficulties.knave.name": "bribón"
+  "difficulties.knave.name": "bribón",
+  "moves.antony_bite.name": "Mordisco bendito",
+  "moves.antony_bite.desc": "El mordisco de corto alcance de Anthony. Tiene un 35 % de probabilidad de aplicar dos acumulaciones de Drenaje oscuro y curarlo un 35 % del daño infligido.",
+  "moves.antony_knife_throw.name": "Lanzamiento de cuchillo",
+  "moves.antony_knife_throw.desc": "Lanza el cuchillo de Anthony en línea recta atravesando la fila de enemigos más cercana.",
+  "moves.antony_freeze_ball.name": "Orbe congelante",
+  "moves.antony_freeze_ball.desc": "Dispara el enorme orbe de escarcha teledirigido de Anthony. Explota al impactar y ralentiza todo lo que alcanza la explosión."
 }

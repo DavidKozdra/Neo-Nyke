@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "درع عريض مع ضربة خلفية ثقيلة وغطاء أمامي مدمج.",
   "weapons.stone_fists.name": "القبضات الحجرية",
   "weapons.stone_fists.description": "لكمة حجر ساحقة ذات تأثير هائل وضربة قاضية.",
-  "difficulties.knave.name": "شرير"
+  "difficulties.knave.name": "شرير",
+  "moves.antony_bite.name": "العضة المباركة",
+  "moves.antony_bite.desc": "عضة أنثوني قصيرة المدى. لديها احتمال 35٪ لإلحاق تراكمين من الاستنزاف المظلم واستعادة صحة تعادل 35٪ من ضرر الضربة.",
+  "moves.antony_knife_throw.name": "رمية السكين",
+  "moves.antony_knife_throw.desc": "ارمِ سكين أنثوني الموجّهة عبر أقرب صف من الأعداء.",
+  "moves.antony_freeze_ball.name": "كرة التجميد",
+  "moves.antony_freeze_ball.desc": "أطلق كرة الصقيع الضخمة المتتبعة الخاصة بأنثوني. تنفجر عند الاصطدام وتبطئ كل من يقع في نطاق الانفجار."
 }

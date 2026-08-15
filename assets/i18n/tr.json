@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Ağır geri tepmeli ve yerleşik ön kapağa sahip geniş bir kalkan darbesi.",
   "weapons.stone_fists.name": "Taş Yumruklar",
   "weapons.stone_fists.description": "Muazzam darbe ve geri tepme ile ezici bir taş yumruğu.",
-  "difficulties.knave.name": "Düzenbaz"
+  "difficulties.knave.name": "Düzenbaz",
+  "moves.antony_bite.name": "Kutsanmış Isırık",
+  "moves.antony_bite.desc": "Anthony'nin kısa menzilli ısırığı. %35 ihtimalle iki Kara Sömürü yükü uygular ve vuruş hasarının %35'i kadar can yeniler.",
+  "moves.antony_knife_throw.name": "Bıçak Atışı",
+  "moves.antony_knife_throw.desc": "Anthony'nin nişanlı bıçağını en yakın düşman sırasının içinden dümdüz fırlat.",
+  "moves.antony_freeze_ball.name": "Dondurucu Küre",
+  "moves.antony_freeze_ball.desc": "Anthony'nin devasa güdümlü ayaz küresini ateşle. Çarptığında patlar ve patlamaya yakalanan her şeyi yavaşlatır."
 }

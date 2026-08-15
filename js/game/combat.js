@@ -790,17 +790,73 @@
     return false;
   }
 
+  function castAntonyBite() {
+    const base = Neo.MOVE_BASE_STATS?.antony_bite || {};
+    const bite = globalThis.NeoNyke?.simulation?.resolveCampaignAntonyBite?.({
+      baseDamage: base.damage,
+      anvilDamage: Neo.getAnvilMoveBonus('antony_bite', 'damage'),
+      anvilRange: Neo.getAnvilMoveBonus('antony_bite', 'range'),
+    });
+    if (!bite) throw new Error('Shared Anthony bite policy is unavailable');
+    fireWeaponSweep(bite.damage, bite.range, bite.arc, bite.knockback, '#b48cff', {
+      melee: true,
+      darkDrainChance: bite.darkDrainChance,
+      darkDrainStacks: bite.darkDrainStacks,
+      darkDrainDuration: bite.darkDrainDurationSeconds,
+    });
+  }
+  function castAntonyFreezeBall() {
+    const move = 'antony_freeze_ball';
+    const angle = Neo.angleToMouse();
+    const stats = Neo.getItemStats();
+    const ball = globalThis.NeoNyke?.simulation?.planCampaignAntonyFreezeBall?.({
+      baseDamage: Neo.MOVE_BASE_STATS?.[move]?.damage,
+      aoeRadiusMultiplier: stats.aoeRadiusMultiplier,
+      aoeDamageMultiplier: stats.aoeDamageMultiplier,
+      projectileSpeedMultiplier: stats.projectileSpeedMultiplier,
+    });
+    if (!ball) throw new Error('Shared Anthony freeze-ball policy is unavailable');
+    Neo.spawnProjectile({
+      x: Neo.player.x + Math.cos(angle) * (Neo.player.r + 14),
+      y: Neo.player.y + Math.sin(angle) * (Neo.player.r + 14),
+      vx: Math.cos(angle) * ball.speed,
+      vy: Math.sin(angle) * ball.speed,
+      r: ball.radius,
+      life: ball.lifeSeconds,
+      enemy: false,
+      kind: ball.kind,
+      source: move,
+      damage: ball.damage,
+      knockback: ball.knockback,
+      color: '#9fe8ff',
+      splash: ball.splashRadius,
+      splashDamage: ball.splashDamage,
+      splashStatusKey: 'slow',
+      splashStatusStacks: ball.slowStacks,
+      splashStatusDuration: ball.splashSlowDurationSeconds,
+      hitOptions: { slowChance: 1, slowStacks: ball.slowStacks, slowDuration: ball.slowDurationSeconds },
+      homing: ball.homing,
+      homingTarget: ball.homingTarget,
+      homingRadius: ball.homingRadius,
+      homingTurnRate: ball.homingTurnRate,
+      homingSpeed: ball.homingSpeed,
+      homingAccel: ball.homingAccel,
+      trail: [],
+    });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 46, '#9fe8ff', 0.45);
+  }
+
   function tryMelee(options = {}) {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
     const useRobotArmCharge = !!options.useRobotArmCharge && itemStats.hasRobotArm && Neo.player?.robotArmReady;
+    const move = getEquippedMove('melee');
     if (getEquippedWeapon()) {
       const attacked = tryWeaponAttack();
       if (attacked) Neo.tutorialController?.signal?.('attack', { action: 'melee' });
       if (attacked && useRobotArmCharge) Neo.consumeCharge('robot_arm');
       return;
     }
-    const move = getEquippedMove('melee');
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return;
     Neo.tutorialController?.signal?.('attack', { action: 'melee' });
@@ -823,6 +879,10 @@
     }
     if (move === 'knave_blade') {
       castKnaveBlade();
+      return;
+    }
+    if (move === 'antony_bite') {
+      castAntonyBite();
       return;
     }
     const angle = Neo.angleToMouse();
@@ -970,7 +1030,7 @@
     'power_disks', 'blood_disks', 'knave_knives', 'blade_justice', 'lightning_columns',
     'nail_shot', 'laser_shockwave', 'hammer_throw', 'lightning_cross',
     'hunter_volley', 'sniper_round', 'gunner_barrage', 'dungeon_beam',
-    'cult_bolt_volley', 'shield_throw',
+    'cult_bolt_volley', 'shield_throw', 'antony_knife_throw',
   ]);
   function isInstantLaserMove(move) {
     return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
@@ -1200,6 +1260,28 @@
         pierceCount: 3,
         bouncesRemaining: 3,
         trail: [],
+      });
+      Neo.playSfx?.('sword_swing');
+      return;
+    }
+    if (move === 'antony_knife_throw') {
+      const knife = globalThis.NeoNyke?.simulation?.planCampaignAntonyKnifeThrow?.({
+        baseDamage,
+        beamDamageMultiplier: stats.beamDamageMultiplier,
+        projectileSpeedMultiplier: stats.projectileSpeedMultiplier,
+      });
+      if (!knife) throw new Error('Shared Anthony knife-throw policy is unavailable');
+      // Knife Throw is a physical attack. Override the laser slot's generic
+      // beam pose so Anthony uses the same authored strike frame as the boss.
+      startPlayerSpriteAction('attack');
+      fire(0, {
+        speed: knife.speed,
+        r: knife.radius,
+        life: knife.lifeSeconds,
+        kind: knife.kind,
+        color: '#d7dee8',
+        knockback: knife.knockback,
+        pierceCount: knife.pierceCount,
       });
       Neo.playSfx?.('sword_swing');
       return;
@@ -1881,6 +1963,10 @@
       castTitanHammer();
       return;
     }
+    if (move === 'antony_freeze_ball') {
+      castAntonyFreezeBall();
+      return;
+    }
     if (move === 'hunter_trap' || move === 'laser_nova' || move === 'bullet_nova'
       || move === 'cult_frenzy' || move === 'summon_cult_followers') {
       castEnemySignatureSmash(move);
@@ -2062,6 +2148,8 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.8, text: `SUMMON ×${count}`, c: '#c7a1ff' });
     }
   }
+
+
 
   function tryDash(moveX, moveY) {
     if (Neo.player.dashTime > 0) return;
@@ -4473,6 +4561,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       poison: applyPoison,
       slow: (target, stacks, duration) => Neo.applyStatus(target, 'slow', stacks, duration),
       static: applyStatic,
+      dark_drain: (target, stacks, duration) => Neo.applyDarkDrain?.(target, stacks, duration, Neo.player),
     };
     procs.forEach(proc => {
       if (proc.kind === 'status') {

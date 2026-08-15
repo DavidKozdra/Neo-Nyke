@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "广泛的盾牌猛击，具有强大的击退效果和内置的前盖。",
   "weapons.stone_fists.name": "石拳",
   "weapons.stone_fists.description": "具有巨大冲击力和击退效果的碎石拳。",
-  "difficulties.knave.name": "无赖"
+  "difficulties.knave.name": "无赖",
+  "moves.antony_bite.name": "祝福之咬",
+  "moves.antony_bite.desc": "安东尼的近距离撕咬。命中时有35%的概率施加2层暗蚀，并恢复本次伤害35%的生命值。",
+  "moves.antony_knife_throw.name": "飞刀投掷",
+  "moves.antony_knife_throw.desc": "将安东尼瞄准的飞刀直线掷出，贯穿最近一列敌人。",
+  "moves.antony_freeze_ball.name": "冰冻法球",
+  "moves.antony_freeze_ball.desc": "发射安东尼的巨型追踪寒霜法球。命中时爆炸，并使爆炸范围内的所有目标减速。"
 }

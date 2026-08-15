@@ -39,6 +39,21 @@ describe('credits-studio playable enemy roster', () => {
     });
   });
 
+  test('gives playable Anthony only his bite, knife throw, freeze ball, and normal dash', () => {
+    const anthony = enemyContent.getPlayableEnemyDefinition('enemy_antony_blemmye');
+    expect(anthony.moveLoadout).toEqual({
+      melee: 'antony_bite',
+      laser: 'antony_knife_throw',
+      smash: 'antony_freeze_ball',
+      dash: 'dash',
+    });
+    expect(anthony.defaultWeapon).toBe('knave_blade');
+    expect(moveContent.ENEMY_SIGNATURE_MOVE_KEYS).not.toEqual(expect.arrayContaining([
+      'antony_hammer',
+      'antony_slash',
+    ]));
+  });
+
   test('gives every enemy form a real weapon and valid starting inventory', () => {
     enemyContent.PLAYABLE_ENEMY_ROSTER.forEach(profile => {
       expect(combatContent.getCharacterDefaultWeapon(profile.characterKey)).toBe(profile.defaultWeapon);

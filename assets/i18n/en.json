@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "A broad shield bash with heavy knockback and built-in frontal cover.",
   "weapons.stone_fists.name": "Stone Fists",
   "weapons.stone_fists.description": "A crushing stone punch with massive impact and knockback.",
-  "difficulties.knave.name": "Knave"
+  "difficulties.knave.name": "Knave",
+  "moves.antony_bite.name": "Blessed Bite",
+  "moves.antony_bite.desc": "Anthony’s short-range bite. It has a 35% chance to inflict two Dark Drain stacks and heal 35% of the hit.",
+  "moves.antony_knife_throw.name": "Knife Throw",
+  "moves.antony_knife_throw.desc": "Throw Anthony’s aimed knife straight through the nearest line of enemies.",
+  "moves.antony_freeze_ball.name": "Freeze Ball",
+  "moves.antony_freeze_ball.desc": "Fire Anthony’s huge homing frost orb. Its impact explodes and slows everything caught in the blast."
 }

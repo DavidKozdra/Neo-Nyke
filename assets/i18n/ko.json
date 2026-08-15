@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "강력한 넉백과 전면 덮개가 내장된 넓은 방패 강타입니다.",
   "weapons.stone_fists.name": "돌주먹",
   "weapons.stone_fists.description": "엄청난 충격과 넉백을 지닌 분쇄석 펀치입니다.",
-  "difficulties.knave.name": "건달"
+  "difficulties.knave.name": "건달",
+  "moves.antony_bite.name": "축복받은 물어뜯기",
+  "moves.antony_bite.desc": "앤서니의 근거리 물어뜯기입니다. 35% 확률로 암흑 흡수 2중첩을 부여하고 적중 피해의 35%만큼 체력을 회복합니다.",
+  "moves.antony_knife_throw.name": "단검 투척",
+  "moves.antony_knife_throw.desc": "앤서니의 조준된 단검을 가장 가까운 적 대열을 향해 일직선으로 던져 관통시킵니다.",
+  "moves.antony_freeze_ball.name": "빙결 구체",
+  "moves.antony_freeze_ball.desc": "앤서니의 거대한 유도 서리 구체를 발사합니다. 적중 시 폭발하며 폭발에 휘말린 모든 대상을 둔화시킵니다."
 }

@@ -455,6 +455,61 @@
     return { active: true, x: blade.x, y: blade.y, angle: blade.angle };
   }
 
+  // Anthony's playable attacks mirror the three attacks on the boss: a
+  // life-draining bite, an aimed knife throw, and a homing freeze ball.
+  function resolveCampaignAntonyBite(options = {}) {
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 30) + Number(options.anvilDamage || 0));
+    return {
+      damage: baseDamage,
+      range: 86 + Number(options.anvilRange || 0),
+      arc: 0.66,
+      knockback: 240,
+      darkDrainChance: 0.35,
+      darkDrainStacks: 2,
+      darkDrainDurationSeconds: 4.2,
+    };
+  }
+
+  function planCampaignAntonyKnifeThrow(options = {}) {
+    const beamMultiplier = Math.max(0, Number(options.beamDamageMultiplier ?? 1));
+    const speedMultiplier = Math.max(0.1, Number(options.projectileSpeedMultiplier ?? 1));
+    return {
+      kind: 'antony_knife',
+      damage: Math.max(1, Math.round(Number(options.baseDamage ?? 34) * beamMultiplier)),
+      speed: 760 * speedMultiplier,
+      radius: 7,
+      lifeSeconds: 1.45,
+      knockback: 150,
+      pierceCount: 1,
+    };
+  }
+
+  function planCampaignAntonyFreezeBall(options = {}) {
+    const radiusMultiplier = Math.max(0, Number(options.aoeRadiusMultiplier ?? 1));
+    const damageMultiplier = Math.max(0, Number(options.aoeDamageMultiplier ?? 1));
+    const speedMultiplier = Math.max(0.1, Number(options.projectileSpeedMultiplier ?? 1));
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 40));
+    return {
+      kind: 'cold_death',
+      damage: Math.max(1, Math.round(baseDamage * damageMultiplier)),
+      speed: 525 * speedMultiplier,
+      radius: 38 * radiusMultiplier,
+      lifeSeconds: 3.4,
+      knockback: 230,
+      splashRadius: 120 * radiusMultiplier,
+      splashDamage: Math.max(1, Math.round(baseDamage * 0.65 * damageMultiplier)),
+      slowStacks: 1,
+      slowDurationSeconds: 4,
+      splashSlowDurationSeconds: 3,
+      homing: true,
+      homingTarget: 'enemy',
+      homingRadius: 700,
+      homingTurnRate: 0.65,
+      homingSpeed: 570 * speedMultiplier,
+      homingAccel: 1.1,
+    };
+  }
+
   // Titan Hammer is a living summon rather than an instant smash.  The
   // authority owns its hit resolution, while both runtimes use this descriptor
   // and motion step so its reach, lifetime, steering, slams, and contact chip
@@ -937,6 +992,9 @@
     planCampaignGroundSmash,
     planCampaignBladeJustice,
     advanceCampaignBladeJustice,
+    resolveCampaignAntonyBite,
+    planCampaignAntonyKnifeThrow,
+    planCampaignAntonyFreezeBall,
     resolveCampaignTitanHammer,
     advanceCampaignTitanHammer,
     resolveCampaignFloorLava,

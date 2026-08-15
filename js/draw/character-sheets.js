@@ -331,6 +331,7 @@ const CHARACTER_SHEET_DEFS = {
     walkFrames: [0, 1],
     attackFrames: [2],
     beamFrames: [1],
+    smashFrames: [2],
     portraitFrame: 0,
   },
   handsome_devil: {

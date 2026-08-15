@@ -186,11 +186,12 @@
       'hunters_bow', { princes_glasses: 1, copper_penny: 1 },
     ),
     antony_blemmye: playableEnemyBuild(
-      'Anthony the Blessed Blemmye', 'knight', 'Chest-faced bruiser', 'Hammer, bite, destroy',
-      'A heavy close-range bruiser carrying the boss hammer, charged death ball, returning hammer throw, and leap that define Anthony’s attacks.',
-      { damageMultiplier: 1.15, hpMultiplier: 1.25, moveSpeedMultiplier: 0.82, aoeRadiusMultiplier: 1.18 },
-      { melee: 'slash', laser: 'hammer_throw', smash: 'death_ball', dash: 'nimrod_stomp' },
-      'sarges_hammer', { tough_bandaid: 1, copper_penny: 1 },
+      'Anthony the Blessed Blemmyie', 'knight', 'Chest-faced bruiser',
+      'Bite, throw, freeze',
+      "Anthony's exact boss kit: a life-draining bite, an aimed knife throw, and a homing freeze ball.",
+      { damageMultiplier: 1.15, hpMultiplier: 1.25, moveSpeedMultiplier: 0.82, aoeRadiusMultiplier: 1.18, signatureMelee: true },
+      { melee: 'antony_bite', laser: 'antony_knife_throw', smash: 'antony_freeze_ball', dash: 'dash' },
+      'knave_blade', { tough_bandaid: 1, copper_penny: 1 },
     ),
     handsome_devil: playableEnemyBuild(
       'Handsome Devil', 'knave', 'Hazard duelist', 'Burn every escape',
@@ -267,6 +268,11 @@
     ]),
     queen_cult: Object.freeze([
       Object.freeze({ level: 20, moveKey: 'summon_cult_followers' }),
+    ]),
+    antony_blemmye: Object.freeze([
+      Object.freeze({ level: 7, moveKey: 'antony_bite' }),
+      Object.freeze({ level: 14, moveKey: 'antony_knife_throw' }),
+      Object.freeze({ level: 20, moveKey: 'antony_freeze_ball' }),
     ]),
   });
 

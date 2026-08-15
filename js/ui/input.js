@@ -54,6 +54,7 @@ export const MOVE_DEFS = {
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
     mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe with a small bleed chance. Hold to charge: a full wind-up unleashes a wider, far heavier slash.', exclusiveCharacter: 'mooggy' },
     knave_blade: { key: 'knave_blade', slot: 'melee', name: 'Knave Blade', desc: 'A fast, cruel blade slash that bleeds what it cuts — the same strike as the equipped Knave Blade.', exclusiveCharacter: 'knave' },
+    antony_bite: { key: 'antony_bite', slot: 'melee', name: 'Blessed Bite', desc: 'Anthony’s short-range bite. It has a 35% chance to inflict two Dark Drain stacks and heal 35% of the hit.', enemyOnly: true },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
@@ -80,6 +81,7 @@ export const MOVE_DEFS = {
     dungeon_beam: { key: 'dungeon_beam', slot: 'laser', name: 'Dungeon Beam', desc: 'Fire the Laser Unit’s instant magenta room-piercing beam.', enemyOnly: true },
     cult_bolt_volley: { key: 'cult_bolt_volley', slot: 'laser', name: 'Cult Bolt Volley', desc: 'Cast a fan of violet cult bolts that burn on impact.', enemyOnly: true },
     shield_throw: { key: 'shield_throw', slot: 'laser', name: 'Shield Throw', desc: 'Hurl a heavy ricocheting shield through clustered enemies.', enemyOnly: true },
+    antony_knife_throw: { key: 'antony_knife_throw', slot: 'laser', name: 'Knife Throw', desc: 'Throw Anthony’s aimed knife straight through the nearest line of enemies.', enemyOnly: true },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     hammer_smash: { key: 'hammer_smash', slot: 'smash', name: 'Hammer Smash', desc: 'Slam the war hammer down: a heavy shockwave that stuns and flings a cross of debris outward, up, down, left, and right.', exclusiveCharacter: 'sarge' },
@@ -103,6 +105,7 @@ export const MOVE_DEFS = {
     bullet_nova: { key: 'bullet_nova', slot: 'smash', name: 'Bullet Nova', desc: 'Spray a dense ring of machine-gun fire around you.', enemyOnly: true },
     cult_frenzy: { key: 'cult_frenzy', slot: 'smash', name: 'Cult Frenzy', desc: 'Enter an eight-second frenzy that boosts movement and attack speed.', enemyOnly: true },
     summon_cult_followers: { key: 'summon_cult_followers', slot: 'smash', name: 'Summon Cult Followers', desc: 'Call allied Cult Followers that chase and claw nearby enemies for you.', enemyOnly: true },
+    antony_freeze_ball: { key: 'antony_freeze_ball', slot: 'smash', name: 'Freeze Ball', desc: 'Fire Anthony’s huge homing frost orb. Its impact explodes and slows everything caught in the blast.', enemyOnly: true },
 
     dash: {
       key: 'dash',

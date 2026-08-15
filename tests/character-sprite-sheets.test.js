@@ -493,13 +493,14 @@ describe('character sprite sheet assets', () => {
       walkFrames: [0, 1],
       attackFrames: [2],
       beamFrames: [1],
+      smashFrames: [2],
       portraitFrame: 0,
     }));
 
     const image = await loadImage(path.join(__dirname, '..', def.src));
     expect(image.naturalWidth).toBe(192);
     expect(image.naturalHeight).toBe(64);
-    [def.portraitFrame, ...def.idleFrames, ...def.attackFrames, ...def.beamFrames].forEach(frameIndex => {
+    [def.portraitFrame, ...def.idleFrames, ...def.attackFrames, ...def.beamFrames, ...def.smashFrames].forEach(frameIndex => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(500);
     });
   });

@@ -1054,6 +1054,7 @@ const PLAYABLE_ENEMY_CHARACTER_DEFS = Object.freeze(Object.fromEntries(
     hpMultiplier: profile.hpMultiplier,
     moveSpeedMultiplier: profile.moveSpeedMultiplier,
     aoeRadiusMultiplier: profile.aoeRadiusMultiplier,
+    signatureMelee: !!profile.signatureMelee,
     skills: { ...profile.moveLoadout },
     unlock: 'credits_studio_hover',
     enemyType: profile.type,

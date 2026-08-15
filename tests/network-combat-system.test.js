@@ -1002,6 +1002,57 @@ describe('authoritative network combat system', () => {
     }));
   });
 
+  test('runs playable Anthony’s bite, knife throw, and freeze ball on authority', () => {
+    const { state, simulation, random } = combatHarness('enemy_antony_blemmye');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'enemy_antony_blemmye');
+    expect(player).toEqual(expect.objectContaining({
+      equippedWeapon: null,
+      equippedMoves: {
+        melee: 'antony_bite',
+        laser: 'antony_knife_throw',
+        smash: 'antony_freeze_ball',
+        dash: 'dash',
+      },
+    }));
+    expect(player.ownedWeapons).toEqual({ knave_blade: true });
+
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    Object.assign(enemy, {
+      x: player.x + 48,
+      y: player.y,
+      health: 10000,
+      hp: 10000,
+      maxHealth: 10000,
+      maxHp: 10000,
+      moveSpeed: 0,
+    });
+    random.next = () => 0;
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+    expect(enemy.statuses.dark_drain).toEqual(expect.objectContaining({ stacks: 2 }));
+
+    enemy.x = player.x + 400;
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'antony_knife_throw', aimDirection: 0 },
+      { action: 'ABILITY', abilityId: 'antony_freeze_ball', aimDirection: 0 },
+    ] } }, 0.05);
+    const projectiles = Object.values(state.projectiles);
+    expect(projectiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        attackKind: 'antony_knife_throw',
+        kind: 'antony_knife',
+        remainingPierces: 1,
+      }),
+      expect.objectContaining({
+        attackKind: 'antony_freeze_ball',
+        kind: 'cold_death',
+        splashStatusKey: 'slow',
+        homing: true,
+      }),
+    ]));
+  });
+
   test('applies starter defensive item stats to authoritative multiplayer damage', () => {
     const { state, simulation } = combatHarness('princess');
     const player = state.players.p1;

@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Um amplo golpe de escudo com forte repulsão e cobertura frontal integrada.",
   "weapons.stone_fists.name": "Punhos de Pedra",
   "weapons.stone_fists.description": "Um soco de pedra esmagadora com enorme impacto e repulsão.",
-  "difficulties.knave.name": "Valete"
+  "difficulties.knave.name": "Valete",
+  "moves.antony_bite.name": "Mordida Abençoada",
+  "moves.antony_bite.desc": "A mordida de curto alcance de Anthony. Tem 35% de chance de aplicar duas cargas de Dreno Sombrio e curá-lo em 35% do dano causado.",
+  "moves.antony_knife_throw.name": "Arremesso de Faca",
+  "moves.antony_knife_throw.desc": "Arremesse a faca de Anthony em linha reta, atravessando a fileira de inimigos mais próxima.",
+  "moves.antony_freeze_ball.name": "Orbe Congelante",
+  "moves.antony_freeze_ball.desc": "Dispare o enorme orbe de gelo teleguiado de Anthony. Ele explode ao atingir o alvo e desacelera tudo que for pego na explosão."
 }

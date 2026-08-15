@@ -309,6 +309,8 @@
     }
     pushStatus('bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
     pushStatus('fire', options.fireChance, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
+    pushStatus('slow', options.slowChance, Number(options.slowStacks || 1), Number(options.slowDuration || 4));
+    pushStatus('dark_drain', options.darkDrainChance, Number(options.darkDrainStacks || 1), Number(options.darkDrainDuration || 4.2));
     // Item bleed is not implicit: campaign weapon paths decide whether the hit
     // type can proc it and opt in. This prevents projectiles from gaining a proc
     // that the single-player operation never supplied.

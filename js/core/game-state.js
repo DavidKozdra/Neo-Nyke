@@ -1091,7 +1091,7 @@ export function resumeGame() {
       statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
-      equippedWeapon: defaultWeapon,
+      equippedWeapon: character.signatureMelee ? null : defaultWeapon,
       weaponCooldown: 0,
       blockActive: false,
       blockTimer: 0,

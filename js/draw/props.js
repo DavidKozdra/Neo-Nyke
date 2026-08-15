@@ -1893,9 +1893,11 @@
     sarges_hammer: { color: '#7da3ff', core: '#e7efff', trail: '#9bb8ff', shape: 'rock', length: 22 },
     death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
     love_bomb: { color: '#ff6fa8', core: '#ffe3f0', trail: '#ff9cc9', shape: 'heart', length: 20 },
+    cold_death: { color: '#9fe8ff', core: '#eafbff', trail: '#3fb4ff', shape: 'orb', length: 140 },
     biscuit: { color: '#d99032', core: '#ffe29a', trail: '#f0b64f', shape: 'disk', length: 18 },
     // Knave's thrown knife: a steel blade with a red bleed trail.
     knave_knife: { color: '#d7dee8', core: '#ffffff', trail: '#ff4d6d', shape: 'blade', length: 30 },
+    antony_knife: { color: '#d7dee8', core: '#ffffff', trail: '#b48cff', shape: 'blade', length: 34 },
     // Blood Disks reuse the disk silhouette in Knave's red.
     blood_disk: { color: '#ff2f4d', core: '#ffd7de', trail: '#b8102b', shape: 'disk', length: 20 },
   };

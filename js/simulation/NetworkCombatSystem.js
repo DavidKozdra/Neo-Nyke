@@ -38,6 +38,7 @@
   const {
     CHARACTER_DEFAULT_WEAPONS = {},
     CHARACTER_STARTING_ITEMS = {},
+    PLAYABLE_ENEMY_ROSTER = [],
     DEFAULT_WEAPON_ATTACKS = {},
     WEAPON_PROJECTILE_ATTACKS = {},
     PROJECTILE_TYPE_DEFS = {},
@@ -60,6 +61,7 @@
     WIZARD_LAZER_EXTRA_RECOIL = 220,
     steerBeamChannelAngle = (_moveKey, angle) => Number(angle) || 0,
     getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
+    getCharacterStartingItems = characterKey => ({ ...(CHARACTER_STARTING_ITEMS[characterKey] || {}) }),
     getMoveBaseCharges = () => 1,
     createPowerDiskBurstDescriptors = () => [],
     ENEMY_CATALOG = {},
@@ -256,6 +258,9 @@
     planCampaignGroundSmash = () => ({ moveKey: 'crimson_smash', radius: 148, damage: 46, pvpDamage: 46, bleedBonus: 26, knockback: 320, destructibleDamage: 2, stunSeconds: 0, projectileDescriptors: [] }),
     planCampaignBladeJustice = () => ({ damage: 22, durationSeconds: 2.1, count: 3, radius: 16, reach: 120, turnRate: 9, swingRate: 7.5, swingArc: 0.7, contactCooldownSeconds: 0.22, destructibleCooldownSeconds: 0.4, knockback: 180, destructibleDamage: 2, blades: [] }),
     advanceCampaignBladeJustice = () => ({ active: false }),
+    resolveCampaignAntonyBite = () => ({ damage: 30, range: 86, arc: 0.66, knockback: 240, darkDrainChance: 0.35, darkDrainStacks: 2, darkDrainDurationSeconds: 4.2 }),
+    planCampaignAntonyKnifeThrow = () => ({ kind: 'antony_knife', damage: 34, speed: 760, radius: 7, lifeSeconds: 1.45, knockback: 150, pierceCount: 1 }),
+    planCampaignAntonyFreezeBall = () => ({ kind: 'death_ball', damage: 40, speed: 525, radius: 38, lifeSeconds: 3.4, knockback: 230, splashRadius: 120, splashDamage: 26, slowStacks: 1, slowDurationSeconds: 4, splashSlowDurationSeconds: 3, homing: true, homingTarget: 'enemy', homingRadius: 700, homingTurnRate: 0.65, homingSpeed: 570, homingAccel: 1.1 }),
     resolveCampaignTitanHammer = () => ({ damage: 70, radius: 97.5, durationSeconds: 4.55, followRadius: 120, turnRate: 10, followRate: 12, swingCooldownSeconds: 1, swingDurationSeconds: 1 / 4.5, maxSwings: 2, slamKnockback: 300, pvpKnockback: 280, stunSeconds: 0.6, destructibleDamage: 2, contactRadiusMultiplier: 0.32, contactCooldownSeconds: 0.35, contactDamage: 13, contactKnockback: 120 }),
     advanceCampaignTitanHammer = hammer => hammer,
     resolveCampaignFloorLava = () => ({ durationSeconds: 7.5, trailIntervalSeconds: 0.22, puddleRadius: 24, puddleDurationSeconds: 1.8, damagePerSecond: 14, pulseIntervalSeconds: 0.05, statusIntervalSeconds: 0.45, fireDurationSeconds: 2.8 }),
@@ -337,6 +342,13 @@
     turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 228, damageMultiplier: 1 }),
     sarge: Object.freeze({ maxHp: 108, moveSpeed: 228, damageMultiplier: 1.05 }),
     knave: Object.freeze({ maxHp: 98, moveSpeed: 269.04, damageMultiplier: 0.95 }),
+    ...Object.fromEntries(PLAYABLE_ENEMY_ROSTER.map(profile => [profile.characterKey, Object.freeze({
+      maxHp: Math.round(120 * Number(profile.hpMultiplier || 1)),
+      moveSpeed: 228 * Number(profile.moveSpeedMultiplier || 1),
+      damageMultiplier: Number(profile.damageMultiplier || 1),
+      aoeRadiusMultiplier: Number(profile.aoeRadiusMultiplier || 1),
+      signatureMelee: !!profile.signatureMelee,
+    })])),
   });
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
@@ -417,13 +429,14 @@
     const healthRatio = Math.max(0, Math.min(1, Number(player.hp ?? previousMaximum) / previousMaximum));
     player.characterKey = key;
     player.character = key;
-    player.equippedWeapon = getCharacterDefaultWeapon(key);
+    const defaultWeapon = getCharacterDefaultWeapon(key);
+    player.equippedWeapon = profile.signatureMelee ? null : defaultWeapon;
     player.equippedMoves = getDefaultMoveLoadout(key);
     player.kitChoices = sanitizeKitChoices(key, kitChoices) || {};
     Object.assign(player.equippedMoves, player.kitChoices);
-    player.ownedWeapons = { [player.equippedWeapon]: true };
+    player.ownedWeapons = defaultWeapon ? { [defaultWeapon]: true } : {};
     player.ownedMoves = Object.fromEntries(Object.values(player.equippedMoves).map(moveKey => [moveKey, true]));
-    player.items = { ...(CHARACTER_STARTING_ITEMS[key] || {}) };
+    player.items = getCharacterStartingItems(key);
     player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
     // Charge pools are built lazily per move by ensureMoveChargeState (which reads
@@ -2537,6 +2550,9 @@
       splashFireStacks: Number(definition.splashFireStacks || 0),
       fireDuration: Number(definition.fireDuration || 0),
       hitOptions: definition.hitOptions ? { ...definition.hitOptions } : null,
+      splashStatusKey: definition.splashStatusKey || '',
+      splashStatusStacks: Math.max(0, Number(definition.splashStatusStacks || 0)),
+      splashStatusDuration: Math.max(0, Number(definition.splashStatusDuration || 0)),
       homing: !!definition.homing,
       homingTarget: definition.homingTarget || null,
       homingTargetId: definition.homingTargetId || null,
@@ -3384,10 +3400,12 @@
         ? { weaponKey: 'fire_balls', mode: 'fireball_volley', ...(MOVE_BASE_STATS.fire_balls || {}) }
         : unarmedMeleeMove === 'smite'
           ? { weaponKey: 'smite', mode: 'smite', ...(MOVE_BASE_STATS.smite || {}) }
-          : unarmedMeleeMove === 'slash'
-            ? { weaponKey: 'slash', mode: 'campaign_slash', ...(MOVE_BASE_STATS.slash || {}) }
-            : getCampaignWeaponAttack(player.equippedWeapon, player.characterKey);
-    const usesMoveStats = !player.equippedWeapon && ['narwal_fight', 'fire_balls', 'smite', 'slash'].includes(authoredDefinition.weaponKey);
+          : unarmedMeleeMove === 'antony_bite'
+            ? { weaponKey: 'antony_bite', mode: 'antony_bite', ...(MOVE_BASE_STATS.antony_bite || {}) }
+            : unarmedMeleeMove === 'slash'
+              ? { weaponKey: 'slash', mode: 'campaign_slash', ...(MOVE_BASE_STATS.slash || {}) }
+              : getCampaignWeaponAttack(player.equippedWeapon, player.characterKey);
+    const usesMoveStats = !player.equippedWeapon && ['narwal_fight', 'fire_balls', 'smite', 'slash', 'antony_bite'].includes(authoredDefinition.weaponKey);
     const upgradedStats = applyForgeStats(player, usesMoveStats ? 'move' : 'weapon', authoredDefinition.weaponKey,
       usesMoveStats ? MOVE_BASE_STATS[authoredDefinition.weaponKey] : WEAPON_BASE_STATS[authoredDefinition.weaponKey]);
     const definition = {
@@ -3459,6 +3477,23 @@
       definition.bleedStacks = slash.bleedStacks;
       definition.bleedDuration = slash.bleedDurationSeconds;
       definition.itemBleedChance = Number(player.itemStats?.bleedChance || 0);
+      targetIds = resolveSweep(state, player, definition, angle, emitEvent, random, 0, action.validationState);
+    } else if (definition.mode === 'antony_bite') {
+      const base = MOVE_BASE_STATS.antony_bite || {};
+      const bite = resolveCampaignAntonyBite({
+        baseDamage: Number(upgradedStats.damage || base.damage || 30),
+        anvilDamage: 0,
+        anvilRange: Number(upgradedStats.range || 0) - Number(base.range || 86),
+      });
+      Object.assign(definition, {
+        damage: bite.damage,
+        range: bite.range,
+        arc: bite.arc,
+        knockback: bite.knockback,
+        darkDrainChance: bite.darkDrainChance,
+        darkDrainStacks: bite.darkDrainStacks,
+        darkDrainDuration: bite.darkDrainDurationSeconds,
+      });
       targetIds = resolveSweep(state, player, definition, angle, emitEvent, random, 0, action.validationState);
     } else if (definition.mode === 'fireball_volley' || (definition.mode === 'volley' && definition.weaponKey === 'metao_fire_staff')) {
       const volley = planCampaignFireballVolley({
@@ -4482,7 +4517,7 @@
         mode = moveKey === 'warp' ? 'warp' : 'dash';
       }
     } else if (slot === 'laser') {
-      const projectileMoves = new Set(['love_bomb_laser', 'ghost_ball', 'power_disks', 'hammer_throw', 'nail_shot', 'laser_shockwave']);
+      const projectileMoves = new Set(['love_bomb_laser', 'ghost_ball', 'power_disks', 'hammer_throw', 'nail_shot', 'laser_shockwave', 'antony_knife_throw']);
       if (moveKey === 'blade_justice') {
         const base = MOVE_BASE_STATS.blade_justice || {};
         const justice = planCampaignBladeJustice({
@@ -4597,6 +4632,22 @@
           }, angle).id);
           player.vx = Number(player.vx || 0) - Math.cos(angle) * hammer.recoil;
           player.vy = Number(player.vy || 0) - Math.sin(angle) * hammer.recoil;
+        } else if (moveKey === 'antony_knife_throw') {
+          const knife = planCampaignAntonyKnifeThrow({
+            baseDamage: Number(stats.damage || 34),
+            beamDamageMultiplier: player.itemStats?.beamDamageMultiplier,
+            projectileSpeedMultiplier: player.itemStats?.projectileSpeedMultiplier,
+          });
+          projectileIds.push(createPlayerProjectile(state, player, {
+            kind: knife.kind,
+            attackKind: moveKey,
+            damage: knife.damage,
+            speed: knife.speed,
+            radius: knife.radius,
+            lifeTicks: Math.round(knife.lifeSeconds * 20),
+            knockback: knife.knockback,
+            pierce: knife.pierceCount,
+          }, angle).id);
         } else if (moveKey === 'ghost_ball') {
           const ball = planCampaignGhostBall({
             chargeRatio,
@@ -4700,7 +4751,38 @@
         mode = 'beam';
       }
     } else if (slot === 'smash') {
-      if (moveKey === 'titan_hammer') {
+      if (moveKey === 'antony_freeze_ball') {
+        const ball = planCampaignAntonyFreezeBall({
+          baseDamage: Number(stats.damage || 40),
+          aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
+          aoeDamageMultiplier: player.itemStats?.aoeDamageMultiplier,
+          projectileSpeedMultiplier: player.itemStats?.projectileSpeedMultiplier,
+        });
+        projectileIds.push(createPlayerProjectile(state, player, {
+          kind: ball.kind,
+          attackKind: moveKey,
+          damage: ball.damage,
+          speed: ball.speed,
+          radius: ball.radius,
+          lifeTicks: Math.round(ball.lifeSeconds * 20),
+          knockback: ball.knockback,
+          splash: ball.splashRadius,
+          splashDamage: ball.splashDamage,
+          splashStatusKey: 'slow',
+          splashStatusStacks: ball.slowStacks,
+          splashStatusDuration: ball.splashSlowDurationSeconds,
+          hitOptions: { slowChance: 1, slowStacks: ball.slowStacks, slowDuration: ball.slowDurationSeconds },
+          homing: ball.homing,
+          homingTarget: ball.homingTarget,
+          homingRadius: ball.homingRadius,
+          homingSpeed: ball.homingSpeed,
+          homingAccel: ball.homingAccel,
+          homingTurnRate: ball.homingTurnRate,
+        }, angle).id);
+        effectRadius = ball.splashRadius;
+        mode = 'projectile';
+      } else if (moveKey === 'titan_hammer') {
+        
         const base = MOVE_BASE_STATS.titan_hammer || {};
         const hammer = resolveCampaignTitanHammer({
           godMode: godModeActive(state, player),
@@ -8860,9 +8942,20 @@
             projectileId,
             attackKind: projectile.attackKind,
           });
-          const directStacks = candidate.id === enemy.id ? Number(projectile.fireStacks || 0) : 0;
-          const splashStacks = Number(projectile.splashFireStacks || 1);
-          applyFireStatus(state, candidate, directStacks + splashStacks, projectile.fireDuration, projectile.ownerId);
+          const statusKey = String(projectile.splashStatusKey || '');
+          if (statusKey) {
+            applyAuthorityStatus(
+              state,
+              candidate,
+              statusKey,
+              Math.max(1, Number(projectile.splashStatusStacks || 1)),
+              Math.max(0.2, Number(projectile.splashStatusDuration || 3)),
+              projectile.ownerId,
+            );
+          } else if (Number(projectile.splashFireStacks || 0) > 0 || Number(projectile.fireStacks || 0) > 0) {
+            const directStacks = candidate.id === enemy.id ? Number(projectile.fireStacks || 0) : 0;
+            applyFireStatus(state, candidate, directStacks + Number(projectile.splashFireStacks || 0), projectile.fireDuration, projectile.ownerId);
+          }
         });
       } else if (Number(projectile.fireStacks || 0) > 0) {
         applyFireStatus(state, enemy, projectile.fireStacks, projectile.fireDuration, projectile.ownerId);

@@ -20,6 +20,9 @@ const {
   planCampaignGroundSmash,
   planCampaignBladeJustice,
   advanceCampaignBladeJustice,
+  resolveCampaignAntonyBite,
+  planCampaignAntonyKnifeThrow,
+  planCampaignAntonyFreezeBall,
   resolveCampaignTitanHammer,
   advanceCampaignTitanHammer,
   resolveCampaignFloorLava,
@@ -397,6 +400,46 @@ describe('shared campaign move effects', () => {
       kind: 'sarges_hammer', damage: 70, speed: 720, radius: 11, lifeSeconds: 0.75,
       knockback: 540, pierce: 0, returning: true, lightning: true,
     });
+  });
+
+  test('keeps Anthony’s bite, knife throw, and freeze ball on their boss geometry', () => {
+    expect(resolveCampaignAntonyBite({ baseDamage: 32, anvilDamage: 3, anvilRange: 4 })).toEqual({
+      damage: 35,
+      range: 90,
+      arc: 0.66,
+      knockback: 240,
+      darkDrainChance: 0.35,
+      darkDrainStacks: 2,
+      darkDrainDurationSeconds: 4.2,
+    });
+    expect(planCampaignAntonyKnifeThrow({
+      baseDamage: 34,
+      beamDamageMultiplier: 1.5,
+      projectileSpeedMultiplier: 1.2,
+    })).toEqual({
+      kind: 'antony_knife',
+      damage: 51,
+      speed: 912,
+      radius: 7,
+      lifeSeconds: 1.45,
+      knockback: 150,
+      pierceCount: 1,
+    });
+    expect(planCampaignAntonyFreezeBall({
+      baseDamage: 40,
+      aoeRadiusMultiplier: 1.25,
+      aoeDamageMultiplier: 1.5,
+      projectileSpeedMultiplier: 1.2,
+    })).toEqual(expect.objectContaining({
+      kind: 'cold_death',
+      damage: 60,
+      speed: 630,
+      radius: 47.5,
+      splashRadius: 150,
+      splashDamage: 39,
+      slowStacks: 1,
+      homing: true,
+    }));
   });
 
   test('keeps Lazer Glasses’ twin bouncing beam, fire proc, and chains in one policy', () => {

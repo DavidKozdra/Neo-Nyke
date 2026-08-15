@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Perisai lebar dengan knockback berat dan penutup depan bawaan.",
   "weapons.stone_fists.name": "Tinju Batu",
   "weapons.stone_fists.description": "Pukulan batu penghancur dengan dampak besar dan pukulan balik.",
-  "difficulties.knave.name": "pisau"
+  "difficulties.knave.name": "pisau",
+  "moves.antony_bite.name": "Gigitan Berkat",
+  "moves.antony_bite.desc": "Gigitan jarak dekat Anthony. Memiliki peluang 35% untuk memberikan dua tumpuk Dark Drain dan memulihkan kesehatan sebesar 35% dari kerusakan serangan.",
+  "moves.antony_knife_throw.name": "Lempar Pisau",
+  "moves.antony_knife_throw.desc": "Lempar pisau bidikan Anthony lurus menembus barisan musuh terdekat.",
+  "moves.antony_freeze_ball.name": "Bola Beku",
+  "moves.antony_freeze_ball.desc": "Tembakkan bola es raksasa berpemandu milik Anthony. Bola ini meledak saat mengenai sasaran dan memperlambat semua yang terkena ledakan."
 }

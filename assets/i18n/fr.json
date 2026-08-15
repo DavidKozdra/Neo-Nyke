@@ -558,5 +558,11 @@
   "weapons.shield_bash.description": "Un large bouclier avec un fort recul et une couverture frontale intégrée.",
   "weapons.stone_fists.name": "Poings de pierre",
   "weapons.stone_fists.description": "Un poinçon de pierre concassée avec un impact et un recul massifs.",
-  "difficulties.knave.name": "Vainqueur"
+  "difficulties.knave.name": "Vainqueur",
+  "moves.antony_bite.name": "Morsure bénie",
+  "moves.antony_bite.desc": "Morsure à courte portée d’Anthony. Elle a 35 % de chances d’infliger deux charges de Drain obscur et de le soigner à hauteur de 35 % des dégâts infligés.",
+  "moves.antony_knife_throw.name": "Lancer de couteau",
+  "moves.antony_knife_throw.desc": "Lance le couteau d’Anthony en ligne droite à travers la rangée d’ennemis la plus proche.",
+  "moves.antony_freeze_ball.name": "Orbe de givre",
+  "moves.antony_freeze_ball.desc": "Tire l’énorme orbe de givre à tête chercheuse d’Anthony. Il explose à l’impact et ralentit tout ce qui se trouve dans la zone d’explosion."
 }
