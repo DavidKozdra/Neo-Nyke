@@ -129,6 +129,13 @@
         ? { action: 'beam' }
         : {};
     }
+    if (
+      enemy?.type === 'antony_blemmye'
+      && enemy.state === 'antonyMouthBeam'
+      && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)
+    ) {
+      return { action: 'beam' };
+    }
     if (enemy?.type === 'handsome_devil') {
       const firingLightning = enemy.state === 'devilLaser' || enemy.state === 'devilGiantLaser';
       if (firingLightning && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)) {

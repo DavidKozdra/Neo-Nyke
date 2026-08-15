@@ -454,6 +454,30 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, 5, def.frameWidth, def.frameHeight)).toBe(0);
   });
 
+  test('Antony Blemmyae uses the supplied idle, mouth-beam, and attack frames', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.antony_blemmye;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/Anthony.png',
+      frameWidth: 64,
+      frameHeight: 64,
+      frameCount: 3,
+      renderScale: 1.15,
+      idleFrames: [0, 1],
+      walkFrames: [0, 1],
+      attackFrames: [2],
+      beamFrames: [1],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(image.naturalWidth).toBe(192);
+    expect(image.naturalHeight).toBe(64);
+    [def.portraitFrame, ...def.idleFrames, ...def.attackFrames, ...def.beamFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(500);
+    });
+  });
+
   test('Handsome Devil uses the authored idle, walk, lightning, and kick strips', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.handsome_devil;
