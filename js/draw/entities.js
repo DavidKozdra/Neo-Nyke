@@ -118,11 +118,17 @@
     if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner || Neo.CHARACTER_SPRITE_SHEETS?.summoner ? 'summoner' : 'cult_mage';
     if (enemy.type === 'shield_unit') return 'shield_unit';
     if (enemy.type === 'healer') return 'healer';
-    if (enemy.type === 'laser' || enemy.type === 'boss_spawner') return 'cult_mage';
+    if (enemy.type === 'laser') return Neo.CHARACTER_SPRITE_SHEETS?.laser ? 'laser' : 'cult_mage';
+    if (enemy.type === 'boss_spawner') return 'cult_mage';
     return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
   }
 
   function getEnemySpriteActionOptions(enemy) {
+    if (enemy?.type === 'laser') {
+      return Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0
+        ? { action: 'beam' }
+        : {};
+    }
     if (enemy?.type === 'handsome_devil') {
       const firingLightning = enemy.state === 'devilLaser' || enemy.state === 'devilGiantLaser';
       if (firingLightning && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)) {

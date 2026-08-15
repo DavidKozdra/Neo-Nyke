@@ -208,6 +208,28 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+  test('laser enemy uses the supplied walk and beam-firing strip', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.laser;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/cultMage.png',
+      frameWidth: 24,
+      frameHeight: 24,
+      frameCount: 9,
+      idleFrames: [0],
+      walkFrames: [0, 1, 2, 3, 4],
+      beamFrames: [5, 6, 7, 8],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    const availableFrames = Math.floor(image.naturalWidth / def.frameWidth)
+      * Math.floor(image.naturalHeight / def.frameHeight);
+    expect(availableFrames).toBeGreaterThanOrEqual(def.frameCount);
+    [...def.idleFrames, ...def.walkFrames, ...def.beamFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
+    });
+  });
 
 
 

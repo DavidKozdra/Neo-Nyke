@@ -2999,7 +2999,8 @@ export function createUIController(view) {
 
         // Sandbox Lab panel: visual "game hacking" controls moved to Alt Modes.
         function getSandboxEnemySpriteKey(type) {
-          if (type === 'laser' || type === 'boss_spawner') return 'cult_mage';
+          if (type === 'laser') return 'laser';
+          if (type === 'boss_spawner') return 'cult_mage';
           return type;
         }
 

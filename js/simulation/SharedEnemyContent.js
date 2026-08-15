@@ -25,7 +25,7 @@
   const ENEMY_CATALOG = Object.freeze({
     hunter: enemy('hunter', 'chaser'),
     charger: enemy('charger', 'charger'),
-    laser: enemy('laser', 'beam', {}, { spriteKey: 'cult_mage' }),
+    laser: enemy('laser', 'beam'),
     knave: enemy('knave', 'skirmisher', { radius: 16, maxHealth: 68, moveSpeed: 118, contactDamage: 14, attackCooldown: 1.3 }),
     sniper: enemy('sniper', 'sniper', { radius: 15, maxHealth: 58, moveSpeed: 104, contactDamage: 12, attackCooldown: 1.55 }),
     machine_gunner: enemy('machine_gunner', 'burst', { radius: 17, maxHealth: 96, moveSpeed: 112, contactDamage: 8, attackCooldown: 1.15 }),

@@ -2508,10 +2508,8 @@ export function resumeGame() {
   }
 
   const killerSpriteMap = {
-    // Enemy types with no sprite of their own: they borrow a stand-in at draw
-    // time (see getEnemySpriteKey), so the killer portrait must borrow the same
-    // one or it falls through to the "unknown" question-mark hazard icon.
-    laser: 'cult_mage',
+    // Enemy types with no sprite of their own borrow a stand-in at draw time,
+    // so their killer portraits must borrow the same one.
     boss_spawner: 'cult_mage',
     god_beam: 'god',
     mirror_beam: 'thorn_knight',
@@ -2533,7 +2531,7 @@ export function resumeGame() {
     'Mirror Champion': 'thorn_knight',
     'Hunter': 'hunter',
     'Charger': 'charger',
-    'Laser': 'cult_mage',
+    'Laser': 'laser',
     'Sniper': 'sniper',
     'Machine Gunner': 'machine_gunner',
     'Golem': 'golem',
@@ -2548,7 +2546,8 @@ export function resumeGame() {
   function resolveKillerSprite(key) {
     if (!key) return '';
     const rawKey = String(key).trim();
-    if (rawKey === 'laser' || rawKey === 'boss_spawner') return 'cult_mage';
+    if (rawKey === 'boss_spawner') return 'cult_mage';
+    if (rawKey === 'laser') return 'laser';
     if (rawKey.endsWith('_projectile')) return resolveKillerSprite(rawKey.slice(0, -'_projectile'.length));
     if (rawKey.endsWith('_blind_shot')) return resolveKillerSprite(rawKey.slice(0, -'_blind_shot'.length));
     if (Neo.SPRITE_DEFS[key]) return key;
