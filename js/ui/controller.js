@@ -195,6 +195,7 @@ export function createUIController(view) {
       mooggy: 'MOOGGY',
       turtle_boy: 'TURTLE BOY',
       sarge: 'SARGE',
+      knave: 'KNAVE',
     };
     // Roster the authority accepts (mirrors ProtocolV1 PLAYER_CHARACTER enum).
     // Card metadata copied from the #charSelect champion panel so the lobby
@@ -204,9 +205,10 @@ export function createUIController(view) {
       { key: 'thorn_knight', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Bleed melee' },
       { key: 'metao', rarity: 'wizard', tag: 'wizard', role: 'WIZARD', hint: 'Long range' },
       { key: 'gelleh', rarity: 'god', tag: 'god', role: 'GOD', hint: 'Divine power' },
-      { key: 'mooggy', rarity: 'assassin', tag: 'assassin', role: 'ASSASSIN', hint: 'Fast striker' },
+      { key: 'mooggy', rarity: 'knave', tag: 'knave', role: 'KNAVE', hint: 'Fast striker' },
       { key: 'turtle_boy', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Tanky, free laser' },
       { key: 'sarge', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Hammer brawler' },
+      { key: 'knave', rarity: 'knave', tag: 'knave', role: 'KNAVE', hint: 'Fastest, fragile' },
     ];
     const MULTIPLAYER_SELECTABLE = MULTIPLAYER_ROSTER.map(entry => entry.key);
     const MULTIPLAYER_SLOT_COLORS = ['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf'];
@@ -560,7 +562,12 @@ export function createUIController(view) {
       const locked = status !== 'waiting' || localMember?.ready === true;
       view.coopLobbyPicker.classList.toggle('coop-lobby__picker--locked', locked);
       const selectedKey = localMember?.characterKey || 'thorn_knight';
-      const cards = MULTIPLAYER_ROSTER.map(entry => {
+      // The hidden Knave stays out of the co-op picker until he's been found in
+      // single-player, so the lobby never spoils the easter egg.
+      const knaveFound = !!Neo.metaProgress?.unlockedCharacters?.includes('knave');
+      const cards = MULTIPLAYER_ROSTER
+        .filter(entry => entry.key !== 'knave' || knaveFound)
+        .map(entry => {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'char-card';
@@ -1069,30 +1076,77 @@ export function createUIController(view) {
         : [...root.querySelectorAll?.('[data-loop-crystal-icon], .loop-crystal-icon') || []];
       canvases.forEach(canvas => Neo.drawPixelIcon(canvas, '#83f3ff', LOOP_CRYSTAL_PIXELS));
     }
-    const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', ...(Neo.getCustomCharacterKeys?.() || [])];
+    const getCharacterOrder = () => [
+      'princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', 'knave',
+      ...(globalThis.NeoNyke?.content?.getPlayableEnemyCharacterKeys?.() || []),
+      ...(Neo.getCustomCharacterKeys?.() || []),
+    ];
     const CHARACTER_ROLE_LABELS = Object.freeze({
       princess: 'Power all-rounder',
       thorn_knight: 'Bleed bruiser',
       metao: 'Ranged caster',
       gelleh: 'Divine hybrid',
-      mooggy: 'Mobile assassin',
+      mooggy: 'Mobile knave',
       turtle_boy: 'Tank · scaling',
       sarge: 'Heavy brawler',
+      knave: 'Glass-cannon speed',
       custom_character: 'Custom loadout',
     });
 
     function getCharacterRoleLabel(characterKey) {
       if (Neo.isCustomCharacterKey?.(characterKey)) return CHARACTER_ROLE_LABELS.custom_character;
-      return CHARACTER_ROLE_LABELS[characterKey] || 'Dungeon hero';
+      const enemyRole = globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(characterKey)?.roleLabel;
+      return enemyRole || CHARACTER_ROLE_LABELS[characterKey] || 'Dungeon hero';
     }
 
     function getCharacterButton(characterKey) {
       return view.charButtons.find(button => button.dataset.char === characterKey) || null;
     }
 
+    // Secret heroes carry `char-card--secret` until they're found. Pagination
+    // must not count them: they own no page slot and are never revealed by the
+    // page-visibility pass, which drives every card's `hidden` flag.
     function refreshCharacterButtons() {
       view.charButtons = [...document.querySelectorAll('#choose .char-card[data-char]')];
-      return view.charButtons;
+      return view.charButtons.filter(button => !button.classList.contains('char-card--secret'));
+    }
+
+    function renderPlayableEnemyRosterCards() {
+      const track = document.getElementById('choose');
+      const addButton = track?.querySelector('[data-add-custom-character]');
+      if (!track || !addButton) return;
+      const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || []);
+      const profiles = (globalThis.NeoNyke?.content?.PLAYABLE_ENEMY_ROSTER || [])
+        .filter(profile => unlocked.has(profile.characterKey));
+      const existing = [...track.querySelectorAll('[data-generated-enemy-character]')];
+      if (existing.length === profiles.length
+        && existing.every((button, index) => button.dataset.char === profiles[index]?.characterKey)) {
+        return;
+      }
+
+      existing.forEach(node => node.remove());
+      const fragment = document.createDocumentFragment();
+      profiles.forEach(profile => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'char-card';
+        button.dataset.char = profile.characterKey;
+        button.dataset.rarity = profile.rarity;
+        button.dataset.generatedEnemyCharacter = 'true';
+        button.innerHTML = `
+          <div class="char-card-art-wrap">
+            <canvas class="char-card-art" data-char-sprite="${Neo.escapeHtml(profile.characterKey)}" width="96" height="96" aria-hidden="true"></canvas>
+          </div>
+          <div class="char-card-header">
+            <span class="char-card-name">${Neo.escapeHtml(profile.name.toUpperCase())}</span>
+            <span class="char-card-tag ${Neo.escapeHtml(profile.rarity)}-tag">ENEMY</span>
+          </div>
+          <small class="char-card-hint" data-base="${Neo.escapeHtml(profile.hint)}">${Neo.escapeHtml(profile.hint)}</small>
+        `;
+        fragment.appendChild(button);
+      });
+      track.insertBefore(fragment, addButton);
+      refreshCharacterButtons();
     }
 
     function renderCustomRosterCards() {
@@ -1261,13 +1315,17 @@ export function createUIController(view) {
       };
       handle.addEventListener('pointerup', endDrag);
       handle.addEventListener('pointercancel', endDrag);
-      window.addEventListener('resize', () => {
-        if (panel.classList.contains('hidden') || panel.style.left === '') return;
+      // Keep a dragged panel on-screen when the viewport shrinks or the user
+      // grows the panel past the edge with the corner resize grip.
+      const reclampPanel = () => {
+        if (drag || panel.classList.contains('hidden') || panel.style.left === '') return;
         const rect = panel.getBoundingClientRect();
         const next = clampPanel(rect.left, rect.top);
         panel.style.left = `${next.left}px`;
         panel.style.top = `${next.top}px`;
-      });
+      };
+      window.addEventListener('resize', reclampPanel);
+      if (typeof ResizeObserver === 'function') new ResizeObserver(reclampPanel).observe(panel);
     }
 
     function getChallengeAccent(def) {
@@ -1956,11 +2014,13 @@ export function createUIController(view) {
       if (show !== 'charselect') setCustomCharacterPanelOpen(false);
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
-      setVisible(
-        view.practicePanel,
-        inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant === 'standard' && show !== 'dying',
-        'block',
-      );
+      const practicePanelVisible = inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant === 'standard' && show !== 'dying';
+      // 'flex' (not 'block') so the head/body column that makes the body
+      // scroll inside a resized panel survives the inline display write.
+      setVisible(view.practicePanel, practicePanelVisible, 'flex');
+      // Repaint on open so the mirror-knight icon tracks the character actually
+      // in play, and so a mid-session atlas rebuild can't leave blank canvases.
+      if (practicePanelVisible) Neo.paintPracticeEnemyIcons?.();
       const isBossRush = Neo.gameMode === 'boss_rush' || Neo.gameMode === 'rival_rumble';
       if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
@@ -2119,7 +2179,7 @@ export function createUIController(view) {
       { key: 'bulk_golem',      label: 'Bulk Golem',      boss: true,  hp: 1280, dmg: 31, speed: 88,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Massive golem that splits into smaller golems at low HP. Ground-slam AOE attack.' },
       { key: 'artificer_knave', label: 'Artificer Knave', boss: true,  hp: 1880, dmg: 20, speed: 124, attackStyle: 'melee',   immunities: [],                                    desc: 'Boss. High-speed multi-phase fighter. Becomes more aggressive at each phase threshold.' },
       { key: 'queen_cult',      label: 'Queen Cult',      boss: true,  hp: 912,  dmg: 20, speed: 96,  attackStyle: 'summon',  immunities: [],                                    desc: 'Boss. Cult leader that summons followers and mages while striking with projectiles.' },
-      { key: 'antony_blemmye',  label: 'Antony Blemmyae',  boss: true,  hp: 1250, dmg: 24, speed: 78,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Chest-faced bruiser. Up close he bites to drain HP or sweeps a wide slash; his hammer sends a shockwave forward and he charges a cold death ball at range.' },
+      { key: 'antony_blemmye',  label: 'Anthony The Blessed Blemmye',  boss: true,  hp: 1250, dmg: 24, speed: 78,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Chest-faced bruiser. Up close he bites to drain HP or sweeps a wide slash; his hammer sends a shockwave forward and he charges a cold death ball at range.' },
       { key: 'handsome_devil',  label: 'Handsome Devil',  boss: true,  hp: 1700, dmg: 23, speed: 104, attackStyle: 'hazard',  immunities: ['fire'],                              desc: 'Floor 6 boss. Phase 1 raises red floor spikes and lava grids. Phase 2 fires red laser eyes.' },
       { key: 'bowman_bane',     label: "Bowman's Bane",   boss: true,  hp: 2400, dmg: 22, speed: 80,  attackStyle: 'beam',    immunities: [],                                    desc: 'Secret boss. Found by revisiting a cleared secret room. Drops lightning columns and sweeps a tracking beam. At half HP he unleashes Justice of Sonichu — a fan of room-spanning lightning bolts that strike across the arena.' },
       { key: 'mirror_knight',   label: 'Mirror Champion', boss: true,  hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'mirror',  immunities: [],                                    desc: 'Elite. Copies the player\'s equipped moves and items. The perfect counter to your build.' },
@@ -2148,6 +2208,10 @@ export function createUIController(view) {
       }
       if (characterKey === 'turtle_boy') {
         return '<div class="info-char-card__lock">LOCKED: Equip Extending Staff + Turtle Wave together</div>';
+      }
+      // Knave is a secret unlock — never spell out how to find him.
+      if (characterKey === 'knave') {
+        return '<div class="info-char-card__lock">LOCKED: ???</div>';
       }
       return '<div class="info-char-card__lock">LOCKED</div>';
     }
@@ -2430,7 +2494,11 @@ export function createUIController(view) {
         if (filteredEnemies.length) showEnemyDetail(filteredEnemies[0].key);
 
       } else if (tab === 'characters') {
-        const infoCharacters = Object.values(Neo.CHARACTER_DEFS).filter(c => c.key !== 'custom_character');
+        // Knave is a hidden easter-egg hero: he stays out of the compendium
+        // entirely until found, so the roster never hints that he exists.
+        const knaveFound = !!Neo.metaProgress?.unlockedCharacters?.includes('knave');
+        const infoCharacters = Object.values(Neo.CHARACTER_DEFS)
+          .filter(c => c.key !== 'custom_character' && (c.key !== 'knave' || knaveFound));
         setInfoResultStatus(tab, infoCharacters.length);
         view.rhInfoContent.innerHTML = `${getInfoResultSummary(tab, infoCharacters.length)}<div class="info-char-grid" role="list">${infoCharacters.map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
@@ -2936,6 +3004,7 @@ export function createUIController(view) {
         if (menuBound) return;
         bindOrientationPrompt();
         ensureRunHistoryPanelCanOverlayGame();
+        renderPlayableEnemyRosterCards();
         renderCustomRosterCards();
         const rosterTrack = document.getElementById('choose');
         rosterTrack?.addEventListener('click', event => {
@@ -4038,11 +4107,36 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onStartSandbox();
         });
-        // Practice panel toggle
+        // Practice panel toggle. A user resize writes an inline height that
+        // would otherwise keep the collapsed panel tall, so stash and restore
+        // it around the collapse instead of fighting it in CSS.
         view.practicePanelToggle?.addEventListener('click', () => {
-          view.practicePanelBody?.classList.toggle('hidden');
+          const collapsed = view.practicePanelBody?.classList.toggle('hidden');
+          const panel = view.practicePanel;
+          if (!panel) return;
+          if (collapsed) {
+            if (panel.style.height) panel.dataset.expandedHeight = panel.style.height;
+            panel.style.height = 'auto';
+          } else {
+            panel.style.height = panel.dataset.expandedHeight || '';
+          }
         });
         bindPracticePanelDrag();
+        view.practiceSearch?.addEventListener('input', () => {
+          Neo.filterPracticePanel?.(view.practiceSearch.value);
+        });
+        // Escape clears the filter first, and only blurs once it is already
+        // empty, so one key does not both clear and drop focus.
+        view.practiceSearch?.addEventListener('keydown', event => {
+          if (event.key !== 'Escape') return;
+          event.stopPropagation();
+          if (view.practiceSearch.value) {
+            view.practiceSearch.value = '';
+            Neo.filterPracticePanel?.('');
+          } else {
+            view.practiceSearch.blur();
+          }
+        });
         view.practiceMaxHpSlider?.addEventListener('input', () => {
           Neo.setPracticeMaxHp(view.practiceMaxHpSlider.value);
         });
@@ -4157,6 +4251,7 @@ export function createUIController(view) {
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
+        renderPlayableEnemyRosterCards();
         renderCustomRosterCards();
         const previousCarouselKey = selectedCarouselKey;
         selectedCarouselKey = selected || previousCarouselKey;
@@ -4171,7 +4266,9 @@ export function createUIController(view) {
             return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
           }
           if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first';
-          if (unlocked.has(itemKey)) return '';
+          if (unlocked.has(itemKey)) {
+            return globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(itemKey)?.hint || '';
+          }
           if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
@@ -4179,6 +4276,8 @@ export function createUIController(view) {
           }
           if (itemKey === 'sarge') return "Unlock: defeat Bowman's Bane";
           if (itemKey === 'turtle_boy') return 'Unlock: equip Extending Staff + Turtle Wave';
+          // Knave is a secret: the card gives no hint about how to find him.
+          if (itemKey === 'knave') return '???';
           return 'Locked';
         };
 
@@ -4205,6 +4304,20 @@ export function createUIController(view) {
             button.querySelector('[data-custom-character-card-name]')?.replaceChildren(document.createTextNode(customName.toUpperCase()));
           } else {
             button.classList.remove('char-card--empty-custom');
+          }
+          // Knave is the hidden hero: his card doesn't exist in the carousel at
+          // all until the credits easter egg reveals him. `char-card--secret`
+          // (not `hidden`) keeps him out, because `hidden` is owned by the
+          // pagination pass and would be cleared on the next page update.
+          if (itemKey === 'knave') {
+            const revealed = unlocked.has('knave');
+            button.classList.toggle('char-card--secret', !revealed);
+            if (!revealed) {
+              button.classList.remove('sel');
+              button.disabled = true;
+              button.hidden = true;
+              return;
+            }
           }
           button.classList.toggle('locked', !isSelectable(itemKey));
           button.classList.toggle('sel', selected === itemKey);

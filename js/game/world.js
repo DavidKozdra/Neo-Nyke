@@ -189,7 +189,7 @@
       const damage = Math.max(1, Number(Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.laser.damage) * (0.7 + ratio * 1.3));
       for (const enemy of Neo.enemies) {
         if (!enemy?.dead && Neo.beamPathHitsCircle?.(path, enemy.x, enemy.y, enemy.r + 7)) {
-          Neo.hitEnemy(enemy, damage, aimAngle, 80 + ratio * 100, color);
+          Neo.hitEnemy(enemy, damage, aimAngle, 80 + ratio * 100, color, { attacker: player });
         }
       }
       player.auxLaserPath = path;
@@ -203,7 +203,7 @@
       Neo.spawnAoeShockwave(player.x, player.y, radius, color, 'heavy');
       for (const enemy of Neo.enemies) {
         if (!enemy?.dead && Neo.dist(player.x, player.y, enemy.x, enemy.y) <= radius + enemy.r) {
-          Neo.hitEnemy(enemy, damage, Neo.angleBetween(player, enemy), 260 + ratio * 120, color);
+          Neo.hitEnemy(enemy, damage, Neo.angleBetween(player, enemy), 260 + ratio * 120, color, { attacker: player });
         }
       }
       player.auxSmashCooldown = getPvpMoveCooldown(player, 'smash', 'crimson_smash');
@@ -301,7 +301,7 @@
         const diff = Math.abs(((a - aimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
         if (diff > Neo.ATTACKS.melee.arc) continue;
         const dmg = Math.max(1, Neo.ATTACKS.melee.damage);
-        Neo.hitEnemy(enemy, dmg, a, Neo.ATTACKS.melee.push, '#4ca8ff');
+        Neo.hitEnemy(enemy, dmg, a, Neo.ATTACKS.melee.push, '#4ca8ff', { attacker: Neo.player2 });
       }
     } else if (!Neo.keys['u'] && !(_gp1Active && _gp1.p2MeleeHeld)) {
       Neo.player2.meleeLatch = false;
@@ -369,7 +369,7 @@
         const pvpDiff = Math.abs(((pvpHitAngle - pvpAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
         if (pvpDiff <= Neo.ATTACKS.melee.arc) {
           const pvpDmg = Math.max(1, Neo.ATTACKS.melee.damage);
-          damagePlayer(pvpDmg, Math.atan2(pvpDy, pvpDx), Neo.ATTACKS.melee.push, 'pvp_p2', { ignoreInv: false });
+          damagePlayer(pvpDmg, Math.atan2(pvpDy, pvpDx), Neo.ATTACKS.melee.push, 'pvp_p2', { ignoreInv: false, attacker: Neo.player2 });
         }
       }
     }
@@ -416,7 +416,7 @@
         if (Math.hypot(dx, dy) > Neo.ATTACKS.melee.range + enemy.r + 4) continue;
         const a = Math.atan2(dy, dx);
         if (Math.abs(((a - aimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI) <= Neo.ATTACKS.melee.arc)
-          Neo.hitEnemy(enemy, Math.max(1, Neo.ATTACKS.melee.damage), a, Neo.ATTACKS.melee.push, '#a8d8ff');
+          Neo.hitEnemy(enemy, Math.max(1, Neo.ATTACKS.melee.damage), a, Neo.ATTACKS.melee.push, '#a8d8ff', { attacker: pn });
       }
     } else if (!(_gpN && _gpN.p2MeleeHeld)) { pn.meleeLatch = false; }
     if (_gpN && _gpN.p2DashHeld && !pn.dashLatch && pn.dashTime <= 0) {
@@ -433,11 +433,29 @@
     }
   }
 
+  function scaleKnockbackByAttackerLevel(knockback, source = '', options = {}) {
+    const getLevelKnockbackMultiplier = globalThis.NeoNyke?.simulation?.getEntityLevelKnockbackMultiplier;
+    if (typeof getLevelKnockbackMultiplier !== 'function') throw new Error('Shared level knockback rules are unavailable');
+    const attacker = options.attacker
+      || Neo.findKillerEnemyEntity?.(options.sourceKey || source, options.sourceLabel || source);
+    return Number(knockback || 0) * getLevelKnockbackMultiplier(attacker);
+  }
+
+  function getAttackArtifactOwner(artifact) {
+    if (!artifact) return null;
+    if (artifact.ownerEnemy) return artifact.ownerEnemy;
+    if (artifact.owner && typeof artifact.owner === 'object') return artifact.owner;
+    if (artifact.level !== undefined) return artifact;
+    const ownerId = artifact.ownerId;
+    if (ownerId === undefined || ownerId === null) return null;
+    return Neo.enemies?.find(enemy => String(enemy?.id) === String(ownerId)) || null;
+  }
+
   function damagePlayerN(pn, n, amount, angle, knockback, source = '', options = {}) {
     if (!pn || (pn.inv > 0 && !options.ignoreInv)) return;
     pn.hp -= amount;
     if (!options.noInvFrames) {
-      Neo.applyImpulse(pn, angle, knockback);
+      Neo.applyImpulse(pn, angle, scaleKnockbackByAttackerLevel(knockback, source, options));
       pn.inv = 0.75;
     }
     if (amount >= 1) spawnDamagePopup(pn.x, pn.y - 18, amount, { color: '#a8d8ff', size: 16 });
@@ -456,7 +474,7 @@
   function damagePvpPlayer2(amount, x, y, knockback = 120, source = 'pvp_p1') {
     if (!canHitPvpPlayer2()) return false;
     const angle = Math.atan2(Neo.player2.y - y, Neo.player2.x - x);
-    damagePlayer2(Math.max(1, Number(amount || 0)), angle, knockback, source);
+    damagePlayer2(Math.max(1, Number(amount || 0)), angle, knockback, source, { attacker: Neo.player });
     return true;
   }
 
@@ -470,7 +488,7 @@
     if (!canHitPvpPlayer2()) return null;
     const hitSegment = Neo.beamPathHitsCircle(path, Neo.player2.x, Neo.player2.y, Neo.player2.r + radiusPadding);
     if (!hitSegment) return null;
-    damagePlayer2(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source);
+    damagePlayer2(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source, { attacker: Neo.player });
     return hitSegment;
   }
 
@@ -481,7 +499,7 @@
   function hitPvpPlayer1InRadius(x, y, radius, damage, knockback = 160, source = 'pvp_p2') {
     if (!canHitPvpPlayer1()) return false;
     if (Neo.dist(x, y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
-    damagePlayer(Math.max(1, Number(damage || 0)), Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, source);
+    damagePlayer(Math.max(1, Number(damage || 0)), Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, source, { attacker: Neo.player2 });
     return true;
   }
 
@@ -489,7 +507,7 @@
     if (!canHitPvpPlayer1()) return null;
     const hitSegment = Neo.beamPathHitsCircle(path, Neo.player.x, Neo.player.y, Neo.player.r + radiusPadding);
     if (!hitSegment) return null;
-    damagePlayer(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source);
+    damagePlayer(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source, { attacker: Neo.player2 });
     return hitSegment;
   }
 
@@ -498,7 +516,7 @@
     if (Neo.player2.inv > 0 && !options.ignoreInv) return;
     Neo.player2.hp -= amount;
     if (!options.noInvFrames) {
-      Neo.applyImpulse(Neo.player2, angle, knockback);
+      Neo.applyImpulse(Neo.player2, angle, scaleKnockbackByAttackerLevel(knockback, source, options));
       Neo.player2.inv = 0.75;
     }
     if (amount >= 1) spawnDamagePopup(Neo.player2.x, Neo.player2.y - 18, amount, { color: '#4ca8ff', size: 16 });
@@ -696,7 +714,8 @@
       Neo.player.inv = 0.75;
       // Anchor Charm roots the player: reduce incoming knockback. The reduced value
       // also feeds the impact-stun check, so less shove = harder to heavy-knockback stun.
-      const resistedKnockback = knockback * (1 - Number(itemStats.anchorKnockbackResist || 0));
+      const resistedKnockback = scaleKnockbackByAttackerLevel(knockback, source, options)
+        * (1 - Number(itemStats.anchorKnockbackResist || 0));
       Neo.applyImpulse(Neo.player, angle, resistedKnockback);
       Neo.applyPlayerImpactStun(finalAmount, resistedKnockback);
       const hitRatio = Neo.clamp(finalAmount / Math.max(1, Neo.player.maxHp), 0, 1);
@@ -1088,12 +1107,15 @@
       const playerDamage = falloff
         ? getRadialFalloffDamage(damage, playerDistance, radius, falloff.centerMultiplier, falloff.edgeMultiplier)
         : damage;
-      damagePlayerSlot(slot, playerDamage, Math.atan2(actor.y - y, actor.x - x), knockback, sourceEnemy.type || 'enemy_aoe');
+      damagePlayerSlot(slot, playerDamage, Math.atan2(actor.y - y, actor.x - x), knockback, sourceEnemy.type || 'enemy_aoe', { attacker: sourceEnemy });
     });
     if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, knockback, 'pvp_p1_aoe');
     const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
     const targetFxBudget = performanceMode ? (adaptiveQuality >= 2 ? 2 : adaptiveQuality >= 1 ? 4 : 8) : Infinity;
+    const primaryHitOptions = sourceEnemy ? { ...PRIMARY_AOE_HIT_OPTIONS, attacker: sourceEnemy } : PRIMARY_AOE_HIT_OPTIONS;
+    const secondaryHitOptions = sourceEnemy ? { ...SECONDARY_AOE_HIT_OPTIONS, attacker: sourceEnemy } : SECONDARY_AOE_HIT_OPTIONS;
+    const culledHitOptions = sourceEnemy ? { ...CULLED_AOE_HIT_OPTIONS, attacker: sourceEnemy } : CULLED_AOE_HIT_OPTIONS;
     let hitCount = 0;
     forEachEnemyNearCircle(x, y, radius, enemy => {
       const enemyReach = radius + Number(enemy.r || 0);
@@ -1101,10 +1123,10 @@
       const enemyDy = enemy.y - y;
       if (enemyDx * enemyDx + enemyDy * enemyDy > enemyReach * enemyReach) return;
       const hitOptions = !performanceMode || hitCount === 0
-        ? PRIMARY_AOE_HIT_OPTIONS
+        ? primaryHitOptions
         : hitCount < targetFxBudget
-          ? SECONDARY_AOE_HIT_OPTIONS
-          : CULLED_AOE_HIT_OPTIONS;
+          ? secondaryHitOptions
+          : culledHitOptions;
       Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), knockback * 0.9, color, hitOptions);
       hitCount += 1;
     }, { excludeEnemy: sourceEnemy });
@@ -1130,7 +1152,9 @@
     if (damage > 0) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
       const actor = slot.getEntity();
       if (!globalThis.NeoNyke.simulation.campaignCircleHazardHitsEntity({ x, y }, actor, radius)) return;
-      damagePlayerSlot(slot, damage, Math.atan2(actor.y - y, actor.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe');
+      damagePlayerSlot(slot, damage, Math.atan2(actor.y - y, actor.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe', {
+        attacker: getAttackArtifactOwner(projectile),
+      });
       if (blast.statusKey) {
         Neo.applyStatus?.(actor, blast.statusKey, Number(blast.statusStacks || 1), Number(blast.statusDuration || 3), projectile.source || 'enemy_aoe');
       }
@@ -1162,6 +1186,7 @@
         damagePlayerSlot(slot, damage, angle, 220, projectile.source || 'rival_love_bomb', {
           sourceKey: projectile.source || 'rival_love_bomb',
           sourceLabel: projectile.sourceLabel || 'Rival Love Bomb',
+          attacker: getAttackArtifactOwner(projectile),
         });
       });
       return;
@@ -2132,6 +2157,7 @@
         if (target) {
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
           const hitOptions = { ...(projectile.hitOptions || {}) };
+          hitOptions.attacker = projectile.owner || Neo.player;
           if (Neo.player?.character === 'mooggy' && Neo.getStatusStacks?.(target, 'bleed') > 0) {
             hitOptions.critBonus = Number(hitOptions.critBonus || 0) + 0.18;
           }
@@ -2145,6 +2171,12 @@
           );
           if (Neo.player?.character === 'princess' && projectile.pierceCount > 0) {
             Neo.applyPlayerHealing?.(1.2, { showBarrier: false });
+          }
+          // Projectiles that count as beam-type for item purposes (Knave Knives)
+          // let Dragon Orb chain from the struck target, matching how the item
+          // behaves for real beams.
+          if (projectile.chainsOnHit && target.hp > 0) {
+            Neo.chainBeamHit?.(target, projectile.damage || 16, hitAngle, projectile.color || '#d890ff');
           }
           if (projectile.kind === 'fireball') {
             Neo.applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
@@ -2326,7 +2358,9 @@
             if (dungeonOwned) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
               const actor = slot.getEntity();
               if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) > blast + actor.r) return;
-              damagePlayerSlot(slot, damage, Neo.angleBetween(hazard, actor), 170, hazard.source || 'thorn_mine');
+              damagePlayerSlot(slot, damage, Neo.angleBetween(hazard, actor), 170, hazard.source || 'thorn_mine', {
+                attacker: getAttackArtifactOwner(hazard),
+              });
               Neo.applyStatus?.(actor, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5, hazard.source || 'thorn_mine');
             });
             Neo.ringBurst(hazard.x, hazard.y, blast, '#ff6e8b', 0.35);
@@ -2349,7 +2383,14 @@
           getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
             const actor = slot.getEntity();
             if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + actor.r) {
-              damagePlayerSlot(slot, damage, Neo.angleBetween(hazard, actor), 240, hazard.source || 'bomb_aoe');
+              damagePlayerSlot(
+                slot,
+                damage,
+                Neo.angleBetween(hazard, actor),
+                Number(hazard.knockback || 240),
+                hazard.source || 'bomb_aoe',
+                { attacker: getAttackArtifactOwner(hazard) },
+              );
             }
           });
           blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
@@ -2455,7 +2496,9 @@
               const actor = slot.getEntity();
               if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) <= hazard.r + actor.r) {
               const angle = Neo.angleBetween(hazard, actor);
-              damagePlayerSlot(slot, hazard.damage || 18, angle, 130, hazard.source || 'red_spikes');
+              damagePlayerSlot(slot, hazard.damage || 18, angle, 130, hazard.source || 'red_spikes', {
+                attacker: getAttackArtifactOwner(hazard),
+              });
               const statusKey = String(hazard.statusKey || 'bleed');
               const stacks = Math.max(1, Number(hazard.statusStacks || 1));
               const duration = Math.max(0.2, Number(hazard.statusDuration || (statusKey === 'fire' ? 2.8 : 3.4)));
@@ -2531,7 +2574,9 @@
             const damageInterval = Number(hazard.damageInterval || 0.2);
             if (victims.length) hazard.playerDamageTick = damageInterval;
             const damage = Math.max(1, Math.round(Number(hazard.damagePerSecond || 10 * zoneDamageMult) * damageInterval));
-            victims.forEach(slot => damagePlayerSlot(slot, damage, 0, 35, hazard.source || 'rival_healing_zone'));
+            victims.forEach(slot => damagePlayerSlot(slot, damage, 0, 35, hazard.source || 'rival_healing_zone', {
+              attacker: getAttackArtifactOwner(hazard),
+            }));
           }
         } else {
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
@@ -2605,7 +2650,9 @@
                 const actor = slot.getEntity();
                 if (Neo.dist(px, py, actor.x, actor.y) > 52 + actor.r) return;
                 const angle = Math.atan2(actor.y - py, actor.x - px);
-                damagePlayerSlot(slot, hazard.damage || 18, angle, 120, hazard.source || 'rival_chaos_burst');
+                damagePlayerSlot(slot, hazard.damage || 18, angle, 120, hazard.source || 'rival_chaos_burst', {
+                  attacker: getAttackArtifactOwner(hazard),
+                });
                 Neo.applyStatus?.(actor, 'poison', 1, 4.8, hazard.source || 'rival_chaos_burst');
               });
             } else {
@@ -2627,7 +2674,9 @@
                 if (hazard.source === 'storm' && Number(actor.inv || 0) <= 0 && !actor.blockActive) {
                   Neo.playSfx?.('lightning_charge');
                 }
-                damagePlayerSlot(slot, hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
+                damagePlayerSlot(slot, hazard.damage || 16, angle, 90, hazard.source || 'lightning_column', {
+                  attacker: getAttackArtifactOwner(hazard),
+                });
                 }
               });
             } else {
@@ -2690,7 +2739,9 @@
                 const actor = slot.getEntity();
                 if (Neo.distToSegment(actor.x, actor.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) > reach + actor.r) return;
                 const angle = Math.atan2(hazard.y2 - hazard.y1, hazard.x2 - hazard.x1) + Math.PI / 2;
-                damagePlayerSlot(slot, hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu');
+                damagePlayerSlot(slot, hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu', {
+                  attacker: getAttackArtifactOwner(hazard),
+                });
               });
             } else {
               forEachEnemyNearCircle(hazard.x1, hazard.y1, reach + Math.hypot(hazard.x2 - hazard.x1, hazard.y2 - hazard.y1) + 80, enemy => {
@@ -2708,6 +2759,61 @@
               },
             });
           }
+        }
+      } else if (hazard.kind === 'cult_follower_ally') {
+        hazard.attackFlash = Math.max(0, Number(hazard.attackFlash || 0) - dt);
+        hazard.tick = Number(hazard.tick || 0) - dt;
+        const range = Number(hazard.range || 520);
+        let target = null;
+        let bestSq = range * range;
+        forEachEnemyNearCircle(hazard.x, hazard.y, range, enemy => {
+          if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.spawnT > 0) return;
+          const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
+          if (dSq < bestSq) {
+            bestSq = dSq;
+            target = enemy;
+          }
+        });
+
+        let goalX;
+        let goalY;
+        let stopDistance;
+        if (target) {
+          goalX = target.x;
+          goalY = target.y;
+          stopDistance = Number(hazard.attackRange || 48) + target.r;
+        } else {
+          const orbitAngle = Number(hazard.allyIndex || 0) * 2.399 + Number(Neo.gameElapsedTime || 0) * 0.55;
+          goalX = Neo.player.x + Math.cos(orbitAngle) * 66;
+          goalY = Neo.player.y + Math.sin(orbitAngle) * 66;
+          stopDistance = 18;
+        }
+        const dx = goalX - hazard.x;
+        const dy = goalY - hazard.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        hazard.aimAngle = Math.atan2(dy, dx);
+        hazard.moving = distance > stopDistance;
+        if (hazard.moving) {
+          const step = Math.min(distance - stopDistance, Number(hazard.speed || 170) * dt);
+          hazard.x = Neo.clamp(hazard.x + dx / distance * step, Neo.WALL + hazard.r, Neo.ROOM_W - Neo.WALL - hazard.r);
+          hazard.y = Neo.clamp(hazard.y + dy / distance * step, Neo.WALL + hazard.r, Neo.ROOM_H - Neo.WALL - hazard.r);
+        } else if (target && hazard.tick <= 0) {
+          hazard.tick = Number(hazard.interval || 0.55);
+          hazard.attackFlash = 0.24;
+          const attackAngle = Neo.angleBetween(hazard, target);
+          Neo.hitEnemy(target, Number(hazard.damage || 22), attackAngle, 110, '#b575ff', {
+            bleedChance: 0.2,
+            bleedStacks: 1,
+            bleedDuration: 4,
+          });
+          Neo.spawnParticle({
+            x: hazard.x, y: hazard.y, life: 0.18, c: '#b575ff',
+            line: {
+              x1: hazard.x, y1: hazard.y,
+              x2: target.x, y2: target.y,
+              w: 4, jag: 6, seg: 5, phase: Neo.nextRandom('fx') * Math.PI * 2,
+            },
+          });
         }
       } else if (hazard.kind === 'holy_turret') {
         // Gelleh's Holy Turrets: periodically lock onto the nearest enemy in
@@ -2751,7 +2857,9 @@
               getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
                 const actor = slot.getEntity();
                 if (Neo.dist(actor.x, actor.y, target.x, target.y) <= burstR + actor.r) {
-                  damagePlayerSlot(slot, hazard.damage || 17, aimAngle, 120, hazard.source || 'rival_holy_turret');
+                  damagePlayerSlot(slot, hazard.damage || 17, aimAngle, 120, hazard.source || 'rival_holy_turret', {
+                    attacker: getAttackArtifactOwner(hazard),
+                  });
                 }
               });
             } else {

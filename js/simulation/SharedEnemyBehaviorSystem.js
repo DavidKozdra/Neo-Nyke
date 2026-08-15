@@ -1,11 +1,12 @@
 (function initializeSharedEnemyBehaviorSystem(root, factory) {
   const geometryApi = typeof require === 'function' ? require('koz-engine-lib/Core/geometry2d.js') : root.KozEngine?.Core?.geometry2d;
-  const api = factory(geometryApi || {});
+  const enemyContentApi = typeof require === 'function' ? require('./SharedEnemyContent') : root.NeoNyke?.content;
+  const api = factory(geometryApi || {}, enemyContentApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi, enemyContentApi) {
   'use strict';
 
   const deterministicRandom = () => 0.5;
@@ -32,6 +33,7 @@
   const QUEEN_FINISHER_RADIUS = 190;
   const QUEEN_FINISHER_KNOCKBACK = 820;
   const QUEEN_FINISHER_RESISTANCE = 400;
+  const BULK_GOLEM_KNOCKBACK_MULTIPLIER = 3;
   const MOOGGY_CLAW_SWING = 0.22;
   const MOOGGY_CLAW_REACH_PAD = 34;
   const MOOGGY_CLAW_ARC = 1.0;
@@ -61,7 +63,8 @@
     function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
       const slowMultiplier = ctx.getSlowMultiplier?.(enemy) ?? 1;
       const packSpeedMultiplier = Math.max(1, Number(enemy.minorPackSpeedMultiplier || 1));
-      const adjustedSpeed = maxSpeed * slowMultiplier * packSpeedMultiplier;
+      const signatureSpeedMultiplier = Math.max(1, Number(enemy.signatureSpeedMultiplier || 1));
+      const adjustedSpeed = maxSpeed * slowMultiplier * packSpeedMultiplier * signatureSpeedMultiplier;
       enemy.vx += (dirX * adjustedSpeed - enemy.vx) * accel * dt;
       enemy.vy += (dirY * adjustedSpeed - enemy.vy) * accel * dt;
     }
@@ -266,6 +269,148 @@
       enemy.projectileEvadeCd = enemy.boss ? 2.6 : 3.2;
       return true;
     }
+
+    function spawnNpcSignatureProjectile(enemy, moveKey, angle, options = {}) {
+      const speed = Number(options.speed || 520);
+      ctx.spawnProjectile?.(enemy, {
+        x: enemy.x + Math.cos(angle) * (enemy.r + 8),
+        y: enemy.y + Math.sin(angle) * (enemy.r + 8),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: Number(options.r || 5),
+        life: Number(options.life || 1.4),
+        kind: options.kind || moveKey,
+        source: moveKey,
+        damage: Math.max(1, Math.round(Number(enemy.dmg || 10) * Number(options.damageScale || 1))),
+        knockback: Number(options.knockback || 140),
+        pierceCount: Number(options.pierceCount || 0),
+        statusEffects: options.statusEffects,
+      });
+    }
+
+    function summonNpcCultFollowers(enemy, count) {
+      for (let index = 0; index < count; index += 1) {
+        const angle = (Math.PI * 2 * index) / count + random('encounter') * 0.5;
+        const x = enemy.x + Math.cos(angle) * (48 + index * 6);
+        const y = enemy.y + Math.sin(angle) * (48 + index * 6);
+        if (typeof ctx.spawnMinion === 'function') ctx.spawnMinion(enemy, 'cult_follower', x, y, {});
+        else ctx.spawnSummon?.(enemy, 'cult_follower', x, y);
+      }
+    }
+
+    function executeNpcEnemySignatureMove(enemy, player, moveKey) {
+      const level = Math.max(1, Math.floor(Number(enemy.level) || 1));
+      const levelTwenty = level >= 20;
+      const angle = angleBetween(enemy, player);
+      const fan = (count, spread, options) => {
+        for (let index = 0; index < count; index += 1) {
+          const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
+          spawnNpcSignatureProjectile(enemy, moveKey, angle + offset, options);
+        }
+      };
+
+      if (moveKey === 'hunter_volley') {
+        fan(levelTwenty ? 7 : 5, 0.17, { speed: 620, life: 1.15, damageScale: 0.72, pierceCount: levelTwenty ? 2 : 1 });
+      } else if (moveKey === 'hunter_trap') {
+        ctx.spawnHazard?.(enemy, {
+          kind: 'red_spikes', enemy: true, source: 'hunter_trap',
+          x: player.x + Number(player.vx || 0) * 0.32,
+          y: player.y + Number(player.vy || 0) * 0.32,
+          r: levelTwenty ? 46 : 38, ttl: 2.2, armTime: 0.62,
+          damage: Math.round(Number(enemy.dmg || 10) * 1.15),
+          statusKey: 'bleed', statusStacks: levelTwenty ? 3 : 2, statusDuration: 4.5,
+        });
+      } else if (moveKey === 'sniper_round') {
+        fan(levelTwenty ? 2 : 1, 0.14, {
+          speed: 900, r: 6, life: 1.05, damageScale: 1.45,
+          knockback: 300, pierceCount: levelTwenty ? 4 : 2,
+        });
+      } else if (moveKey === 'gunner_barrage') {
+        fan(levelTwenty ? 16 : 12, 0.025, { speed: 720, life: 1.05, damageScale: 0.42, knockback: 70 });
+      } else if (moveKey === 'bullet_nova' || moveKey === 'laser_nova') {
+        const count = moveKey === 'bullet_nova' ? (levelTwenty ? 30 : 24) : (levelTwenty ? 16 : 12);
+        for (let index = 0; index < count; index += 1) {
+          spawnNpcSignatureProjectile(enemy, moveKey, angle + index * Math.PI * 2 / count, {
+            speed: moveKey === 'bullet_nova' ? 680 : 520,
+            r: moveKey === 'bullet_nova' ? 4 : 6,
+            damageScale: moveKey === 'bullet_nova' ? 0.4 : 0.68,
+            knockback: moveKey === 'bullet_nova' ? 65 : 130,
+          });
+        }
+      } else if (moveKey === 'dungeon_beam') {
+        fan(levelTwenty ? 3 : 1, 0.12, {
+          speed: 820, r: 11, life: 0.9, damageScale: 1.15,
+          knockback: 220, pierceCount: levelTwenty ? 3 : 2,
+        });
+      } else if (moveKey === 'cult_bolt_volley') {
+        fan(levelTwenty ? 7 : 5, 0.16, {
+          speed: 500, r: 7, life: 1.4, damageScale: 0.7, knockback: 100,
+          statusEffects: [{ key: 'fire', chance: 1, stacks: levelTwenty ? 2 : 1, duration: 3.2 }],
+        });
+      } else if (moveKey === 'cult_frenzy') {
+        enemy.npcFrenzyTime = levelTwenty ? 8 : 6;
+        enemy.signatureSpeedMultiplier = levelTwenty ? 1.6 : 1.4;
+        enemy.signatureAttackSpeedMultiplier = levelTwenty ? 1.6 : 1.4;
+        enemy.attackCd = Math.min(Number(enemy.attackCd || 0), 0.18);
+      } else if (moveKey === 'shield_throw') {
+        fan(1, 0, { speed: 600, r: 12, life: 1.7, damageScale: 1.1, knockback: 330, pierceCount: levelTwenty ? 5 : 3 });
+      } else if (moveKey === 'shield_guard') {
+        ctx.grantBarrier?.(enemy, enemy, Math.round(Number(enemy.max || enemy.maxHealth || 1) * (levelTwenty ? 0.34 : 0.24)));
+        enemy.signatureGuardTime = levelTwenty ? 5 : 3.5;
+      } else if (moveKey === 'summon_cult_followers') {
+        const baseCount = enemy.type === 'queen_cult' ? 5 : enemy.type === 'boss_spawner' ? 4 : 3;
+        summonNpcCultFollowers(enemy, baseCount + (levelTwenty && enemy.type === 'summoner' ? 1 : 0));
+      } else if (moveKey === 'charger_rush') {
+        enemy.dashAngle = angle;
+        enemy.dashTime = levelTwenty ? 0.48 : 0.4;
+        enemy.dashHit = false;
+        enemy.npcSignatureRush = true;
+      }
+
+      enemy.attackAnimT = 0.32;
+      ctx.emit?.('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: moveKey });
+    }
+
+    function updateNpcEnemySignatureMoves(enemy, dt) {
+      enemy.npcFrenzyTime = Math.max(0, Number(enemy.npcFrenzyTime || 0) - dt);
+      if (enemy.npcFrenzyTime <= 0) {
+        enemy.signatureSpeedMultiplier = 1;
+        enemy.signatureAttackSpeedMultiplier = 1;
+      }
+      enemy.signatureGuardTime = Math.max(0, Number(enemy.signatureGuardTime || 0) - dt);
+      enemy.npcSignatureCd = Math.max(0, Number(enemy.npcSignatureCd || 0) - dt);
+      const player = ctx.getPlayer(enemy);
+      if (!player || enemy.stun > 0) return false;
+
+      if (enemy.npcSignatureWindup > 0) {
+        enemy.npcSignatureWindup = Math.max(0, enemy.npcSignatureWindup - dt);
+        enemy.vx *= 0.76;
+        enemy.vy *= 0.76;
+        if (enemy.npcSignatureWindup <= 0) {
+          executeNpcEnemySignatureMove(enemy, player, enemy.npcSignatureMove);
+          enemy.npcSignatureMove = '';
+        }
+        return true;
+      }
+
+      if (enemy.npcSignatureCd > 0 || enemy.windup > 0 || enemy.beamTime > 0
+        || enemy.dashTime > 0 || enemy.swingTime > 0) return false;
+      const unlocked = enemyContentApi.getNpcEnemyUnlockedMoves?.(enemy.type, enemy.level) || [];
+      if (!unlocked.length) return false;
+      const moveKey = unlocked[Number(enemy.npcSignatureIndex || 0) % unlocked.length];
+      enemy.npcSignatureIndex = Number(enemy.npcSignatureIndex || 0) + 1;
+      enemy.npcSignatureMove = moveKey;
+      enemy.npcSignatureWindup = moveKey === 'sniper_round' || moveKey === 'dungeon_beam' ? 0.7 : 0.48;
+      enemy.npcSignatureCd = (Math.max(1, Number(enemy.level || 1)) >= 20 ? 5.8 : 7.4)
+        * Math.max(0.72, Number(tuningOf().rangedCadence || 1));
+      ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: moveKey });
+      return true;
+    }
+
+    const withNpcSignatures = update => (enemy, dt) => {
+      if (updateNpcEnemySignatureMoves(enemy, dt)) return;
+      update(enemy, dt);
+    };
 
     // --- authored per-type behaviors ---------------------------------------
 
@@ -645,7 +790,7 @@
             kind: 'golem_spit',
             source: 'golem_projectile',
             damage: enemy.dmg + 4,
-            statusEffects: [{ key: 'poison', chance: 1, stacks: 1, duration: 4.2 }],
+            knockback: 120 * (enemy.type === 'bulk_golem' ? BULK_GOLEM_KNOCKBACK_MULTIPLIER : 1),
           });
         }
         return;
@@ -668,7 +813,14 @@
         enemy.vy = Math.sin(enemy.dashAngle) * 390;
         if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
           enemy.dashHit = true;
-          ctx.damagePlayer(enemy, player, enemy.dmg + 6, enemy.dashAngle, 280, enemy.type);
+          ctx.damagePlayer(
+            enemy,
+            player,
+            enemy.dmg + 6,
+            enemy.dashAngle,
+            280 * (enemy.type === 'bulk_golem' ? BULK_GOLEM_KNOCKBACK_MULTIPLIER : 1),
+            enemy.type,
+          );
         }
         return;
       }
@@ -980,12 +1132,22 @@
 
       if (enemy.dashTime > 0) {
         enemy.dashTime -= dt;
-        enemy.vx = Math.cos(enemy.dashAngle) * 430;
-        enemy.vy = Math.sin(enemy.dashAngle) * 430;
+        const signatureRush = !!enemy.npcSignatureRush;
+        const dashSpeed = signatureRush ? 820 : 430;
+        enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+        enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
         if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 6) {
           enemy.dashHit = true;
-          ctx.damagePlayer(enemy, player, enemy.dmg + 4, enemy.dashAngle, 240, enemy.type);
+          ctx.damagePlayer(
+            enemy,
+            player,
+            signatureRush ? Math.round(enemy.dmg * 1.45) : enemy.dmg + 4,
+            enemy.dashAngle,
+            signatureRush ? 520 : 240,
+            signatureRush ? 'charger_rush' : enemy.type,
+          );
         }
+        if (enemy.dashTime <= 0) enemy.npcSignatureRush = false;
         return;
       }
 
@@ -1404,7 +1566,14 @@
           enemy.airborne = false;
           enemy.jumpCd = 2.4;
           const impactRadius = 150;
-          ctx.blastRadius(enemy, enemy.x, enemy.y, impactRadius, Math.round(enemy.dmg * 0.85), 330);
+          ctx.blastRadius(
+            enemy,
+            enemy.x,
+            enemy.y,
+            impactRadius,
+            Math.round(enemy.dmg * 0.85),
+            330 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+          );
         }
         return;
       }
@@ -1418,7 +1587,14 @@
           enemy.bulkNovaLineShown = true;
           ctx.speak?.(enemy, 'Break under the weight.');
         }
-        ctx.blastRadius(enemy, enemy.x, enemy.y, 173, Math.round(enemy.dmg * 0.864), 200);
+        ctx.blastRadius(
+          enemy,
+          enemy.x,
+          enemy.y,
+          173,
+          Math.round(enemy.dmg * 0.864),
+          200 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+        );
       }
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
@@ -2787,19 +2963,20 @@
       updateEliteEnemyTraits,
       wanderEnemy,
       blindDefendEnemy,
-      updateHunterEnemy,
-      updateCultMageEnemy,
+      updateNpcEnemySignatureMoves,
+      updateHunterEnemy: withNpcSignatures(updateHunterEnemy),
+      updateCultMageEnemy: withNpcSignatures(updateCultMageEnemy),
       updateKnaveEnemy,
-      updateSniperEnemy,
-      updateMachineGunnerEnemy,
+      updateSniperEnemy: withNpcSignatures(updateSniperEnemy),
+      updateMachineGunnerEnemy: withNpcSignatures(updateMachineGunnerEnemy),
       updateGolemEnemy,
-      updateSummonerEnemy,
-      updateShieldUnitEnemy,
+      updateSummonerEnemy: withNpcSignatures(updateSummonerEnemy),
+      updateShieldUnitEnemy: withNpcSignatures(updateShieldUnitEnemy),
       updateHealerEnemy,
-      updateBossSpawnerEnemy,
-      updateLaserEnemy,
-      updateChargerEnemy,
-      updateCultQueenBoss,
+      updateBossSpawnerEnemy: withNpcSignatures(updateBossSpawnerEnemy),
+      updateLaserEnemy: withNpcSignatures(updateLaserEnemy),
+      updateChargerEnemy: withNpcSignatures(updateChargerEnemy),
+      updateCultQueenBoss: withNpcSignatures(updateCultQueenBoss),
       updateBulkGolemBoss,
       updateArtificerBoss,
       updateBowmanBane,
@@ -2814,6 +2991,7 @@
 
   return {
     SHARED_BEHAVIOR_TYPES,
+    BULK_GOLEM_KNOCKBACK_MULTIPLIER,
     createCampaignEnemyBehaviors,
     createCampaignBulkGolemSplitPlan,
     lineIntersectsRect,

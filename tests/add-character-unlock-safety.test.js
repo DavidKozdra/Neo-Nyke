@@ -1,6 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const enemyContent = require('../js/simulation/SharedEnemyContent');
+
 // Brace-matches a `{ ... }` block starting at `openIndex` (which must point at the `{`).
 function matchBraces(source, openIndex) {
   let depth = 0;
@@ -23,15 +25,52 @@ function extractFunction(source, functionName, deps = {}) {
   );
 }
 
+// Evaluates a top-level `const|export const NAME = <object literal>;` from a
+// module-wrapped source file, with `deps` supplied as scope.
+function extractObjectLiteral(source, declaration, deps = {}) {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`Missing ${declaration}`);
+  const literal = matchBraces(source, source.indexOf('{', start));
+  return new Function(...Object.keys(deps), `return ${literal};`)(...Object.values(deps));
+}
+
+// Evaluates a top-level `const NAME = <expression>;` whose value is not a bare object
+// literal (so brace matching would stop inside a nested callback). Reads to the first
+// `;` that sits outside every bracket pair.
+function extractExpression(source, declaration, deps = {}) {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`Missing ${declaration}`);
+  const from = start + declaration.length;
+  const pairs = { '}': '{', ')': '(', ']': '[' };
+  const stack = [];
+  for (let i = from; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '{' || char === '(' || char === '[') stack.push(char);
+    else if (pairs[char]) {
+      if (stack[stack.length - 1] !== pairs[char]) throw new Error('Unbalanced brackets');
+      stack.pop();
+    } else if (char === ';' && stack.length === 0) {
+      const expression = source.slice(from, i);
+      return new Function(...Object.keys(deps), `return (${expression});`)(...Object.values(deps));
+    }
+  }
+  throw new Error(`Unterminated initializer for ${declaration}`);
+}
+
 // Evaluates the real `export const CHARACTER_DEFS = { ... }` literal from game-core.js
 // so the test runs against the actual shipped roster, not a hand-written fake.
+// The literal spreads in the enemy-derived defs, so those are rebuilt from the same
+// source expression and injected — keeping the roster real on both halves.
 function loadRealCharacterDefs() {
   const source = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
-  const marker = 'export const CHARACTER_DEFS =';
-  const start = source.indexOf(marker);
-  if (start < 0) throw new Error('Missing CHARACTER_DEFS');
-  const literal = matchBraces(source, source.indexOf('{', start));
-  return new Function(`return ${literal};`)();
+  const PLAYABLE_ENEMY_CHARACTER_DEFS = extractExpression(
+    source,
+    'const PLAYABLE_ENEMY_CHARACTER_DEFS =',
+    { PLAYABLE_ENEMY_ROSTER: enemyContent.PLAYABLE_ENEMY_ROSTER },
+  );
+  return extractObjectLiteral(source, 'export const CHARACTER_DEFS =', {
+    PLAYABLE_ENEMY_CHARACTER_DEFS,
+  });
 }
 
 describe('adding a character does not delete existing unlocks', () => {

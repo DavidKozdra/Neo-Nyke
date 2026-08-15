@@ -234,7 +234,7 @@ function recordUnlock(unlock, options = {}) {
 
 const CHARACTER_RARITY_COLOR = {
   princess: '#ff9ccf', knight: '#e8f0ff', wizard: '#c08cff',
-  god: '#ffd23f', assassin: '#ff7a9a',
+  god: '#ffd23f', knave: '#ff7a9a',
 };
 
 // Convenience wrappers used by the various unlock sites.

@@ -56,7 +56,7 @@
   const RESYNC_MIN_TICKS = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
-  const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
+  const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', 'knave']);
   // Background tabs and sleeping mobile browsers can suspend JavaScript well
   // beyond the old 45-second window. Preserve the authority entity long enough
   // for the visibility/focus reconnect path to reclaim it after waking.

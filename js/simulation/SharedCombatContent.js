@@ -1,11 +1,19 @@
 (function initializeSharedCombatContent(root, factory) {
-  const api = factory();
+  let enemyContent = root.NeoNyke?.content || null;
+  if (typeof module !== 'undefined' && module.exports) {
+    try {
+      enemyContent = require('./SharedEnemyContent');
+    } catch {
+      enemyContent = null;
+    }
+  }
+  const api = factory(enemyContent || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.content = namespace.content || {};
   Object.assign(namespace.content, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedCombatContentApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedCombatContentApi(enemyContent) {
   'use strict';
 
   // This is the canonical, headless-safe source for weapon values used by both
@@ -26,6 +34,9 @@
     void_piercer: Object.freeze({ damage: 55, cooldown: 0.80, knockback: 160 }),
     princess_wand: Object.freeze({ damage: 30, cooldown: 0.77, range: 120, knockback: 160 }),
     sarges_hammer: Object.freeze({ damage: 64, cooldown: 0.70, range: 120, knockback: 520 }),
+    knave_blade: Object.freeze({ damage: 36, cooldown: 0.44, range: 96, knockback: 240 }),
+    shield_bash: Object.freeze({ damage: 34, cooldown: 0.62, range: 100, knockback: 420 }),
+    stone_fists: Object.freeze({ damage: 42, cooldown: 0.75, range: 105, knockback: 460 }),
   });
 
   const PROJECTILE_TYPE_DEFS = Object.freeze({
@@ -53,6 +64,7 @@
     mooggy: 'claw_gauntlets',
     turtle_boy: 'extending_staff',
     sarge: 'sarges_hammer',
+    knave: 'knave_blade',
   });
 
   // Matches the starter inventory assigned by the campaign's
@@ -66,6 +78,9 @@
     mooggy: Object.freeze({ hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 }),
     turtle_boy: Object.freeze({ turtle_shell: 1, dragon_orb: 1 }),
     sarge: Object.freeze({ copper_penny: 1 }),
+    // Pendant of Rock softens his paper-thin health, and the Artificer Charger
+    // (the Knave's own cult tooling) doubles his level and widens his AOEs.
+    knave: Object.freeze({ pendant_of_rock: 1, artificer_charger: 1 }),
   });
 
   // Exact default-weapon behavior authored in combat.js, represented without
@@ -79,10 +94,23 @@
     extending_staff: Object.freeze({ mode: 'sweep', arc: 1.45, color: '#ff3333' }),
     // The hammer lodges its first target in lightning, then recalls to Sarge.
     sarges_hammer: Object.freeze({ mode: 'projectile', projectileType: 'sarges_hammer', returning: true, lightning: true }),
+    // Thorn's blade sharpened for an assassin: tighter arc, faster swing, and a
+    // far higher bleed chance carrying two stacks instead of one.
+    knave_blade: Object.freeze({ mode: 'sweep', arc: 1.10, color: '#ff4d6d', bleedChance: 0.35, bleedStacks: 2, bleedDuration: 5 }),
+    shield_bash: Object.freeze({ mode: 'sweep', arc: 1.35, color: '#9cefff' }),
+    stone_fists: Object.freeze({ mode: 'sweep', arc: 1.5, color: '#a8875e' }),
   });
 
   function getCharacterDefaultWeapon(characterKey) {
-    return CHARACTER_DEFAULT_WEAPONS[characterKey] || CHARACTER_DEFAULT_WEAPONS.thorn_knight;
+    return enemyContent.getPlayableEnemyDefinition?.(characterKey)?.defaultWeapon
+      || CHARACTER_DEFAULT_WEAPONS[characterKey]
+      || CHARACTER_DEFAULT_WEAPONS.thorn_knight;
+  }
+
+  function getCharacterStartingItems(characterKey) {
+    const items = enemyContent.getPlayableEnemyDefinition?.(characterKey)?.startingItems
+      || CHARACTER_STARTING_ITEMS[characterKey];
+    return { ...(items || {}) };
   }
 
   function getDefaultWeaponAttack(characterKey) {
@@ -134,6 +162,7 @@
     CHARACTER_STARTING_ITEMS,
     DEFAULT_WEAPON_ATTACKS,
     getCharacterDefaultWeapon,
+    getCharacterStartingItems,
     getDefaultWeaponAttack,
     buildCampaignWeaponProjectileConfig,
   };

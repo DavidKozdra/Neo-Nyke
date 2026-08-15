@@ -699,6 +699,16 @@ html.princess-ui .practice-toggle-btn:hover { color: #ffb8de; }
 
 html.princess-ui .practice-section-label { color: rgba(255, 154, 207, .7); }
 
+html.princess-ui .practice-search-row { background: rgba(20, 4, 12, .97); }
+html.princess-ui .practice-search {
+  background: rgba(40, 8, 24, .85);
+  border-color: rgba(200, 80, 150, .28);
+  color: #ffe3f2;
+}
+html.princess-ui .practice-search::placeholder { color: rgba(255, 154, 207, .5); }
+html.princess-ui .practice-search:focus { border-color: rgba(255, 154, 207, .6); }
+html.princess-ui .practice-search-empty { color: rgba(255, 154, 207, .6); }
+
 html.princess-ui .practice-spawn-btn {
   background: rgba(40, 8, 24, .85);
   border-color: rgba(200, 80, 150, .28);

@@ -1,5 +1,6 @@
 const {
   applyCampaignLevelUp,
+  getEntityLevelKnockbackMultiplier,
   getLevelMilestone,
   getMilestoneChargeBonus,
   getLevelMoveSpeedBonus,
@@ -37,6 +38,14 @@ describe('shared campaign progression', () => {
   test('uses the shared stat-surge and move-speed milestone registry', () => {
     expect(getLevelMilestone(14, 'princess')).toEqual(expect.objectContaining({ label: 'STAT SURGE' }));
     expect(getLevelMoveSpeedBonus('princess', 28)).toBeCloseTo(0.07);
+  });
+
+  test('adds two percent outgoing knockback for every level gained', () => {
+    expect(getEntityLevelKnockbackMultiplier(1)).toBe(1);
+    expect(getEntityLevelKnockbackMultiplier({ level: 2 })).toBeCloseTo(1.02);
+    expect(getEntityLevelKnockbackMultiplier({ level: 11 })).toBeCloseTo(1.2);
+    expect(getEntityLevelKnockbackMultiplier({ rivalData: { level: 26 } })).toBeCloseTo(1.5);
+    expect(getEntityLevelKnockbackMultiplier({ level: Number.NaN })).toBe(1);
   });
 
   test('both browser campaign and authority invoke the same level operation', () => {

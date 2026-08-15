@@ -3,7 +3,10 @@ const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState } = require('../js/multiplayer/LocalMultiplayerSession');
 const { getEnemyDefinition, ENEMY_CATALOG } = require('../js/simulation/SharedEnemyContent');
-const { createCampaignEnemyBehaviors } = require('../js/simulation/SharedEnemyBehaviorSystem');
+const {
+  BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+  createCampaignEnemyBehaviors,
+} = require('../js/simulation/SharedEnemyBehaviorSystem');
 const {
   applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, advanceToNextFloor,
 } = require('../js/simulation/NetworkCombatSystem');
@@ -826,6 +829,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
     const rival = injectEnemy(state, 'rival', player.x + 130, player.y, {
+      level: 11,
       behavior: 'mirror', rivalCharacterKey: 'princess', rivalVendetta: true,
       contactDamage: 40, mirrorWeapon: 'princess_wand', mirrorWeaponStats: { damage: 30, range: 380, knockback: 160 },
       mirrorMoves: { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' },
@@ -836,7 +840,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
 
     tick(simulation, 10);
     expect(events).toContainEqual(expect.objectContaining({
-      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'kicky_kick', knockbackMagnitude: 680 }),
+      eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'kicky_kick', knockbackMagnitude: 816 }),
     }));
     expect(player.hp).toBeLessThan(1000);
     expect(rival.state).not.toBe('mirrorSmash');
@@ -1345,6 +1349,62 @@ describe('shared behavior module in isolation', () => {
     expect(shots.every(shot => shot.kind === 'machine_round')).toBe(true);
     expect(enemy.attackAnimT).toBeGreaterThan(0);
   });
+
+  test('triples every Bulk Golem knockback source without changing regular Golems', () => {
+    const player = { id: 'p', x: 0, y: 0, r: 18 };
+    const blasts = [];
+    const hits = [];
+    const shots = [];
+    const behaviors = createCampaignEnemyBehaviors({
+      getPlayer: () => player,
+      getPlayers: () => [player],
+      getTuning: () => ({ reaction: 1, rangedCadence: 1, supportPower: 1 }),
+      random: () => 0.5,
+      bounds: () => ({ wall: 28, width: 900, height: 700 }),
+      isBlocked: () => false,
+      getSlowMultiplier: () => 1,
+      blastRadius: (...args) => blasts.push(args),
+      damagePlayer: (...args) => hits.push(args),
+      spawnProjectile: (_enemy, descriptor) => shots.push(descriptor),
+    });
+    const base = {
+      id: 'bulk', type: 'bulk_golem', x: 0, y: 0, vx: 0, vy: 0,
+      r: 58, speed: 78, dmg: 31, hp: 1280, max: 1280, stun: 0,
+      windup: 0, spitWindup: 0, dashTime: 0, attackCd: 9, jumpCd: 99, aoeTime: 99,
+    };
+
+    behaviors.updateBulkGolemBoss({
+      ...base,
+      bulkJumpTime: 0.01,
+      bulkJumpDuration: 0.82,
+      bulkJumpStartX: 0,
+      bulkJumpStartY: 0,
+      bulkJumpTargetX: 0,
+      bulkJumpTargetY: 0,
+    }, 0.02);
+    behaviors.updateBulkGolemBoss({ ...base, aoeTime: 0.01 }, 0.02);
+    behaviors.updateGolemEnemy({
+      ...base,
+      dashTime: 0.01,
+      dashHit: false,
+      dashAngle: 0,
+    }, 0.02);
+    behaviors.updateGolemEnemy({ ...base, spitWindup: 0.01 }, 0.02);
+    behaviors.updateGolemEnemy({
+      ...base,
+      id: 'regular',
+      type: 'golem',
+      r: 20,
+      dashTime: 0.01,
+      dashHit: false,
+      dashAngle: 0,
+    }, 0.02);
+
+    expect(BULK_GOLEM_KNOCKBACK_MULTIPLIER).toBe(3);
+    expect(blasts.map(call => call[5])).toEqual([330 * 3, 200 * 3]);
+    expect(hits.map(call => call[4])).toEqual([280 * 3, 280]);
+    expect(shots.map(shot => shot.knockback)).toEqual([120 * 3]);
+  });
 });
 
 describe('authored boss behaviors on the authority', () => {
@@ -1452,6 +1512,7 @@ describe('player hits shove and stun enemies (game feel)', () => {
   test('a beam tick knocks the enemy back along the beam and heavy hits stun', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;
+    player.level = 11;
     const enemy = injectEnemy(state, 'hunter', player.x + 60, player.y, { attackCd: 9 });
     const startX = enemy.x;
 
@@ -1462,8 +1523,10 @@ describe('player hits shove and stun enemies (game feel)', () => {
     }
     // Enemy shoved forward (+x) by the beam knockback, not standing still.
     expect(enemy.x).toBeGreaterThan(startX + 5);
-    // The ENEMY_HIT events carry an impact weight for the client's screenshake.
-    expect(events.some(event => event.eventType === 'ENEMY_HIT' && Number(event.data.knockback) > 0)).toBe(true);
+    // Level 11 adds ten 2% gains to Blood Beam's authored 60 knockback.
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ENEMY_HIT', data: expect.objectContaining({ enemyId: enemy.id, knockback: 72 }),
+    }));
   });
 
   test('a smash detonation shoves enemies outward and stuns them', () => {

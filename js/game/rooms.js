@@ -3733,7 +3733,7 @@
       });
       turrets.forEach(turret => {
         Neo.hazards.push({
-          kind: 'holy_turret', enemy: true, source: rival.characterKey,
+          kind: 'holy_turret', enemy: true, ownerEnemy: enemy, source: rival.characterKey,
           x: turret.x, y: turret.y, r: turret.radius, ttl: turret.durationSeconds, tick: 0, interval: turret.intervalSeconds,
           range: turret.range, burstRadius: turret.burstRadius, damage: turret.damage, aimAngle: turret.aimAngle, recoil: 0,
         });
@@ -3759,7 +3759,7 @@
         Neo.skySwords.push({
           x: sword.x, y: sword.y, phase: sword.phase, delay: sword.delaySeconds, fall: sword.fallSeconds, radius: sword.radius,
           damage: sword.damage, hoverTime: sword.hoverSeconds, angle: sword.angle, spin: sword.spin,
-          enemy: true, source: rival.characterKey, sourceLabel: rival.name,
+          enemy: true, owner: enemy, source: rival.characterKey, sourceLabel: rival.name,
         });
       });
       Neo.ringBurst(Neo.player.x, Neo.player.y, 36, '#ffd980', 0.5);
@@ -3784,7 +3784,9 @@
         const py = enemy.y + Math.sin(burst.angle) * burst.distance;
         Neo.ringBurst(px, py, burst.visualRadius, '#b6f0ff', 0.5);
         if (Neo.dist(px, py, Neo.player.x, Neo.player.y) <= burst.radius + Neo.player.r) {
-          Neo.damagePlayer(burst.damage, burst.angle, burst.knockback, rival.characterKey, { sourceKey: rival.characterKey, sourceLabel: `${rival.name} Potion Bath` });
+          Neo.damagePlayer(burst.damage, burst.angle, burst.knockback, rival.characterKey, {
+            sourceKey: rival.characterKey, sourceLabel: `${rival.name} Potion Bath`, attacker: enemy,
+          });
         }
       });
     } else if (key === 'turtle_powerup') {
@@ -4014,6 +4016,7 @@
         Neo.damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.characterKey, {
           sourceKey: rival.characterKey,
           sourceLabel: rival.name,
+          attacker: enemy,
         });
       }
       if (enemy.dashTime <= 0) {
@@ -4089,6 +4092,7 @@
         Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.characterKey, {
           sourceKey: rival.characterKey,
           sourceLabel: rival.name,
+          attacker: enemy,
         });
         if (rival.memory) {
           rival.memory.playerHitsDealt += 1;

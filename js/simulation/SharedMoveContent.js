@@ -1,31 +1,42 @@
 (function initializeSharedMoveContent(root, factory) {
-  const api = factory();
+  let enemyContent = root.NeoNyke?.content || null;
+  if (typeof module !== 'undefined' && module.exports) {
+    try {
+      enemyContent = require('./SharedEnemyContent');
+    } catch {
+      enemyContent = null;
+    }
+  }
+  const api = factory(enemyContent || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.content = namespace.content || {};
   Object.assign(namespace.content, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedMoveContentApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedMoveContentApi(enemyContent) {
   'use strict';
 
   const MOVE_SLOTS = Object.freeze(['melee', 'laser', 'smash', 'dash']);
   const FLYING_UNTOUCHABLE_DURATION_SECONDS = 5;
   const MOVE_SLOT_KEYS = Object.freeze({
-    melee: Object.freeze(['slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe']),
+    melee: Object.freeze(['slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe', 'knave_blade']),
     laser: Object.freeze([
       'blood_beam', 'love_beam', 'love_bomb_laser', 'turtle_wave', 'ghost_ball', 'power_disks',
       'hammer_throw', 'lightning_cross', 'blade_justice', 'holy_eye_beams', 'lightning_columns',
       'god_sweep', 'laser_shockwave', 'nail_shot', 'mooggy_blood_beam',
-      'thorn_blood_beams', 'wizard_lazer',
+      'thorn_blood_beams', 'wizard_lazer', 'knave_knives', 'blood_disks',
+      'hunter_volley', 'sniper_round', 'gunner_barrage', 'dungeon_beam',
+      'cult_bolt_volley', 'shield_throw',
     ]),
     smash: Object.freeze([
       'crimson_smash', 'hammer_smash', 'titan_hammer', 'death_ball', 'turtle_powerup', 'mooggy_hairball',
       'potion_bath', 'excalibur_strike', 'holy_turrets', 'kicky_kick', 'chaos_burst', 'wall_of_toph',
       'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce', 'intense_biscuits',
+      'hunter_trap', 'laser_nova', 'bullet_nova', 'cult_frenzy', 'summon_cult_followers',
     ]),
     dash: Object.freeze([
       'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'princess_shield',
-      'cowards_way', 'mooggy_zoomies', 'knight_slash_dash',
+      'cowards_way', 'mooggy_zoomies', 'knight_slash_dash', 'charger_rush', 'shield_guard',
     ]),
   });
 
@@ -35,12 +46,18 @@
     fire_balls: Object.freeze({ damage: 20, cooldown: 0.75, range: 180 }),
     smite: Object.freeze({ damage: 28, cooldown: 0.55, range: 110 }),
     narwal_fight: Object.freeze({ damage: 36, cooldown: 0.55, range: 126 }),
+    // Knave's blade melee, mirroring his weapon the way mooggy_swipe mirrors claws.
+    knave_blade: Object.freeze({ damage: 36, cooldown: 0.44, range: 96 }),
     blood_beam: Object.freeze({ damage: 14, cooldown: 3.00, duration: 1.2, critChance: 0 }),
     love_beam: Object.freeze({ damage: 13.3, cooldown: 3.40, duration: 1.275, critChance: 0 }),
     love_bomb_laser: Object.freeze({ damage: 34, cooldown: 3.80, range: 420 }),
     turtle_wave: Object.freeze({ damage: 55, cooldown: 6.00, duration: 1.35 }),
     ghost_ball: Object.freeze({ damage: 34, cooldown: 5.50, range: 460 }),
     power_disks: Object.freeze({ damage: 20, cooldown: 1.90, range: 240 }),
+    // Knave's signature laser: two homing knives, each with a 15% bleed chance.
+    knave_knives: Object.freeze({ damage: 34, cooldown: 2.60, range: 420 }),
+    // Red Power Disks: fewer disks, faster, bleed instead of drain/fire.
+    blood_disks: Object.freeze({ damage: 24, cooldown: 2.10, range: 260 }),
     blade_justice: Object.freeze({ damage: 60, cooldown: 3.80, range: 80 }),
     holy_eye_beams: Object.freeze({ damage: 13, cooldown: 3.60, duration: 1.2 }),
     lightning_columns: Object.freeze({ damage: 30, cooldown: 4.80, range: 180 }),
@@ -79,6 +96,19 @@
     turtle_powerup: Object.freeze({ damage: 36, cooldown: 6.00, range: 110 }),
     laser_shockwave: Object.freeze({ damage: 22, cooldown: 2.60, range: 400 }),
     wall_of_toph: Object.freeze({ damage: 46, cooldown: 4.20, range: 150 }),
+    hunter_volley: Object.freeze({ damage: 18, cooldown: 2.40, range: 520 }),
+    sniper_round: Object.freeze({ damage: 72, cooldown: 4.50, range: 760 }),
+    gunner_barrage: Object.freeze({ damage: 12, cooldown: 3.20, range: 620 }),
+    dungeon_beam: Object.freeze({ damage: 38, cooldown: 3.80, range: 560 }),
+    cult_bolt_volley: Object.freeze({ damage: 20, cooldown: 2.80, range: 460 }),
+    shield_throw: Object.freeze({ damage: 34, cooldown: 3.00, range: 440 }),
+    hunter_trap: Object.freeze({ damage: 44, cooldown: 5.00, duration: 12.0, range: 120 }),
+    laser_nova: Object.freeze({ damage: 24, cooldown: 5.00, range: 420 }),
+    bullet_nova: Object.freeze({ damage: 16, cooldown: 5.20, range: 500 }),
+    cult_frenzy: Object.freeze({ cooldown: 10.00, duration: 8.0 }),
+    summon_cult_followers: Object.freeze({ damage: 22, cooldown: 9.00, duration: 14.0, range: 520 }),
+    charger_rush: Object.freeze({ damage: 52, cooldown: 3.20, range: 320 }),
+    shield_guard: Object.freeze({ cooldown: 8.00, duration: 3.5 }),
   });
 
   // Presentation is shared content, while rendering remains client-only. The
@@ -91,6 +121,7 @@
     smite: Object.freeze({ kind: 'chain', color: '#cfdcff', style: 'normal', sound: 'lightning_charge' }),
     narwal_fight: Object.freeze({ kind: 'swing', color: '#ff8ed0', style: 'normal', sound: 'sword_swing' }),
     mooggy_swipe: Object.freeze({ kind: 'swing', color: '#ff7a9a', style: 'heavy', sound: 'sword_swing' }),
+    knave_blade: Object.freeze({ kind: 'swing', color: '#ff4d6d', style: 'normal', sound: 'sword_swing' }),
 
     blood_beam: Object.freeze({ kind: 'beam', color: '#ff3048', style: 'normal', sound: 'lazer_blast' }),
     love_beam: Object.freeze({ kind: 'beam', color: '#ff9de8', style: 'normal', sound: 'lazer_blast' }),
@@ -98,6 +129,8 @@
     turtle_wave: Object.freeze({ kind: 'beam', color: '#74f5ff', style: 'heavy', sound: 'lazer_blast' }),
     ghost_ball: Object.freeze({ kind: 'projectile', color: '#8fffe0', style: 'heavy', sound: 'lazer_blast' }),
     power_disks: Object.freeze({ kind: 'projectile', color: '#ffb35c', style: 'normal', sound: 'lazer_blast' }),
+    knave_knives: Object.freeze({ kind: 'projectile', color: '#d7dee8', style: 'normal', sound: 'sword_swing' }),
+    blood_disks: Object.freeze({ kind: 'projectile', color: '#ff2f4d', style: 'normal', sound: 'lazer_blast' }),
     hammer_throw: Object.freeze({ kind: 'projectile', color: '#9bb8ff', style: 'heavy', sound: 'sword_swing' }),
     lightning_cross: Object.freeze({ kind: 'cross', color: '#bfe4ff', style: 'heavy', sound: 'lightning_charge' }),
     blade_justice: Object.freeze({ kind: 'beam', color: '#fff6a3', style: 'heavy', sound: 'sword_swing' }),
@@ -109,6 +142,12 @@
     mooggy_blood_beam: Object.freeze({ kind: 'beam', color: '#ff4164', style: 'normal', sound: 'lazer_blast' }),
     thorn_blood_beams: Object.freeze({ kind: 'beam', color: '#ff3048', style: 'heavy', sound: 'lazer_blast' }),
     wizard_lazer: Object.freeze({ kind: 'beam', color: '#b99cff', style: 'heavy', sound: 'lazer_blast' }),
+    hunter_volley: Object.freeze({ kind: 'projectile', color: '#d8f2ff', style: 'normal', sound: 'sword_swing' }),
+    sniper_round: Object.freeze({ kind: 'projectile', color: '#fff0b5', style: 'heavy', sound: 'lazer_blast' }),
+    gunner_barrage: Object.freeze({ kind: 'projectile', color: '#ff9dd7', style: 'heavy', sound: 'lazer_blast' }),
+    dungeon_beam: Object.freeze({ kind: 'beam', color: '#f45cff', style: 'heavy', sound: 'lazer_blast' }),
+    cult_bolt_volley: Object.freeze({ kind: 'projectile', color: '#b575ff', style: 'normal', sound: 'fire' }),
+    shield_throw: Object.freeze({ kind: 'projectile', color: '#9cefff', style: 'heavy', sound: 'sword_swing' }),
 
     crimson_smash: Object.freeze({ kind: 'aoe', color: '#ff3048', style: 'heavy', sound: 'aoe' }),
     hammer_smash: Object.freeze({ kind: 'aoe', color: '#7da3ff', style: 'heavy', sound: 'aoe' }),
@@ -127,6 +166,11 @@
     floor_lava: Object.freeze({ kind: 'status', color: '#ff9f40', style: 'heavy', sound: 'fire_burn' }),
     random_pounce: Object.freeze({ kind: 'aoe', color: '#ff3070', style: 'heavy', sound: 'aoe' }),
     intense_biscuits: Object.freeze({ kind: 'aoe', color: '#ffc95a', style: 'normal', sound: 'aoe' }),
+    hunter_trap: Object.freeze({ kind: 'summon', color: '#d9b279', style: 'normal', sound: 'aoe' }),
+    laser_nova: Object.freeze({ kind: 'aoe', color: '#f45cff', style: 'heavy', sound: 'lazer_blast' }),
+    bullet_nova: Object.freeze({ kind: 'aoe', color: '#ff9dd7', style: 'heavy', sound: 'lazer_blast' }),
+    cult_frenzy: Object.freeze({ kind: 'status', color: '#a46cff', style: 'light', sound: 'dash' }),
+    summon_cult_followers: Object.freeze({ kind: 'summon', color: '#a86cff', style: 'heavy', sound: 'fire' }),
 
     dash: Object.freeze({ kind: 'dash', color: '#fff06a', style: 'normal', sound: 'dash' }),
     nimrod_stomp: Object.freeze({ kind: 'dash_aoe', color: '#ffe67a', style: 'heavy', sound: 'aoe' }),
@@ -137,6 +181,8 @@
     cowards_way: Object.freeze({ kind: 'status', color: '#8dffcf', style: 'light', sound: 'dash' }),
     mooggy_zoomies: Object.freeze({ kind: 'status', color: '#a0ffcc', style: 'light', sound: 'dash' }),
     knight_slash_dash: Object.freeze({ kind: 'dash', color: '#ff3b5c', style: 'heavy', sound: 'sword_swing' }),
+    charger_rush: Object.freeze({ kind: 'dash_aoe', color: '#ffb85c', style: 'heavy', sound: 'dash' }),
+    shield_guard: Object.freeze({ kind: 'shield', color: '#9cefff', style: 'heavy', sound: 'dash' }),
   });
 
   const DEFAULT_MOVE_LOADOUTS = Object.freeze({
@@ -147,6 +193,7 @@
     mooggy: Object.freeze({ melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' }),
     turtle_boy: Object.freeze({ melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' }),
     sarge: Object.freeze({ melee: 'slash', laser: 'hammer_throw', smash: 'hammer_smash', dash: 'nimrod_stomp' }),
+    knave: Object.freeze({ melee: 'knave_blade', laser: 'knave_knives', smash: 'crimson_smash', dash: 'dash' }),
   });
 
   const KIT_ALTERNATIVES = Object.freeze({
@@ -157,6 +204,9 @@
     turtle_boy: Object.freeze({ laser: Object.freeze(['turtle_wave', 'ghost_ball']), smash: Object.freeze(['death_ball', 'turtle_powerup']) }),
     sarge: Object.freeze({ laser: Object.freeze(['hammer_throw', 'lightning_cross']), smash: Object.freeze(['hammer_smash', 'titan_hammer']) }),
     princess: Object.freeze({ laser: Object.freeze(['love_beam', 'love_bomb_laser']), dash: Object.freeze(['flying_unhitable', 'princess_shield']) }),
+    // Mobility is deliberately dash-only for Knave — his choice lives on the
+    // laser slot: homing knives or the bleed-heavy Blood Disks.
+    knave: Object.freeze({ laser: Object.freeze(['knave_knives', 'blood_disks']) }),
   });
 
   const MOVE_SLOT_BY_KEY = Object.freeze(Object.fromEntries(
@@ -215,7 +265,16 @@
     mooggy_hairball: 'mooggy', potion_bath: 'metao', excalibur_strike: 'gelleh', holy_turrets: 'gelleh',
     kicky_kick: 'princess', random_pounce: 'mooggy', flying_unhitable: 'princess', princess_shield: 'princess',
     mooggy_zoomies: 'mooggy', knight_slash_dash: 'thorn_knight',
+    knave_knives: 'knave', blood_disks: 'knave', knave_blade: 'knave',
   });
+
+  const ENEMY_SIGNATURE_MOVE_KEYS = Object.freeze([
+    'hunter_volley', 'sniper_round', 'gunner_barrage', 'dungeon_beam',
+    'cult_bolt_volley', 'shield_throw', 'hunter_trap', 'laser_nova',
+    'bullet_nova', 'cult_frenzy', 'summon_cult_followers', 'charger_rush',
+    'shield_guard',
+  ]);
+  const ENEMY_SIGNATURE_MOVE_SET = new Set(ENEMY_SIGNATURE_MOVE_KEYS);
 
   // Base charge counts, and the per-character overrides that bend them (Thorn's
   // double dash). This is the single source of truth for both runtimes: the local
@@ -243,12 +302,21 @@
 
   function isMoveAllowedForCharacter(moveKey, characterKey) {
     if (!MOVE_SLOT_BY_KEY[moveKey]) return false;
+    const enemyMoves = enemyContent.getPlayableEnemyDefinition?.(characterKey)?.moveLoadout;
+    if (enemyMoves && (
+      enemyMoves.melee === moveKey
+      || enemyMoves.laser === moveKey
+      || enemyMoves.smash === moveKey
+      || enemyMoves.dash === moveKey
+    )) return true;
+    if (ENEMY_SIGNATURE_MOVE_SET.has(moveKey)) return false;
     const exclusive = MOVE_EXCLUSIVE_CHARACTERS[moveKey];
     return !exclusive || exclusive === characterKey;
   }
 
   function getDefaultMoveLoadout(characterKey) {
-    return { ...(DEFAULT_MOVE_LOADOUTS[characterKey] || DEFAULT_MOVE_LOADOUTS.thorn_knight) };
+    const enemyMoves = enemyContent.getPlayableEnemyDefinition?.(characterKey)?.moveLoadout;
+    return { ...(enemyMoves || DEFAULT_MOVE_LOADOUTS[characterKey] || DEFAULT_MOVE_LOADOUTS.thorn_knight) };
   }
 
   function getMoveSlot(moveKey) {
@@ -290,12 +358,80 @@
     }));
   }
 
+  // Blood Disks: Knave's red take on Power Disks. Fewer disks (5 vs 8) and no
+  // shard sub-spawns, traded for higher speed and a heavy bleed application on
+  // every hit. Authored here so the authority and the campaign fire the same
+  // burst.
+  function createBloodDiskBurstDescriptors(options = {}) {
+    const damageMultiplier = Math.max(0, Number(options.damageMultiplier ?? 1));
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 24));
+    return Array.from({ length: 5 }, (_, index) => ({
+      // Its own kind, not 'disk': the renderer resolves visuals by kind and the
+      // preset wins over a per-projectile colour, so reusing 'disk' would draw
+      // Knave's red discs in Metao's purple.
+      kind: 'blood_disk',
+      angle: index * (Math.PI * 2 / 5),
+      speed: 640,
+      radius: 7,
+      lifeSeconds: 1.6,
+      damage: Math.max(1, Math.round(baseDamage * damageMultiplier)),
+      color: '#ff2f4d',
+      hitOptions: {
+        drainChanceBonus: 0.05,
+        bleedChance: 0.55,
+        bleedStacks: 2,
+        bleedDuration: 5,
+      },
+    }));
+  }
+
+  // Knave Knives: two homing blades that seek separate targets, each carrying a
+  // 15% bleed chance. Targets are picked by the caller (campaign or authority)
+  // and passed through so both sides commit to the same two victims.
+  const KNAVE_KNIFE_COUNT = 2;
+  const KNAVE_KNIFE_BLEED_CHANCE = 0.15;
+  function createKnaveKnifeDescriptors(options = {}) {
+    const damageMultiplier = Math.max(0, Number(options.damageMultiplier ?? 1));
+    const baseDamage = Math.max(1, Number(options.baseDamage ?? 34));
+    const aimAngle = Number(options.aimAngle) || 0;
+    const targets = Array.isArray(options.targets) ? options.targets : [];
+    // Without a target the knife still flies: it fans slightly off the aim so
+    // two knives never overlap into what looks like one projectile.
+    const fanOffsets = [-0.14, 0.14];
+    return Array.from({ length: KNAVE_KNIFE_COUNT }, (_, index) => ({
+      kind: 'knave_knife',
+      angle: aimAngle + fanOffsets[index % fanOffsets.length],
+      speed: 720,
+      radius: 6,
+      lifeSeconds: 1.5,
+      damage: Math.max(1, Math.round(baseDamage * damageMultiplier)),
+      knockback: 140,
+      color: '#d7dee8',
+      // The knives are laser-slot beam-type content, so beam items apply: their
+      // damage already scales with Dragon Orb's beamDamageMultiplier, and this
+      // flag lets a hit chain to nearby enemies the way a real beam does.
+      chainsOnHit: true,
+      target: targets[index % Math.max(1, targets.length)] || null,
+      homing: true,
+      homingRadius: 820,
+      homingSpeed: 900,
+      homingAccel: 3.2,
+      homingTurnRate: 3.0,
+      hitOptions: {
+        bleedChance: KNAVE_KNIFE_BLEED_CHANCE,
+        bleedStacks: 1,
+        bleedDuration: 5,
+      },
+    }));
+  }
+
   return {
     MOVE_SLOTS,
     FLYING_UNTOUCHABLE_DURATION_SECONDS,
     MOVE_SLOT_KEYS,
     MOVE_SLOT_BY_KEY,
     MOVE_EXCLUSIVE_CHARACTERS,
+    ENEMY_SIGNATURE_MOVE_KEYS,
     MOVE_BASE_CHARGES,
     MOVE_CHARGE_OVERRIDES,
     getMoveBaseCharges,
@@ -313,5 +449,9 @@
     getMoveSlot,
     isMoveAllowedForCharacter,
     createPowerDiskBurstDescriptors,
+    createBloodDiskBurstDescriptors,
+    createKnaveKnifeDescriptors,
+    KNAVE_KNIFE_COUNT,
+    KNAVE_KNIFE_BLEED_CHANCE,
   };
 });

@@ -74,6 +74,13 @@ export function bindInput() {
     });
     window.addEventListener('keydown', event => {
       const key = event.key.toLowerCase();
+      // Typing in a text field must never reach gameplay bindings — the practice
+      // panel's search box sits over a live run, so "sniper" would otherwise
+      // walk and dash the player. Escape still gets through to blur the field.
+      if (isTypingTarget(event.target)) {
+        if (event.key === 'Escape') event.target.blur();
+        return;
+      }
       const multiplayerChatForm = document.getElementById('multiplayerChatForm');
       const multiplayerChatOpen = !!multiplayerChatForm && !multiplayerChatForm.classList.contains('hidden');
       if (multiplayerChatOpen) {
@@ -799,6 +806,20 @@ function handleInventoryMoveSelect(event) {
 
 export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
+  }
+
+  // True for elements that swallow typing: text-ish inputs, textareas, selects
+  // and contenteditable regions. Buttons/checkboxes are excluded so gameplay
+  // keys still work while an action button happens to hold focus.
+  const NON_TYPING_INPUT_TYPES = new Set(['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'color', 'file', 'image']);
+
+  function isTypingTarget(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+    const tag = target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag !== 'INPUT') return false;
+    return !NON_TYPING_INPUT_TYPES.has(String(target.type || 'text').toLowerCase());
   }
 
   // Browsers warn (and assistive tech misbehaves) if aria-hidden is applied to an

@@ -194,6 +194,7 @@
     resolveCampaignBoomerangCatch = () => ({ healedAmount: 0, health: 0, pickupImpulses: [] }),
     applyCampaignDestructibleDamage = () => ({ ok: false, drops: [] }),
     applyCampaignLevelUp = () => null,
+    getEntityLevelKnockbackMultiplier = () => 1,
     finishCampaignChallenge = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
     createCampaignChallengeRewardPlan = () => ({ ok: false, pickups: [], xp: 0, weaponKey: '' }),
     resolveCampaignChallengePickup = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
@@ -335,6 +336,7 @@
     mooggy: Object.freeze({ maxHp: 130, moveSpeed: 228, damageMultiplier: 0.6 }),
     turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 228, damageMultiplier: 1 }),
     sarge: Object.freeze({ maxHp: 108, moveSpeed: 228, damageMultiplier: 1.05 }),
+    knave: Object.freeze({ maxHp: 98, moveSpeed: 269.04, damageMultiplier: 0.95 }),
   });
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
@@ -2310,7 +2312,9 @@
       return false;
     }
     const sparkleMultiplier = state.tick < Number(enemy.critSparkleUntilTick || 0) ? 2 : 1;
-    const attacker = state.players?.[playerId];
+    const attacker = details.attacker
+      || state.enemies?.[details.attackerId]
+      || state.players?.[playerId];
     const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
     let incoming = details.preScaled ? Math.max(0, Math.round(Number(damage || 0))) : scaleCampaignDamage({
       damage,
@@ -2358,7 +2362,7 @@
     // elites resist crowd control (they're shoved less and stun-gate higher);
     // the impulse pushes the enemy away along the hit angle so the world's
     // physics carries the shove, then the client shakes on the ENEMY_HIT event.
-    const knockback = Number(details.knockback || 0);
+    const knockback = Number(details.knockback || 0) * getEntityLevelKnockbackMultiplier(attacker);
     if (knockback > 0 && Number.isFinite(Number(details.angle))) {
       const ccLevel = enemy.boss || enemy.type === 'god' ? 0.6 : enemy.elite ? 0.3 : 0;
       const resistFactor = 1 / (1 + ccLevel + Math.max(0, Number(enemy.stunResistance || 0)));
@@ -5679,6 +5683,8 @@
       noEnemyAggression: true,
       knockback: Number(options.knockback || 0) * Math.max(0, Number(mirrorStats.knockbackMultiplier || 1)),
     } : options;
+    const levelScaledKnockback = Number(resolvedOptions.knockback || 0)
+      * getEntityLevelKnockbackMultiplier(packAttacker);
     const resolvedDamage = resolveCampaignPlayerDamage({
       health: healthBeforeHit,
       maxHp: player.maxHp,
@@ -5742,8 +5748,8 @@
     });
     let dealt = Math.max(0, healthBeforeHit - Number(player.hp || 0));
     player.hitTick = state.tick;
-    const impulse = dealt > 0 && Number(resolvedOptions.knockback || 0) > 0
-      ? applyCampaignImpulse(player, Number(resolvedOptions.angle || 0), Number(resolvedOptions.knockback || 0), Number(itemStats.anchorKnockbackResist || 0))
+    const impulse = dealt > 0 && levelScaledKnockback > 0
+      ? applyCampaignImpulse(player, Number(resolvedOptions.angle || 0), levelScaledKnockback, Number(itemStats.anchorKnockbackResist || 0))
       : null;
     if (dealt > 0) {
       const stunResistance = Math.max(0, Number(itemStats.stunResistance || 0));
@@ -5850,7 +5856,8 @@
         players.forEach(player => {
           if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.blastRadius || 150) + Number(player.radius || 18)) return;
           damagePlayer(state, player, damage, hazard.ownerId, emitEvent, hazard.source || 'bomb_aoe', {
-            angle: Math.atan2(player.y - hazard.y, player.x - hazard.x), knockback: 240,
+            angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
+            knockback: Number(hazard.knockback || 240),
           });
         });
         const blastRadius = Number(hazard.blastRadius || 150);
@@ -6999,9 +7006,11 @@
     enemy.hp = Number(enemy.health || 0);
     enemy.max = Math.max(1, Number(enemy.maxHealth || 1));
     enemy.stun = Math.max(0, (Number(enemy.stunnedUntilTick || 0) - state.tick) / 20);
-    // Pack pressure also shortens the gap between attacks (campaign core/update.js).
-    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0)
-      - fixedDelta * Math.max(1, Number(enemy.minorPackCooldownRate || 1)));
+    // Pack pressure and Cult Frenzy both shorten the gap between attacks
+    // (campaign core/update.js).
+    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - fixedDelta
+      * Math.max(1, Number(enemy.minorPackCooldownRate || 1))
+      * Math.max(1, Number(enemy.signatureAttackSpeedMultiplier || 1)));
     const foldGodInvulnerability = () => {
       if (Number(enemy.inv || 0) > 0) {
         enemy.invulnerableUntilTick = Math.max(Number(enemy.invulnerableUntilTick || 0), state.tick + Math.round(Number(enemy.inv) * 20));

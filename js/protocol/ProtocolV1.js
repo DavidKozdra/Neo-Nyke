@@ -64,7 +64,7 @@
       fields: {
         characterKey: field('string', {
           required: true,
-          enum: ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge'],
+          enum: ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', 'knave'],
         }),
         // Optional alt-kit picks, e.g. { laser: 'thorn_blood_beams' }. Shape is
         // shallow-checked here; the authority validates slots/moves against the

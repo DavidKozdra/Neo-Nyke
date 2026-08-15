@@ -181,12 +181,15 @@ const CHARACTER_SHEET_DEFS = {
   knave: {
     src: 'assets/sprites/chars/knave.png',
     frameWidth: 24,
-    frameHeight: 24,
+    // The authored strip is vertically centered in a 48 px export canvas, but
+    // its content spans 25 rows (y=14..38), not 24: the sword tip on the arm
+    // frame sits alone on row 14 and the portrait frame's base sits alone on
+    // row 38. A 24 px window had to clip one of them — at sourceOffsetY 15 it
+    // cut the blade tip off. Crop from row 14 with a 25 px frame so the whole
+    // strip fits and the sword stays intact.
+    frameHeight: 25,
     frameCount: 8,
-    // The authored strip is vertically centered in a 48 px export canvas.
-    // Crop that padding at load time so each atlas entry stays a square 24 px
-    // frame like the other combatants.
-    sourceOffsetY: 15,
+    sourceOffsetY: 14,
     renderScale: 1.5,
     stepRate: 10,
     idleRate: 1.5,
@@ -195,7 +198,8 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 1,
     portraitFrame: 0,
     armBaseAngle: -Math.PI / 2,
-    armPivot: { x: 12, y: 19 },
+    // Pivot follows the crop: one row earlier means one row further down the frame.
+    armPivot: { x: 12, y: 20 },
     armOffset: { x: 1, y: 3 },
   },
   // The charged Artificer is the same Knave transformed into a boss. Keep the
@@ -204,9 +208,11 @@ const CHARACTER_SHEET_DEFS = {
   artificer_knave: {
     src: 'assets/sprites/chars/knave.png',
     frameWidth: 24,
-    frameHeight: 24,
+    // Same sheet as `knave`, so it needs the same 25 px crop — otherwise the
+    // boss loses its sword tip exactly like the hero did.
+    frameHeight: 25,
     frameCount: 8,
-    sourceOffsetY: 15,
+    sourceOffsetY: 14,
     renderScale: 1.5,
     stepRate: 10,
     idleRate: 1.5,
@@ -215,7 +221,7 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 1,
     portraitFrame: 0,
     armBaseAngle: -Math.PI / 2,
-    armPivot: { x: 12, y: 19 },
+    armPivot: { x: 12, y: 20 },
     armOffset: { x: 1, y: 3 },
   },
   cult_mage: {
@@ -317,7 +323,7 @@ const CHARACTER_SHEET_DEFS = {
     frameWidth: 64,
     frameHeight: 64,
     frameCount: 3,
-    renderScale: 1.15,
+    renderScale: 2.3,
     stepRate: 4,
     idleRate: 1.5,
     actionRate: 8,

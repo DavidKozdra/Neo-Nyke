@@ -34,7 +34,7 @@ describe('shared Neo Nyke move content', () => {
 
   test('catalogs every authored move exactly once for headless authorities', () => {
     const catalog = Object.values(MOVE_SLOT_KEYS).flat();
-    expect(catalog).toHaveLength(48);
+    expect(catalog).toHaveLength(64);
     expect(new Set(catalog).size).toBe(catalog.length);
     expect(Object.keys(MOVE_BASE_STATS).sort()).toEqual(catalog.slice().sort());
     expect(Object.keys(MOVE_PRESENTATION_DEFS).sort()).toEqual(catalog.slice().sort());
@@ -48,7 +48,7 @@ describe('shared Neo Nyke move content', () => {
   });
 
   test('shares every hero default and selectable alternate kit', () => {
-    expect(Object.keys(DEFAULT_MOVE_LOADOUTS)).toHaveLength(7);
+    expect(Object.keys(DEFAULT_MOVE_LOADOUTS)).toHaveLength(8);
     expect(getDefaultMoveLoadout('princess')).toEqual({
       melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable',
     });

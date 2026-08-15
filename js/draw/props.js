@@ -641,6 +641,45 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'cult_follower_ally') {
+        const sheet = Neo.CHARACTER_SPRITE_SHEETS?.cult_follower;
+        const attacking = Number(hazard.attackFlash || 0) > 0;
+        const animation = attacking ? 'attack' : hazard.moving ? 'walk' : 'idle';
+        const frameCount = Math.max(1, Number(sheet?.animationFrames?.[animation]?.length
+          || (animation === 'walk' ? sheet?.walkFrames?.length : sheet?.idleFrames?.length)
+          || 1));
+        const rate = animation === 'idle' ? 4 : Number(sheet?.actionRate || sheet?.stepRate || 9);
+        const frameIndex = Math.floor((Number(Neo.gameElapsedTime || 0) + Number(hazard.allyIndex || 0) * 0.13) * rate) % frameCount;
+        const frame = Neo.SPRITE_ATLAS?.frames?.[`cult_follower:${animation}${frameIndex}`]
+          || Neo.SPRITE_ATLAS?.frames?.cult_follower;
+        Neo.ctx.fillStyle = 'rgba(10,8,18,0.5)';
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 10, 18, 8, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = '#b575ff';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.globalAlpha = 0.7;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 2, 21, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 1;
+        if (frame) {
+          const size = 44;
+          Neo.ctx.save();
+          if (Math.cos(Number(hazard.aimAngle || 0)) < 0) Neo.ctx.scale(-1, 1);
+          Neo.ctx.imageSmoothingEnabled = false;
+          Neo.ctx.drawImage(
+            Neo.SPRITE_ATLAS.canvas,
+            frame.x, frame.y, frame.w, frame.h,
+            -size / 2, -size / 2 - 5, size, size,
+          );
+          Neo.ctx.restore();
+        } else {
+          Neo.ctx.fillStyle = '#5b367d';
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, 15, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
       } else if (hazard.kind === 'holy_turret') {
         const aimAngle = Number(hazard.aimAngle || 0);
         const recoilRatio = Neo.clamp(Number(hazard.recoil || 0) / 0.14, 0, 1);
@@ -1855,6 +1894,10 @@
     death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
     love_bomb: { color: '#ff6fa8', core: '#ffe3f0', trail: '#ff9cc9', shape: 'heart', length: 20 },
     biscuit: { color: '#d99032', core: '#ffe29a', trail: '#f0b64f', shape: 'disk', length: 18 },
+    // Knave's thrown knife: a steel blade with a red bleed trail.
+    knave_knife: { color: '#d7dee8', core: '#ffffff', trail: '#ff4d6d', shape: 'blade', length: 30 },
+    // Blood Disks reuse the disk silhouette in Knave's red.
+    blood_disk: { color: '#ff2f4d', core: '#ffd7de', trail: '#b8102b', shape: 'disk', length: 20 },
   };
   Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
   Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);

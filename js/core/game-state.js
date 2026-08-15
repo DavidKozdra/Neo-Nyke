@@ -177,6 +177,8 @@ export function resumeGame() {
   }
 
   function getCharacterSpriteKey(characterKey) {
+    const enemySpriteKey = globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(characterKey)?.spriteKey;
+    if (enemySpriteKey) return enemySpriteKey;
     if (!isCustomCharacterKey(characterKey)) return characterKey;
     return Neo.hasCustomCharacterSprite?.(characterKey) ? characterKey : 'thorn_knight';
   }
@@ -366,6 +368,8 @@ export function resumeGame() {
   }
 
   function getCharacterStartingItems(characterKey) {
+    const enemyBuild = globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(characterKey);
+    if (enemyBuild) return { ...enemyBuild.startingItems };
     const items = {};
     if (characterKey === 'thorn_knight') {
       items.neo_knife = 1;
@@ -393,6 +397,13 @@ export function resumeGame() {
       // Sarge's Hammer god item is his default weapon; copper penny rounds out his
       // starting kit so his electric hammer hits land a little harder out of the gate.
       items.copper_penny = 1;
+    }
+    if (characterKey === 'knave') {
+      // Pendant of Rock softens his paper-thin health, and the Artificer Charger
+      // (the Knave's own cult tooling) doubles his level and widens his AOEs.
+      // Must stay in sync with CHARACTER_STARTING_ITEMS in SharedCombatContent.js.
+      items.pendant_of_rock = 1;
+      items.artificer_charger = 1;
     }
     return items;
   }
@@ -536,14 +547,16 @@ export function resumeGame() {
     return isReplayTutorialRequested() && !hasSargeUnlockPrereq();
   }
 
-  // Custom character creation is a reward for completing the roster: locked
-  // until every base (non-custom) character has been unlocked.
+  // Custom character creation is a reward for completing the earnable hero
+  // roster. Secret credits unlocks (Knave and the enemy roster) do not gate it.
   function hasAllCharactersUnlocked() {
     const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
     if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     if (Number(Neo.metaProgress?.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
-    const baseKeys = Object.keys(Neo.CHARACTER_DEFS || {}).filter(key => key !== 'custom_character');
+    const isPlayableEnemy = globalThis.NeoNyke?.content?.isPlayableEnemyCharacterKey;
+    const baseKeys = Object.keys(Neo.CHARACTER_DEFS || {})
+      .filter(key => key !== 'custom_character' && key !== 'knave' && !isPlayableEnemy?.(key));
     return baseKeys.every(key => unlocked.has(key));
   }
 
@@ -560,6 +573,53 @@ export function resumeGame() {
     Neo.recordCharacterUnlock?.('turtle_boy');
     Neo.persistMetaSoon();
     Neo.refreshMenuState();
+  }
+
+  // Knave is the hidden roster slot: he is never earned through play. Clicking
+  // the studio line on the credits page five times flips developer mode on and
+  // hands over the dungeon's own footsoldier. Returns true only on the click
+  // that actually performs the unlock, so the caller can celebrate once.
+  function unlockKnaveCharacter() {
+    if (!Neo.metaProgress) return false;
+    if (!Array.isArray(Neo.metaProgress.unlockedCharacters)) Neo.metaProgress.unlockedCharacters = [];
+    if (Neo.metaProgress.unlockedCharacters.includes('knave')) return false;
+    Neo.metaProgress.unlockedCharacters.push('knave');
+    Neo.recordCharacterUnlock?.('knave');
+    Neo.persistMetaSoon();
+    Neo.refreshMenuState?.();
+    Neo.updateCharacterSelectionUI?.();
+    return true;
+  }
+
+  function hasPlayableEnemyRosterUnlocked() {
+    const keys = globalThis.NeoNyke?.content?.getPlayableEnemyCharacterKeys?.() || [];
+    const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || []);
+    return keys.length > 0 && keys.every(key => unlocked.has(key));
+  }
+
+  // Holding the Credits studio byline grants every authored enemy form at once.
+  // The operation is idempotent so repeated hovers cannot duplicate save keys or
+  // queue another celebration.
+  function unlockPlayableEnemyRoster() {
+    if (!Neo.metaProgress) return false;
+    const keys = globalThis.NeoNyke?.content?.getPlayableEnemyCharacterKeys?.() || [];
+    if (!keys.length) return false;
+    if (!Array.isArray(Neo.metaProgress.unlockedCharacters)) Neo.metaProgress.unlockedCharacters = [];
+    const unlocked = new Set(Neo.metaProgress.unlockedCharacters);
+    const newlyUnlocked = keys.filter(key => !unlocked.has(key));
+    if (!newlyUnlocked.length) return false;
+    Neo.metaProgress.unlockedCharacters.push(...newlyUnlocked);
+    Neo.persistMetaSoon?.();
+    Neo.refreshMenuState?.();
+    Neo.updateCharacterSelectionUI?.();
+    Neo.showUnlockBanner?.({
+      type: 'character',
+      key: newlyUnlocked[0],
+      name: 'ENEMY ROSTER',
+      desc: `${keys.length} enemy forms are now playable from Champion Select.`,
+      color: '#ff4d9d',
+    });
+    return true;
   }
 
   // Offer the green main-menu tutorial button on the first menu visit, then at
@@ -2165,7 +2225,7 @@ export function resumeGame() {
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
     if (type === 'bowman_bane') return "Bowman's Bane";
-    if (type === 'antony_blemmye') return 'Antony Blemmyae';
+    if (type === 'antony_blemmye') return 'Anthony The Blessed Blemmye';
     if (type === 'handsome_devil') return 'Handsome Devil';
     if (type === 'god') return 'GOD';
     return titleCase(type);
@@ -2525,7 +2585,8 @@ export function resumeGame() {
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
-    'Antony Blemmyae': 'antony_blemmye',
+    'Anthony The Blessed Blemmye': 'antony_blemmye',
+    'Antony Blemmyae': 'antony_blemmye', // legacy spelling in old death-history records
     'Antony Blemmye': 'antony_blemmye', // legacy spelling in old death-history records
     'Handsome Devil': 'handsome_devil',
     'GOD': 'god',
@@ -4047,6 +4108,54 @@ export function resumeGame() {
     Neo.updateHud();
   }
 
+  const PRACTICE_ICON_PX = 40;
+
+  // Paint each spawn button's portrait from the sprite atlas. Split out from the
+  // grid builder so a later atlas rebuild (custom sprites) can refresh the icons
+  // without re-binding the click handler.
+  function paintPracticeEnemyIcons() {
+    if (!Neo.ui.practiceEnemyGrid || typeof Neo.drawSpriteToCanvas !== 'function') return;
+    Neo.ui.practiceEnemyGrid.querySelectorAll('[data-enemy]').forEach(btn => {
+      const canvasEl = btn.querySelector('.practice-spawn-icon');
+      if (!canvasEl) return;
+      const type = btn.dataset.enemy;
+      const spriteKey = Neo.getEnemySpriteKey?.({ type }) || type;
+      Neo.drawSpriteToCanvas(
+        canvasEl,
+        Neo.getPortraitSpriteKey?.(spriteKey) || spriteKey,
+        PRACTICE_ICON_PX,
+      );
+    });
+  }
+
+  // Filters every labelled control in the practice panel (spawn tiles plus the
+  // option rows) against the search box. Matching is substring, case- and
+  // separator-insensitive so "machinegunner" and "machine gunner" both hit.
+  function normalizePracticeSearch(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function filterPracticePanel(query) {
+    const body = Neo.ui.practicePanelBody;
+    if (!body) return 0;
+    const needle = normalizePracticeSearch(query);
+    let matches = 0;
+    body.querySelectorAll('[data-practice-label]').forEach(item => {
+      const hit = !needle || normalizePracticeSearch(item.dataset.practiceLabel).includes(needle);
+      item.classList.toggle('practice-filtered-out', !hit);
+      if (hit) matches += 1;
+    });
+    // A section whose every control was filtered out hides its heading too,
+    // otherwise the panel shows bare labels over empty space.
+    body.querySelectorAll('.practice-section').forEach(section => {
+      const items = section.querySelectorAll('[data-practice-label]');
+      const anyVisible = [...items].some(item => !item.classList.contains('practice-filtered-out'));
+      section.classList.toggle('practice-filtered-out', items.length > 0 && !anyVisible);
+    });
+    Neo.ui.practiceSearchEmpty?.classList.toggle('hidden', matches > 0);
+    return matches;
+  }
+
   function buildPracticeEnemyGrid() {
     if (!Neo.ui.practiceEnemyGrid) return;
     const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
@@ -4058,8 +4167,12 @@ export function resumeGame() {
     Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
       const label = type.replace(/_/g, ' ');
-      return `<button class="practice-spawn-btn${isBoss ? ' is-boss' : ''}" data-enemy="${type}">${label}</button>`;
+      return `<button class="practice-spawn-btn${isBoss ? ' is-boss' : ''}" data-enemy="${type}" data-practice-label="${label}" title="${label}">`
+        + `<canvas class="practice-spawn-icon" width="${PRACTICE_ICON_PX}" height="${PRACTICE_ICON_PX}" aria-hidden="true"></canvas>`
+        + `<span class="practice-spawn-name">${label}</span>`
+        + '</button>';
     }).join('');
+    paintPracticeEnemyIcons();
     Neo.ui.practiceEnemyGrid.addEventListener('click', event => {
       const btn = event.target instanceof Element ? event.target.closest('[data-enemy]') : null;
       if (!btn || !Neo.player) return;
@@ -4452,6 +4565,9 @@ export function resumeGame() {
   Neo.isSargeTutorialBlocked = isSargeTutorialBlocked;
   Neo.hasAllCharactersUnlocked = hasAllCharactersUnlocked;
   Neo.checkTurtleBoyUnlock = checkTurtleBoyUnlock;
+  Neo.unlockKnaveCharacter = unlockKnaveCharacter;
+  Neo.hasPlayableEnemyRosterUnlocked = hasPlayableEnemyRosterUnlocked;
+  Neo.unlockPlayableEnemyRoster = unlockPlayableEnemyRoster;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
   Neo.getActiveControlHint = getActiveControlHint;
@@ -4615,6 +4731,8 @@ export function resumeGame() {
   Neo.syncPracticeMaxHpControls = syncPracticeMaxHpControls;
   Neo.setPracticeMaxHp = setPracticeMaxHp;
   Neo.buildPracticeEnemyGrid = buildPracticeEnemyGrid;
+  Neo.paintPracticeEnemyIcons = paintPracticeEnemyIcons;
+  Neo.filterPracticePanel = filterPracticePanel;
   Neo.findPracticeEnemySpawnPoint = findPracticeEnemySpawnPoint;
   Neo.updateEndlessWaveHud = updateEndlessWaveHud;
   Neo.resetScene = resetScene;

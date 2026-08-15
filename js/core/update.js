@@ -673,7 +673,8 @@ export function loop(timestamp) {
       Neo.updateMinorEnemyPackPressure?.(enemy);
       const minorPackCooldownRate = Math.max(1, Number(enemy.minorPackCooldownRate || 1));
       const enemyLevelAttackSpeed = Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1));
-      enemy.attackCd = Math.max(0, enemy.attackCd - dt * minorPackCooldownRate * enemyLevelAttackSpeed);
+      const signatureAttackSpeed = Math.max(1, Number(enemy.signatureAttackSpeedMultiplier || 1));
+      enemy.attackCd = Math.max(0, enemy.attackCd - dt * minorPackCooldownRate * enemyLevelAttackSpeed * signatureAttackSpeed);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
       if (enemy.critSparkle > 0) enemy.critSparkle = Math.max(0, enemy.critSparkle - dt);

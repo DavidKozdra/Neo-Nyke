@@ -424,7 +424,7 @@ Before accepting money:
 - Achieve full controller navigation and target-hardware performance.
 - Synchronize content/roster/save/backend contracts.
 - Complete rights, credits, privacy, storefront, support, and release tooling.
-- Replace `Beta 2.1` with one generated release version only when all gates pass.
+- Replace `Beta 2.3` with one generated release version only when all gates pass.
 
 **P1 — high-value launch features**
 

@@ -141,30 +141,69 @@
     cancelAnimationFrame(raf);
     lastTs = performance.now();
     raf = requestAnimationFrame(step);
-    handleCreditsStudioClick(); // Added clicker here to allow us to enable developer mode
   }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
 
-  // ── Developer mode enabler ───────────────────────────────────────────────
+  // ── Developer mode + hidden roster unlocks ───────────────────────────────
+  // Five clicks still reveal Knave. A separate, continuous one-minute hover
+  // over the studio byline unlocks playable forms of every enemy type.
+  const KNAVE_CLICKS_REQUIRED = 5;
   function handleCreditsStudioClick() {
     const creditsStudio = document.getElementById('creditsStudio');
-    
     if (!creditsStudio) return; // Ensure the element exists before proceeding
-  
+
     let clickCount = 0;
 
     function onCreditsStudioClick() {
       clickCount++;
-      
-      if (clickCount >= 5) {
-        globalThis.developer_mode = true;
-        console.log("Enabling developer mode.");
-        creditsStudio.removeEventListener('click', onCreditsStudioClick); // Remove event listener after reaching count
+      if (clickCount < KNAVE_CLICKS_REQUIRED) return;
+
+      globalThis.developer_mode = true;
+      console.log('Enabling developer mode.');
+      // Banner + confetti fire only on the click that actually unlocks him;
+      // re-triggering the egg on a save that already has Knave stays quiet.
+      if (Neo.unlockKnaveCharacter?.()) {
+        console.log('Unlocked hidden character: Knave.');
       }
+      creditsStudio.removeEventListener('click', onCreditsStudioClick); // Remove event listener after reaching count
     }
 
     creditsStudio.addEventListener('click', onCreditsStudioClick);
   }
+  handleCreditsStudioClick();
+
+  const ENEMY_ROSTER_HOVER_MS = 60_000;
+  function handleCreditsStudioHover() {
+    const creditsStudio = document.getElementById('creditsStudio');
+    if (!creditsStudio) return;
+
+    let hoverTimer = 0;
+    const cancelHover = () => {
+      clearTimeout(hoverTimer);
+      hoverTimer = 0;
+      creditsStudio.classList.remove('credits__studio--holding');
+    };
+    const completeHover = () => {
+      hoverTimer = 0;
+      creditsStudio.classList.remove('credits__studio--holding');
+      if (Neo.unlockPlayableEnemyRoster?.()) {
+        console.log('Unlocked playable enemy roster.');
+      }
+    };
+    const beginHover = () => {
+      if (hoverTimer || Neo.hasPlayableEnemyRosterUnlocked?.()) return;
+      creditsStudio.classList.add('credits__studio--holding');
+      hoverTimer = setTimeout(completeHover, ENEMY_ROSTER_HOVER_MS);
+    };
+
+    creditsStudio.addEventListener('pointerenter', beginHover);
+    creditsStudio.addEventListener('pointerleave', cancelHover);
+    creditsStudio.addEventListener('pointercancel', cancelHover);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelHover();
+    });
+  }
+  handleCreditsStudioHover();
 
   // ── Cutscene gallery ────────────────────────────────────────────────────
   const sceneList = document.getElementById('creditsSceneList');

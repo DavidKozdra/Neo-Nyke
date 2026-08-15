@@ -24,7 +24,7 @@ const unchangedStrictValues = new Set([
   'RNG',
   'UI',
   'XP',
-  'Antony Blemmyae',
+  'Anthony The Blessed Blemmye',
   'Excalibur',
   'Gelleh',
   'Gorba Gorba',

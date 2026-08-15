@@ -417,6 +417,10 @@ export const KIT_ALTERNATIVES = {
     laser: ['love_beam', 'love_bomb_laser'],
     dash: ['flying_unhitable', 'princess_shield'],
   },
+  knave: {
+    // Mobility is dash-only for Knave; his alt-kit choice is the laser slot.
+    laser: ['knave_knives', 'blood_disks'],
+  },
 };
 
 // The base (first-option) default kit per character, before any alt-kit choices.
@@ -458,6 +462,11 @@ function getBaseMovesForCharacter(characterKey) {
       // slot, Hammer Smash (a heavy ground shockwave) on smash, leap-slam on dash.
       // Death Ball is offered as an alt-kit smash (see KIT_ALTERNATIVES).
       return { melee: 'slash', laser: 'hammer_throw', smash: 'hammer_smash', dash: 'nimrod_stomp' };
+    }
+    if (characterKey === 'knave') {
+      // Signature kit: his own blade in the melee slot and homing knives on the
+      // laser. Mobility is deliberately plain dash — his choice lives on laser.
+      return { melee: 'knave_blade', laser: 'knave_knives', smash: 'crimson_smash', dash: 'dash' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -502,6 +511,14 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
     const def = Neo.MOVE_DEFS[moveKey];
     if (!def) return false;
     if (Neo.isCustomCharacterKey?.(characterKey)) return true;
+    const enemyMoves = globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(characterKey)?.moveLoadout;
+    if (enemyMoves && (
+      enemyMoves.melee === moveKey
+      || enemyMoves.laser === moveKey
+      || enemyMoves.smash === moveKey
+      || enemyMoves.dash === moveKey
+    )) return true;
+    if (def.enemyOnly) return false;
     if (!def.exclusiveCharacter) return true;
     // exclusiveCharacter may be a single key or a list of keys that share the move.
     return Array.isArray(def.exclusiveCharacter)

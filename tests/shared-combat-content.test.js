@@ -13,6 +13,7 @@ describe('shared Neo Nyke combat content', () => {
       mooggy: 'claw_gauntlets',
       turtle_boy: 'extending_staff',
       sarge: 'sarges_hammer',
+      knave: 'knave_blade',
     });
     expect(content.WEAPON_BASE_STATS.princess_wand).toEqual({ damage: 30, cooldown: 0.77, range: 120, knockback: 160 });
     expect(content.DEFAULT_WEAPON_ATTACKS.metao_fire_staff).toEqual(expect.objectContaining({

@@ -321,11 +321,14 @@
     smite:            { base: 20 },
     narwal_fight:     { base: 40 },
     mooggy_swipe:     { base: 44, charge: [1, 2.5] },
+    knave_blade:      { base: 36 },
     // laser moves
     blood_beam:       { base: 10, mult: 'beamDamageMultiplier', tick: true },
     love_beam:        { base: 13.3, mult: 'beamDamageMultiplier', tick: true },
     turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
     power_disks:      { base: 20, hits: 8, mult: 'beamDamageMultiplier' },
+    blood_disks:      { base: 24, hits: 5, mult: 'beamDamageMultiplier' },
+    knave_knives:     { base: 34, hits: 2, mult: 'beamDamageMultiplier' },
     blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
     holy_eye_beams:   { base: 13, mult: 'beamDamageMultiplier', tick: true, hits: 2 },
     lightning_columns:{ base: 18 },
@@ -338,6 +341,12 @@
     hammer_throw:     { base: 46, mult: 'beamDamageMultiplier' },
     lightning_cross:  { base: 30, mult: 'beamDamageMultiplier' },
     love_bomb_laser:  { base: 34, mult: 'beamDamageMultiplier' },
+    hunter_volley:    { base: 18, hits: 5, mult: 'beamDamageMultiplier' },
+    sniper_round:     { base: 72, mult: 'beamDamageMultiplier' },
+    gunner_barrage:   { base: 12, hits: 12, mult: 'beamDamageMultiplier' },
+    dungeon_beam:     { base: 38, mult: 'beamDamageMultiplier' },
+    cult_bolt_volley: { base: 20, hits: 5, mult: 'beamDamageMultiplier' },
+    shield_throw:     { base: 34, mult: 'beamDamageMultiplier' },
     // smash moves
     crimson_smash:    { base: 46, mult: 'aoeDamageMultiplier' },
     hammer_smash:     { base: 46, mult: 'aoeDamageMultiplier' },
@@ -353,10 +362,15 @@
     holy_turrets:     { base: 17, mult: 'aoeDamageMultiplier' },
     death_ball:       { base: 40, charge: [0.6, 2.6] },
     turtle_powerup:   { base: 18, charge: [1, 44 / 18] },
+    hunter_trap:      { base: 44, mult: 'aoeDamageMultiplier' },
+    laser_nova:       { base: 24, hits: 12, mult: 'aoeDamageMultiplier' },
+    bullet_nova:      { base: 16, hits: 24, mult: 'aoeDamageMultiplier' },
+    summon_cult_followers: { base: 22, hits: 3, mult: 'aoeDamageMultiplier' },
     // dash moves that hit
     zip_lightning:    { base: 26 },
     nimrod_stomp:     { base: 46, mult: 'aoeDamageMultiplier' },
     knight_slash_dash:{ base: 42 },
+    charger_rush:     { base: 52 },
   };
 
   // Returns { min, max, tick, hits, label } for a weapon/move, or null if the
@@ -658,6 +672,13 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
+    if (weaponKey === 'knave_blade') {
+      // Thorn's blade sharpened for an assassin: tighter arc, quicker recovery,
+      // and a much higher bleed chance that lands two stacks per cut.
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.10, wKnk(weaponKey), '#ff4d6d', { bleedChance: 0.35, bleedStacks: 2, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
     if (weaponKey === 'claw_gauntlets') {
       // Claws strike twice: an immediate swipe leaning one way, then a mirrored
       // follow-up 0.12s later for a quick one-two "X" flurry across the cursor.
@@ -749,6 +770,18 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
+    if (weaponKey === 'shield_bash') {
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.35, wKnk(weaponKey), '#9cefff');
+      Neo.player.blockTimer = Math.max(Number(Neo.player.blockTimer || 0), 0.22);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
+    if (weaponKey === 'stone_fists') {
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.5, wKnk(weaponKey), '#a8875e');
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 42, '#a8875e', 0.3);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
     if (Neo.isProjectileWeaponKey?.(weaponKey)) {
       fireConfiguredWeaponProjectile(weaponKey, angle, wDmg(weaponKey), wKnk(weaponKey));
       if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
@@ -786,6 +819,10 @@
     }
     if (move === 'mooggy_swipe') {
       castMooggySwipe();
+      return;
+    }
+    if (move === 'knave_blade') {
+      castKnaveBlade();
       return;
     }
     const angle = Neo.angleToMouse();
@@ -929,7 +966,12 @@
   // beam. They must NOT auto-repeat every frame while the button is held — with
   // a multi-charge pool that would drain every charge in a few frames. Beam
   // moves are absent here because Neo.laserActive already blocks their re-entry.
-  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot', 'laser_shockwave', 'hammer_throw', 'lightning_cross']);
+  const INSTANT_LASER_MOVES = new Set([
+    'power_disks', 'blood_disks', 'knave_knives', 'blade_justice', 'lightning_columns',
+    'nail_shot', 'laser_shockwave', 'hammer_throw', 'lightning_cross',
+    'hunter_volley', 'sniper_round', 'gunner_barrage', 'dungeon_beam',
+    'cult_bolt_volley', 'shield_throw',
+  ]);
   function isInstantLaserMove(move) {
     return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
   }
@@ -992,6 +1034,16 @@
     if (move === 'power_disks') {
       if (!spendLaserCharge()) return;
       spawnPlayerDiskBurst();
+      return;
+    }
+    if (move === 'blood_disks') {
+      if (!spendLaserCharge()) return;
+      spawnBloodDiskBurst();
+      return;
+    }
+    if (move === 'knave_knives') {
+      if (!spendLaserCharge()) return;
+      castKnaveKnives();
       return;
     }
     if (move === 'hammer_throw') {
@@ -1059,6 +1111,11 @@
       castLaserShockwave();
       return;
     }
+    if (INSTANT_LASER_MOVES.has(move)) {
+      if (!spendLaserCharge()) return;
+      castEnemySignatureLaser(move);
+      return;
+    }
     if (move === 'thorn_blood_beams') {
       if (!spendLaserCharge({ deferTimer: true })) return;
       Neo.laserActive = true;
@@ -1076,6 +1133,97 @@
     Neo.laserTick = 0;
     Neo.turtleWaveHpTimer = 0;
     Neo.laserAngle = Neo.angleToMouse();
+  }
+
+  function castEnemySignatureLaser(move) {
+    const angle = Neo.angleToMouse();
+    const stats = Neo.getItemStats();
+    const baseDamage = Math.max(1, Number(Neo.MOVE_BASE_STATS?.[move]?.damage || 18));
+    const damage = Math.max(1, Math.round(baseDamage * Number(stats.beamDamageMultiplier || 1)));
+    const fire = (offset, config = {}) => spawnWeaponProjectile({
+      angle: angle + offset,
+      damage,
+      speed: config.speed || 760,
+      r: config.r || 5,
+      life: config.life || 1.1,
+      kind: config.kind || move,
+      color: config.color || '#d8f2ff',
+      knockback: config.knockback || 140,
+      pierceCount: config.pierceCount || 0,
+      hitOptions: config.hitOptions || null,
+    });
+
+    if (move === 'hunter_volley') {
+      [-0.34, -0.17, 0, 0.17, 0.34].forEach(offset => fire(offset, {
+        speed: 820, r: 4, life: 0.9, kind: 'hunters_bow', pierceCount: 1,
+        hitOptions: { critBonus: 0.1 },
+      }));
+      return;
+    }
+    if (move === 'sniper_round') {
+      fire(0, {
+        speed: 1450, r: 6, life: 0.85, color: '#fff0b5', knockback: 360,
+        pierceCount: 4, hitOptions: { critBonus: 0.35 },
+      });
+      Neo.player.vx -= Math.cos(angle) * 150;
+      Neo.player.vy -= Math.sin(angle) * 150;
+      return;
+    }
+    if (move === 'gunner_barrage') {
+      for (let shot = 0; shot < 12; shot += 1) {
+        const spread = (Neo.nextRandom('encounter') - 0.5) * 0.22;
+        fire(spread, { speed: 1220, r: 4, life: 0.75, color: '#ff9dd7', knockback: 70 });
+      }
+      Neo.player.vx -= Math.cos(angle) * 120;
+      Neo.player.vy -= Math.sin(angle) * 120;
+      return;
+    }
+    if (move === 'cult_bolt_volley') {
+      [-0.32, -0.16, 0, 0.16, 0.32].forEach(offset => fire(offset, {
+        speed: 610, r: 7, life: 1.25, color: '#b575ff', knockback: 110,
+        hitOptions: { fireChance: 1, fireStacks: 2, fireDuration: 3.2 },
+      }));
+      return;
+    }
+    if (move === 'shield_throw') {
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(angle) * 720,
+        vy: Math.sin(angle) * 720,
+        r: 12,
+        life: 1.7,
+        damage,
+        kind: 'shield_throw',
+        color: '#9cefff',
+        knockback: 360,
+        pierceCount: 3,
+        bouncesRemaining: 3,
+        trail: [],
+      });
+      Neo.playSfx?.('sword_swing');
+      return;
+    }
+    if (move === 'dungeon_beam') {
+      const range = Number(Neo.MOVE_BASE_STATS?.dungeon_beam?.range || 560);
+      const endX = Neo.player.x + Math.cos(angle) * range;
+      const endY = Neo.player.y + Math.sin(angle) * range;
+      Neo.spawnParticle({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        life: 0.24,
+        c: '#f45cff',
+        line: {
+          x1: Neo.player.x, y1: Neo.player.y, x2: endX, y2: endY,
+          w: 10, jag: 2, seg: 12, phase: Neo.nextRandom('fx') * Math.PI * 2,
+        },
+      });
+      forEachEnemyNearPlayer(range + 40, enemy => {
+        if (!enemy || Neo.distToSegment(enemy.x, enemy.y, Neo.player.x, Neo.player.y, endX, endY) > enemy.r + 13) return;
+        hitEnemy(enemy, damage, angle, 220, '#f45cff', { lightning: true });
+      });
+      Neo.addTrauma?.(0.45, angle + Math.PI, 10);
+    }
   }
 
   function endActiveLaser() {
@@ -1733,6 +1881,11 @@
       castTitanHammer();
       return;
     }
+    if (move === 'hunter_trap' || move === 'laser_nova' || move === 'bullet_nova'
+      || move === 'cult_frenzy' || move === 'summon_cult_followers') {
+      castEnemySignatureSmash(move);
+      return;
+    }
     const smash = globalThis.NeoNyke?.simulation?.planCampaignGroundSmash?.({
       moveKey: move,
       godMode: Neo.godTimer > 0,
@@ -1828,6 +1981,88 @@
     }
   }
 
+  function castEnemySignatureSmash(move) {
+    const angle = Neo.angleToMouse();
+    const stats = Neo.getItemStats();
+    const damageMultiplier = Number(stats.aoeDamageMultiplier || stats.damageMultiplier || 1);
+    const baseDamage = Math.max(1, Number(Neo.MOVE_BASE_STATS?.[move]?.damage || 18));
+    const damage = Math.max(1, Math.round(baseDamage * damageMultiplier));
+
+    if (move === 'hunter_trap') {
+      const distance = 76;
+      Neo.hazards.push({
+        kind: 'thorn_mine',
+        owner: 'player',
+        x: Neo.player.x + Math.cos(angle) * distance,
+        y: Neo.player.y + Math.sin(angle) * distance,
+        r: 20,
+        ttl: Number(Neo.MOVE_BASE_STATS?.hunter_trap?.duration || 12),
+        armTime: 0.25,
+        triggerRadius: 42,
+        blastRadius: 78 * Number(stats.aoeRadiusMultiplier || 1),
+        damage,
+        bleedStacks: 3,
+        bleedDuration: 5,
+        statusTick: 0,
+      });
+      Neo.ringBurst(Neo.player.x + Math.cos(angle) * distance, Neo.player.y + Math.sin(angle) * distance, 28, '#d9b279', 0.35);
+      return;
+    }
+    if (move === 'laser_nova' || move === 'bullet_nova') {
+      const count = move === 'bullet_nova' ? 24 : 12;
+      const speed = move === 'bullet_nova' ? 1050 : 720;
+      const color = move === 'bullet_nova' ? '#ff9dd7' : '#f45cff';
+      const kind = move === 'bullet_nova' ? 'magenta_p90' : 'laser_nova';
+      for (let index = 0; index < count; index += 1) {
+        const shotAngle = angle + index * (Math.PI * 2 / count);
+        spawnWeaponProjectile({
+          angle: shotAngle,
+          damage,
+          speed,
+          r: move === 'bullet_nova' ? 4 : 6,
+          life: move === 'bullet_nova' ? 0.82 : 1.05,
+          kind,
+          color,
+          knockback: move === 'bullet_nova' ? 80 : 160,
+        });
+      }
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 58, color, 0.45);
+      return;
+    }
+    if (move === 'cult_frenzy') {
+      Neo.player.deathBallBuffTime = Math.max(Number(Neo.player.deathBallBuffTime || 0), 8);
+      Neo.player.deathBallBuffPower = Math.max(Number(Neo.player.deathBallBuffPower || 0), 0.55);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.8, text: 'FRENZY', c: '#b575ff' });
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 48, '#b575ff', 0.5);
+      return;
+    }
+    if (move === 'summon_cult_followers') {
+      const characterKey = Neo.player?.character || Neo.chosenCharacter;
+      const count = characterKey === 'enemy_boss_spawner' ? 5 : characterKey === 'enemy_queen_cult' ? 4 : 3;
+      const duration = Number(Neo.MOVE_BASE_STATS?.summon_cult_followers?.duration || 14);
+      for (let index = 0; index < count; index += 1) {
+        const summonAngle = angle + index * (Math.PI * 2 / count);
+        Neo.hazards.push({
+          kind: 'cult_follower_ally',
+          x: Neo.clamp(Neo.player.x + Math.cos(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_W - Neo.WALL - 24),
+          y: Neo.clamp(Neo.player.y + Math.sin(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_H - Neo.WALL - 24),
+          r: 15,
+          ttl: duration,
+          damage,
+          speed: 170,
+          range: 520,
+          attackRange: 48,
+          interval: 0.55,
+          tick: index * 0.08,
+          aimAngle: summonAngle,
+          allyIndex: index,
+        });
+      }
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 76, '#a86cff', 0.65);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.8, text: `SUMMON ×${count}`, c: '#c7a1ff' });
+    }
+  }
+
   function tryDash(moveX, moveY) {
     if (Neo.player.dashTime > 0) return;
     const move = getEquippedMove('dash');
@@ -1878,7 +2113,56 @@
       castKnightSlashDash(moveX, moveY);
       return;
     }
+    if (move === 'charger_rush') {
+      castChargerRush(moveX, moveY);
+      return;
+    }
+    if (move === 'shield_guard') {
+      castShieldGuard();
+      return;
+    }
     castDashBurst(moveX, moveY);
+  }
+
+  function castChargerRush(moveX, moveY) {
+    const angle = Math.hypot(moveX, moveY) > 0.15 ? Math.atan2(moveY, moveX) : Neo.angleToMouse();
+    const startX = Neo.player.x;
+    const startY = Neo.player.y;
+    const distance = Number(Neo.MOVE_BASE_STATS?.charger_rush?.range || 320);
+    const endX = Neo.clamp(startX + Math.cos(angle) * distance, Neo.WALL + Neo.player.r, Neo.ROOM_W - Neo.WALL - Neo.player.r);
+    const endY = Neo.clamp(startY + Math.sin(angle) * distance, Neo.WALL + Neo.player.r, Neo.ROOM_H - Neo.WALL - Neo.player.r);
+    const stats = Neo.getItemStats();
+    const damage = Math.max(1, Math.round(
+      Number(Neo.MOVE_BASE_STATS?.charger_rush?.damage || 52) * Number(stats.damageMultiplier || 1),
+    ));
+    const hitRadius = 42 * Number(stats.aoeRadiusMultiplier || 1);
+    forEachEnemyNearPlayer(distance + hitRadius, enemy => {
+      if (!enemy || Neo.distToSegment(enemy.x, enemy.y, startX, startY, endX, endY) > hitRadius + enemy.r) return;
+      hitEnemy(enemy, damage, angle, 520, '#ffb85c', { melee: true });
+      if (!enemy.dead) enemy.stun = Math.max(Number(enemy.stun || 0), 0.45);
+    });
+    Neo.player.dashTime = 0.36;
+    Neo.player.dashX = Math.cos(angle) * 890;
+    Neo.player.dashY = Math.sin(angle) * 890;
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 0.42);
+    Neo.spawnParticle({
+      x: startX, y: startY, life: 0.36, c: '#ffb85c',
+      line: { x1: startX, y1: startY, x2: endX, y2: endY, w: 13, jag: 4, seg: 10, phase: Neo.nextRandom('fx') * Math.PI * 2 },
+    });
+    Neo.addTrauma?.(0.55, angle, 16);
+  }
+
+  function castShieldGuard() {
+    const duration = Number(Neo.MOVE_BASE_STATS?.shield_guard?.duration || 3.5);
+    const barrier = Math.max(1, Math.round(Neo.player.maxHp * 0.35));
+    Neo.player.blockTimer = Math.max(Number(Neo.player.blockTimer || 0), duration);
+    Neo.setOverhealBarrier(
+      Math.max(Number(Neo.player.overhealBarrier || 0), barrier),
+      Math.max(Number(Neo.player.overhealBarrierMax || 0), barrier),
+      '#9cefff',
+    );
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 54, '#9cefff', 0.6);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.75, text: 'GUARD', c: '#d9f8ff' });
   }
 
   // Bleeding slash left in the wake of a Knight's Slash Dash hop: slashes every
@@ -2000,6 +2284,45 @@
     });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22 + swipe.chargeRatio * 0.18, ring: swipe.ringRadius, c: swipe.chargeRatio >= 0.99 ? '#ffd0e6' : '#ff6090' });
     if (swipe.trauma > 0) Neo.addTrauma?.(swipe.trauma);
+  }
+
+  // Knave Blade (melee slot): the bare-hands version of Knave's weapon, used
+  // when no weapon is equipped. Same identity as the weapon sweep — a tight,
+  // quick arc that bleeds hard — reusing the authored weapon numbers so the two
+  // never drift apart.
+  function castKnaveBlade() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('melee');
+    const angle = Neo.angleToMouse();
+    startPlayerSwing(angle, false);
+    Neo.playSfx?.('sword_swing');
+    const blade = globalThis.NeoNyke?.simulation?.resolveCampaignKnaveBlade?.({
+      godMode: Neo.godTimer > 0,
+      anvilDamage: Neo.getAnvilMoveBonus(move, 'damage'),
+      anvilRange: Neo.getAnvilMoveBonus(move, 'range'),
+    });
+    if (!blade) throw new Error('Shared Knave Blade policy is unavailable');
+    forEachEnemyNearPlayer(blade.range, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, blade.range)) return;
+      const targetAngle = Neo.angleBetween(Neo.player, enemy);
+      if (angleDifferenceAbs(targetAngle, angle) > blade.arc) return;
+      hitEnemy(enemy, blade.damage, angle, blade.knockback, '#ff4d6d', {
+        melee: true,
+        bleedChance: blade.bleedChance,
+        bleedStacks: blade.bleedStacks,
+        bleedDuration: blade.bleedDurationSeconds,
+        itemBleedChance: itemStats.bleedChance,
+      });
+    });
+    forEachDestructibleNearPlayer(blade.range + 8, prop => {
+      if (prop.broken || prop.hidden) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, blade.range, 8)) return;
+      const targetAngle = Neo.angleBetween(Neo.player, prop);
+      if (angleDifferenceAbs(targetAngle, angle) > blade.arc + blade.propArcBonus) return;
+      Neo.damageDestructible(prop, blade.propDamage);
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.2, ring: 30, c: '#ff4d6d' });
   }
 
   // True only while Mooggy Swipe is the active melee (no weapon override). The
@@ -2952,6 +3275,79 @@
     });
   }
 
+  // Blood Disks (laser slot): Knave's red Power Disks. Five faster disks with no
+  // shard sub-spawns, trading the spread for a heavy bleed on every hit.
+  function spawnBloodDiskBurst() {
+    const itemStats = Neo.getItemStats();
+    const beamMult = itemStats.beamDamageMultiplier || 1;
+    const createBurst = globalThis.NeoNyke?.content?.createBloodDiskBurstDescriptors;
+    if (typeof createBurst !== 'function') throw new Error('Shared Blood Disk content is unavailable');
+    createBurst({ damageMultiplier: beamMult }).forEach(disk => {
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(disk.angle) * disk.speed,
+        vy: Math.sin(disk.angle) * disk.speed,
+        r: disk.radius,
+        life: disk.lifeSeconds,
+        enemy: false,
+        kind: disk.kind,
+        color: disk.color,
+        damage: disk.damage,
+        hitOptions: { ...disk.hitOptions, itemBleedChance: itemStats.bleedChance || 0 },
+      });
+    });
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 30, '#ff2f4d', 0.35);
+    Neo.playSfx?.('lazer_blast');
+  }
+
+  // Knave Knives (laser slot): two homing knives that pick separate targets and
+  // chase them down, each carrying a 15% bleed chance.
+  function castKnaveKnives() {
+    const itemStats = Neo.getItemStats();
+    const beamMult = itemStats.beamDamageMultiplier || 1;
+    const createKnives = globalThis.NeoNyke?.content?.createKnaveKnifeDescriptors;
+    if (typeof createKnives !== 'function') throw new Error('Shared Knave Knife content is unavailable');
+    const angle = Neo.angleToMouse();
+    // Pick the two nearest live enemies so the knives split up instead of both
+    // piling onto the same target. Falls back to a plain fanned throw if the
+    // room is empty.
+    const targets = (Neo.enemies || [])
+      .filter(enemy => enemy && enemy.hp > 0 && !enemy.dead)
+      .map(enemy => ({ enemy, distSq: (enemy.x - Neo.player.x) ** 2 + (enemy.y - Neo.player.y) ** 2 }))
+      .sort((a, b) => a.distSq - b.distSq)
+      .slice(0, 2)
+      .map(entry => entry.enemy);
+    createKnives({ damageMultiplier: beamMult, aimAngle: angle, targets }).forEach(knife => {
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(knife.angle) * knife.speed,
+        vy: Math.sin(knife.angle) * knife.speed,
+        r: knife.radius,
+        life: knife.lifeSeconds,
+        enemy: false,
+        kind: knife.kind,
+        color: knife.color,
+        damage: knife.damage,
+        knockback: knife.knockback,
+        hitOptions: { ...knife.hitOptions, itemBleedChance: itemStats.bleedChance || 0 },
+        chainsOnHit: knife.chainsOnHit,
+        homing: knife.homing,
+        homingTarget: 'enemy',
+        homingRadius: knife.homingRadius,
+        homingSpeed: knife.homingSpeed,
+        homingAccel: knife.homingAccel,
+        homingTurnRate: knife.homingTurnRate,
+        homingTargetRef: knife.target,
+        homingTargetTimer: 1.1,
+        homingPathRefreshInterval: 0.45,
+      });
+    });
+    triggerArmRecoil(angle, 0.14);
+    Neo.playSfx?.('sword_swing');
+  }
+
   // Sarge's Hammer Throw (laser slot): hurl a spinning hammer toward the cursor.
   // It uses the same boomerang flight as the double-kill hammer — flies out, hits,
   // then arcs back to Sarge — but is a manually aimed skill, not a passive proc.
@@ -3769,6 +4165,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
               Neo.damagePlayer(sword.damage, angle, 180, sword.source || 'rival_excalibur', {
                 sourceKey: sword.source || 'rival_excalibur',
                 sourceLabel: sword.sourceLabel || 'Rival Excalibur Strike',
+                attacker: sword.owner,
               });
             }
           } else {
@@ -4147,11 +4544,13 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const isCrit = critResolution.isCrit;
-    // Higher-level enemies (deeper/later runs, scaled by difficulty) resist
-    // knockback: the impulse is divided by 1+ccLevel, so they need a bigger hit to
-    // be moved and to cross the heavy-knockback stun threshold. No cap.
+    // Every level gained adds 2% to the attacker's outgoing knockback. This
+    // stacks multiplicatively with equipment and the target's CC resistance.
+    const getLevelKnockbackMultiplier = globalThis.NeoNyke?.simulation?.getEntityLevelKnockbackMultiplier;
+    if (typeof getLevelKnockbackMultiplier !== 'function') throw new Error('Shared level knockback rules are unavailable');
+    const levelKnockbackMultiplier = getLevelKnockbackMultiplier(options.attacker || Neo.player);
     const knockbackResistFactor = 1 / (1 + getEnemyCcLevel(enemy));
-    const appliedKnockback = knockback * (stats.knockbackMultiplier || 1) * knockbackResistFactor;
+    const appliedKnockback = knockback * levelKnockbackMultiplier * (stats.knockbackMultiplier || 1) * knockbackResistFactor;
     if (isCrit) dealt = Math.round(dealt * critMultiplier);
     // Rivals retain a slight 5% damage reduction. A larger hidden reduction
     // made ordinary hits read like an unexplained block on top of their HP.

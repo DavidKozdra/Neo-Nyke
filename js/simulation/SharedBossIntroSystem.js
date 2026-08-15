@@ -14,7 +14,7 @@
     bulk_golem: Object.freeze({ speaker: 'BULK GOLEM', text: '........' }),
     artificer_knave: Object.freeze({ speaker: 'ARTIFICER KNAVE', text: 'Run. I only need one clean hit.' }),
     bowman_bane: Object.freeze({ speaker: "BOWMAN'S BANE", text: 'You came back. I was waiting.' }),
-    antony_blemmye: Object.freeze({ speaker: 'ANTONY BLEMMYE', text: '. GOrba GORBA !.' }),
+    antony_blemmye: Object.freeze({ speaker: 'ANTHONY THE BLESSED BLEMMYE', text: '. GOrba GORBA !.' }),
     handsome_devil: Object.freeze({ speaker: 'HANDSOME DEVIL', text: 'Try not to stare.' }),
   });
 
@@ -48,7 +48,7 @@
       Object.freeze({ speaker: 'HANDSOME DEVIL', text: 'Family is complicated.' }),
     ]),
     antony_blemmye: Object.freeze([
-      Object.freeze({ speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' }),
+      Object.freeze({ speaker: 'ANTHONY THE BLESSED BLEMMYE', text: 'gorba Gorba' }),
     ]),
   });
 

@@ -12957,7 +12957,17 @@ body.network-multiplayer-active #c {
   position: fixed;
   top: 80px;
   right: 14px;
-  width: 220px;
+  width: 280px;
+  height: 420px;
+  min-width: 200px;
+  min-height: 120px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  /* Drag by the head, resize from the bottom-right corner. */
+  resize: both;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: rgba(10,8,22,0.94);
   border: 1px solid rgba(160,120,255,0.3);
   border-radius: 10px;
@@ -12966,9 +12976,16 @@ body.network-multiplayer-active #c {
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
 }
 .practice-panel.hidden { display: none; }
+/* Collapsed (body hidden): shrink to the header bar and drop the resize grip. */
+.practice-panel:has(> .practice-body.hidden) {
+  height: auto;
+  min-height: 0;
+  resize: horizontal;
+}
 
 .practice-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px 8px;
@@ -12995,7 +13012,63 @@ body.network-multiplayer-active #c {
 }
 .practice-toggle-btn:hover { color: #c8b4ff; }
 
-.practice-body { padding: 10px 12px 14px; }
+.practice-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Vertical only — the grid reflows to the width, so a sideways bar would
+     always be a layout bug rather than something to scroll. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160,120,255,0.45) transparent;
+  padding: 10px 12px 14px;
+}
+.practice-body::-webkit-scrollbar { width: 8px; }
+.practice-body::-webkit-scrollbar-track { background: transparent; }
+.practice-body::-webkit-scrollbar-thumb {
+  background: rgba(160,120,255,0.35);
+  border-radius: 4px;
+}
+.practice-body::-webkit-scrollbar-thumb:hover { background: rgba(160,120,255,0.6); }
+
+/* Search box — sticks to the top of the scroll area so the filter stays
+   reachable while scrolling a long roster. */
+.practice-search-row {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  margin: -10px -12px 10px;
+  padding: 10px 12px 8px;
+  background: rgba(10,8,22,0.97);
+}
+.practice-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0,0,0,0.32);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: #d8e4f8;
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 5px 8px;
+}
+.practice-search::placeholder { color: #6858a0; }
+.practice-search:focus {
+  outline: none;
+  border-color: rgba(160,120,255,0.6);
+  background: rgba(0,0,0,0.45);
+}
+.practice-search-empty {
+  margin: 0 0 10px;
+  color: #6858a0;
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+/* Filtered-out controls collapse entirely so the grid reflows around them. */
+.practice-filtered-out { display: none !important; }
+
 .practice-section { margin-bottom: 14px; }
 .practice-section:last-child { margin-bottom: 0; }
 .practice-section-label {
@@ -13009,21 +13082,41 @@ body.network-multiplayer-active #c {
 }
 
 .practice-spawn-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  display: grid;
+  /* Reflows column count as the panel is resized. */
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 6px;
 }
 .practice-spawn-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 5px;
+  border-radius: 6px;
   color: #c4d4e8;
   cursor: pointer;
-  font-size: 0.68rem;
-  padding: 4px 7px;
+  font-size: 0.6rem;
+  padding: 5px 3px 4px;
   text-transform: capitalize;
   transition: background 0.15s, border-color 0.15s;
+}
+.practice-spawn-icon {
+  display: block;
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.practice-spawn-name {
+  display: block;
+  max-width: 100%;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none;
 }
 .practice-spawn-btn:hover {
   background: rgba(160,120,255,0.18);
@@ -13051,7 +13144,8 @@ body.network-multiplayer-active #c {
 
 .practice-range-row {
   display: grid;
-  grid-template-columns: 56px minmax(110px, 1fr) 72px;
+  /* Label and number box hold their size; the slider absorbs the resize. */
+  grid-template-columns: auto minmax(40px, 1fr) 64px;
   gap: 8px;
   align-items: center;
   margin-bottom: 10px;
@@ -13062,12 +13156,15 @@ body.network-multiplayer-active #c {
 
 .practice-slider {
   width: 100%;
+  min-width: 0;
   accent-color: #a880ff;
   cursor: pointer;
 }
 
 .practice-num {
-  width: 72px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: rgba(0,0,0,0.28);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 5px;
@@ -15177,16 +15274,16 @@ body.network-multiplayer-active #c {
   border-radius: 999px;
 }
 
-.char-card[data-rarity="assassin"] {
+.char-card[data-rarity="knave"] {
   border-color: rgba(255, 51, 72, .45);
 }
-.char-card[data-rarity="assassin"]:hover,
-.char-card[data-rarity="assassin"].sel {
+.char-card[data-rarity="knave"]:hover,
+.char-card[data-rarity="knave"].sel {
   border-color: rgba(255, 78, 96, .95);
   box-shadow: 0 0 26px rgba(255, 51, 72, .22);
 }
-.assassin-tag,
-.info-card__tag--assassin {
+.knave-tag,
+.info-card__tag--knave {
   background: rgba(255, 51, 72, .14);
   color: #ffb8c1;
   border: 1px solid rgba(255, 51, 72, .4);

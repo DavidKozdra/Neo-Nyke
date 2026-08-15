@@ -34,7 +34,7 @@ const manualValues = {
     'BULK GOLEM': 'الغولم الضخم',
     'RIVAL PRINCESS': 'الأميرة المنافسة',
     'HANDSOME DEVIL': 'الشيطان الوسيم',
-    'ANTONY BLEMMYE': 'أنتوني بليمي',
+    'ANTHONY THE BLESSED BLEMMYE': 'أنتوني بليمي المبارك',
     'BOWMAN BANE': 'لعنة الرامي',
   },
   de: {
@@ -50,7 +50,7 @@ const manualValues = {
     'BULK GOLEM': 'Massengolem',
     'RIVAL PRINCESS': 'Rivalin-Prinzessin',
     'HANDSOME DEVIL': 'Schoener Teufel',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Anthony der Gesegnete Blemmye',
     'BOWMAN BANE': 'Bogens Fluch',
   },
   es: {
@@ -66,7 +66,7 @@ const manualValues = {
     'BULK GOLEM': 'Golem enorme',
     'RIVAL PRINCESS': 'Princesa rival',
     'HANDSOME DEVIL': 'Diablo apuesto',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Anthony el Bendito Blemmye',
     'BOWMAN BANE': 'Azote del arquero',
   },
   fr: {
@@ -82,7 +82,7 @@ const manualValues = {
     'BULK GOLEM': 'Golem massif',
     'RIVAL PRINCESS': 'Princesse rivale',
     'HANDSOME DEVIL': 'Beau diable',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Antoine le Béni Blemmyæ',
     'BOWMAN BANE': "Fleau de l'archer",
   },
   hi: {
@@ -98,7 +98,7 @@ const manualValues = {
     'BULK GOLEM': 'विशाल गोलेम',
     'RIVAL PRINCESS': 'प्रतिद्वंद्वी राजकुमारी',
     'HANDSOME DEVIL': 'सुंदर शैतान',
-    'ANTONY BLEMMYE': 'एंटनी ब्लेमी',
+    'ANTHONY THE BLESSED BLEMMYE': 'एंटनी द ब्लेस्ड ब्लेमी',
     'BOWMAN BANE': 'धनुर्धर का अभिशाप',
   },
   id: {
@@ -114,7 +114,7 @@ const manualValues = {
     'BULK GOLEM': 'Golem raksasa',
     'RIVAL PRINCESS': 'Putri saingan',
     'HANDSOME DEVIL': 'Iblis tampan',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Anthony Sang Blemmye Terberkati',
     'BOWMAN BANE': 'Kutukan pemanah',
   },
   ja: {
@@ -130,7 +130,7 @@ const manualValues = {
     'BULK GOLEM': '巨大ゴーレム',
     'RIVAL PRINCESS': 'ライバル姫',
     'HANDSOME DEVIL': '美形の悪魔',
-    'ANTONY BLEMMYE': 'アントニー・ブレミー',
+    'ANTHONY THE BLESSED BLEMMYE': '祝福されしアントニー・ブレミー',
     'BOWMAN BANE': '弓兵の災厄',
   },
   ko: {
@@ -146,7 +146,7 @@ const manualValues = {
     'BULK GOLEM': '거대 골렘',
     'RIVAL PRINCESS': '경쟁 공주',
     'HANDSOME DEVIL': '잘생긴 악마',
-    'ANTONY BLEMMYE': '앤터니 블레미',
+    'ANTHONY THE BLESSED BLEMMYE': '축복받은 앤터니 블레미',
     'BOWMAN BANE': '궁수의 재앙',
   },
   pt: {
@@ -162,7 +162,7 @@ const manualValues = {
     'BULK GOLEM': 'Golem enorme',
     'RIVAL PRINCESS': 'Princesa rival',
     'HANDSOME DEVIL': 'Diabo bonito',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Anthony o Abençoado Blemmye',
     'BOWMAN BANE': 'Flagelo do arqueiro',
   },
   ru: {
@@ -178,7 +178,7 @@ const manualValues = {
     'BULK GOLEM': 'Огромный голем',
     'RIVAL PRINCESS': 'Принцесса-соперница',
     'HANDSOME DEVIL': 'Красивый дьявол',
-    'ANTONY BLEMMYE': 'Энтони Блемми',
+    'ANTHONY THE BLESSED BLEMMYE': 'Энтони Благословенный Блемми',
     'BOWMAN BANE': 'Проклятие лучника',
   },
   tr: {
@@ -194,7 +194,7 @@ const manualValues = {
     'BULK GOLEM': 'Dev golem',
     'RIVAL PRINCESS': 'Rakip prenses',
     'HANDSOME DEVIL': 'Yakışıklı şeytan',
-    'ANTONY BLEMMYE': 'Antony Blemmye',
+    'ANTHONY THE BLESSED BLEMMYE': 'Kutsanmış Anthony Blemmye',
     'BOWMAN BANE': 'Okçunun belası',
   },
   zh: {
@@ -210,7 +210,7 @@ const manualValues = {
     'BULK GOLEM': '巨型魔像',
     'RIVAL PRINCESS': '宿敌公主',
     'HANDSOME DEVIL': '英俊恶魔',
-    'ANTONY BLEMMYE': '安东尼·布莱米',
+    'ANTHONY THE BLESSED BLEMMYE': '受祝福的安东尼·布莱米',
     'BOWMAN BANE': '弓手灾星',
   },
 };

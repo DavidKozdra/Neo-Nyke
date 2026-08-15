@@ -913,7 +913,7 @@
     if (type === 'bulk_golem') return 'BULK GOLEM';
     if (type === 'artificer_knave') return 'ARTIFICER CHARGED KNAVE';
     if (type === 'bowman_bane') return "BOWMAN'S BANE";
-    if (type === 'antony_blemmye') return 'ANTONY BLEMMYAE';
+    if (type === 'antony_blemmye') return 'ANTHONY THE BLESSED BLEMMYE';
     if (type === 'handsome_devil') return 'HANDSOME DEVIL';
     if (type === 'god') return 'GOD';
     return type.toUpperCase();

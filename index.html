@@ -156,6 +156,22 @@
       opacity: .5;
     }
 
+
+    #creditsStudio {
+      color: magenta;
+    }
+
+    #creditsStudio:hover {
+      color: white;
+      cursor: pointer;
+    }
+
+        #creditsStudio:active {
+      color: magenta;
+
+      font-size: 2em;  
+    }
+
   </style>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/theme-princess.css">
@@ -170,7 +186,7 @@
 <div id="bootLoading" class="boot-loading" role="status" aria-live="polite">
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
-    <span class="version">Beta 2.1</span>
+    <span class="version">Beta 2.2</span>
     <h1 class="boot-loading__title">NEO - NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
@@ -796,21 +812,25 @@
       <button id="practicePanelToggle" class="practice-toggle-btn" aria-label="Toggle practice panel">&#9776;</button>
     </div>
     <div id="practicePanelBody" class="practice-body">
+      <div class="practice-search-row">
+        <input id="practiceSearch" class="practice-search" type="search" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Filter practice panel controls">
+      </div>
+      <p id="practiceSearchEmpty" class="practice-search-empty hidden" role="status">No matches</p>
       <div class="practice-section">
         <span class="practice-section-label">SPAWN ENEMY</span>
         <div class="practice-spawn-grid" id="practiceEnemyGrid"></div>
       </div>
       <div class="practice-section">
         <span class="practice-section-label">OPTIONS</span>
-        <div class="practice-range-row">
+        <div class="practice-range-row" data-practice-label="Max HP">
           <label for="practiceMaxHpSlider">Max HP</label>
           <input id="practiceMaxHpSlider" class="practice-slider" type="range" min="1" max="10000" step="10" value="1000">
           <input id="practiceMaxHpNum" class="practice-num" type="number" min="1" max="10000" step="10" value="1000" aria-label="Practice max health">
         </div>
-        <label class="practice-opt"><input type="checkbox" id="practiceEliteToggle"> Spawn as Elite</label>
-        <button id="practiceClearBtn" class="practice-action-btn">CLEAR ENEMIES</button>
-        <button id="practiceHealBtn" class="practice-action-btn">FULL HEAL</button>
-        <button id="practiceGiveItemBtn" class="practice-action-btn">GIVE RANDOM ITEM</button>
+        <label class="practice-opt" data-practice-label="Spawn as Elite"><input type="checkbox" id="practiceEliteToggle"> Spawn as Elite</label>
+        <button id="practiceClearBtn" class="practice-action-btn" data-practice-label="Clear Enemies">CLEAR ENEMIES</button>
+        <button id="practiceHealBtn" class="practice-action-btn" data-practice-label="Full Heal">FULL HEAL</button>
+        <button id="practiceGiveItemBtn" class="practice-action-btn" data-practice-label="Give Random Item">GIVE RANDOM ITEM</button>
       </div>
     </div>
   </div>
@@ -852,7 +872,7 @@
       </div>
       <div class="menu-footer__summary">
         <span id="runSummary" class="run-summary-line"></span>
-        <span class="menu-footer__version">version Beta 2.1</span>
+        <span class="menu-footer__version">version Beta 2.2</span>
       </div>
     </div><!-- /.menu-footer -->
   </div><!-- /.menu-stage -->
@@ -1713,13 +1733,13 @@
               </button>
 
               <!-- Mooggy -->
-              <button class="char-card" data-char="mooggy" data-rarity="assassin">
+              <button class="char-card" data-char="mooggy" data-rarity="knave">
                 <div class="char-card-art-wrap">
                   <canvas class="char-card-art" data-char-sprite="mooggy" width="96" height="96" aria-hidden="true"></canvas>
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">MOOGGY</span>
-                  <span class="char-card-tag assassin-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-assassin" width="18" height="18" aria-hidden="true"></canvas>ASSASSIN</span>
+                  <span class="char-card-tag knave-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-knave" width="18" height="18" aria-hidden="true"></canvas>KNAVE</span>
                 </div>
                 <small class="char-card-hint" data-base="Locked: beat Mooggy">Locked: beat Mooggy</small>
               </button>
@@ -1746,6 +1766,19 @@
                   <span class="char-card-tag knight-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-knight" width="18" height="18" aria-hidden="true"></canvas>KNIGHT</span>
                 </div>
                 <small class="char-card-hint" data-base="Hammer brawler, double-kill hammer">Hammer brawler, double-kill hammer</small>
+              </button>
+
+              <!-- Hidden easter-egg hero: stays display:none until the credits
+                   studio byline is clicked five times (see js/ui/credits.js). -->
+              <button class="char-card char-card--secret" data-char="knave" data-rarity="knave" hidden>
+                <div class="char-card-art-wrap">
+                  <canvas class="char-card-art" data-char-sprite="knave" width="96" height="96" aria-hidden="true"></canvas>
+                </div>
+                <div class="char-card-header">
+                  <span class="char-card-name">KNAVE</span>
+                  <span class="char-card-tag knave-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-knave" width="18" height="18" aria-hidden="true"></canvas>KNAVE</span>
+                </div>
+                <small class="char-card-hint" data-base="Fastest hero, thinnest health">Fastest hero, thinnest health</small>
               </button>
 
               <!-- Dynamic custom character cards are inserted here. -->

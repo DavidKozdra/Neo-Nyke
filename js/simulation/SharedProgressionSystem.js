@@ -7,6 +7,16 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedProgressionApi() {
   'use strict';
 
+  const KNOCKBACK_BONUS_PER_LEVEL = 0.02;
+
+  function getEntityLevelKnockbackMultiplier(entityOrLevel) {
+    const rawLevel = typeof entityOrLevel === 'object' && entityOrLevel !== null
+      ? entityOrLevel.level ?? entityOrLevel.rivalData?.level
+      : entityOrLevel;
+    const level = Math.max(1, Math.floor(Number(rawLevel) || 1));
+    return 1 + (level - 1) * KNOCKBACK_BONUS_PER_LEVEL;
+  }
+
   const DEFAULT_LEVEL_MILESTONES = Object.freeze({
     7:  Object.freeze({ moveCharge: 'dash', stat: Object.freeze({ maxHp: 10, attackPower: 2 }), label: '+1 MOBILITY CHARGE' }),
     14: Object.freeze({ stat: Object.freeze({ maxHp: 20, attackPower: 3, attackSpeed: 0.03 }), moveSpeed: 0.03, label: 'STAT SURGE' }),
@@ -88,6 +98,7 @@
   }
 
   return {
+    KNOCKBACK_BONUS_PER_LEVEL,
     DEFAULT_LEVEL_MILESTONES,
     CHARACTER_LEVEL_MILESTONES,
     LEVEL_MILESTONE_LEVELS,
@@ -95,6 +106,7 @@
     getLevelMilestone,
     getMilestoneChargeBonus,
     getLevelMoveSpeedBonus,
+    getEntityLevelKnockbackMultiplier,
     applyCampaignLevelUp,
   };
 });

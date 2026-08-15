@@ -352,12 +352,16 @@ describe('character sprite sheet assets', () => {
   test('knave crops its padded export into portrait, arm, idle, and walk frames', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.knave;
+    // The strip's content spans 25 rows (y=14..38), not 24: the sword tip on
+    // the arm frame sits alone on row 14 and the portrait frame's base on row
+    // 38. Cropping 24px from row 15 sliced the blade tip off, so the window is
+    // 25px from row 14.
     expect(def).toEqual(expect.objectContaining({
       src: 'assets/sprites/chars/knave.png',
       frameWidth: 24,
-      frameHeight: 24,
+      frameHeight: 25,
       frameCount: 8,
-      sourceOffsetY: 15,
+      sourceOffsetY: 14,
       idleFrames: [2, 3],
       walkFrames: [4, 5, 6, 7],
       armFrame: 1,
@@ -378,6 +382,25 @@ describe('character sprite sheet assets', () => {
         def.sourceOffsetY,
       )).toBeGreaterThan(15);
     });
+
+    // The crop window must contain every authored row. If it starts even one
+    // row late the sword tip on the arm frame is silently sliced off, which is
+    // exactly what a 24px window at offset 15 used to do.
+    const sheetCanvas = createCanvas(image.naturalWidth, image.naturalHeight);
+    const sheetCtx = sheetCanvas.getContext('2d');
+    sheetCtx.drawImage(image, 0, 0);
+    const { data } = sheetCtx.getImageData(0, 0, image.naturalWidth, image.naturalHeight);
+    const alphaAt = (x, y) => data[(y * image.naturalWidth + x) * 4 + 3];
+    const contentRows = [];
+    for (let y = 0; y < image.naturalHeight; y += 1) {
+      for (let x = 0; x < image.naturalWidth; x += 1) {
+        if (alphaAt(x, y) > 0) { contentRows.push(y); break; }
+      }
+    }
+    const firstRow = Math.min(...contentRows);
+    const lastRow = Math.max(...contentRows);
+    expect(def.sourceOffsetY).toBeLessThanOrEqual(firstRow);
+    expect(def.sourceOffsetY + def.frameHeight - 1).toBeGreaterThanOrEqual(lastRow);
 
     // The charged boss is the same character and must stay on the exact same
     // authored art/animation definition. Enemy radius controls its larger size.
@@ -454,7 +477,7 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, 5, def.frameWidth, def.frameHeight)).toBe(0);
   });
 
-  test('Antony Blemmyae uses the supplied idle, mouth-beam, and attack frames', async () => {
+  test('Anthony The Blessed Blemmye uses the supplied idle, mouth-beam, and attack frames', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.antony_blemmye;
     expect(def).toEqual(expect.objectContaining({
@@ -462,7 +485,7 @@ describe('character sprite sheet assets', () => {
       frameWidth: 64,
       frameHeight: 64,
       frameCount: 3,
-      renderScale: 1.15,
+      renderScale: 2.3,
       idleFrames: [0, 1],
       walkFrames: [0, 1],
       attackFrames: [2],

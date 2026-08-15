@@ -350,6 +350,12 @@
   display: none !important;
 }
 
+/* Secret heroes (Knave) are absent from the roster until found. Kept separate
+   from [hidden], which the carousel pagination pass owns and rewrites. */
+#charSelect .char-card--secret {
+  display: none !important;
+}
+
 #charSelect .char-carousel-viewport {
   max-height: 590px;
   padding: 2px;

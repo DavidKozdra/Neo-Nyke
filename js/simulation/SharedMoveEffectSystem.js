@@ -256,6 +256,23 @@
     };
   }
 
+  // Knave Blade in the melee slot — the bare-hands twin of Knave's weapon, used
+  // when no weapon is equipped. Numbers mirror the authored weapon sweep (tight
+  // arc, fast recovery, heavy bleed) so the move and the weapon never drift.
+  function resolveCampaignKnaveBlade(options = {}) {
+    const anvilDamage = Number(options.anvilDamage || 0);
+    const anvilRange = Number(options.anvilRange || 0);
+    return {
+      damage: (options.godMode ? 72 : 36) + anvilDamage,
+      range: 96 + anvilRange,
+      arc: 1.10,
+      knockback: 240,
+      bleedChance: 0.35, bleedStacks: 2, bleedDurationSeconds: 5,
+      propDamage: 1,
+      propArcBonus: 0.35,
+    };
+  }
+
   function planCampaignMagentaP90Burst(options = {}) {
     const count = Math.max(1, Math.floor(Number(options.count ?? 5)));
     const delaySeconds = Math.max(0, Number(options.delaySeconds ?? 0.08));
@@ -910,6 +927,7 @@
     planCampaignFireballVolley,
     resolveCampaignSmite,
     resolveCampaignUnarmedSlash,
+    resolveCampaignKnaveBlade,
     planCampaignMagentaP90Burst,
     planCampaignDivineWeaponCombo,
     resolveCampaignSargesHammerWeapon,

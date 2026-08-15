@@ -5,6 +5,9 @@
   const MINOR_PACK_RADIUS = 260;
   const MINOR_PACK_MAX_ALLIES = 3;
   const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;
+  const BULK_GOLEM_KNOCKBACK_MULTIPLIER = Number(
+    globalThis.NeoNyke?.simulation?.BULK_GOLEM_KNOCKBACK_MULTIPLIER || 3,
+  );
 
   function updateMinorEnemyPackPressure(enemy) {
     const eligible = enemy
@@ -94,6 +97,48 @@
       Neo.clamp(py, SUMMON_SPAWN_MARGIN, Neo.ROOM_H - SUMMON_SPAWN_MARGIN),
       SUMMON_SPAWN_RADIUS,
     );
+  }
+
+  // Reuse the authority-safe signature controller in campaign play. Only the
+  // world adapters differ; move thresholds and attack payloads stay shared.
+  const npcSignatureController = globalThis.NeoNyke?.simulation?.createCampaignEnemyBehaviors?.({
+    getPlayer: () => Neo.player,
+    getTuning: () => Neo.getEnemyDifficultyTuning(),
+    random: scope => Neo.nextRandom(scope || 'encounter'),
+    spawnProjectile(enemy, descriptor) {
+      Neo.spawnProjectile({
+        ...descriptor,
+        enemy: true,
+        owner: enemy,
+        source: descriptor.source || descriptor.kind || enemy.type,
+      });
+    },
+    spawnMinion(enemy, type, x, y) {
+      const safeSpawn = findSafeSummonSpawnPoint(x, y);
+      if (safeSpawn) spawnEnemy(type, safeSpawn.x, safeSpawn.y, false, { level: enemy.level });
+    },
+    spawnHazard(enemy, hazard) {
+      Neo.hazards.push({ ...hazard, ownerEnemy: enemy });
+    },
+    grantBarrier(_enemy, target, amount) {
+      target.barrier = Math.max(Number(target.barrier || 0), Math.max(0, Math.round(Number(amount || 0))));
+      target.barrierAge = 0;
+    },
+    emit(eventType, data) {
+      if (eventType !== 'ENEMY_TELEGRAPH') return;
+      const enemy = Neo.enemies.find(candidate => candidate?.id === data?.enemyId);
+      if (!enemy) return;
+      const label = Neo.MOVE_DEFS?.[data.attackKind]?.name || String(data.attackKind || 'SIGNATURE');
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.55, text: label.toUpperCase(), c: '#f4d7ff' });
+      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 24, '#c68cff', 0.35);
+    },
+  });
+
+  function withNpcEnemySignatures(update) {
+    return (enemy, dt) => {
+      if (npcSignatureController?.updateNpcEnemySignatureMoves?.(enemy, dt)) return;
+      update(enemy, dt);
+    };
   }
 
   function compactEnemyList() {
@@ -2530,6 +2575,7 @@
           kind: 'golem_spit',
           source: 'golem_projectile',
           damage: enemy.dmg + 4,
+          knockback: 120 * (enemy.type === 'bulk_golem' ? BULK_GOLEM_KNOCKBACK_MULTIPLIER : 1),
           statusEffects: [{ key: 'poison', chance: 1, stacks: 1, duration: 4.2 }],
         });
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: 'SPIT', c: '#9bb05a' });
@@ -2554,7 +2600,13 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 390;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type, { attacker: enemy });
+        Neo.damagePlayer(
+          enemy.dmg + 6,
+          enemy.dashAngle,
+          280 * (enemy.type === 'bulk_golem' ? BULK_GOLEM_KNOCKBACK_MULTIPLIER : 1),
+          enemy.type,
+          { attacker: enemy },
+        );
       }
       return;
     }
@@ -3007,14 +3059,21 @@
         Neo.shake = Math.max(Neo.shake, 10);
         Neo.shakeT = Math.max(Neo.shakeT, 0.18);
         if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < impactRadius + Neo.player.r) {
-          Neo.damagePlayer(Math.round(enemy.dmg * 0.85), Neo.angleBetween(enemy, Neo.player), 330, enemy.type);
+          Neo.damagePlayer(
+            Math.round(enemy.dmg * 0.85),
+            Neo.angleBetween(enemy, Neo.player),
+            330 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+            enemy.type,
+            { attacker: enemy },
+          );
         }
         if (enemy.level >= 10) {
           Neo.hazards.push({
-            kind: 'bomb_aoe', enemy: true, source: enemy.type,
+            kind: 'bomb_aoe', enemy: true, ownerEnemy: enemy, source: enemy.type,
             x: enemy.x, y: enemy.y, blastRadius: impactRadius + 24,
             fuse: 0.55, fuseDuration: 0.55, ttl: 0.7,
             baseDamage: Math.round(enemy.dmg * 0.62), sparkTick: 0,
+            knockback: 240 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
           });
         }
       }
@@ -3033,7 +3092,15 @@
       const aoeRadius = Math.min(225, 173 + tier * 9);
       const aoeDamage = Math.round(enemy.dmg * 0.864);
       Neo.ringBurst(enemy.x, enemy.y, aoeRadius, '#ff8844', 0.5);
-      Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
+      Neo.blastRadius(
+        enemy.x,
+        enemy.y,
+        aoeRadius,
+        aoeDamage,
+        '#ff8844',
+        enemy,
+        200 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+      );
       Neo.shake = 12;
       Neo.shakeT = 0.2;
     }
@@ -3155,7 +3222,7 @@
       }
       if (hitSegment) {
         const damage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
-        Neo.damagePlayer(damage, hitSegment.angle, phaseLevel >= 4 ? 230 : 190, 'God Beam', { sourceKey: 'god' });
+        Neo.damagePlayer(damage, hitSegment.angle, phaseLevel >= 4 ? 230 : 190, 'God Beam', { sourceKey: 'god', attacker: enemy });
       }
     }
 
@@ -3431,6 +3498,7 @@
         Neo.hazards.push({
           kind: 'lightning_column',
           enemy: true,
+          ownerEnemy: enemy,
           source: 'bowman_bane',
           x: cx,
           y: cy,
@@ -3595,7 +3663,7 @@
         && pDist <= front + wave.bandWidth / 2 + Neo.player.r;
       if (inArc && reached) {
         wave.hit = true;
-        Neo.damagePlayer(wave.damage, pAngle, 320, enemy.type);
+        Neo.damagePlayer(wave.damage, pAngle, 320, enemy.type, { attacker: enemy });
       }
     }
 
@@ -3638,7 +3706,7 @@
       let delta = Math.abs(Math.atan2(pdy, pdx) - angle);
       if (delta > Math.PI) delta = Math.PI * 2 - delta;
       if (pDist <= reach && delta <= halfArc) {
-        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 300, enemy.type);
+        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 300, enemy.type, { attacker: enemy });
       }
     }
     Neo.shake = Math.max(Neo.shake, 7);
@@ -3752,7 +3820,7 @@
       const angle = Math.atan2(dy, dx);
       const biteDamage = Math.round(enemy.dmg * 0.82);
       enemy.attackAnimT = 0.28;
-      Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
+      Neo.damagePlayer(biteDamage, angle, 240, enemy.type, { attacker: enemy });
       if (enemy.level >= 20) {
         enemy.antonyComboQueued = true;
         enemy.antonyComboTimer = 0.48;
@@ -3864,6 +3932,7 @@
       Neo.hazards.push({
         kind: 'red_spikes',
         enemy: true,
+        ownerEnemy: enemy,
         source: 'handsome_devil',
         x,
         y,
@@ -3896,6 +3965,7 @@
         kind: 'lava',
         shape: 'rect',
         enemy: true,
+        ownerEnemy: enemy,
         source: 'handsome_devil',
         x,
         y: top + h / 2,
@@ -3916,6 +3986,7 @@
         kind: 'lava',
         shape: 'rect',
         enemy: true,
+        ownerEnemy: enemy,
         source: 'handsome_devil',
         x: left + w / 2,
         y,
@@ -4235,7 +4306,7 @@
       for (let index = 0; index < 2; index += 1) {
         const px = Neo.clamp(Neo.player.x + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_W - Neo.WALL - 60);
         const py = Neo.clamp(Neo.player.y + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_H - Neo.WALL - 60);
-        Neo.hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78), enemy: true, source: enemy.type || 'lightning_column' });
+        Neo.hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78), enemy: true, ownerEnemy: enemy, source: enemy.type || 'lightning_column' });
         Neo.ringBurst(px, py, 18, '#8dd4ff', 0.28);
       }
       enemy.eliteLaserCd = 1.6;
@@ -4281,12 +4352,21 @@
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
-      enemy.vx = Math.cos(enemy.dashAngle) * 430;
-      enemy.vy = Math.sin(enemy.dashAngle) * 430;
+      const signatureRush = !!enemy.npcSignatureRush;
+      const dashSpeed = signatureRush ? 820 : 430;
+      enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+      enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type, { attacker: enemy });
+        Neo.damagePlayer(
+          signatureRush ? Math.round(enemy.dmg * 1.45) : enemy.dmg + 4,
+          enemy.dashAngle,
+          signatureRush ? 520 : 240,
+          signatureRush ? 'charger_rush' : enemy.type,
+          { attacker: enemy },
+        );
       }
+      if (enemy.dashTime <= 0) enemy.npcSignatureRush = false;
       return;
     }
 
@@ -4542,6 +4622,7 @@
         Neo.hazards.push({
           kind: 'lightning_column',
           enemy: true,
+          ownerEnemy: enemy,
           source: 'mirror_lightning',
           x: predicted.x + ox,
           y: predicted.y + oy,
@@ -5276,7 +5357,8 @@
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
     const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
     const packSpeedMultiplier = Math.max(1, Number(enemy?.minorPackSpeedMultiplier || 1));
-    const adjustedSpeed = maxSpeed * slowMultiplier * packSpeedMultiplier;
+    const signatureSpeedMultiplier = Math.max(1, Number(enemy?.signatureSpeedMultiplier || 1));
+    const adjustedSpeed = maxSpeed * slowMultiplier * packSpeedMultiplier * signatureSpeedMultiplier;
     enemy.vx += (dirX * adjustedSpeed - enemy.vx) * accel * dt;
     enemy.vy += (dirY * adjustedSpeed - enemy.vy) * accel * dt;
   }
@@ -5425,22 +5507,22 @@
   Neo.updateBowmanBane = updateBowmanBane;
   Neo.updateAntonyBlemmyeBoss = updateAntonyBlemmyeBoss;
   Neo.updateHandsomeDevilBoss = updateHandsomeDevilBoss;
-	  Neo.updateHunterEnemy = updateHunterEnemy;
-	  Neo.updateCultMageEnemy = updateCultMageEnemy;
-	  Neo.updateCultQueenBoss = updateCultQueenBoss;
-	  Neo.updateBulkGolemBoss = updateBulkGolemBoss;
-	  Neo.updateArtificerBoss = updateArtificerBoss;
-	  Neo.updateKnaveEnemy = updateKnaveEnemy;
-	  Neo.updateSniperEnemy = updateSniperEnemy;
-	  Neo.updateMachineGunnerEnemy = updateMachineGunnerEnemy;
-	  Neo.updateGolemEnemy = updateGolemEnemy;
-	  Neo.updateSummonerEnemy = updateSummonerEnemy;
-	  Neo.updateShieldUnitEnemy = updateShieldUnitEnemy;
-	  Neo.updateHealerEnemy = updateHealerEnemy;
-	  Neo.updateBossSpawnerEnemy = updateBossSpawnerEnemy;
-	  Neo.updateLaserEnemy = updateLaserEnemy;
+  Neo.updateHunterEnemy = withNpcEnemySignatures(updateHunterEnemy);
+  Neo.updateCultMageEnemy = withNpcEnemySignatures(updateCultMageEnemy);
+  Neo.updateCultQueenBoss = withNpcEnemySignatures(updateCultQueenBoss);
+  Neo.updateBulkGolemBoss = updateBulkGolemBoss;
+  Neo.updateArtificerBoss = updateArtificerBoss;
+  Neo.updateKnaveEnemy = updateKnaveEnemy;
+  Neo.updateSniperEnemy = withNpcEnemySignatures(updateSniperEnemy);
+  Neo.updateMachineGunnerEnemy = withNpcEnemySignatures(updateMachineGunnerEnemy);
+  Neo.updateGolemEnemy = updateGolemEnemy;
+  Neo.updateSummonerEnemy = withNpcEnemySignatures(updateSummonerEnemy);
+  Neo.updateShieldUnitEnemy = withNpcEnemySignatures(updateShieldUnitEnemy);
+  Neo.updateHealerEnemy = updateHealerEnemy;
+  Neo.updateBossSpawnerEnemy = withNpcEnemySignatures(updateBossSpawnerEnemy);
+  Neo.updateLaserEnemy = withNpcEnemySignatures(updateLaserEnemy);
   Neo.updateEliteEnemyTraits = updateEliteEnemyTraits;
-  Neo.updateChargerEnemy = updateChargerEnemy;
+  Neo.updateChargerEnemy = withNpcEnemySignatures(updateChargerEnemy);
   Neo.getMirrorMove = getMirrorMove;
   Neo.getMirrorSkillCooldown = getMirrorSkillCooldown;
   Neo.getMirrorMoveDamage = getMirrorMoveDamage;

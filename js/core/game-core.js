@@ -582,9 +582,9 @@ export const CUTSCENE_GALLERY = [
   {
     id: 'antony_blemmye',
     title: 'Gorba Gorba',
-    subtitle: 'Antony Blemmye stirs',
+    subtitle: 'Anthony The Blessed Blemmye stirs',
     lines: [
-      { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
+      { speaker: 'ANTHONY THE BLESSED BLEMMYE', text: 'gorba Gorba' },
     ],
   },
   {
@@ -648,7 +648,7 @@ export const CUTSCENE_GALLERY = [
       { speaker: 'BULK GOLEM', text: BOSS_OPENING_DIALOGUE.bulk_golem },
       { speaker: 'KNAVE', text: BOSS_OPENING_DIALOGUE.artificer_knave },
       { speaker: 'BOWMAN BANE', text: BOSS_OPENING_DIALOGUE.bowman_bane },
-      { speaker: 'ANTONY BLEMMYE', text: BOSS_OPENING_DIALOGUE.antony_blemmye },
+      { speaker: 'ANTHONY THE BLESSED BLEMMYE', text: BOSS_OPENING_DIALOGUE.antony_blemmye },
       { speaker: 'HANDSOME DEVIL', text: BOSS_OPENING_DIALOGUE.handsome_devil },
     ],
   },
@@ -1043,6 +1043,23 @@ export const LEGACY_UPGRADES = {
 export const LEGACY_ORDER = Object.keys(LEGACY_UPGRADES);
 export const HARD_DIFFICULTIES = new Set(['hard', 'impossible', 'god']);
 
+const PLAYABLE_ENEMY_ROSTER = globalThis.NeoNyke?.content?.PLAYABLE_ENEMY_ROSTER || [];
+const PLAYABLE_ENEMY_CHARACTER_DEFS = Object.freeze(Object.fromEntries(
+  PLAYABLE_ENEMY_ROSTER.map(profile => [profile.characterKey, Object.freeze({
+    key: profile.characterKey,
+    name: profile.name,
+    rarity: profile.rarity,
+    spriteKey: profile.spriteKey,
+    damageMultiplier: profile.damageMultiplier,
+    hpMultiplier: profile.hpMultiplier,
+    moveSpeedMultiplier: profile.moveSpeedMultiplier,
+    aoeRadiusMultiplier: profile.aoeRadiusMultiplier,
+    skills: { ...profile.moveLoadout },
+    unlock: 'credits_studio_hover',
+    enemyType: profile.type,
+  })]),
+));
+
 export const CHARACTER_DEFS = {
   princess: {
     key: 'princess',
@@ -1087,7 +1104,7 @@ export const CHARACTER_DEFS = {
   mooggy: {
     key: 'mooggy',
     name: 'Mooggy',
-    rarity: 'assassin',
+    rarity: 'knave',
     damageMultiplier: 0.6,
     hpMultiplier: 1.08,
     skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Random Pounce', dash: 'Zoomies' },
@@ -1115,6 +1132,19 @@ export const CHARACTER_DEFS = {
     skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },
     unlock: 'bowman_bane',
   },
+  knave: {
+    key: 'knave',
+    name: 'Knave',
+    rarity: 'knave',
+    // The dungeon's own footsoldier, turned playable: glass-cannon speed. Hits
+    // hard and moves fastest on the roster, but folds under return fire.
+    damageMultiplier: 0.95,
+    hpMultiplier: 0.82,
+    moveSpeedMultiplier: 1.18,
+    skills: { melee: 'Slash', laser: 'Laser Shockwave', smash: 'Crimson Smash', dash: 'Dash' },
+    unlock: 'credits_studio',
+  },
+  ...PLAYABLE_ENEMY_CHARACTER_DEFS,
   custom_character: {
     key: 'custom_character',
     name: 'Custom',
@@ -1139,7 +1169,7 @@ export const HERO_DISPLAY = {
     lore: 'A balanced divine fighter who mixes lightning, healing, and mobility. Unlock by defeating GOD.',
   },
   mooggy: {
-    lore: 'A fast, aggressive assassin built around mobility, pounces, and ranged pressure. Unlock by defeating Mooggy three times.',
+    lore: 'A fast, aggressive knave built around mobility, pounces, and ranged pressure. Unlock by defeating Mooggy three times.',
   },
   turtle_boy: {
     lore: 'A water-blooded brawler with a turtle shell on his back and a long red extending staff. Tanky and patient — his wave laser grows stronger every few floors. Unlock by equipping the Extending Staff and Turtle Wave at the same time.',
@@ -1147,6 +1177,13 @@ export const HERO_DISPLAY = {
   sarge: {
     lore: 'A blue-coated old soldier who never left the war. Smashes with his hammer up close and hurls it at range. Double-kills feed his homing hammer. Unlock by defeating Bowman\'s Bane.',
   },
+  knave: {
+    lore: 'One of the dungeon\'s own footsoldiers, fighting for the other side. The fastest hero on the roster and a heavy hitter with the claws, but the thinnest health pool — a knave who stops moving is a knave who dies. Hidden: found, not earned.',
+  },
+  ...Object.fromEntries(PLAYABLE_ENEMY_ROSTER.map(profile => [
+    profile.characterKey,
+    Object.freeze({ lore: profile.lore }),
+  ])),
   custom_character: {
     lore: 'A saved custom build that can mix any weapon and move set.',
   },

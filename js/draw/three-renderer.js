@@ -2753,7 +2753,7 @@ const HAZARD_STYLES = {
 // have a dedicated textured 3D assembly below. The fire circle remains upright
 // as a billboard.
 const BAKED_2D_HAZARD_KINDS = new Set([
-  'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine',
+  'fire_circle', 'el_barto_graffiti', 'red_spikes', 'thorn_mine', 'cult_follower_ally',
 ]);
 const FLAT_BAKED_HAZARD_KINDS = new Set(['red_spikes', 'thorn_mine', 'el_barto_graffiti']);
 // These hazards scale every stroke off hazard.r, so a fixed band would clip a
@@ -2765,6 +2765,7 @@ const BAKED_HAZARD_SIZE_FACTOR = {
   el_barto_graffiti: 5,
   red_spikes: 2.6,
   thorn_mine: 2.6,
+  cult_follower_ally: 4.5,
 };
 function bakedHazardWorldSize(hazard) {
   const r = Math.max(8, Number(hazard.r) || 32);

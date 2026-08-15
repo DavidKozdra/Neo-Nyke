@@ -53,6 +53,7 @@ export const MOVE_DEFS = {
     smite: { key: 'smite', slot: 'melee', name: 'Spear of Lightning', desc: 'Lightning spear jab that chains between enemies — the same strike as the equipped spear.' },
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
     mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe with a small bleed chance. Hold to charge: a full wind-up unleashes a wider, far heavier slash.', exclusiveCharacter: 'mooggy' },
+    knave_blade: { key: 'knave_blade', slot: 'melee', name: 'Knave Blade', desc: 'A fast, cruel blade slash that bleeds what it cuts — the same strike as the equipped Knave Blade.', exclusiveCharacter: 'knave' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
@@ -60,6 +61,8 @@ export const MOVE_DEFS = {
     turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
     ghost_ball: { key: 'ghost_ball', slot: 'laser', name: 'Ghost Ball', desc: 'Hold to charge, then release a spectral orb that chases the mouse and passes through enemies. It shrinks and weakens over time and with every hit until it fades away.', exclusiveCharacter: 'turtle_boy' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
+    knave_knives: { key: 'knave_knives', slot: 'laser', name: 'Knave Knives', desc: 'Throw two homing knives that hunt down separate targets. Each hit has a 15% chance to cause bleed.', exclusiveCharacter: 'knave' },
+    blood_disks: { key: 'blood_disks', slot: 'laser', name: 'Blood Disks', desc: 'A red burst of five spinning disks — fewer than Power Disks, but far faster and soaked in bleed.', exclusiveCharacter: 'knave' },
     hammer_throw: { key: 'hammer_throw', slot: 'laser', name: 'Hammer Throw', desc: 'Hurl a heavy spinning hammer that flies out, then arcs back to you — striking foes both ways.', exclusiveCharacter: 'sarge' },
     lightning_cross: { key: 'lightning_cross', slot: 'laser', name: 'Lightning Cross', desc: 'Call down two room-spanning lightning bolts through yourself, one horizontal and one vertical, damaging everything they cross and healing you 1% max HP per enemy struck. 2 charges.', exclusiveCharacter: 'sarge', maxStacks: 2 },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
@@ -71,6 +74,12 @@ export const MOVE_DEFS = {
     mooggy_blood_beam: { key: 'mooggy_blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'A crimson assassin beam that drenches enemies in heavy poison and chills them solid (freeze).', exclusiveCharacter: 'mooggy' },
     thorn_blood_beams: { key: 'thorn_blood_beams', slot: 'laser', name: 'Infinite Blood Beam', desc: 'Four bleeding beams that orbit you, all aimed by the mouse. Channels while held.', exclusiveCharacter: 'thorn_knight' },
     wizard_lazer: { key: 'wizard_lazer', slot: 'laser', name: 'Wizard Lazer', desc: 'A thick, heavy purple beam with massive recoil and heavy damage.', exclusiveCharacter: 'metao' },
+    hunter_volley: { key: 'hunter_volley', slot: 'laser', name: 'Hunter Volley', desc: 'Loose five arrows in the Hunter’s wide pursuit fan.', enemyOnly: true },
+    sniper_round: { key: 'sniper_round', slot: 'laser', name: 'Sniper Round', desc: 'Fire one extreme-range round that pierces a line of targets.', enemyOnly: true },
+    gunner_barrage: { key: 'gunner_barrage', slot: 'laser', name: 'Gunner Barrage', desc: 'Empty a rapid twelve-round burst toward the cursor.', enemyOnly: true },
+    dungeon_beam: { key: 'dungeon_beam', slot: 'laser', name: 'Dungeon Beam', desc: 'Fire the Laser Unit’s instant magenta room-piercing beam.', enemyOnly: true },
+    cult_bolt_volley: { key: 'cult_bolt_volley', slot: 'laser', name: 'Cult Bolt Volley', desc: 'Cast a fan of violet cult bolts that burn on impact.', enemyOnly: true },
+    shield_throw: { key: 'shield_throw', slot: 'laser', name: 'Shield Throw', desc: 'Hurl a heavy ricocheting shield through clustered enemies.', enemyOnly: true },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     hammer_smash: { key: 'hammer_smash', slot: 'smash', name: 'Hammer Smash', desc: 'Slam the war hammer down: a heavy shockwave that stuns and flings a cross of debris outward, up, down, left, and right.', exclusiveCharacter: 'sarge' },
@@ -89,6 +98,11 @@ export const MOVE_DEFS = {
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
     random_pounce: { key: 'random_pounce', slot: 'smash', name: 'Random Pounce', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
     intense_biscuits: { key: 'intense_biscuits', slot: 'smash', name: 'Intense Biscuits', desc: 'Biscuit blasting, if you will: a compact pounce fires five homing biscuits and heals 2% max HP per enemy caught, up to 8%.', exclusiveCharacter: 'mooggy' },
+    hunter_trap: { key: 'hunter_trap', slot: 'smash', name: 'Hunter Trap', desc: 'Plant a long-lived pressure mine in front of you.', enemyOnly: true },
+    laser_nova: { key: 'laser_nova', slot: 'smash', name: 'Laser Nova', desc: 'Discharge laser bolts in every direction.', enemyOnly: true },
+    bullet_nova: { key: 'bullet_nova', slot: 'smash', name: 'Bullet Nova', desc: 'Spray a dense ring of machine-gun fire around you.', enemyOnly: true },
+    cult_frenzy: { key: 'cult_frenzy', slot: 'smash', name: 'Cult Frenzy', desc: 'Enter an eight-second frenzy that boosts movement and attack speed.', enemyOnly: true },
+    summon_cult_followers: { key: 'summon_cult_followers', slot: 'smash', name: 'Summon Cult Followers', desc: 'Call allied Cult Followers that chase and claw nearby enemies for you.', enemyOnly: true },
 
     dash: {
       key: 'dash',
@@ -146,6 +160,20 @@ export const MOVE_DEFS = {
       desc: 'Dash through enemies and strike everything left in your wake with a high bleed rate.',
       exclusiveCharacter: 'thorn_knight',
       maxStacks: 1,
+    },
+    charger_rush: {
+      key: 'charger_rush',
+      slot: 'dash',
+      name: 'Charger Rush',
+      desc: 'Commit to the Charger’s damaging high-speed collision.',
+      enemyOnly: true,
+    },
+    shield_guard: {
+      key: 'shield_guard',
+      slot: 'dash',
+      name: 'Shield Guard',
+      desc: 'Raise the Shield Unit’s guard, blocking hits and gaining a blue barrier.',
+      enemyOnly: true,
     },
   };
 
@@ -216,6 +244,19 @@ export const WEAPON_DEFS = {
       description: 'Rapid wide claw swipe. High bleed chance on every hit.',
       color: '#ff7a9a',
       baseCooldown: 0.38,
+    },
+    knave_blade: {
+      key: 'knave_blade',
+      name: 'Knave Blade',
+      // 'knight' like the other white-tier melee weapons (claw_gauntlets,
+      // thorns_bleed_blade). Rarity drives colour and the inventory sort order,
+      // and an unrecognised value sorts last — there is no 'knave' item tier
+      // (the hero class tag of that name is a separate namespace).
+      rarity: 'knight',
+      description: 'A quick cruel blade. Cuts faster than a Bleed Blade and bleeds harder.',
+      color: '#ff4d6d',
+      accent: '#ffd7de',
+      baseCooldown: 'melee',
     },
     lazer_glasses: {
       key: 'lazer_glasses',
@@ -310,6 +351,24 @@ export const WEAPON_DEFS = {
       color: '#7da3ff',
       accent: '#cfe0ff',
       baseCooldown: 0.7,
+    },
+    shield_bash: {
+      key: 'shield_bash',
+      name: 'Tower Shield',
+      rarity: 'knight',
+      description: 'A broad shield bash with heavy knockback and built-in frontal cover.',
+      color: '#9cefff',
+      accent: '#d9f8ff',
+      baseCooldown: 0.62,
+    },
+    stone_fists: {
+      key: 'stone_fists',
+      name: 'Stone Fists',
+      rarity: 'knight',
+      description: 'A crushing stone punch with massive impact and knockback.',
+      color: '#a8875e',
+      accent: '#e0c39a',
+      baseCooldown: 0.75,
     },
   };
 export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
@@ -1107,6 +1166,8 @@ export const ui = {
     practicePanelToggle: document.getElementById('practicePanelToggle'),
     practicePanelBody: document.getElementById('practicePanelBody'),
     practiceEnemyGrid: document.getElementById('practiceEnemyGrid'),
+    practiceSearch: document.getElementById('practiceSearch'),
+    practiceSearchEmpty: document.getElementById('practiceSearchEmpty'),
     practiceMaxHpSlider: document.getElementById('practiceMaxHpSlider'),
     practiceMaxHpNum: document.getElementById('practiceMaxHpNum'),
     practiceEliteToggle: document.getElementById('practiceEliteToggle'),
