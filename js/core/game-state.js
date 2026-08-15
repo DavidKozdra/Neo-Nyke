@@ -551,6 +551,7 @@ export function resumeGame() {
   // laser equipped at the same time: Extending Staff + Turtle Wave.
   function checkTurtleBoyUnlock() {
     if (!Neo.player) return;
+    if (Neo.gameMode === 'practice') return;
     if (!Neo.metaProgress || Neo.metaProgress.unlockedCharacters?.includes('turtle_boy')) return;
     if (Neo.player.equippedWeapon !== 'extending_staff') return;
     if (Neo.player.equippedMoves?.laser !== 'turtle_wave') return;

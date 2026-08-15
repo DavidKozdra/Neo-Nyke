@@ -4860,6 +4860,50 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     Neo.playSfx?.('sword_swing');
   }
 
+  function recordCharacterUnlockProgress(enemy) {
+    if (!enemy || Neo.gameMode === 'practice' || !Neo.metaProgress) return null;
+
+    if (enemy.type === 'mooggy') {
+      const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
+      Neo.metaProgress.mooggyDefeats = defeats;
+      if (defeats >= 3 && !Neo.metaProgress.unlockedCharacters.includes('mooggy')) {
+        Neo.metaProgress.unlockedCharacters.push('mooggy');
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 2.2, text: 'MOOGGY UNLOCKED!', c: '#ff3348' });
+        Neo.recordCharacterUnlock?.('mooggy');
+      } else {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 28, life: 1.5, text: `MOOGGY ${defeats}/3`, c: '#ff3348' });
+      }
+      Neo.persistMetaSoon();
+      Neo.refreshMenuState();
+      return defeats;
+    }
+
+    if (enemy.type === 'god') {
+      Neo.metaProgress.godsKilled = Number(Neo.metaProgress.godsKilled || 0) + 1;
+      window.achievementEvents?.emit('god:killed');
+      if (!Neo.metaProgress.unlockedCharacters.includes('gelleh')) {
+        Neo.metaProgress.unlockedCharacters.push('gelleh');
+        Neo.recordCharacterUnlock?.('gelleh');
+      }
+      return Neo.metaProgress.godsKilled;
+    }
+
+    if (enemy.type === 'bowman_bane') {
+      window.achievementEvents?.emit('bowman:killed');
+      Neo.metaProgress.bowmanBaneDefeats = Number(Neo.metaProgress.bowmanBaneDefeats || 0) + 1;
+      if (!Neo.metaProgress.unlockedCharacters.includes('sarge')) {
+        Neo.metaProgress.unlockedCharacters.push('sarge');
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 60, life: 2.2, text: 'SARGE UNLOCKED!', c: '#ffd24a' });
+        Neo.recordCharacterUnlock?.('sarge');
+      }
+      Neo.persistMetaSoon();
+      Neo.refreshMenuState();
+      return Neo.metaProgress.bowmanBaneDefeats;
+    }
+
+    return null;
+  }
+
   function onEnemyDie(enemy, options = {}) {
     if (enemy.type === 'god' && !enemy.rebirthUsed && !options.forceDeath) {
       enemy.rebirthUsed = true;
@@ -5100,28 +5144,14 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     });
 
     if (enemy.type === 'mooggy') {
-      const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
-      Neo.metaProgress.mooggyDefeats = defeats;
+      const defeats = recordCharacterUnlockProgress(enemy)
+        ?? Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0));
       dropCoins(enemy.x, enemy.y, 35 + defeats * 5);
       grantXp(24 + Neo.floor * 4);
-      if (defeats >= 3 && !Neo.metaProgress.unlockedCharacters.includes('mooggy')) {
-        Neo.metaProgress.unlockedCharacters.push('mooggy');
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 2.2, text: 'MOOGGY UNLOCKED!', c: '#ff3348' });
-        Neo.recordCharacterUnlock?.('mooggy');
-      } else {
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 28, life: 1.5, text: `MOOGGY ${defeats}/3`, c: '#ff3348' });
-      }
-      Neo.persistMetaSoon();
-      Neo.refreshMenuState();
     }
 
     if (enemy.type === 'god') {
-      Neo.metaProgress.godsKilled = Number(Neo.metaProgress.godsKilled || 0) + 1;
-      window.achievementEvents?.emit('god:killed');
-      if (!Neo.metaProgress.unlockedCharacters.includes('gelleh')) {
-        Neo.metaProgress.unlockedCharacters.push('gelleh');
-        Neo.recordCharacterUnlock?.('gelleh');
-      }
+      recordCharacterUnlockProgress(enemy);
       if (Neo.gameMode === 'boss_rush') {
         Neo.currentRoom.cleared = true;
         Neo.bossRushActive = false;
@@ -5181,19 +5211,12 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     }
 
     if (enemy.type === 'bowman_bane' && Neo.currentRoom?.secret && Neo.currentRoom?.secretKind === 'bowman_bane') {
-      window.achievementEvents?.emit('bowman:killed');
+      recordCharacterUnlockProgress(enemy);
       Neo.currentRoom.cleared = true;
       Neo.pickups = Neo.pickups.filter(pickup => pickup.type !== 'secret_boss_chest');
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'secret_boss_chest' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 40, life: 1.4, text: "BANE DEFEATED", c: '#c9aaff' });
-      Neo.metaProgress.bowmanBaneDefeats = Number(Neo.metaProgress.bowmanBaneDefeats || 0) + 1;
-      if (!Neo.metaProgress.unlockedCharacters.includes('sarge')) {
-        Neo.metaProgress.unlockedCharacters.push('sarge');
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 60, life: 2.2, text: 'SARGE UNLOCKED!', c: '#ffd24a' });
-        Neo.recordCharacterUnlock?.('sarge');
-      }
-      Neo.persistMetaSoon();
-      Neo.refreshMenuState();
+
       Neo.updateObjective();
       Neo.scheduleRunSave();
     }
