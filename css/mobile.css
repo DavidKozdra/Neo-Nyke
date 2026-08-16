@@ -880,6 +880,7 @@
     width: 38px;
     font-size: 1.55rem;
   }
+  .altmode-card__icon-art { width: 34px; height: 34px; }
 
   .altmode-card__text {
     min-width: 0;
@@ -1306,6 +1307,7 @@
     width: 30px;
     font-size: 1.25rem;
   }
+  .altmode-card__icon-art { width: 28px; height: 28px; }
 
   .altmode-card__name {
     font-size: calc(12px * var(--font-scale, 1));
@@ -1726,6 +1728,7 @@
     width: 34px;
     font-size: 1.35rem;
   }
+  .altmode-card__icon-art { width: 32px; height: 32px; }
 
   .altmode-card__name {
     font-size: calc(11px * var(--font-scale, 1));

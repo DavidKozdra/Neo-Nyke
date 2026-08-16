@@ -1417,9 +1417,22 @@
         ? getBossRushBossLevel(bossRush.stage)
         : Math.max(
           1,
-          Number(state.floorNumber || 1),
+          authorityProgressionDepth(state),
           ...activePlayers(state).map(player => Number(player.level || 1)),
         );
+      const scaledStats = scaleAuthorityEnemyStats(state, {
+        type,
+        level: enemyLevel,
+        maxHealth: Number(archetype.maxHealth || 1) * healthScale,
+        contactDamage: Number(archetype.contactDamage || 0),
+        moveSpeed: Number(archetype.moveSpeed || 0) * (room.type === 'challenge' ? 1.08 : 1),
+      }, {
+        type,
+        isBoss: !!archetype.boss,
+        enemyLevel,
+      });
+      const projectileDamageRatio = Number(archetype.projectileDamage || archetype.contactDamage * 0.75)
+        / Math.max(1, Number(archetype.contactDamage || 1));
       const enemy = {
         id: enemyId,
         type,
@@ -1431,11 +1444,12 @@
         vx: 0,
         vy: 0,
         radius: archetype.radius,
-        moveSpeed: archetype.moveSpeed * (room.type === 'challenge' ? 1.08 : 1),
-        maxHealth: Math.round(archetype.maxHealth * healthScale),
-        health: Math.round(archetype.maxHealth * healthScale),
-        contactDamage: Math.round(archetype.contactDamage),
-        projectileDamage: Math.max(5, Math.round(Number(archetype.projectileDamage || archetype.contactDamage * 0.75))),
+        moveSpeed: scaledStats.moveSpeed,
+        maxHealth: scaledStats.maxHealth,
+        health: scaledStats.maxHealth,
+        contactDamage: scaledStats.contactDamage,
+        projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+        enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
         elite,
         eliteTypes: [], elitePowers: [],
         patterns: archetype.patterns || [],

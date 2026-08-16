@@ -786,6 +786,9 @@ export function createUIController(view) {
       const resumable = hasResumableBrowserMultiplayerGame()
         || (browserMultiplayerBackgrounded && (status === 'running' || status === 'starting'));
       view.multiplayerResumeCard?.classList.toggle('hidden', !resumable);
+      // Paint when it becomes visible: the card starts hidden, so an open-time
+      // pass alone would miss the case where a match starts mid-session.
+      if (resumable) Neo.drawModeIconCanvases?.(view.multiplayerResumeCard);
     }
 
     // Back out of a live network match to the menu WITHOUT disconnecting. Tears
@@ -2873,6 +2876,11 @@ export function createUIController(view) {
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+      // The mode cards are static HTML, so nothing repaints their canvases on a
+      // re-render the way the mods panel does — paint on open instead. Hidden
+      // tabs are painted too: a canvas in a display:none panel still draws, so
+      // switching tabs later needs no extra work.
+      if (open) Neo.drawModeIconCanvases?.(view.altModesPanel || document);
     }
 
     // Selects an Alt Modes tab programmatically, so callers that arrive from
@@ -2892,6 +2900,7 @@ export function createUIController(view) {
       if (open) {
         setAltModesPanelOpen(false);
         initCompetitiveLeaderboard();
+        Neo.drawModeIconCanvases?.(view.competitivePanel || document);
       }
     }
 

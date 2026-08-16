@@ -11694,6 +11694,21 @@ body.network-multiplayer-active #c {
   width: 48px;
   text-align: center;
 }
+
+/* Cards carrying pixel art rather than a glyph: the canvas supplies its own
+   brightness, so the container's glyph dimming would only mute it. */
+.altmode-card__icon:has(.altmode-card__icon-art) {
+  opacity: 1;
+  display: grid;
+  place-items: center;
+}
+
+.altmode-card__icon-art {
+  width: 44px;
+  height: 44px;
+  display: block;
+  image-rendering: pixelated;
+}
 .altmode-card__text { flex: 1; }
 .altmode-card__name {
   font-size: 1.05rem;

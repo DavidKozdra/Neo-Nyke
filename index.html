@@ -1003,7 +1003,7 @@
       <div class="multiplayer-panel__surface">
         <div class="competitive-screen-body multiplayer-panel__body">
           <div id="multiplayerResumeCard" class="altmode-card multiplayer-resume-card hidden">
-            <div class="altmode-card__icon" aria-hidden="true">▸</div>
+            <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="resume" width="44" height="44" aria-hidden="true"></canvas></div>
             <div class="altmode-card__text">
               <h3 class="altmode-card__name">GAME IN PROGRESS</h3>
             </div>
@@ -1086,7 +1086,7 @@
       <!-- CHALLENGES -->
       <div class="altmodes-tab-panel" data-panel="challenges">
         <div class="altmode-card" id="altModeSeedSpeedRunCard">
-          <div class="altmode-card__icon">&#9733;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="seed_speed_run" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">SEED SPEED RUN</h3>
             <p class="altmode-card__desc">Race the shared weekly seed on Hard with no modifiers, then place your winning time on the leaderboard.</p>
@@ -1094,7 +1094,7 @@
           <button id="altModeSeedSpeedRunBtn" class="nav-btn nav-btn--competitive altmode-card__btn">VIEW</button>
         </div>
         <div class="altmode-card" id="altModeEndlessCard">
-          <div class="altmode-card__icon">&#9830;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="endless" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">ENDLESS</h3>
             <p class="altmode-card__desc">One room. Infinite waves. Survive as long as possible and collect item rewards between each wave.</p>
@@ -1102,7 +1102,7 @@
           <button id="altModeEndlessBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeBossRushCard">
-          <div class="altmode-card__icon">&#9760;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="boss_rush" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">BOSS RUSH</h3>
             <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
@@ -1110,7 +1110,7 @@
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeRivalRumbleCard">
-          <div class="altmode-card__icon">&#9876;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="rival_rumble" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">RIVAL RUMBLE</h3>
             <p class="altmode-card__desc">A tournament of 1v1 duels against every rival, each leveled to match you. Collect loot between each fight. Beat them all to win.</p>
@@ -1118,7 +1118,7 @@
           <button id="altModeRivalRumbleBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeTreasureHuntCard">
-          <div class="altmode-card__icon" aria-hidden="true">&#9919;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="treasure_hunt" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">TREASURE HUNT</h3>
             <p class="altmode-card__desc">Kill the vault boss, take its key, then fight back through new monsters and explosive traps. Return to the entrance to reveal a ladder or key chest.</p>
@@ -1129,7 +1129,7 @@
       <!-- Networked play. The card opens the full multiplayer page (#multiplayerPanel). -->
       <div class="altmodes-tab-panel hidden" data-panel="online">
         <div class="altmode-card" id="altModeOnlineCard">
-          <div class="altmode-card__icon" aria-hidden="true">&#9741;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="online" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">MULTIPLAYER</h3>
             <p class="altmode-card__desc">Create or join an online party over the network. Play co-op, rival, or boss rush together from anywhere. still in development nothing is promised</p>
@@ -1140,7 +1140,7 @@
       <!-- Existing same-device local play; separate from network multiplayer. -->
       <div class="altmodes-tab-panel hidden" data-panel="multiplayer">
         <div class="altmode-card" id="altModeCoopCard">
-          <div class="altmode-card__icon">&#9829;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="coop" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">CO-OP</h3>
             <p class="altmode-card__desc">Two players, one screen. P1: WASD + mouse / Gamepad 1. P2: IJKL + U/;  / Gamepad 2. Clear the dungeon together.</p>
@@ -1148,7 +1148,7 @@
           <button id="altModeCoopBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModePvpCard">
-          <div class="altmode-card__icon">&#9876;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="pvp" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">PVP</h3>
             <p class="altmode-card__desc">Two players fight each other in an arena. First to land 3 kills wins. P2 uses IJKL plus U/O/P/;.</p>
@@ -1159,7 +1159,7 @@
       <!-- TESTING -->
       <div class="altmodes-tab-panel hidden" data-panel="testing">
         <div class="altmode-card" id="altModePracticeCard">
-          <div class="altmode-card__icon">&#9878;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="practice" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">PRACTICE</h3>
             <p class="altmode-card__desc">Spawn any enemy or challenge trial at will. Test builds and learn attack patterns without consequences.</p>
@@ -1167,7 +1167,7 @@
           <button id="altModePracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeChallengePracticeCard">
-          <div class="altmode-card__icon">&#9672;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="challenge_practice" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">CHALLENGE TESTING</h3>
             <p class="altmode-card__desc">Enter a portal hub containing every challenge trial. Cleared rooms open a return portal to the hub.</p>
@@ -1175,7 +1175,7 @@
           <button id="altModeChallengePracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeBeamPracticeCard">
-          <div class="altmode-card__icon" aria-hidden="true">&#9788;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="beam_practice" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">LASER GAUNTLET</h3>
             <p class="altmode-card__desc">Practice DBZ-style beam struggles against stronger elite laser users. Every continuous beam type rotates through escalating waves.</p>
@@ -1183,7 +1183,7 @@
           <button id="altModeBeamPracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeSandboxCard">
-          <div class="altmode-card__icon">&#9881;</div>
+          <div class="altmode-card__icon" aria-hidden="true"><canvas class="altmode-card__icon-art" data-mode-icon="sandbox" width="44" height="44" aria-hidden="true"></canvas></div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">SANDBOX LAB</h3>
             <p class="altmode-card__desc">A visual game-hacking mode. Tune enemies, items, multipliers, and run wild in a full dungeon run.</p>
