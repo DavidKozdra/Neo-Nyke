@@ -19,12 +19,19 @@ const ENVIRONMENT_IMAGE_PATHS = {
 };
 
 export async function preloadEnvironmentImages() {
-  const loaded = await Promise.all(Object.entries(ENVIRONMENT_IMAGE_PATHS).map(([key, src]) => new Promise(resolve => {
+  const loadImage = (key, src) => new Promise(resolve => {
     const image = new Image();
     image.onload = () => resolve([key, { image, src }]);
     image.onerror = () => resolve([key, null]);
     image.src = src;
-  })));
+  });
+  const loaded = await Promise.all(Object.entries(ENVIRONMENT_IMAGE_PATHS).map(async ([key, src]) => {
+    let result = await loadImage(key, src);
+    // A service-worker handoff or transient network failure must not make a
+    // static room prop disappear for the rest of the session.
+    if (!result[1]) result = await loadImage(key, src);
+    return result;
+  }));
   Neo.ENVIRONMENT_IMAGES = Object.fromEntries(loaded.filter(([, asset]) => asset));
   return Neo.ENVIRONMENT_IMAGES;
 }
