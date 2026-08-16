@@ -20,13 +20,6 @@
     const centerY = height / 2;
     if (gameMode === 'boss_rush') return [];
     if (gameMode === 'story') return [{ type: 'crown', x: centerX, y: centerY }];
-    if (options.endlessDescent) {
-      return [
-        { type: 'crown', x: centerX - 200, y: centerY },
-        { type: 'descend', x: centerX, y: centerY },
-        { type: 'returnGate', x: centerX + 200, y: centerY },
-      ];
-    }
     return [
       { type: 'crown', x: centerX - 120, y: centerY },
       { type: 'returnGate', x: centerX + 120, y: centerY },
@@ -40,7 +33,6 @@
     if (choice === 'returnGate') {
       return { ok: true, action: gameMode === 'competitive' ? 'victory' : 'loop' };
     }
-    if (choice === 'descend' && options.endlessDescent) return { ok: true, action: 'descend' };
     return { ok: false, reason: 'INVALID_GOD_ENDGAME_CHOICE' };
   }
 

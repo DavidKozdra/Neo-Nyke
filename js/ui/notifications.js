@@ -500,7 +500,263 @@ const INVENTORY_UI_ICON_DEFS = {
     pixels: [[5,0],[5,1],[4,2],[4,3],[3,4],[2,5],[1,6],[0,7],[2,2],[3,3],[5,4],[6,5]],
     accentPixels: [[1,5],[2,6],[3,6],[2,7]],
   },
+
+  // --- Run modifier icons (mods panel) ---
+  // Each challenge, chaos mod and legacy upgrade gets a picture rather than the
+  // text abbreviation the panel used to show, so the mods panel reads like the
+  // item and shop screens. Keys are `mod-<defKey>`; the accent color is kept
+  // close to each def's own `accent` so the card frame and the art agree.
+  'mod-no_hit': { // struck heart with a crack through it
+    color: '#ff5c78',
+    accent: '#ffe0e6',
+    pixels: [[2,1],[3,1],[5,1],[6,1],[1,2],[7,2],[1,3],[7,3],[2,4],[6,4],[3,5],[5,5],[4,6]],
+    accentPixels: [[4,2],[3,3],[4,4],[3,5]],
+  },
+  'mod-no_items': { // relic orb struck through by a bar
+    color: '#7fd0ff',
+    accent: '#ffffff',
+    pixels: [[3,1],[4,1],[2,2],[5,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[6,1],[5,2],[4,3],[3,4],[2,5],[1,6]],
+  },
+  'mod-fragile_body': { // heart broken down the middle
+    color: '#f28b54',
+    accent: '#ffe3cd',
+    pixels: [[2,1],[3,1],[5,1],[6,1],[1,2],[7,2],[1,3],[7,3],[2,4],[6,4],[3,5],[5,5],[4,6]],
+    accentPixels: [[4,2],[3,3],[4,3],[3,4]],
+  },
+  'mod-swarm_rooms': { // three stacked enemy heads
+    color: '#9ce070',
+    accent: '#e6ffd6',
+    pixels: [[1,1],[2,1],[1,2],[2,2],[5,1],[6,1],[5,2],[6,2],[3,4],[4,4],[3,5],[4,5],[2,6],[5,6]],
+    accentPixels: [[1,1],[5,1],[3,4]],
+  },
+  'mod-elite_hunt': { // crown over a target
+    color: '#d8b0ff',
+    accent: '#f6ecff',
+    pixels: [[1,1],[3,1],[5,1],[1,2],[2,2],[3,2],[4,2],[5,2],[3,4],[2,5],[4,5],[1,6],[5,6],[3,7]],
+    accentPixels: [[3,1],[3,4]],
+  },
+  'mod-cursed_shops': { // coin marked with a curse cross
+    color: '#f0c85a',
+    accent: '#fff4d0',
+    pixels: [[2,1],[3,1],[4,1],[1,2],[5,2],[1,3],[5,3],[1,4],[5,4],[2,5],[3,5],[4,5]],
+    accentPixels: [[2,2],[4,2],[3,3],[2,4],[4,4]],
+  },
+  'mod-glass_cannon': { // cracked crystal shard
+    color: '#ff8dd2',
+    accent: '#ffe4f5',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[2,2],[5,2],[2,3],[5,3],[2,4],[5,4],[3,5],[4,5],[3,6],[4,6]],
+    accentPixels: [[4,1],[3,2],[4,3],[3,4]],
+  },
+  'mod-cursed_blood': { // dripping blood droplet
+    color: '#85df63',
+    accent: '#dcffcb',
+    pixels: [[4,0],[3,1],[4,1],[3,2],[4,2],[2,3],[5,3],[2,4],[5,4],[3,5],[4,5],[4,6],[4,7]],
+    accentPixels: [[3,3],[3,4]],
+  },
+  'mod-overcharged': { // lightning bolt
+    color: '#9adfff',
+    accent: '#ffffff',
+    pixels: [[4,0],[3,1],[4,1],[2,2],[3,2],[2,3],[3,3],[4,3],[5,3],[3,4],[4,4],[3,5],[2,6],[3,6]],
+    accentPixels: [[4,0],[3,3],[4,3]],
+  },
+  'mod-random_character': { // two swapped silhouettes
+    color: '#ff8dd2',
+    accent: '#ffe4f5',
+    pixels: [[1,1],[2,1],[1,2],[2,2],[1,3],[2,3],[5,4],[6,4],[5,5],[6,5],[5,6],[6,6],[3,2],[4,2],[3,5],[4,5]],
+    accentPixels: [[4,1],[4,2],[3,5],[3,6]],
+  },
+  'mod-random_loadout': { // four shuffled slot pips
+    color: '#7fd0ff',
+    accent: '#e4f6ff',
+    pixels: [[1,1],[2,1],[1,2],[2,2],[5,1],[6,1],[5,2],[6,2],[1,5],[2,5],[1,6],[2,6],[5,5],[6,5],[5,6],[6,6],[3,3],[4,3],[3,4],[4,4]],
+    accentPixels: [[3,3],[4,4]],
+  },
+  'mod-enemy_reincarnation': { // skull with a rebirth spark
+    color: '#9ce070',
+    accent: '#eaffdc',
+    pixels: [[2,1],[3,1],[4,1],[5,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[3,5],[4,5],[5,5],[2,6],[5,6]],
+    accentPixels: [[2,3],[5,3],[3,4],[4,4]],
+  },
+  'mod-random_enemy_levels': { // dice face
+    color: '#f0c85a',
+    accent: '#fff4d0',
+    pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[1,5],[6,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]],
+    accentPixels: [[2,2],[5,2],[3,3],[4,4],[2,5],[5,5]],
+  },
+  'mod-authored_first_floor': { // drafted floor plan grid
+    color: '#d8b0ff',
+    accent: '#f6ecff',
+    pixels: [[1,1],[2,1],[3,1],[1,2],[3,2],[1,3],[2,3],[3,3],[5,3],[6,3],[5,4],[6,4],[1,5],[2,5],[3,5],[1,6],[3,6]],
+    accentPixels: [[2,2],[5,3],[2,6]],
+  },
+  'mod-rival_bounty': { // coin purse with a bounty mark
+    color: '#ffd47a',
+    accent: '#fff4d0',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[4,2],[3,3],[4,3]],
+  },
+  'mod-elite_tracker': { // radar sweep with a blip
+    color: '#8dd4ff',
+    accent: '#e4f6ff',
+    pixels: [[3,0],[4,0],[1,1],[6,1],[0,3],[7,3],[0,4],[7,4],[1,6],[6,6],[3,7],[4,7],[3,3],[4,3],[3,4],[4,4]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mod-god_memory': { // scroll with a divine spark
+    color: '#e8c040',
+    accent: '#fff8cc',
+    pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[1,5],[6,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mod-bank_interest': { // stacked coins rising
+    color: '#ffd47a',
+    accent: '#fff4d0',
+    pixels: [[1,5],[2,5],[1,6],[2,6],[3,3],[4,3],[3,4],[4,4],[3,5],[4,5],[3,6],[4,6],[5,1],[6,1],[5,2],[6,2],[5,3],[6,3],[5,4],[6,4],[5,5],[6,5],[5,6],[6,6]],
+    accentPixels: [[5,1],[6,1],[3,3],[1,5]],
+  },
+  'mod-crystal_tithe': { // loop crystal with an offering plus
+    color: '#83f3ff',
+    accent: '#ffffff',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[4,2],[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mod-challenge_mastery': { // laurel-flanked star
+    color: '#ffb46b',
+    accent: '#fff1c6',
+    pixels: [[3,1],[4,1],[3,2],[4,2],[1,3],[2,3],[5,3],[6,3],[2,4],[5,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,1],[4,1],[3,2],[4,2]],
+  },
+  'mod-scroll_scholar': { // open scroll with text lines
+    color: '#b985ff',
+    accent: '#f2e6ff',
+    pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[1,5],[6,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]],
+    accentPixels: [[2,3],[3,3],[4,3],[2,4],[3,4],[4,4]],
+  },
+  'mod-first_light': { // sunrise rays over a horizon
+    color: '#ffe26b',
+    accent: '#fff8cc',
+    pixels: [[3,1],[4,1],[2,2],[5,2],[1,3],[6,3],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6]],
+    accentPixels: [[3,1],[4,1],[3,2],[4,2],[3,3],[4,3]],
+  },
+  'mod-voucher_economy': { // ticket voucher with a punch hole
+    color: '#79f7bf',
+    accent: '#dcfff0',
+    pixels: [[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[1,3],[6,3],[1,4],[6,4],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+
+  // --- Alternate game mode icons ---
+  // The alt-modes panel used single Unicode glyphs, several of which had nothing
+  // to do with the mode they sat on (a wheelchair sign for Treasure Hunt, a
+  // hammer-and-sickle for Multiplayer). These draw the mode instead. Keys are
+  // `mode-<slug>`, matching each card's data-mode-icon attribute.
+  'mode-seed_speed_run': { // stopwatch racing a seed
+    color: '#ffd15a',
+    accent: '#fff4d0',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[3,3],[4,3],[5,3]],
+  },
+  'mode-endless': { // infinity loop
+    color: '#8dd4ff',
+    accent: '#e4f6ff',
+    pixels: [[1,2],[2,2],[5,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[2,5],[5,5],[6,5]],
+    accentPixels: [[3,3],[4,4]],
+  },
+  'mode-boss_rush': { // horned boss skull
+    color: '#ff6f7f',
+    accent: '#ffe0e6',
+    pixels: [[0,1],[7,1],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[3,5],[4,5],[5,5],[2,6],[5,6]],
+    accentPixels: [[2,3],[5,3],[3,4],[4,4]],
+  },
+  'mode-rival_rumble': { // crossed duelling swords
+    color: '#d8b0ff',
+    accent: '#f6ecff',
+    pixels: [[0,0],[7,0],[1,1],[6,1],[2,2],[5,2],[3,3],[4,3],[3,4],[4,4],[2,5],[5,5],[1,6],[6,6],[0,7],[7,7]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mode-treasure_hunt': { // treasure chest with a keyhole
+    color: '#f0c85a',
+    accent: '#fff4d0',
+    pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[0,2],[7,2],[0,3],[7,3],[0,4],[7,4],[0,5],[7,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]],
+    accentPixels: [[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[3,4],[4,4]],
+  },
+  'mode-online': { // networked globe with orbit
+    color: '#79f7bf',
+    accent: '#dcfff0',
+    pixels: [[2,1],[3,1],[4,1],[5,1],[1,2],[6,2],[0,3],[7,3],[0,4],[7,4],[1,5],[6,5],[2,6],[3,6],[4,6],[5,6]],
+    accentPixels: [[3,1],[4,1],[0,3],[7,3],[3,6],[4,6]],
+  },
+  'mode-coop': { // two hearts side by side
+    color: '#ff9ccf',
+    accent: '#fff1f8',
+    pixels: [[0,1],[1,1],[3,1],[4,1],[5,1],[7,1],[0,2],[2,2],[3,2],[5,2],[7,2],[1,3],[6,3],[2,4],[5,4],[3,5],[4,5]],
+    accentPixels: [[1,1],[4,1]],
+  },
+  'mode-pvp': { // two fighters clashing
+    color: '#ff6f7f',
+    accent: '#ffe0e6',
+    pixels: [[1,0],[6,0],[2,1],[5,1],[3,2],[4,2],[2,3],[5,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[4,2],[3,6],[4,6]],
+  },
+  'mode-practice': { // target dummy on a stand
+    color: '#9adfff',
+    accent: '#e4f6ff',
+    pixels: [[2,0],[3,0],[4,0],[5,0],[1,1],[6,1],[1,2],[6,2],[2,3],[3,3],[4,3],[5,3],[3,4],[4,4],[3,5],[4,5],[2,6],[5,6]],
+    accentPixels: [[3,1],[4,1]],
+  },
+  'mode-challenge_practice': { // portal ring into a hub
+    color: '#b985ff',
+    accent: '#f2e6ff',
+    pixels: [[2,0],[3,0],[4,0],[5,0],[1,1],[6,1],[0,2],[7,2],[0,3],[7,3],[0,4],[7,4],[1,5],[6,5],[2,6],[3,6],[4,6],[5,6]],
+    accentPixels: [[3,2],[4,2],[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mode-beam_practice': { // charged beam firing right
+    color: '#83f3ff',
+    accent: '#ffffff',
+    pixels: [[1,2],[2,2],[1,3],[2,3],[1,4],[2,4],[1,5],[2,5],[3,3],[4,3],[5,3],[6,3],[7,3],[3,4],[4,4],[5,4],[6,4],[7,4]],
+    accentPixels: [[1,3],[2,3],[1,4],[2,4],[6,3],[7,3],[6,4],[7,4]],
+  },
+  'mode-sandbox': { // gear / tuning cog
+    color: '#93aabc',
+    accent: '#e8f7ff',
+    pixels: [[3,0],[4,0],[1,1],[3,1],[4,1],[6,1],[0,3],[1,3],[6,3],[7,3],[0,4],[1,4],[6,4],[7,4],[1,6],[3,6],[4,6],[6,6],[3,7],[4,7],[2,2],[5,2],[2,5],[5,5]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'mode-resume': { // play triangle
+    color: '#79f7bf',
+    accent: '#dcfff0',
+    pixels: [[2,1],[2,2],[3,2],[2,3],[3,3],[4,3],[2,4],[3,4],[4,4],[5,4],[2,5],[3,5],[4,5],[2,6],[3,6],[2,7]],
+    accentPixels: [[2,1],[2,7]],
+  },
 };
+
+// Alt-mode cards name their art with `data-mode-icon="<slug>"`; unknown slugs
+// fall back to the sandbox cog rather than rendering an empty frame.
+export function resolveModeIconKey(slug) {
+  const key = `mode-${slug}`;
+  return INVENTORY_UI_ICON_DEFS[key] ? key : 'mode-sandbox';
+}
+
+// Paints every alt-mode card canvas under a root. The cards are static HTML, so
+// unlike the mods panel this has to be called when the panel opens rather than
+// falling out of a re-render.
+export function drawModeIconCanvases(root = document) {
+  root?.querySelectorAll?.('[data-mode-icon]').forEach(canvas => {
+    if (typeof canvas.getContext !== 'function') return;
+    drawInventoryUiIcon(canvas, resolveModeIconKey(canvas.dataset.modeIcon));
+  });
+}
+
+// Maps a mods-panel def key to its pixel icon, falling back to a per-category
+// generic so a newly added mod still renders a picture before it gets bespoke
+// art. Used by the challenges/chaos/legacy panes.
+export function resolveModIconKey(defKey, category = 'challenge') {
+  const key = `mod-${defKey}`;
+  if (INVENTORY_UI_ICON_DEFS[key]) return key;
+  if (category === 'chaos') return 'mod-random_enemy_levels';
+  if (category === 'legacy') return 'mod-crystal_tithe';
+  return 'mod-elite_hunt';
+}
 
 export function drawInventoryUiIcon(canvas, iconKey) {
   const ctx2d = canvas.getContext('2d');
@@ -626,5 +882,8 @@ Neo.drawWeaponToastIcon = drawWeaponToastIcon;
 Neo.drawHealToastIcon = drawHealToastIcon;
 Neo.drawHazardKillerIcon = drawHazardKillerIcon;
 Neo.drawInventoryUiIcon = drawInventoryUiIcon;
+Neo.resolveModIconKey = resolveModIconKey;
+Neo.resolveModeIconKey = resolveModeIconKey;
+Neo.drawModeIconCanvases = drawModeIconCanvases;
 Neo.pushMoveNotification = pushMoveNotification;
 Neo.pushWeaponNotification = pushWeaponNotification;

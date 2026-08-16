@@ -4,7 +4,6 @@
   const MINOR_PACK_ENEMY_TYPES = new Set(['hunter', 'charger', 'laser', 'cult_follower']);
   const MINOR_PACK_RADIUS = 260;
   const MINOR_PACK_MAX_ALLIES = 3;
-  const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;
   const BULK_GOLEM_KNOCKBACK_MULTIPLIER = Number(
     globalThis.NeoNyke?.simulation?.BULK_GOLEM_KNOCKBACK_MULTIPLIER || 3,
   );
@@ -665,51 +664,21 @@
     if (profile.eliteCrit !== undefined) enemy.eliteCrit = profile.eliteCrit;
   }
 
-  function softCapEnemyScale(value, cap, curve = 0.35) {
-    const numericValue = Math.max(1, Number(value) || 1);
-    const numericCap = Math.max(1, Number(cap) || 1);
-    if (numericValue <= numericCap) return numericValue;
-    return numericCap + Math.sqrt(numericValue - numericCap) * curve;
-  }
-
-  function getEnemyLevelStatMultipliers(level) {
-    const levelsAboveFive = Math.max(0, Math.floor(Number(level || 1)) - 5);
-    if (levelsAboveFive <= 0) return { hp: 1, damage: 1, speed: 1, attackSpeed: 1 };
-    // HP earns one "credit" every 3 levels, not one per level. Enemy level is
-    // max(floorDepth, playerLevel), so a high-level player hitting a fresh loop's
-    // floor 1 used to inherit their FULL level as a per-level HP bonus — a Lv40
-    // player faced ~16.75x level HP before elite Knight/Giant/inventory stacks
-    // multiplied it into 100k+ sponges. Throttling to a credit per 3 levels keeps
-    // the bonus meaningful (Lv40 -> ~6.1x) without letting level alone run away;
-    // depth/loop still own the rest of the curve. Only HP is throttled — damage,
-    // speed, and attack speed keep their own separately-tuned per-level curves.
-    const hpCredits = Math.floor(levelsAboveFive / 3);
-    return {
-      // Small LINEAR bonus per HP credit (levelHpBonus per credit above level 5).
-      // Tune slope via ENEMY_SCALING.levelHpBonus, cadence via the /3 above.
-      hp: 1 + hpCredits * (Neo.ENEMY_SCALING.levelHpBonus ?? 0.15),
-      damage: Math.pow(1.14, levelsAboveFive),
-      speed: Math.min(1.35, Math.pow(1.025, levelsAboveFive)),
-      attackSpeed: Math.min(2.25, Math.pow(1.07, levelsAboveFive)),
-    };
-  }
-
-  function getBossLevelHpMultiplier(level, difficulty = Neo.getDifficultyDef()) {
-    const levelsAboveOne = Math.max(0, Math.floor(Number(level || 1)) - 1);
-    const difficultyGrowth = Math.max(0.25, Number(difficulty?.bossHpGrowthMultiplier ?? 1));
-    const perLevelRate = Math.max(0, Number(Neo.ENEMY_SCALING.bossLevelHpRate ?? 0.055)) * difficultyGrowth;
-    const compounded = Math.pow(1 + perLevelRate, levelsAboveOne);
-    return softCapEnemyScale(
-      compounded,
-      Neo.ENEMY_SCALING.bossLevelHpSoftCap ?? 3.25,
-      Neo.ENEMY_SCALING.bossLevelHpSoftCapCurve ?? 0.55,
-    );
-  }
 
   // Encounter level is cumulative-floor pressure plus a small deterministic XP
   // roll from elapsed run time. Time grants XP, not raw levels, so slow runs get
   // variation without suddenly jumping dozens of levels.
   function rollEnemyEncounterLevel(baseLevel) {
+    // Lottery Levels severs the depth-to-level link entirely: the roll spans the
+    // whole range every time, so a floor-1 room can hold a level-20 enemy and a
+    // floor-9 room can hold a level-1 one.
+    if (Neo.isChaosActive?.('random_enemy_levels')) {
+      const chaosLevel = globalThis.NeoNyke?.simulation?.rollChaosEnemyLevel?.({
+        progressionDepth: getProgressionDepth(),
+        random: () => Neo.nextRandom('encounter'),
+      });
+      if (Number.isFinite(Number(chaosLevel))) return Math.max(1, Math.trunc(Number(chaosLevel)));
+    }
     let level = Math.max(1, Math.floor(Number(baseLevel || 1)));
     let xp = Neo.nextRandom('encounter') * Math.max(0, Neo.gameElapsedTime / 60) * 8;
     while (xp >= 8 + level * 2) {
@@ -732,12 +701,6 @@
   Neo.getBossTier = getBossTier;
   Neo.getBossStatusStacks = getBossStatusStacks;
 
-  function getBossTimeHpMultiplier(gameMinutes, difficulty = Neo.getDifficultyDef()) {
-    const minutes = Math.max(0, Number(gameMinutes || 0));
-    const difficultyGrowth = Math.max(0.25, Number(difficulty?.bossHpGrowthMultiplier ?? 1));
-    const perMinuteRate = Math.max(0, Number(Neo.ENEMY_SCALING.bossHpMinute ?? 0.055)) * difficultyGrowth;
-    return 1 + minutes * perMinuteRate;
-  }
 
   // Cumulative floor depth that drives enemy scaling: the number of floors the
   // player has actually entered this run (across loops, excluding skipped floors).
@@ -775,100 +738,37 @@
   }
 
   function scaleEnemyStats(baseStats, type) {
-    const result = { ...baseStats };
-    const sandbox = Neo.getActiveSandboxSettings();
-    const difficulty = Neo.getDifficultyDef();
-    const gameMinutes = Neo.gameElapsedTime / 60;
-    // Scale off the cumulative number of floors the player has entered this run
-    // (floorsEntered), not the raw `floor` — `floor` resets to 1 every loop, which
-    // would make enemies weak again after each loop. floorsEntered keeps climbing
-    // and ignores skipped floors. The floor component must stay cumulative across
-    // loop boundaries; loop multipliers remain as additional late-run pressure.
-    const progressionDepth = getProgressionDepth();
-    const enemyLevel = Math.max(1, Number(baseStats?.level || progressionDepth));
-    const isBoss = isBossType(type);
-    const levelMultipliers = isBoss
-      ? {
-        hp: getBossLevelHpMultiplier(enemyLevel, difficulty),
-        damage: type === 'god' ? 1 : softCapEnemyScale(Math.pow(1.05, Math.max(0, enemyLevel - 1)), 2.15, 0.22),
-        speed: 1,
-        attackSpeed: type === 'god' ? 1 : Math.min(1.35, Math.pow(1.02, Math.max(0, enemyLevel - 1))),
-      }
-      : getEnemyLevelStatMultipliers(enemyLevel);
-    const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
-    const floorsCleared = progressionDepth - 1;
-    // Harder difficulties steepen the per-floor HP slope (not just the flat
-    // statMultiplier below), so enemies gain more HP each floor as difficulty rises.
-    const hpFloorRate = Neo.ENEMY_SCALING.floor + (difficulty.hpFloorScaleBonus ?? 0);
-    const floorMultiplier = 1 + floorsCleared * hpFloorRate;
-    // Normal-enemy HP loop scaling uses a concave (diminishing-returns) curve
-    // instead of a flat per-loop slope: the first loop adds a gentler bump and
-    // each subsequent loop contributes progressively less, so deep loops don't
-    // balloon HP the way the old linear `loop * (loopNumber - 1)` ramp did.
-    // Bosses keep their dedicated linear bossLoopHp boost on top of this.
-    const loopMultiplier = 1
-      + Neo.ENEMY_SCALING.loop * Math.pow(Math.max(0, loopNumber - 1), Neo.ENEMY_SCALING.loopHpCurve ?? 1);
-    // Normal enemies do not gain HP from the clock because floor traversal already
-    // owns that curve. Bosses are the exception: their dedicated clock multiplier
-    // keeps a late arrival durable enough for the player's accumulated build.
-    const difficultyMultiplier = isBoss ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
-    const bossTimeHpMultiplier = isBoss ? getBossTimeHpMultiplier(gameMinutes, difficulty) : 1;
-    // Endless mode: enemies "level up" with each wave. The wave the current
-    // enemies belong to is endlessWave + 1 (endlessWave counts cleared waves).
-    // Outside endless mode this collapses to 1 and changes nothing.
-    const endlessWaveIndex = Neo.gameMode === 'endless' ? Math.max(0, Number(Neo.endlessWave || 0)) : 0;
-    const endlessHpMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveHp;
-    const endlessDamageMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveDamage;
-    const endlessSpeedMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveSpeed;
-    // Bosses get an extra per-loop boost on top of the generic loop scaling above.
-    // HP folds into hpScale (no cap); damage is applied after the soft cap below so
-    // it always contributes full value. Non-bosses and loop 1 collapse to 1.
-    const bossLoopHpMultiplier = isBoss
-      ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopHp ?? 0)
-      : 1;
-    const bossLoopDamageMultiplier = isBoss
-      ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopDamage ?? 0)
-      : 1;
-    const hpScale = floorMultiplier * loopMultiplier * difficultyMultiplier * endlessHpMultiplier
-      * bossLoopHpMultiplier * bossTimeHpMultiplier;
-    const damageFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
-    const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
-    // Time -> damage is the clock's main lever now, with a steeper slope than
-    // before. It's soft-capped on its OWN before combining with floor/loop/diff
-    // so a slow player's enemies plateau in damage instead of climbing forever.
-    const damageTimerMultiplier = softCapEnemyScale(
-      1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? 0.085),
-      Neo.ENEMY_SCALING.damageTimeSoftCap ?? 1.9,
-      0.3
-    );
-    const damageSoftCap = isBoss
-      ? (Neo.ENEMY_SCALING.bossDamageSoftCap ?? 2.45)
-      : (Neo.ENEMY_SCALING.damageSoftCap ?? 2.15);
-    const damageScale = softCapEnemyScale(
-      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier * endlessDamageMultiplier,
-      endlessWaveIndex > 0 ? Math.max(damageSoftCap, Neo.ENEMY_SCALING.endlessWaveDamageSoftCap) : damageSoftCap,
-      isBoss ? 0.38 : 0.34
-    ) * bossLoopDamageMultiplier;
-    const speedFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
-    const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
-    const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);
-    const speedScale = softCapEnemyScale(
-      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier * endlessSpeedMultiplier,
-      endlessWaveIndex > 0 ? Math.max(Neo.ENEMY_SCALING.speedSoftCap ?? 1.38, Neo.ENEMY_SCALING.endlessWaveSpeedSoftCap) : (Neo.ENEMY_SCALING.speedSoftCap ?? 1.38),
-      0.16
-    );
-    result.hp = Math.max(1, Math.round(result.hp * hpScale * levelMultipliers.hp * ENEMY_UNIVERSAL_STAT_MULTIPLIER));
-    result.max = result.hp;
-    result.dmg = Math.max(1, Math.round(result.dmg * damageScale * levelMultipliers.damage * ENEMY_UNIVERSAL_STAT_MULTIPLIER));
-    result.speed *= speedScale * levelMultipliers.speed * ENEMY_UNIVERSAL_STAT_MULTIPLIER;
-    result.enemyLevelAttackSpeedMultiplier = levelMultipliers.attackSpeed;
-    if (sandbox) {
-      result.hp = Math.max(1, Math.round(result.hp * sandbox.enemyStatMultiplier));
-      result.max = result.hp;
-      result.dmg = Math.max(1, Math.round(result.dmg * sandbox.enemyStatMultiplier));
-      result.speed *= sandbox.enemySpeedMultiplier;
+    const sharedScaleEnemyStats = globalThis.NeoNyke?.simulation?.scaleCampaignEnemyStats;
+    if (typeof sharedScaleEnemyStats !== 'function') {
+      throw new Error('Shared campaign enemy scaling is unavailable');
     }
-    return result;
+    const scaled = sharedScaleEnemyStats({
+      ...baseStats,
+      maxHealth: baseStats.max,
+      health: baseStats.hp,
+      contactDamage: baseStats.dmg,
+      moveSpeed: baseStats.speed,
+    }, {
+      type,
+      isBoss: isBossType(type),
+      progressionDepth: getProgressionDepth(),
+      enemyLevel: baseStats.level,
+      elapsedSeconds: Neo.gameElapsedTime,
+      gameMode: Neo.gameMode,
+      endlessWave: Neo.endlessWave,
+      maxFloor: Neo.MAX_FLOOR,
+      difficulty: Neo.getDifficultyDef(),
+      scaling: Neo.ENEMY_SCALING,
+      sandbox: Neo.getActiveSandboxSettings(),
+    });
+    return {
+      ...baseStats,
+      hp: scaled.maxHealth,
+      max: scaled.maxHealth,
+      dmg: scaled.contactDamage,
+      speed: scaled.moveSpeed,
+      enemyLevelAttackSpeedMultiplier: scaled.enemyLevelAttackSpeedMultiplier,
+    };
   }
 
   function getGodRunPressure(elapsedSeconds = Neo.gameElapsedTime) {
@@ -1858,6 +1758,7 @@
       floorNumber: Neo.floor, centerX: Neo.ROOM_W / 2, centerY: Neo.ROOM_H / 2,
       authoredRewardKey: authoredRewardKey || Neo.currentRoom.challengeData?.rewardKey,
       random: rewardRandom, scrollRandom, rollScroll: Neo.rollScrollOfControl,
+      scrollChanceMultiplier: Neo.hasLegacy?.('scroll_scholar') ? 1.5 : 1,
       rollEliteItem: random => Neo.rollItemDrop({ elite: true, random }),
       weaponPool, ownedWeapons: Neo.player?.ownedWeapons || {}, weaponRandom,
     });
@@ -5469,7 +5370,7 @@
   Neo.rollBlessedEliteInventory = rollBlessedEliteInventory;
   Neo.rollEliteTypes = rollEliteTypes;
   Neo.applyEliteTypes = applyEliteTypes;
-  Neo.getEnemyLevelStatMultipliers = getEnemyLevelStatMultipliers;
+  Neo.getEnemyLevelStatMultipliers = globalThis.NeoNyke.simulation.getEnemyLevelStatMultipliers;
   Neo.scaleEnemyStats = scaleEnemyStats;
   Neo.spawnEnemy = spawnEnemy;
   Neo.makeGellehTurret = makeGellehTurret;

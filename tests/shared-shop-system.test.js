@@ -5,6 +5,158 @@ const { WEAPON_PROJECTILE_ATTACKS } = require('../js/simulation/SharedCombatCont
 const fs = require('fs');
 const path = require('path');
 
+const panelSource = fs.readFileSync(path.join(__dirname, '../js/ui/panels.js'), 'utf8');
+
+function createShopPanelHarness({ networkActive = true } = {}) {
+  class TestElement {
+    constructor() {
+      this.dataset = {};
+      this.textContent = '';
+      this.childElementCount = 0;
+      this.classList = {
+        contains: jest.fn(() => false),
+        toggle: jest.fn(),
+        add: jest.fn(),
+        remove: jest.fn(),
+      };
+    }
+
+    set innerHTML(value) {
+      this._innerHTML = String(value);
+      this.childElementCount = this._innerHTML ? 1 : 0;
+    }
+
+    get innerHTML() {
+      return this._innerHTML || '';
+    }
+
+    querySelectorAll() {
+      return [];
+    }
+
+    querySelector() {
+      return null;
+    }
+
+    closest() {
+      return this;
+    }
+  }
+
+  const room = {
+    id: 'authority-shop',
+    type: 'shop',
+    shopStocked: true,
+    shopOffers: [{ id: 'authority:item:0', type: 'item', key: 'iron_lung', cost: 731, bought: false }],
+    shopMoveOffers: [{ id: 'authority:move:0', type: 'move', key: 'dash', cost: 509, bought: false }],
+    shopWeaponOffers: [{ id: 'authority:weapon:0', type: 'weapon', key: 'neo_blade', cost: 887, bought: false }],
+    shopTradeOffer: {
+      id: 'authority:trade',
+      type: 'trade',
+      key: 'authority_prize',
+      costKeys: ['iron_lung', 'tough_bandaid'],
+      unavailable: false,
+      bought: false,
+    },
+  };
+  const refreshRoomShopCosts = jest.fn(targetRoom => {
+    [
+      ...(targetRoom.shopOffers || []),
+      ...(targetRoom.shopMoveOffers || []),
+      ...(targetRoom.shopWeaponOffers || []),
+    ].forEach(offer => { offer.cost = 42; });
+  });
+  const ensureShopHasMinimumItemOffers = jest.fn();
+  const ensureShopTradeOffer = jest.fn(targetRoom => targetRoom.shopTradeOffer);
+  const sendShopPurchase = jest.fn();
+  const purchaseCampaignShop = jest.fn(() => ({ ok: true }));
+  const ui = {
+    shopPanel: new TestElement(),
+    shopCoins: new TestElement(),
+    shopItems: new TestElement(),
+    shopWeapons: new TestElement(),
+    shopMoves: new TestElement(),
+    shopTrades: new TestElement(),
+    shopHeals: new TestElement(),
+    shopTabs: ['items', 'weapons', 'moves', 'trades', 'heals'].map(tab => {
+      const element = new TestElement();
+      element.dataset.tab = tab;
+      return element;
+    }),
+  };
+  const Neo = {
+    ui,
+    player: {
+      coins: 1000,
+      hp: 100,
+      maxHp: 100,
+      items: { iron_lung: 1, tough_bandaid: 1 },
+      ownedMoves: {},
+      ownedWeapons: {},
+      equippedMoves: {},
+    },
+    currentRoom: room,
+    shopOffers: room.shopOffers,
+    activeShopTab: 'items',
+    multiplayerGameView: { active: networkActive },
+    gameSession: { sendShopPurchase },
+    isShopRoomActive: jest.fn(() => true),
+    refreshRoomShopCosts,
+    ensureShopHasMinimumItemOffers,
+    ensureShopTradeOffer,
+    refreshShopVoucherBanner: jest.fn(),
+    isChallengeActive: jest.fn(() => false),
+    itemRegistry: new Map([
+      ['iron_lung', { name: 'Iron Lung', rarity: 'knight', category: 'relic', description: 'Authority item.' }],
+      ['tough_bandaid', { name: 'Tough Bandaid', rarity: 'knight', category: 'relic' }],
+      ['authority_prize', { name: 'Authority Prize', rarity: 'wizard', category: 'relic' }],
+    ]),
+    ITEM_DEFS: {},
+    MOVE_DEFS: { dash: { name: 'Dash', slot: 'dash', desc: 'Authority move.' } },
+    MOVE_BASE_STATS: {},
+    WEAPON_DEFS: { neo_blade: { name: 'Neo Blade', rarity: 'knight', description: 'Authority weapon.' } },
+    WEAPON_BASE_STATS: {},
+    SLOT_LABELS: { dash: 'Dash' },
+    VOUCHER_TYPES: [],
+    getActiveBuildTags: jest.fn(() => []),
+    getRarityNameColor: jest.fn(() => '#ffffff'),
+    getRarityDisplayName: jest.fn(value => value),
+    drawItemIconCanvases: jest.fn(),
+  };
+  const windowObject = {
+    addEventListener: jest.fn(),
+    achievementEvents: { emit: jest.fn() },
+  };
+  const documentObject = {
+    addEventListener: jest.fn(),
+    getElementById: jest.fn(() => null),
+    activeElement: null,
+    hidden: false,
+  };
+  const globalObject = { NeoNyke: { simulation: { purchaseCampaignShop } } };
+  const source = panelSource.replace(/\bexport\s+/g, '');
+  const api = new Function(
+    'Neo',
+    'window',
+    'document',
+    'Element',
+    'HTMLElement',
+    'globalThis',
+    `${source}; return { getShopMoveOffers, getShopWeaponOffers, renderShopPanel, handleShopBuyClick };`,
+  )(Neo, windowObject, documentObject, TestElement, TestElement, globalObject);
+  return {
+    ...api,
+    Neo,
+    room,
+    TestElement,
+    refreshRoomShopCosts,
+    ensureShopHasMinimumItemOffers,
+    ensureShopTradeOffer,
+    sendShopPurchase,
+    purchaseCampaignShop,
+  };
+}
+
 describe('shared complete campaign shop', () => {
   test('stocks every campaign offer family from one deterministic operation', () => {
     const state = { floorNumber: 7, elapsedSeconds: 0, matchRules: {} };
@@ -60,5 +212,53 @@ describe('shared complete campaign shop', () => {
     expect(panels).toContain('globalThis.NeoNyke?.simulation?.purchaseCampaignShop');
     expect(panels).not.toContain('Neo.player.ownedMoves[offer.key] = true');
     expect(panels).not.toContain('Neo.player.ownedWeapons[offer.key] = true');
+  });
+
+  test('multiplayer shop rendering and reads preserve every authority-projected offer', () => {
+    const harness = createShopPanelHarness({ networkActive: true });
+    const authorityStock = JSON.parse(JSON.stringify(harness.room));
+    const moveOffers = harness.room.shopMoveOffers;
+    const weaponOffers = harness.room.shopWeaponOffers;
+
+    expect(harness.getShopMoveOffers()).toBe(moveOffers);
+    expect(harness.getShopWeaponOffers()).toBe(weaponOffers);
+    harness.renderShopPanel();
+    expect(harness.Neo.ui.shopItems.innerHTML).toContain('731');
+
+    harness.Neo.activeShopTab = 'trades';
+    harness.renderShopPanel();
+    expect(harness.Neo.ui.shopTrades.innerHTML).toContain('Authority Prize');
+
+    expect(harness.room).toEqual(authorityStock);
+    expect(harness.ensureShopHasMinimumItemOffers).not.toHaveBeenCalled();
+    expect(harness.ensureShopTradeOffer).not.toHaveBeenCalled();
+    expect(harness.refreshRoomShopCosts).not.toHaveBeenCalled();
+  });
+
+  test('the non-network shop read and render path still runs campaign stock and cost refreshes', () => {
+    const harness = createShopPanelHarness({ networkActive: false });
+
+    expect(harness.getShopMoveOffers()[0].cost).toBe(42);
+    expect(harness.getShopWeaponOffers()[0].cost).toBe(42);
+    harness.renderShopPanel();
+    expect(harness.Neo.ui.shopItems.innerHTML).toContain('42');
+    harness.Neo.activeShopTab = 'trades';
+    harness.renderShopPanel();
+
+    expect(harness.ensureShopHasMinimumItemOffers).toHaveBeenCalledTimes(2);
+    expect(harness.ensureShopTradeOffer).toHaveBeenCalledTimes(1);
+    expect(harness.refreshRoomShopCosts).toHaveBeenCalledTimes(4);
+  });
+
+  test('multiplayer shop purchase clicks still route to the authority', () => {
+    const harness = createShopPanelHarness({ networkActive: true });
+    const button = new harness.TestElement();
+    button.dataset.kind = 'weapon';
+    button.dataset.index = '0';
+
+    harness.handleShopBuyClick({ target: button });
+
+    expect(harness.sendShopPurchase).toHaveBeenCalledWith('weapon', { offerIndex: 0 });
+    expect(harness.purchaseCampaignShop).not.toHaveBeenCalled();
   });
 });

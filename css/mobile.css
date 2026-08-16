@@ -305,6 +305,13 @@
 
   .challenge-btn { grid-template-columns: 38px minmax(0, 1fr); gap: 9px; }
   .challenge-btn__icon { width: 34px; height: 34px; font-size: calc(11px * var(--font-scale, 1)); }
+  /* Mod cards carry a pixel-icon canvas rather than a text glyph, so both the
+     frame and the canvas inside it have to shrink together. */
+  .mod-card { grid-template-columns: 40px minmax(0, 1fr); gap: 9px; }
+  .mod-card__icon-frame { width: 38px; height: 38px; }
+  .mod-card__icon { width: 32px; height: 32px; }
+  .mod-card__buy,
+  .mod-card__toggle { padding: 6px 8px; }
   .meta-info-summary { grid-template-columns: 1fr; }
   .meta-crystal-overview {
     grid-template-columns: 42px minmax(0, 1fr);

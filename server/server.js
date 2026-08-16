@@ -2,6 +2,7 @@ import '../js/simulation/RandomService.js';
 import '../js/simulation/SharedCombatContent.js';
 import '../js/simulation/SharedMoveContent.js';
 import '../js/simulation/SharedEnemyContent.js';
+import '../js/simulation/SharedEnemyScalingSystem.js';
 import '../js/simulation/SharedRivalSystem.js';
 import '../js/simulation/SharedItemContent.js';
 import '../js/simulation/SharedEndgameSystem.js';

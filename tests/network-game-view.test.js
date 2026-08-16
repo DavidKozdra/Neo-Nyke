@@ -520,23 +520,30 @@ describe('network multiplayer game view', () => {
     view.stop();
   });
 
-  test('hides every gameplay HUD layer when a multiplayer view returns to the menu', () => {
+  test('keeps legacy HUD layers hidden while preserving contextual network widgets', () => {
     const hudLayerIds = [
       'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
       'coinDisplay', 'centerDisplay', 'objectiveTracker', 'entityDialogueLayer',
       'interactPrompt', 'endlessHud', 'bossRushHud', 'practicePanel',
     ];
-    const makeElement = (classNames = []) => {
-      const classes = new Set(classNames);
-      const attributes = new Map();
+    const persistentNetworkLayerDisplays = {
+      actionBar: '',
+      equipmentSlots: '',
+      playerStats: '',
+      coinDisplay: 'flex',
+      centerDisplay: '',
+    };
+    const makeElement = () => {
+      const classes = new Set(['hidden']);
+      const attributes = new Map([['aria-hidden', 'true']]);
       return {
         classList: {
           add: name => classes.add(name),
-          remove: name => classes.delete(name),
+          remove: (...names) => names.forEach(name => classes.delete(name)),
           contains: name => classes.has(name),
           toggle: (name, force) => (force === false ? classes.delete(name) : classes.add(name)),
         },
-        style: { display: '' },
+        style: { display: 'none' },
         setAttribute: (name, value) => attributes.set(name, String(value)),
         getAttribute: name => attributes.get(name) ?? null,
         removeAttribute: name => attributes.delete(name),
@@ -545,27 +552,72 @@ describe('network multiplayer game view', () => {
       };
     };
     const elements = Object.fromEntries(hudLayerIds.map(id => [id, makeElement()]));
-    elements.start = makeElement(['hidden']);
+    elements.start = makeElement();
     elements.c3d = makeElement();
     const fakeDocument = {
       getElementById: id => elements[id] || null,
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
     };
+    const updateHud = jest.fn(() => {
+      // Model a campaign refresh trying to expose the retired layer while
+      // independently owned contextual prompt and dialogue layers are visible.
+      elements.hud.classList.remove('hidden');
+      elements.hud.style.display = 'flex';
+      elements.interactPrompt.classList.remove('hidden');
+      elements.interactPrompt.setAttribute('aria-hidden', 'false');
+      elements.entityDialogueLayer.classList.remove('hidden');
+      elements.entityDialogueLayer.style.display = 'block';
+      elements.entityDialogueLayer.setAttribute('aria-hidden', 'false');
+    });
     const view = new NetworkGameView({
-      session: {},
-      neo: { gameState: 'menu', setGameState: jest.fn() },
+      session: {
+        playerId: 'p1',
+        subscribe: () => () => {},
+        snapshot: () => ({}),
+      },
+      neo: {
+        canvas: {},
+        ctx: {},
+        gameState: 'menu',
+        loopStarted: true,
+        setGameState: jest.fn(),
+        updateHud,
+      },
+      canvas: {},
+      context: {},
       document: fakeDocument,
     });
-    view.active = true;
+
+    view.start();
+    expect(elements.hud.classList.contains('hidden')).toBe(true);
+    expect(elements.hud.style.display).toBe('none');
+    Object.entries(persistentNetworkLayerDisplays).forEach(([id, display]) => {
+      expect(elements[id].classList.contains('hidden')).toBe(false);
+      expect(elements[id].style.display).toBe(display);
+    });
+
+    view._updateHud({}, { p1: {} });
+    view._updateHud({}, { p1: {} });
+
+    expect(updateHud).toHaveBeenCalledTimes(2);
+    expect(elements.hud.classList.contains('hidden')).toBe(true);
+    expect(elements.hud.style.display).toBe('none');
+    expect(elements.hud.getAttribute('aria-hidden')).toBe('true');
+    expect(elements.objectiveTracker.classList.contains('hidden')).toBe(true);
+    expect(elements.objectiveTracker.style.display).toBe('none');
+    expect(elements.interactPrompt.classList.contains('hidden')).toBe(false);
+    expect(elements.interactPrompt.style.display).toBe('');
+    expect(elements.entityDialogueLayer.classList.contains('hidden')).toBe(false);
+    expect(elements.entityDialogueLayer.style.display).toBe('');
+    expect(elements.entityDialogueLayer.getAttribute('aria-hidden')).toBe('false');
 
     view.stop();
 
     hudLayerIds.forEach(id => {
-      const layer = elements[id];
-      expect(layer.classList.contains('hidden')).toBe(true);
-      expect(layer.style.display).toBe('none');
-      expect(layer.getAttribute('aria-hidden')).toBe('true');
+      expect(elements[id].classList.contains('hidden')).toBe(true);
+      expect(elements[id].style.display).toBe('none');
+      expect(elements[id].getAttribute('aria-hidden')).toBe('true');
     });
     expect(elements.start.classList.contains('hidden')).toBe(false);
   });
@@ -826,6 +878,82 @@ describe('network multiplayer game view', () => {
     expect(neo.currentRoom.cleared).toBe(true);
   });
 
+  test('projects an unused Portal Chamber through the campaign pictured-choice preparation API', () => {
+    const prepareSpecialRoom = jest.fn(room => {
+      room.pickups = (room.pickups || []).filter(pickup => pickup.type !== 'specialChoice');
+      if (room.type !== 'portal') return false;
+      if (!room.serviceUsed) {
+        room.pickups.push(
+          { x: 312, y: 392, type: 'specialChoice', serviceType: 'portal', choiceId: 'threshold' },
+          { x: 450, y: 322, type: 'specialChoice', serviceType: 'portal', choiceId: 'vault' },
+          { x: 588, y: 392, type: 'specialChoice', serviceType: 'portal', choiceId: 'descend' },
+        );
+      }
+      return true;
+    });
+    const sendGameCommand = jest.fn();
+    const neo = { prepareSpecialRoom };
+    const view = new NetworkGameView({ session: { sendGameCommand }, neo });
+    const floorState = {
+      currentRoomId: 'portal-room',
+      visitedRoomIds: ['portal-room'],
+      layout: {
+        floorNumber: 4,
+        rooms: [{ id: 'portal-room', type: 'portal', serviceUsed: false }],
+      },
+    };
+
+    view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
+
+    const choices = neo.pickups.filter(pickup => pickup.type === 'specialChoice');
+    expect(prepareSpecialRoom).toHaveBeenCalledWith(neo.currentRoom);
+    expect(choices).toHaveLength(3);
+    expect(choices).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        roomId: 'portal-room', x: 450, y: 322, serviceType: 'portal', choiceId: 'vault',
+      }),
+    ]));
+    expect(new Set(choices.map(choice => choice.id))).toHaveProperty('size', 3);
+    expect(sendGameCommand).not.toHaveBeenCalled();
+  });
+
+  test('drops client choice anchors on room change and does not restore a consumed room', () => {
+    const prepareSpecialRoom = jest.fn(room => {
+      room.pickups = (room.pickups || []).filter(pickup => pickup.type !== 'specialChoice');
+      if (room.type !== 'portal') return false;
+      if (!room.serviceUsed) {
+        room.pickups.push(
+          { x: 312, y: 392, type: 'specialChoice', serviceType: 'portal', choiceId: 'threshold' },
+          { x: 450, y: 322, type: 'specialChoice', serviceType: 'portal', choiceId: 'vault' },
+          { x: 588, y: 392, type: 'specialChoice', serviceType: 'portal', choiceId: 'descend' },
+        );
+      }
+      return true;
+    });
+    const neo = { prepareSpecialRoom };
+    const view = new NetworkGameView({ session: {}, neo });
+    const portal = { id: 'portal-room', type: 'portal', serviceUsed: false };
+    const ordinary = { id: 'combat-room', type: 'combat' };
+    const floorState = {
+      currentRoomId: portal.id,
+      visitedRoomIds: [portal.id, ordinary.id],
+      layout: { floorNumber: 4, rooms: [portal, ordinary] },
+    };
+
+    view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
+    expect(neo.pickups.filter(pickup => pickup.type === 'specialChoice')).toHaveLength(3);
+
+    floorState.currentRoomId = ordinary.id;
+    view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
+    expect(neo.pickups.filter(pickup => pickup.type === 'specialChoice')).toEqual([]);
+
+    portal.serviceUsed = true;
+    floorState.currentRoomId = portal.id;
+    view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
+    expect(neo.currentRoom.serviceUsed).toBe(true);
+    expect(neo.pickups.filter(pickup => pickup.type === 'specialChoice')).toEqual([]);
+  });
+
   // The protocol never sends vx/vy, but every movement animation in
   // drawActorSprite is gated on hypot(vx, vy). Without a derived velocity,
   // networked heroes slide across the floor in a permanent idle pose.
@@ -957,6 +1085,33 @@ describe('network multiplayer game view', () => {
     expect(Object.values(local.statuses).every(state => state.stacks === 0)).toBe(true);
   });
 
+  test('publishes every connected player to the minimap across room changes', () => {
+    const neo = {};
+    const view = new NetworkGameView({ session: {}, neo });
+    const players = {
+      p1: { id: 'p1', roomId: 'r1', x: 10, y: 10, action: 'idle' },
+      p2: { id: 'p2', roomId: 'r2', x: 50, y: 50, action: 'idle', color: '#58a6ff' },
+    };
+
+    view._syncCampaignPresentationEntities(players, {}, 'p1', { tick: 1 }, 1 / 60, 'r1');
+
+    expect(view.presentationPlayerSlots.map(slot => slot.id)).toEqual(['p1']);
+    expect(neo.multiplayerMapPlayerSlots.map(slot => slot.id)).toEqual(['p1', 'p2']);
+    expect(neo.multiplayerMapPlayerSlots.find(slot => slot.id === 'p2').getEntity().roomId).toBe('r2');
+
+    players.p2.roomId = 'r3';
+    view._syncCampaignPresentationEntities(players, {}, 'p1', { tick: 2 }, 1 / 60, 'r1');
+    expect(neo.multiplayerMapPlayerSlots.find(slot => slot.id === 'p2').getEntity().roomId).toBe('r3');
+
+    players.p2.disconnected = true;
+    view._syncCampaignPresentationEntities(players, {}, 'p1', { tick: 3 }, 1 / 60, 'r1');
+    expect(neo.multiplayerMapPlayerSlots.map(slot => slot.id)).toEqual(['p1']);
+
+    delete players.p2;
+    view._syncCampaignPresentationEntities(players, {}, 'p1', { tick: 4 }, 1 / 60, 'r1');
+    expect(neo.multiplayerMapPlayerSlots.map(slot => slot.id)).toEqual(['p1']);
+  });
+
   test('projects the authoritative held charge into the existing local charge meter', () => {
     const neo = { DEATH_BALL_MAX_CHARGE: 5 };
     const view = new NetworkGameView({ session: {}, neo });
@@ -977,23 +1132,163 @@ describe('network multiplayer game view', () => {
   });
 
   test('projects authority-owned shop stock into the normal campaign shop UI state', () => {
-    const neo = {};
+    const shopPanel = {};
+    const neo = {
+      ui: { shopPanel },
+      isPanelOpen: jest.fn(() => true),
+      setShopPanelOpen: jest.fn(),
+      markShopPanelDirty: jest.fn(),
+      renderShopPanel: jest.fn(),
+    };
     const view = new NetworkGameView({ session: {}, neo });
     const offers = [
       { id: 'shop:item:0', type: 'item', key: 'neo_knife', cost: 36, bought: false },
       { id: 'shop:potion', type: 'potion', cost: 20, bought: false },
     ];
+    const moveOffers = [{ id: 'shop:move:0', type: 'move', key: 'dash', cost: 509, bought: false }];
+    const weaponOffers = [{ id: 'shop:weapon:0', type: 'weapon', key: 'neo_blade', cost: 887, bought: false }];
+    const tradeOffer = {
+      id: 'shop:trade',
+      type: 'trade',
+      key: 'iron_lung',
+      costKeys: ['neo_knife', 'tough_bandaid'],
+      bought: false,
+    };
     const floorState = {
       currentRoomId: 'shop-room',
       visitedRoomIds: ['shop-room'],
-      layout: { floorNumber: 1, rooms: [{ id: 'shop-room', type: 'shop', shopOffers: offers }] },
+      layout: {
+        floorNumber: 1,
+        rooms: [{
+          id: 'shop-room',
+          type: 'shop',
+          shopOffers: offers,
+          shopMoveOffers: moveOffers,
+          shopWeaponOffers: weaponOffers,
+          shopTradeOffer: tradeOffer,
+        }],
+      },
     };
 
     view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
 
     expect(neo.currentRoom.type).toBe('shop');
-    expect(neo.shopOffers).toEqual(offers);
-    expect(neo.currentRoom.shopOffers).toEqual(offers);
+    expect(neo.shopOffers).toBe(offers);
+    expect(neo.currentRoom.shopOffers).toBe(offers);
+    expect(neo.currentRoom.shopMoveOffers).toBe(moveOffers);
+    expect(neo.currentRoom.shopWeaponOffers).toBe(weaponOffers);
+    expect(neo.currentRoom.shopTradeOffer).toBe(tradeOffer);
+    expect(neo.currentRoom.shopOffers[0].cost).toBe(36);
+    expect(neo.currentRoom.shopMoveOffers[0].cost).toBe(509);
+    expect(neo.currentRoom.shopWeaponOffers[0].cost).toBe(887);
+    expect(neo.setShopPanelOpen).not.toHaveBeenCalled();
+    expect(neo.markShopPanelDirty).toHaveBeenCalledTimes(1);
+    expect(neo.renderShopPanel).toHaveBeenCalledTimes(1);
+  });
+
+  test('closes the prior shop panel and clears displayed stock when authority changes rooms', () => {
+    const shopPanel = {};
+    const neo = {
+      ui: { shopPanel },
+      isPanelOpen: jest.fn(() => true),
+      setShopPanelOpen: jest.fn(),
+      markShopPanelDirty: jest.fn(),
+      renderShopPanel: jest.fn(),
+    };
+    const view = new NetworkGameView({ session: {}, neo });
+    const offers = [{ id: 'shop:item:0', type: 'item', key: 'neo_knife', cost: 36, bought: false }];
+    const state = { interactables: {}, abilityEntities: {} };
+
+    view._syncNeoPresentationFloor({
+      currentRoomId: 'shop-room',
+      layout: {
+        floorNumber: 1,
+        rooms: [
+          { id: 'shop-room', type: 'shop', shopOffers: offers },
+          { id: 'combat-room', type: 'combat' },
+        ],
+      },
+    }, {}, {}, state);
+    neo.setShopPanelOpen.mockClear();
+    neo.markShopPanelDirty.mockClear();
+    neo.renderShopPanel.mockClear();
+
+    view._syncNeoPresentationFloor({
+      currentRoomId: 'combat-room',
+      layout: {
+        floorNumber: 1,
+        rooms: [
+          { id: 'shop-room', type: 'shop', shopOffers: offers },
+          { id: 'combat-room', type: 'combat' },
+        ],
+      },
+    }, {}, {}, state);
+
+    expect(neo.currentRoom.id).toBe('combat-room');
+    expect(neo.shopOffers).toEqual([]);
+    expect(neo.setShopPanelOpen).toHaveBeenCalledWith(false, { animateClose: false });
+    expect(neo.markShopPanelDirty).not.toHaveBeenCalled();
+    expect(neo.renderShopPanel).not.toHaveBeenCalled();
+  });
+
+  test('clears omitted shop state when an authority snapshot reuses a presentation room', () => {
+    const shopPanel = {};
+    const neo = {
+      ui: { shopPanel },
+      isPanelOpen: jest.fn(() => true),
+      setShopPanelOpen: jest.fn(),
+      markShopPanelDirty: jest.fn(),
+      renderShopPanel: jest.fn(),
+    };
+    const view = new NetworkGameView({ session: {}, neo });
+    const offers = [{ id: 'arena:item:0', type: 'item', key: 'iron_lung', cost: 80, bought: false }];
+    const moveOffers = [{ id: 'arena:move:0', key: 'dash', cost: 20, bought: false }];
+    const weaponOffers = [{ id: 'arena:weapon:0', key: 'neo_blade', cost: 30, bought: false }];
+    const tradeOffer = { id: 'arena:trade', key: 'neo_knife', costKeys: ['iron_lung'], bought: false };
+    const state = { interactables: {}, abilityEntities: {} };
+
+    view._syncNeoPresentationFloor({
+      currentRoomId: 'arena',
+      layout: {
+        floorNumber: 1,
+        rooms: [{
+          id: 'arena',
+          type: 'combat',
+          endlessIntermission: true,
+          shopStocked: true,
+          shopOffers: offers,
+          shopMoveOffers: moveOffers,
+          shopWeaponOffers: weaponOffers,
+          shopTradeOffer: tradeOffer,
+        }],
+      },
+    }, {}, {}, state);
+    const presentationRoom = neo.currentRoom;
+
+    expect(neo.shopOffers).toBe(offers);
+    expect(neo.markShopPanelDirty).toHaveBeenCalledTimes(1);
+    expect(neo.renderShopPanel).toHaveBeenCalledTimes(1);
+    neo.setShopPanelOpen.mockClear();
+
+    view._syncNeoPresentationFloor({
+      currentRoomId: 'arena',
+      layout: { floorNumber: 1, rooms: [{ id: 'arena', type: 'combat' }] },
+    }, {}, {}, state);
+
+    expect(neo.currentRoom).toBe(presentationRoom);
+    expect(neo.shopOffers).toEqual([]);
+    expect(neo.currentRoom).toEqual(expect.objectContaining({
+      shopOffers: [],
+      shopMoveOffers: [],
+      shopWeaponOffers: [],
+      shopTradeOffer: null,
+      shopStocked: false,
+      endlessIntermission: false,
+      bossRushIntermission: false,
+    }));
+    expect(neo.endlessIntermission).toBe(false);
+    expect(neo.bossRushIntermission).toBe(false);
+    expect(neo.setShopPanelOpen).toHaveBeenCalledWith(false, { animateClose: false });
   });
 
   test('adapts server-owned persistent abilities into campaign hazards', () => {
@@ -1437,6 +1732,21 @@ describe('network multiplayer game view', () => {
     expect(deriveAbilityPresentation({ abilityId: 'healing_zone', mode: 'support' })).toEqual(expect.objectContaining({
       kind: 'support', color: '#35ff6f', style: 'light', sound: 'aoe',
     }));
+  });
+
+  test('plays the canonical coin pickup sound without a multiplayer-only ring AOE', () => {
+    const playSfx = jest.fn();
+    const ringBurst = jest.fn();
+    const view = new NetworkGameView({ session: {}, neo: { playSfx, ringBurst } });
+    view.currentSample = { state: { players: { p1: { id: 'p1', x: 240, y: 310 } } } };
+
+    view._spawnGameplayEventEffect({
+      eventType: 'PICKUP_COLLECTED',
+      data: { playerId: 'p1', pickupType: 'coin' },
+    });
+
+    expect(playSfx).toHaveBeenCalledWith('coin');
+    expect(ringBurst).not.toHaveBeenCalled();
   });
 
   test('replays an accepted AOE through the campaign effect hooks at server coordinates', () => {

@@ -162,65 +162,11 @@ export const LIGHTING_CONFIG = {
 // Time does not feed normal-enemy HP because it closely tracks floors traversed.
 // Bosses are the deliberate exception: level and time keep a late-arriving boss
 // durable against the build the player assembled while reaching it.
-export const ENEMY_SCALING = {
-  floor: 0.14,
-  // Enemy HP bonus per "credit", where a credit is earned every 3 levels above
-  // level 5 (enemy level = max(floorDepth, playerLevel)). Was applied once PER
-  // LEVEL, which — because level tracks the player, not just depth — ballooned
-  // floor-1 elites into 100k+ sponges after Knight/Giant stacks multiplied it.
-  // 0.45 = +45%/credit: at level 40 that's floor(35/3)=11 credits -> 1+0.45*11
-  // ≈ 6.0x, a chunky bonus that never runs away. Bosses use the separate curved
-  // compound rate below. Cadence (the /3) lives in getEnemyLevelStatMultipliers;
-  // this is just the per-credit slope.
-  levelHpBonus: 0.45,
-  // Boss HP compounds by this base rate per displayed level. A soft cap bends the
-  // high-level tail rather than flattening it, preserving meaningful growth without
-  // recreating the old 100k+ early-loop HP sponges.
-  bossLevelHpRate: 0.055,
-  bossLevelHpSoftCap: 3.25,
-  bossLevelHpSoftCapCurve: 0.55,
-  // Unlike normal enemies, bosses also gain HP from elapsed run time. Difficulty's
-  // bossHpGrowthMultiplier scales both this clock pressure and the level rate.
-  bossHpMinute: 0.055,
-  // Per-loop normal-enemy HP growth. `loop` is the marginal bump for the FIRST
-  // loop (loopNumber 2); `loopHpCurve` < 1 makes each later loop add less than
-  // the last (diminishing returns). With loop 0.26 / curve 0.78 the multiplier
-  // is ~1.26 at loop 2, ~1.77 at loop 5, ~2.3 at loop 9 — versus the old flat
-  // 0.32 slope that hit 1.32 / 2.28 / 3.56 and never stopped climbing.
-  loop: 0.26,
-  loopHpCurve: 0.78,
-  damageFloor: 0.095,
-  damageLoop: 0.2,
-  // Time -> damage is the clock's primary normal-enemy lever; boss HP is the
-  // explicit exception above. The damage slope is stronger than before and runs
-  // through the damage soft cap below, so long runs get scarier without enemies
-  // ever reaching one-shot territory. `damageTimeSoftCap` caps the time term on
-  // its own before it combines with floor/loop/difficulty, so a slow careful
-  // player plateaus instead of being punished by the clock forever.
-  damageMinute: 0.085,
-  damageTimeSoftCap: 1.9,
-  speedFloor: 0.035,
-  speedLoop: 0.07,
-  speedMinute: 0.018,
-  damageSoftCap: 2.15,
-  bossDamageSoftCap: 2.45,
-  speedSoftCap: 1.38,
-  // Bosses get an EXTRA per-loop boost on top of the generic loop scaling above,
-  // so they stay threatening as the player out-scales regular enemies each loop.
-  // HP applies cleanly (no cap); damage is applied after the soft cap so it always
-  // contributes full value. Loop 1 adds nothing.
-  bossLoopHp: 0.20,
-  bossLoopDamage: 0.05,
-  // Endless mode pins floor at 1, so floor/loop multipliers never grow. These
-  // per-wave multipliers stand in for that progression, scaling enemies up as
-  // the wave counter climbs. Damage/speed are softer than HP and reuse the
-  // softCap treatment so late waves stay survivable.
-  endlessWaveHp: 0.12,
-  endlessWaveDamage: 0.06,
-  endlessWaveSpeed: 0.012,
-  endlessWaveDamageSoftCap: 2.6,
-  endlessWaveSpeedSoftCap: 1.5,
-};
+const sharedEnemyScalingApi = globalThis.NeoNyke?.simulation;
+if (!sharedEnemyScalingApi?.CAMPAIGN_ENEMY_SCALING) {
+  throw new Error('Shared campaign enemy scaling is unavailable');
+}
+export const ENEMY_SCALING = sharedEnemyScalingApi.CAMPAIGN_ENEMY_SCALING;
 // Elite "Knight" body rolls multiply all stats by 1.15 each, multiplicatively.
 // HP and damage are allowed to compound without limit, but the realized speed
 // multiplier is clamped here so deep-loop elites never outrun the player's
@@ -987,6 +933,58 @@ export const CHALLENGE_DEFS = {
     description: 'Kill-charge relics gain +1 extra charge progress per kill.',
   },
 };
+
+// Chaos mods rewrite a rule of the run rather than tightening its difficulty.
+// Each is bought once with Loop Crystals, then toggles free forever — the cost
+// gates access, not the per-run choice. They grant no crystal payout bonus,
+// which is what separates them from challenges. Pricing tracks how much a mod
+// helps you: the double-edged rerolls are cheap, while Reincarnation (a free
+// life per floor) and Architect (a hand-drawn opening floor) are pure upside and
+// priced steeply. `configurable` mods own a side panel instead of a plain on/off.
+export const CHAOS_DEFS = {
+  random_character: {
+    key: 'random_character',
+    name: 'Shapeshifter',
+    icon: 'WHO',
+    accent: '#ff8dd2',
+    cost: 4,
+    description: 'Every new floor rerolls your character. Level, items and coins carry over.',
+  },
+  random_loadout: {
+    key: 'random_loadout',
+    name: 'Loose Grip',
+    icon: 'MIX',
+    accent: '#7fd0ff',
+    cost: 4,
+    description: 'Every new floor rerolls all four move slots from the moves you own.',
+  },
+  enemy_reincarnation: {
+    key: 'enemy_reincarnation',
+    name: 'Reincarnation',
+    icon: 'RIP',
+    accent: '#9ce070',
+    cost: 16,
+    description: 'Dying puts you back on the same floor as a random enemy instead of ending the run. One life per floor.',
+  },
+  random_enemy_levels: {
+    key: 'random_enemy_levels',
+    name: 'Lottery Levels',
+    icon: 'LVL',
+    accent: '#f0c85a',
+    cost: 5,
+    description: 'Enemy levels are rolled at random instead of scaling with depth. Anything can show up anywhere.',
+  },
+  authored_first_floor: {
+    key: 'authored_first_floor',
+    name: 'Architect',
+    icon: 'MAP',
+    accent: '#d8b0ff',
+    cost: 12,
+    configurable: true,
+    description: 'Draw the first floor yourself: place rooms, the start and the ladder on a grid.',
+  },
+};
+export const CHAOS_ORDER = Object.keys(CHAOS_DEFS);
 export const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
 
 export const LEGACY_UPGRADES = {
@@ -1032,12 +1030,26 @@ export const LEGACY_UPGRADES = {
     description: 'Completing a loop with 3 or more active challenges grants +3 LC instead of the sum of their individual bonuses (if that sum is lower).',
     effect: 'Triple-challenge loops give at least +3 LC',
   },
-  endless_descent: {
-    key: 'endless_descent',
-    name: 'Endless Descent',
-    cost: 15,
-    description: 'After defeating God, a third pickup appears — Descend. Taking it continues the dungeon past Floor 10 with ever-scaling enemies.',
-    effect: 'Floors continue past Floor 10',
+  scroll_scholar: {
+    key: 'scroll_scholar',
+    name: 'Scroll Scholar',
+    cost: 7,
+    description: 'Scrolls of Control appear 50% more often from every source that can roll one.',
+    effect: '+50% scroll frequency',
+  },
+  first_light: {
+    key: 'first_light',
+    name: 'First Light',
+    cost: 12,
+    description: 'The first Knight (white) relic you pick up each run is upgraded to a random God relic instead.',
+    effect: 'First knight relic becomes a god relic',
+  },
+  voucher_economy: {
+    key: 'voucher_economy',
+    name: 'Voucher Economy',
+    cost: 14,
+    description: 'Relic pickups are replaced by a Forge Voucher of the same rarity, letting you choose the relic at the anvil instead of taking what dropped.',
+    effect: 'Relic drops become rarity-matched vouchers',
   },
 };
 export const LEGACY_ORDER = Object.keys(LEGACY_UPGRADES);
@@ -1302,6 +1314,8 @@ Neo.DIFFICULTY_ORDER = DIFFICULTY_ORDER;
 Neo.DIFFICULTY_DEFS = DIFFICULTY_DEFS;
 Neo.CHALLENGE_DEFS = CHALLENGE_DEFS;
 Neo.CHALLENGE_ORDER = CHALLENGE_ORDER;
+Neo.CHAOS_DEFS = CHAOS_DEFS;
+Neo.CHAOS_ORDER = CHAOS_ORDER;
 Neo.LEGACY_UPGRADES = LEGACY_UPGRADES;
 Neo.LEGACY_ORDER = LEGACY_ORDER;
 Neo.HARD_DIFFICULTIES = HARD_DIFFICULTIES;

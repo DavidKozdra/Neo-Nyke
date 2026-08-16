@@ -62,11 +62,15 @@
     'interactPrompt', 'endlessHud', 'bossRushHud', 'practicePanel',
   ]);
   const NETWORK_HUD_DISPLAY_VALUES = Object.freeze({
-    hud: 'flex',
     coinDisplay: 'flex',
     centerDisplay: '',
     actionBar: '',
+    equipmentSlots: '',
+    playerStats: '',
   });
+  const NETWORK_CONDITIONAL_HUD_LAYER_IDS = Object.freeze([
+    'entityDialogueLayer', 'interactPrompt',
+  ]);
   const DEFAULT_KEYBOARD_BINDINGS = Object.freeze({
     up: 'w', down: 's', left: 'a', right: 'd', dash: 'shift', inventory: 'i',
     interact: 'e', ascend: ' ', smash: 'r', slash: 'lmb', laser: 'rmb',
@@ -353,7 +357,7 @@
     'laserSweepSpeed', 'loveBeamCasting', 'activeBeamPaths', 'justiceBlades',
     'titanHammer', 'ghostBalls', 'skySwords', 'gameElapsedTime', 'lavaAnimTime',
     'showFloorTransition', 'floorTransitionTime', 'presentationPlayerSlots',
-    'activePlayerEffects', 'presentationViewpointPlayer', 'beamStruggle',
+    'multiplayerMapPlayerSlots', 'activePlayerEffects', 'presentationViewpointPlayer', 'beamStruggle',
   ]);
 
   function deriveAbilityPresentation(data = {}) {
@@ -563,6 +567,8 @@
       this.enemyLostSightStartedAtTick = new Map();
       this.presentationProjectiles = new Map();
       this.presentationPickups = new Map();
+      this.presentationSpecialChoiceKey = '';
+      this.presentationSpecialChoiceAnchors = [];
       this.presentationHazards = new Map();
       this.presentationBodies = new Map();
       this.presentationInteractables = new Map();
@@ -982,19 +988,24 @@
     }
 
     _setCampaignHudVisible(visible) {
-      // The campaign state machine (controller.js fallbackState) parks the HUD
-      // widgets at inline `display:none` while `Neo.gameState` sits at the menu,
-      // which it does for the whole network match. Toggling only the `hidden`
-      // class leaves that inline style winning, so clear/set `style.display` too
-      // (mirroring the per-element display values the campaign uses when it shows
-      // the HUD in play).
-      const layerIds = visible ? Object.keys(NETWORK_HUD_DISPLAY_VALUES) : CAMPAIGN_HUD_LAYER_IDS;
-      layerIds.forEach(id => {
+      // Network play reuses the campaign's independent HUD widgets, but never
+      // the legacy #hud container (which still contains "Find the ladder.").
+      // Visit every campaign layer while active so neither a stale menu style
+      // nor a later campaign HUD refresh can expose an unsupported layer.
+      CAMPAIGN_HUD_LAYER_IDS.forEach(id => {
         const element = this.document?.getElementById(id);
         if (!element) return;
-        element.classList.toggle('hidden', !visible);
-        element.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        element.style.display = visible ? NETWORK_HUD_DISPLAY_VALUES[id] : 'none';
+        if (visible && NETWORK_CONDITIONAL_HUD_LAYER_IDS.includes(id)) {
+          // Conditional widgets decide their own visibility in updateHud. Only
+          // clear the menu's inline display:none so current content can be shown.
+          element.style.display = '';
+          return;
+        }
+        const showLayer = visible
+          && Object.prototype.hasOwnProperty.call(NETWORK_HUD_DISPLAY_VALUES, id);
+        element.classList.toggle('hidden', !showLayer);
+        element.setAttribute('aria-hidden', showLayer ? 'false' : 'true');
+        element.style.display = showLayer ? NETWORK_HUD_DISPLAY_VALUES[id] : 'none';
       });
     }
 
@@ -2217,11 +2228,10 @@
         const speaker = this.presentationEnemyActors.get(String(data.enemyId)) || entity;
         if (speaker && data.text) this.neo.sayOverEntity?.(speaker, String(data.text), { holdTime: 1.6 });
       } else if (event.eventType === 'PICKUP_COLLECTED') {
-        // Match the campaign's per-type pickup presentation: coins ring and
-        // chime, potions show the heal popup, items only play item_collect
+        // Match the campaign's per-type pickup presentation: coins chime,
+        // potions show the heal popup, and items only play item_collect
         // (handled with the notification card in _consumeGameplayEvents).
         if (data.pickupType === 'coin') {
-          this.neo.ringBurst?.(entity.x, entity.y, 9, '#ffd966', 0.34);
           this.neo.playSfx?.('coin');
         } else if (data.pickupType === 'potion' && Number(data.healedAmount || 0) > 0) {
           this.neo.spawnHealPopup?.(entity.x, entity.y - 20, Number(data.healedAmount));
@@ -2639,6 +2649,8 @@
       this.presentationHazards.clear();
       this.presentationBodies.clear();
       this.presentationInteractables.clear();
+      this.presentationSpecialChoiceKey = '';
+      this.presentationSpecialChoiceAnchors = [];
     }
 
     _stablePresentationEntities(cache, sources, adapt = source => source) {
@@ -2653,6 +2665,34 @@
         cache.set(id, entity);
         return entity;
       });
+    }
+
+    _specialRoomPresentationPickups(floorState) {
+      const room = this.neo.currentRoom;
+      const prepareSpecialRoom = this.neo.prepareSpecialRoom;
+      const key = room && typeof prepareSpecialRoom === 'function'
+        ? `${this.neo.floor}:${room.id}:${room.type}:${room.serviceUsed ? 'used' : 'available'}`
+        : '';
+      if (key === this.presentationSpecialChoiceKey) return this.presentationSpecialChoiceAnchors;
+
+      this.presentationSpecialChoiceKey = key;
+      this.presentationSpecialChoiceAnchors = [];
+      if (!key) return this.presentationSpecialChoiceAnchors;
+
+      // These are campaign presentation anchors, not authority pickups. Rebuild
+      // them only when entering a room or when its consumed state changes.
+      room.pickups = (Array.isArray(room.pickups) ? room.pickups : [])
+        .filter(pickup => !['specialService', 'specialChoice'].includes(pickup?.type));
+      if (!prepareSpecialRoom.call(this.neo, room)) return this.presentationSpecialChoiceAnchors;
+
+      this.presentationSpecialChoiceAnchors = room.pickups
+        .filter(pickup => pickup?.type === 'specialChoice')
+        .map(pickup => ({
+          ...pickup,
+          id: `specialChoice:${this.neo.floor}:${room.id}:${pickup.choiceId}`,
+          roomId: floorState.currentRoomId,
+        }));
+      return this.presentationSpecialChoiceAnchors;
     }
 
     // Recover vx/vy from how far the interpolated position moved since the last
@@ -2818,6 +2858,10 @@
       const viewpointId = this._viewpointPlayerId(state, localPlayerId);
       const viewpointSlot = projectedPlayerSlots.find(slot => slot.id === viewpointId) || localSlot;
       this.neo.presentationPlayerSlots = this.presentationPlayerSlots;
+      // The world renderer only needs heroes in the viewpoint room, but the
+      // minimap needs every connected hero so teammates remain locatable after
+      // moving through a door.
+      this.neo.multiplayerMapPlayerSlots = projectedPlayerSlots.filter(slot => !players?.[slot.id]?.disconnected);
       this.neo.presentationViewpointPlayer = viewpointSlot?.getEntity?.() || null;
       if (localSlot) {
         this.neo.player = localSlot.getEntity();
@@ -3248,6 +3292,9 @@
     _syncNeoPresentationFloor(floorState, enemies, pickups, state) {
       const layoutRooms = floorState.layout?.rooms || [];
       const visited = new Set(floorState.visitedRoomIds || []);
+      const previousRoomId = this.neo.currentRoom?.id || null;
+      const previousFloorNumber = Math.max(0, Number(this.neo.floor || 0));
+      const authorityRoomId = floorState.currentRoomId || null;
       const rooms = layoutRooms.map(source => {
         let room = this.presentationRooms.get(source.id);
         if (!room) {
@@ -3258,6 +3305,17 @@
           explored: visited.has(source.id),
           cleared: floorState.encounters?.[source.id]?.status === 'cleared'
             || floorState.rewards?.[source.id]?.status === 'claimed',
+          // Presentation rooms are reused between snapshots. Authority omits
+          // inactive shop state, so normalize every transient field instead of
+          // retaining stock from a previous snapshot on the reused object.
+          shopOffers: Array.isArray(source.shopOffers) ? source.shopOffers : [],
+          shopMoveOffers: Array.isArray(source.shopMoveOffers) ? source.shopMoveOffers : [],
+          shopWeaponOffers: Array.isArray(source.shopWeaponOffers) ? source.shopWeaponOffers : [],
+          shopTradeOffer: source.shopTradeOffer || null,
+          shopStocked: !!source.shopStocked,
+          endlessIntermission: !!source.endlessIntermission,
+          bossRushIntermission: !!source.bossRushIntermission,
+          serviceUsed: !!source.serviceUsed,
         });
         return room;
       });
@@ -3266,18 +3324,25 @@
         if (!activeIds.has(id)) this.presentationRooms.delete(id);
       });
       this.neo.rooms = rooms;
-      this.neo.currentRoom = rooms.find(room => room.id === floorState.currentRoomId) || rooms[0] || null;
-      this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
-      this.neo.floorsEntered = this.neo.floor;
-      this.neo.shopOffers = this.neo.currentRoom?.shopOffers || [];
+      this.neo.currentRoom = authorityRoomId == null
+        ? null
+        : rooms.find(room => room.id === authorityRoomId) || null;
+      const authorityFloorNumber = Math.max(1, Number(floorState.layout?.floorNumber || 1));
+      this.neo.floor = authorityFloorNumber;
+      this.neo.floorsEntered = authorityFloorNumber;
       this.neo.endlessIntermission = !!this.neo.currentRoom?.endlessIntermission;
       this.neo.bossRushIntermission = !!this.neo.currentRoom?.bossRushIntermission;
       const intermissionShop = !!this.neo.currentRoom?.shopStocked
         && (this.neo.endlessIntermission || this.neo.bossRushIntermission);
       const shopActive = this.neo.currentRoom?.type === 'shop' || intermissionShop;
-      if (!shopActive && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+      this.neo.shopOffers = shopActive ? this.neo.currentRoom.shopOffers : [];
+      const roomChanged = previousRoomId != null
+        && (previousRoomId !== authorityRoomId
+          || (previousFloorNumber > 0 && previousFloorNumber !== authorityFloorNumber));
+      const shopPanelOpen = !!this.neo.isPanelOpen?.(this.neo.ui?.shopPanel);
+      if ((roomChanged || !shopActive) && shopPanelOpen) {
         this.neo.setShopPanelOpen?.(false, { animateClose: false });
-      } else if (shopActive && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+      } else if (shopActive && shopPanelOpen) {
         this.neo.markShopPanelDirty?.();
         this.neo.renderShopPanel?.();
       }
@@ -3421,6 +3486,7 @@
             networkExit: true,
           })),
         ...this._upgradePresentationPickups(state).filter(choice => choice.roomId === floorState.currentRoomId),
+        ...this._specialRoomPresentationPickups(floorState),
       ];
       this.neo.pickups = this._stablePresentationEntities(
         this.presentationPickups,
@@ -3448,6 +3514,9 @@
       if (!localPlayer || !state) return;
       this._setCampaignHudVisible(true);
       this.neo.updateHud?.();
+      // Campaign HUD updates own the shared widgets. Reassert the network layer
+      // boundary afterward so no legacy layer can be revealed by a refresh.
+      this._setCampaignHudVisible(true);
     }
 
   }

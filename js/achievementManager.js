@@ -317,7 +317,7 @@ const achievementManager = (() => {
 
   async function getProgressSnapshot() {
     await Promise.all([flushPendingCumulativeWrites(), loadPersistentProgress()]);
-    const cumulativeIds = ['rival_kills', 'gods_killed', 'enemies_killed'];
+    const cumulativeIds = ['rival_kills', 'gods_killed', 'enemies_killed', 'floors_entered'];
     const cumulativeEntries = await Promise.all(
       cumulativeIds.map(async id => [id, await getCumulativeCount(id)])
     );
@@ -365,14 +365,7 @@ const achievementManager = (() => {
     if (count >= 100) await unlock('rival_rumble');
   });
 
-  achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp, gameMode, difficulty, challengeKeys, characterKey }) => {
-    // "Beat the game in under 5 minutes" means a genuine campaign speedrun, so
-    // gate it to the full-clear campaign modes via an allowlist. Blocklisting
-    // boss_rush alone let endless slip through (no floor-10 finish, dies-only),
-    // and treasure_hunt's seek/escape detour makes its sub-5-min clear more an
-    // artifact of the mode than a real speedrun.
-    const SPEEDRUN_MODES = new Set(['normal', 'competitive']);
-    if (SPEEDRUN_MODES.has(gameMode) && elapsedSeconds <= 300) await unlock('gotta_meet_god');
+  achievementEvents.on('run:won', async ({ playerHp, gameMode, difficulty, challengeKeys, characterKey }) => {
     if (playerHp <= 1) await unlock('glass_cannon');
     if (gameMode === 'boss_rush') await unlock('rush_hour');
     if (gameMode === 'treasure_hunt') await unlock('crown_thief');
@@ -411,9 +404,20 @@ const achievementManager = (() => {
     if (totalItems >= 100) await unlock('hoarder');
   });
 
-  achievementEvents.on('floor:reached', async ({ floor }) => {
+  achievementEvents.on('floor:reached', async ({ floor, elapsedSeconds }) => {
     maxFloorReached = Math.max(maxFloorReached, Math.max(0, Number(floor) || 0));
-    if (floor >= 10) await unlock('floor_muncher');
+    // Floor Muncher is a lifetime grind: every floor entered across every run
+    // counts, so it uses the persisted cumulative store rather than this run's
+    // high-water mark.
+    const totalFloors = await incrementCumulativeCount('floors_entered');
+    if (totalFloors >= 100) await unlock('floor_muncher');
+    // Gotta Meet God is a speedrun to the bottom, judged on the run clock at the
+    // moment floor 10 is entered — not on the God kill, which adds a boss fight
+    // of variable length to an otherwise pure descent race.
+    const runSeconds = Number(elapsedSeconds);
+    if (floor >= 10 && Number.isFinite(runSeconds) && runSeconds > 0 && runSeconds <= 300) {
+      await unlock('gotta_meet_god');
+    }
   });
 
   achievementEvents.on('endless:wave', async ({ wave }) => {

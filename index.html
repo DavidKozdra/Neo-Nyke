@@ -968,7 +968,7 @@
     </div>
     <div class="competitive-screen-body">
       <div class="altmode-card" id="altModeCompetitiveCard">
-        <div class="altmode-card__icon">&#9733;</div>
+        <div class="altmode-card__icon"><canvas class="altmode-card__icon-art" data-mode-icon="seed_speed_run" width="44" height="44" aria-hidden="true"></canvas></div>
         <div class="altmode-card__text">
           <h3 class="altmode-card__name">THIS WEEK'S SEED</h3>
           <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Only winning runs are accepted.</p>
@@ -2050,6 +2050,7 @@
     </div>
     <div class="mods-tabs" role="tablist" aria-label="Modifier category">
       <button class="mods-tab active" type="button" role="tab" aria-selected="true" data-mods-tab="challenges">Challenges</button>
+      <button class="mods-tab" type="button" role="tab" aria-selected="false" data-mods-tab="chaos">Chaos</button>
       <button class="mods-tab" type="button" role="tab" aria-selected="false" data-mods-tab="legacy">Legacy</button>
     </div>
     <button id="challengeClose" class="panel-close" aria-label="Close mods">X</button>
@@ -2071,6 +2072,40 @@
       <button class="challenge-btn" data-challenge="glass_cannon" type="button">Quartz Cannon</button>
     </div>
   </div>
+  <div id="modsChaosPane" class="floating-panel__body mods-pane hidden" role="tabpanel">
+    <p class="mods-pane__hint">Chaos mods rewrite a rule of the game. Buy one once, then switch it on or off for free — they grant no crystal bonus.</p>
+    <div class="progression-panel-wallet">
+      <canvas id="chaosLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
+      <div><strong><span id="chaosLoopCount">0</span> LOOP CRYSTALS</strong><small>Unlock chaos mods once.</small></div>
+    </div>
+    <small id="chaosHint" class="progression-panel-status">0 ON THIS RUN</small>
+    <div id="chaosSelect" class="challenge-select" role="group" aria-label="Chaos Modifiers">
+      <button class="challenge-btn" data-chaos="random_character" type="button">Shapeshifter</button>
+      <button class="challenge-btn" data-chaos="random_loadout" type="button">Loose Grip</button>
+      <button class="challenge-btn" data-chaos="enemy_reincarnation" type="button">Reincarnation</button>
+      <button class="challenge-btn" data-chaos="random_enemy_levels" type="button">Lottery Levels</button>
+      <button class="challenge-btn" data-chaos="authored_first_floor" type="button">Architect</button>
+    </div>
+    <div id="architectEditor" class="architect-editor hidden">
+      <div class="architect-editor__head">
+        <strong>FIRST FLOOR PLAN</strong>
+        <small id="architectStatus">Place a start and a ladder.</small>
+      </div>
+      <div class="architect-editor__tools" role="group" aria-label="Room brush">
+        <button class="architect-tool active" type="button" data-architect-tool="start">Start</button>
+        <button class="architect-tool" type="button" data-architect-tool="exit">Ladder</button>
+        <button class="architect-tool" type="button" data-architect-tool="combat">Combat</button>
+        <button class="architect-tool" type="button" data-architect-tool="treasure">Treasure</button>
+        <button class="architect-tool" type="button" data-architect-tool="shop">Shop</button>
+        <button class="architect-tool" type="button" data-architect-tool="anvil">Anvil</button>
+        <button class="architect-tool" type="button" data-architect-tool="erase">Erase</button>
+      </div>
+      <div id="architectGrid" class="architect-grid" role="group" aria-label="First floor grid"></div>
+      <div class="architect-editor__actions">
+        <button id="architectClear" class="legacy-btn architect-action" type="button">Clear</button>
+      </div>
+    </div>
+  </div>
   <div id="modsLegacyPane" class="floating-panel__body mods-pane hidden" role="tabpanel">
     <p class="mods-pane__hint mods-pane__hint--legacy">Permanent. Purchased Legacy upgrades stay active for every run.</p>
     <div class="progression-panel-wallet">
@@ -2085,7 +2120,9 @@
       <button class="legacy-btn" data-legacy="bank_interest" type="button">Bank Interest</button>
       <button class="legacy-btn" data-legacy="crystal_tithe" type="button">Crystal Tithe</button>
       <button class="legacy-btn" data-legacy="challenge_mastery" type="button">Challenge Mastery</button>
-      <button class="legacy-btn" data-legacy="endless_descent" type="button">Endless Descent</button>
+      <button class="legacy-btn" data-legacy="scroll_scholar" type="button">Scroll Scholar</button>
+      <button class="legacy-btn" data-legacy="first_light" type="button">First Light</button>
+      <button class="legacy-btn" data-legacy="voucher_economy" type="button">Voucher Economy</button>
     </div>
   </div>
 </section>

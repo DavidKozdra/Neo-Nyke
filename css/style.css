@@ -5505,6 +5505,239 @@ p.sub {
   color: #cfe2b2;
 }
 
+/* --- Mod cards (challenges / chaos / legacy) ---------------------------------
+   One card shape across all three mods panes. The layout is icon + body, with
+   the body ending in a footer that is either a price (still to buy) or an
+   on/off pill (already owned) — that footer is what makes spending crystals
+   visibly different from flipping a free toggle. */
+.mod-card {
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: start;
+  min-height: 118px;
+  gap: 13px;
+}
+
+.mod-card__icon-frame {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--challenge-accent) 62%, transparent);
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--challenge-accent) 22%, transparent), transparent 70%),
+    rgba(6, 12, 20, .55);
+  box-shadow: inset 0 0 16px color-mix(in srgb, var(--challenge-accent) 20%, transparent);
+}
+
+.mod-card__icon {
+  width: 44px;
+  height: 44px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.mod-card__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* Category chip, right-aligned opposite the name. */
+.mod-card__meta {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--challenge-accent) 45%, transparent);
+  border-radius: 6px;
+  background: rgba(255,255,255,.035);
+  color: var(--challenge-accent);
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 850;
+  letter-spacing: .09em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mod-card__footer {
+  margin-top: auto;
+  padding-top: 10px;
+  display: block;
+}
+
+/* Price tag and toggle pill share a shape so the eye compares them directly. */
+.mod-card__buy,
+.mod-card__toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .07em;
+  line-height: 1.15;
+}
+
+/* The price line is "BUY · 3 <crystal>" — the inline crystal canvas is a
+   replaced element, so the line has to be a flex row or it wraps onto its own
+   line under the text. */
+.mod-card__buy,
+.mod-card__toggle {
+  align-items: stretch;
+}
+
+.mod-card__buy > .loop-crystal-icon,
+.mod-card__toggle > .loop-crystal-icon {
+  display: none;
+}
+
+.mod-card__buy-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.mod-card__buy-line .loop-crystal-icon--inline {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.mod-card__buy small,
+.mod-card__toggle small {
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 650;
+  letter-spacing: .02em;
+  text-transform: none;
+  opacity: .8;
+}
+
+/* Affordable purchase: gold, the panel's "this costs crystals" color. */
+.mod-card__buy {
+  border-color: rgba(240, 200, 90, .5);
+  background: rgba(240, 200, 90, .1);
+  color: #ffd884;
+}
+
+.mod-card__buy--short {
+  border-color: rgba(255, 111, 127, .42);
+  background: rgba(255, 111, 127, .09);
+  color: #ff9aa8;
+}
+
+.mod-card__buy--locked {
+  border-color: rgba(147, 170, 188, .35);
+  background: rgba(147, 170, 188, .07);
+  color: #a9bccc;
+}
+
+.mod-card__buy--armed {
+  border-color: rgba(255, 216, 132, .95);
+  background: rgba(240, 200, 90, .24);
+  color: #fff3d0;
+  animation: modBuyArmedPulse 1s ease-in-out infinite;
+}
+
+@keyframes modBuyArmedPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 200, 90, .5); }
+  50% { box-shadow: 0 0 0 4px rgba(240, 200, 90, 0); }
+}
+
+/* Owned mods: no price anywhere, just a switch. */
+.mod-card__toggle {
+  border-color: rgba(147, 170, 188, .32);
+  background: rgba(147, 170, 188, .07);
+  color: #b9cbd9;
+}
+
+.mod-card__toggle i {
+  font-style: normal;
+  margin-right: 6px;
+}
+
+.mod-card__toggle--on {
+  border-color: rgba(128, 204, 150, .7);
+  background: rgba(128, 204, 150, .16);
+  color: #b9f2c8;
+}
+
+.mod-card__toggle--owned {
+  border-color: rgba(128, 204, 150, .5);
+  background: rgba(128, 204, 150, .1);
+  color: #9fdca9;
+}
+
+/* Card-level affordance: a buyable card gets a gold edge, an unaffordable one
+   recedes without being fully disabled (it still explains its price). */
+.mod-card--buyable {
+  border-color: rgba(240, 200, 90, .38);
+}
+
+.mod-card--buyable:hover:not(:disabled) {
+  border-color: rgba(240, 200, 90, .7);
+  box-shadow: 0 0 16px rgba(240, 200, 90, .16);
+}
+
+.mod-card--unaffordable {
+  opacity: .62;
+}
+
+.mod-card--armed {
+  border-color: rgba(255, 216, 132, .9);
+  box-shadow: 0 0 20px rgba(240, 200, 90, .26);
+}
+
+/* The selected state inverts to a light surface; keep the footer readable on it
+   rather than inheriting the dark-surface colors. */
+.challenge-btn.sel .mod-card__meta {
+  color: #203145;
+  border-color: rgba(32,49,69,.42);
+  background: rgba(32,49,69,.08);
+}
+
+.challenge-btn.sel .mod-card__toggle--on {
+  border-color: rgba(32,49,69,.5);
+  background: rgba(32,49,69,.12);
+  color: #17301f;
+}
+
+.challenge-btn.sel .mod-card__icon-frame {
+  border-color: rgba(32,49,69,.42);
+  background: rgba(32,49,69,.1);
+  box-shadow: none;
+}
+
+/* The selected surface is light, so the title must go dark — the themed
+   `--menu-text` it would otherwise inherit is near-white and unreadable here. */
+.challenge-btn.sel.mod-card .challenge-btn__top b {
+  color: #16202c;
+}
+
+/* Legacy cards reuse the shared shape, overriding the old legacy-btn layout. */
+.legacy-btn.mod-card {
+  display: grid;
+  text-align: left;
+}
+
+.legacy-btn.mod-card:disabled {
+  opacity: .78;
+  cursor: default;
+  filter: none;
+}
+
+@media (max-width: 560px) {
+  .mod-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .mod-card__icon-frame { width: 42px; height: 42px; }
+  .mod-card__icon { width: 34px; height: 34px; }
+}
+
 .seedrow {
   margin: 14px 0;
   display: flex;
@@ -5642,6 +5875,124 @@ p.sub {
 }
 
 /* ── Legacy Upgrades panel ────────────────────────────────���── */
+/* The chaos pane stacks a mod list and the Architect editor, so the pane itself
+   scrolls and its list shrinks to fit rather than each scrolling separately. */
+#modsChaosPane {
+  max-height: min(66dvh, 620px);
+  overflow: auto;
+}
+
+#modsChaosPane .challenge-select {
+  max-height: none;
+  overflow: visible;
+}
+
+.architect-editor {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background: rgba(24, 18, 38, .82);
+  display: grid;
+  gap: 10px;
+}
+
+.architect-editor__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--menu-text);
+  font-size: calc(11px * var(--font-scale, 1));
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.architect-editor__head small {
+  opacity: .75;
+  font-weight: 700;
+}
+
+.architect-status--bad {
+  color: #ff8a98;
+  opacity: 1;
+}
+
+.architect-editor__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.architect-tool {
+  padding: 6px 10px;
+  background: var(--menu-surface);
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  color: var(--menu-text);
+  font-weight: 800;
+  font-size: calc(10px * var(--font-scale, 1));
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.architect-tool:hover {
+  border-color: var(--menu-border-strong);
+}
+
+.architect-tool.active {
+  border-color: #d8b0ff;
+  color: #f0e2ff;
+  background: rgba(216, 176, 255, .16);
+}
+
+.architect-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--architect-cols, 9), minmax(0, 1fr));
+  gap: 3px;
+  max-width: 340px;
+}
+
+.architect-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  color: var(--menu-text);
+  font-weight: 900;
+  font-size: calc(10px * var(--font-scale, 1));
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+
+.architect-cell:hover {
+  border-color: var(--menu-border-strong);
+  background: rgba(255, 255, 255, .1);
+}
+
+.architect-cell--start { background: rgba(125, 255, 158, .3); border-color: #7dff9e; color: #d9ffe5; }
+.architect-cell--exit { background: rgba(141, 212, 255, .3); border-color: #8dd4ff; color: #ddf2ff; }
+.architect-cell--combat { background: rgba(255, 255, 255, .17); }
+.architect-cell--treasure { background: rgba(240, 200, 90, .28); border-color: #f0c85a; color: #fff2cf; }
+.architect-cell--shop { background: rgba(255, 141, 210, .26); border-color: #ff8dd2; color: #ffe0f4; }
+.architect-cell--anvil { background: rgba(216, 176, 255, .26); border-color: #d8b0ff; color: #f0e2ff; }
+
+.architect-editor__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.architect-action {
+  min-height: 0;
+  padding: 7px 14px;
+  font-size: calc(10px * var(--font-scale, 1));
+}
+
 .legacy-toggle {
   background: linear-gradient(180deg, rgba(42, 28, 55, .98), rgba(22, 14, 32, .98));
   border-color: rgba(176, 128, 220, .34);
@@ -5669,41 +6020,9 @@ p.sub {
   text-align: left;
   transition: border-color .15s, box-shadow .15s, transform .12s, opacity .15s, background .15s;
 }
-.legacy-btn__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-.legacy-btn__top b { font-size: calc(13px * var(--font-scale, 1)); line-height: 1.2; }
-.legacy-btn__top em {
-  flex: 0 0 auto;
-  max-width: 44%;
-  color: #c9a8f0;
-  font-style: normal;
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.2;
-  text-align: right;
-}
-.legacy-btn__desc {
-  display: block;
-  margin-top: 8px;
-  color: var(--menu-text-muted);
-  font-size: calc(11px * var(--font-scale, 1));
-  font-weight: 650;
-  letter-spacing: 0;
-  line-height: 1.35;
-  text-transform: none;
-}
-.legacy-btn__effect {
-  display: block;
-  margin-top: 6px;
-  color: #b8f0c8;
-  font-size: calc(10px * var(--font-scale, 1));
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
+/* Legacy cards render through the shared .mod-card markup, so the old
+   .legacy-btn__* element styles are gone; the base and state rules below still
+   apply because the buttons keep their .legacy-btn class. */
 .legacy-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(176, 128, 220, .6);
@@ -5712,7 +6031,6 @@ p.sub {
   border-color: rgba(150, 210, 160, .55);
   background: rgba(20, 36, 24, .92);
 }
-.legacy-btn.owned .legacy-btn__top em { color: #9fdca9; }
 .legacy-btn:disabled {
   opacity: .45;
   cursor: not-allowed;
@@ -16206,6 +16524,10 @@ body.network-multiplayer-active #c {
 .shop-card__price,
 .anvil-stat-cost,
 .challenge-btn__meta,
+.mod-card__meta,
+.mod-card__buy,
+.mod-card__toggle,
+.mod-card__icon-frame,
 .voucher-type,
 .special-room-resources span,
 .special-room-card__cost,
@@ -16220,6 +16542,7 @@ body.network-multiplayer-active #c {
 .inv-card,
 .inv-slot,
 .challenge-btn,
+.legacy-btn.mod-card,
 .wizard-paw-stat,
 .wizard-paw-choice,
 .extra-battery-choice,
@@ -16233,8 +16556,14 @@ body.network-multiplayer-active #c {
 }
 
 .shop-card,
-.challenge-btn {
+.challenge-btn,
+.legacy-btn.mod-card {
   border-top-width: 3px;
+}
+
+/* The accent stripe moves to the top edge here, matching shop cards. */
+.mod-card {
+  border-top-color: var(--challenge-accent);
 }
 
 .shop-card::before {

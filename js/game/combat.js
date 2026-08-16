@@ -5658,11 +5658,10 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
         });
       }
       Neo.currentRoom.cleared = true;
-      // Story campaigns end here; procedural campaigns retain crown/loop/descent
-      // choices. The authority consumes this same DOM-free choice plan.
+      // Story campaigns end here; procedural campaigns retain the crown/loop
+      // choice. The authority consumes this same DOM-free choice plan.
       const endgamePlan = globalThis.NeoNyke?.simulation?.createCampaignGodEndgamePlan?.({
         gameMode: Neo.gameMode,
-        endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
         width: Neo.ROOM_W,
         height: Neo.ROOM_H,
       }) || [];
@@ -6466,9 +6465,47 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     if (predicate) predicate.run(itemKey, ctx);
   }
 
+  // Rarity -> matching voucher key for Voucher Economy. Blue and green are
+  // drop-only tiers with no voucher of their own, so they are left alone rather
+  // than being downgraded into a white voucher.
+  const LEGACY_VOUCHER_BY_RARITY = {
+    knight: 'voucher_white',
+    wizard: 'voucher_purple',
+    god: 'voucher_yellow',
+  };
+
+  // Legacy upgrades that rewrite what a relic pickup actually is. Applied once,
+  // before collection commits, and never to vouchers or scrolls — turning a
+  // voucher into a voucher, or eating a scroll, would break their own flows.
+  function applyLegacyPickupTransforms(itemKey) {
+    const item = Neo.itemRegistry?.get?.(itemKey);
+    if (!item || item.voucher || Neo.isScrollControlItem?.(itemKey)) return itemKey;
+    const rarity = String(item.rarity || '');
+    if (Neo.hasLegacy?.('first_light') && !Neo.chaosFirstLightSpent && rarity === 'knight') {
+      const godPool = (Neo.ITEM_KEYS || []).filter(key => Neo.ITEM_DEFS?.[key]?.rarity === 'god'
+        && !Neo.ITEM_DEFS[key]?.voucher);
+      if (godPool.length > 0) {
+        Neo.chaosFirstLightSpent = true;
+        const upgraded = godPool[Math.floor(Neo.nextRandom('world') * godPool.length)] || godPool[0];
+        Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 52, life: 1.8, text: 'FIRST LIGHT', c: '#ffd23f' });
+        return upgraded;
+      }
+    }
+    if (Neo.hasLegacy?.('voucher_economy')) {
+      const voucherKey = LEGACY_VOUCHER_BY_RARITY[rarity];
+      if (voucherKey && Neo.itemRegistry?.get?.(voucherKey)) return voucherKey;
+    }
+    return itemKey;
+  }
+
   function collectItem(itemKey) {
     if (Neo.isChallengeActive('no_items')) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
+      return;
+    }
+    const transformedKey = applyLegacyPickupTransforms(itemKey);
+    if (transformedKey !== itemKey) {
+      collectItem(transformedKey);
       return;
     }
     const item = Neo.itemRegistry.get(itemKey);

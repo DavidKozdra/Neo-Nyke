@@ -48,6 +48,10 @@
   const grantXp = (player, value) => { player.xp = Math.max(0, Number(player.xp || 0) + Math.max(0, Number(value || 0))); };
   const roomsOf = state => state.floorState?.layout?.rooms || [];
   const roomKey = room => `${room?.gx},${room?.gy}`;
+  const hasVisitedRoom = (state, room) => {
+    const visitedRoomIds = state?.floorState?.visitedRoomIds;
+    return Array.isArray(visitedRoomIds) ? visitedRoomIds.includes(room?.id) : Boolean(room?.visited);
+  };
 
   function applySpecialRoomChoice(state, room, player, choiceId, random) {
     if (!state || !room || !player || room.serviceUsed || !SPECIAL_ROOM_TYPES.includes(room.type) || !CHOICE_IDS[room.type]?.includes(choiceId)) {
@@ -140,9 +144,15 @@
         if (!target || !spend(player, cost)) return { ok: false, reason: target ? 'INSUFFICIENT_FUNDS' : 'NO_EXIT' };
         transitionToRoomId = target.id; result = 'Portal opened to the exit';
       } else if (choiceId === 'vault') {
-        const target = rooms.find(candidate => candidate !== room && ((candidate.type === 'treasure' && !candidate.visited) || (SPECIAL_ROOM_TYPES.includes(candidate.type) && !candidate.visited)));
+        const bounty = player.activeBounty;
+        const huntRoom = bounty?.targetRoomKey
+          ? rooms.find(candidate => roomKey(candidate) === bounty.targetRoomKey)
+          : rooms.find(candidate => candidate.type === 'combat' && !hasVisitedRoom(state, candidate));
+        const treasure = rooms.find(candidate => candidate !== room && candidate.type === 'treasure' && !hasVisitedRoom(state, candidate));
+        const service = rooms.find(candidate => candidate !== room && SPECIAL_ROOM_TYPES.includes(candidate.type) && !hasVisitedRoom(state, candidate));
+        const target = (bounty && huntRoom) || treasure || service;
         if (!target) return { ok: false, reason: 'NO_DESTINATION' };
-        transitionToRoomId = target.id; result = 'Portal route changed';
+        transitionToRoomId = target.id; result = bounty && huntRoom ? 'Portal locked onto the quarry' : 'Portal route changed';
       } else {
         if (floor >= 10) return { ok: false, reason: 'MAX_FLOOR' };
         advanceFloor = true; result = 'The floor is left behind';

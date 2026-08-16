@@ -134,7 +134,7 @@
         text: Neo.currentRoom.cleared ? 'GOD defeated' : Neo.currentRoom.bossStarted ? 'Survive GOD' : 'Start the GOD fight',
         state: Neo.currentRoom.cleared ? 'done' : 'warn',
       });
-      if (Neo.currentRoom.cleared) entries.push({ text: Neo.hasLegacy('endless_descent') ? 'Crown, Descend, or Loop' : 'Take the crown or loop', state: 'warn' });
+      if (Neo.currentRoom.cleared) entries.push({ text: 'Take the crown or loop', state: 'warn' });
     }
     pushPanelItemObjectives(entries);
     return entries.slice(0, 5);
@@ -953,6 +953,49 @@
     return true;
   }
 
+  // Reincarnation: instead of ending the run, put the player back on their feet
+  // wearing a random enemy's body. Mirrors the revive cleanup (statuses, hazards,
+  // projectiles, damage-source bookkeeping) because the run is continuing, but
+  // costs no crystals and is limited to one respawn per floor.
+  function tryChaosReincarnation() {
+    if (!Neo.isChaosActive?.('enemy_reincarnation') || !Neo.player) return false;
+    const roster = globalThis.NeoNyke?.content?.getPlayableEnemyCharacterKeys?.() || [];
+    const resolution = globalThis.NeoNyke?.simulation?.resolveChaosReincarnation?.({
+      active: true,
+      floor: Neo.floor,
+      usedOnFloor: Neo.chaosReincarnationFloor,
+      roster: roster.filter(key => Neo.CHARACTER_DEFS?.[key]),
+      random: () => Neo.nextRandom('world'),
+    });
+    if (!resolution?.ok) return false;
+    Neo.chaosReincarnationFloor = resolution.floor;
+    Neo.applyChaosCharacterSwap?.(resolution.characterKey);
+    globalThis.NeoNyke.simulation.applyCampaignRevive(Neo.player, {
+      healthFraction: resolution.hpFraction,
+      invulnerabilitySeconds: 2,
+    });
+    Neo.STATUS_KEYS.forEach(key => Neo.clearStatus(Neo.player, key));
+    Neo.projectiles = [];
+    Neo.hazards = [];
+    Neo.skySwords = [];
+    Neo.justiceBlades = [];
+    Neo.ghostBalls = [];
+    Neo.titanHammer = null;
+    Neo.activeBeamPaths = null;
+    Neo.beamStruggle = null;
+    Neo.lastDamageSource = '';
+    Neo.lastDamageSourceKey = '';
+    Neo.lastDamageSourceSpriteKey = '';
+    Neo.lastDamageSourceHazardIcon = '';
+    const name = Neo.CHARACTER_DEFS?.[resolution.characterKey]?.name || resolution.characterKey;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 2.0, text: `REBORN AS ${String(name).toUpperCase()}`, c: '#9ce070' });
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 60, '#9ce070', 0.6);
+    Neo.playSfx?.('powerup');
+    updateHud();
+    scheduleRunSave();
+    return true;
+  }
+
   function die() {
     if (Neo.gameState === 'dying' || Neo.gameState === 'dead') return;
     if (Neo.gameMode === 'pvp' && Neo.pvpState) return;
@@ -962,6 +1005,10 @@
       Neo.spawnParticle({ x: Neo.player?.x ?? 0, y: (Neo.player?.y ?? 0) - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
       return;
     }
+    // Reincarnation intercepts the death before the run is finalized: the run
+    // continues in an enemy's body instead of ending. Checked after the co-op
+    // guards above so a downed co-op partner still resolves normally.
+    if (tryChaosReincarnation()) return;
     Neo.stopSfxLoop?.('lightning_storm_loop');
     if (Neo.player) Neo.player.hp = 0;
     // A rival that lands the killing blow loots the body: takes up to 3 of the

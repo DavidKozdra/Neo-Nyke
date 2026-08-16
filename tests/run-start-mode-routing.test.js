@@ -78,6 +78,7 @@ function createNormalStartHarness({
     getConfiguredRunSeed: () => String(Neo.ui.seed?.value || '').trim() || createRandomSeed(),
     normalizeDifficulty: jest.fn(value => value),
     normalizeChallengeSelection: jest.fn(value => [...value]),
+    normalizeChaosSelection: jest.fn(value => [...(value || [])]),
     syncSeedState: jest.fn(),
     createDefaultPlayer: jest.fn(() => ({ items: {} })),
     grantTutorialResources: jest.fn(),

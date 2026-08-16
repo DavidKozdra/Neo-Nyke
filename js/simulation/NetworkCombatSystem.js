@@ -2,22 +2,30 @@
   const contentApi = typeof require === 'function'
     ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
+  const enemyScalingApi = typeof require === 'function'
+    ? require('./SharedEnemyScalingSystem.js')
+    : (root.NeoNyke?.simulation || {});
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const worldContentApi = typeof require === 'function'
     ? require('./SharedWorldContent.js')
     : (root.NeoNyke?.content || {});
-  const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi, worldContentApi);
+  const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi, worldContentApi, enemyScalingApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi, floorApi, worldContentApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi, floorApi, worldContentApi, enemyScalingApi) {
   'use strict';
 
   const generateFloorLayout = floorApi?.generateFloorLayout || browserApi?.generateFloorLayout;
   const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi?.CAMPAIGN_PLAYER_RADIUS || 14);
   const MAX_FLOOR = 10;
+  const {
+    scaleCampaignEnemyStats,
+    sanitizeCampaignEnemyDifficulty,
+    DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY = {},
+  } = enemyScalingApi || {};
   const STAIRS_DWELL_TICKS = 30; // ~1.5s at 20 Hz — a deliberate hold, not a walk-over.
   const REVIVE_DWELL_TICKS = 40; // ~2s standing over a downed ally to bring them back.
   const REVIVE_RADIUS = 44;
@@ -475,6 +483,31 @@
 
   function authorityGameMode(state) {
     return String(state.matchRules?.gameMode || state.matchRules?.mode || state.gameMode || 'normal');
+  }
+
+  function authorityProgressionDepth(state) {
+    return Math.max(
+      1,
+      Number(state.floorsEntered)
+        || (Math.max(0, Number(state.runLoopIndex) || 0) * MAX_FLOOR + Math.max(1, Number(state.floorNumber) || 1)),
+    );
+  }
+
+  function scaleAuthorityEnemyStats(state, baseStats, options = {}) {
+    if (typeof scaleCampaignEnemyStats !== 'function') {
+      throw new Error('Shared campaign enemy scaling is unavailable');
+    }
+    return scaleCampaignEnemyStats(baseStats, {
+      type: options.type || baseStats.type,
+      isBoss: options.isBoss === true,
+      progressionDepth: authorityProgressionDepth(state),
+      enemyLevel: options.enemyLevel ?? baseStats.level,
+      elapsedSeconds: state.elapsedSeconds,
+      gameMode: authorityGameMode(state),
+      endlessWave: state.endlessWave,
+      maxFloor: MAX_FLOOR,
+      difficulty: state.matchRules?.difficulty || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY,
+    });
   }
 
   // Boss Rush is intentionally a serialized state machine: campaign uses
@@ -2008,6 +2041,9 @@
       return false;
     }
     if (result.transitionToRoomId) {
+      const visited = new Set(Array.isArray(state.floorState?.visitedRoomIds) ? state.floorState.visitedRoomIds : []);
+      visited.add(result.transitionToRoomId);
+      state.floorState.visitedRoomIds = Array.from(visited);
       player.roomId = result.transitionToRoomId;
       player.x = Number(state.floorState?.width || 900) / 2;
       player.y = Number(state.floorState?.height || 700) / 2;
@@ -8635,6 +8671,7 @@
           weaponRandom: weaponRandom ? () => weaponRandom.next() : authorityFallbackRandom,
           rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
           rollScroll: nextRandom => rollCampaignScroll(nextRandom),
+          scrollChanceMultiplier: state.matchRules?.legacy?.scroll_scholar ? 1.5 : 1,
           weaponPool,
           ownedWeapons: rewardOwner?.ownedWeapons || {},
         });
@@ -9142,7 +9179,7 @@
             <= Number(candidate.radius || 18) + Number(pickup.radius || 13) + 5 + Number(candidate.pickupRadius || 0)
       ));
       if (!player) return;
-      if (pickup.endgameChoice && ['crown', 'returnGate', 'descend'].includes(pickup.type)) {
+      if (pickup.endgameChoice && ['crown', 'returnGate'].includes(pickup.type)) {
         const resolution = resolveCampaignGodEndgameChoice(pickup.type, authorityGodEndgameOptions(state));
         if (!resolution.ok) return;
         Object.entries(state.pickups).forEach(([candidateId, candidate]) => {
@@ -9167,10 +9204,6 @@
           advanceToNextFloor(state, emitEvent, 0, { targetFloor: 1, runLoopIndex: nextLoopIndex });
           spawnAuthorityLoopBlueRewardChoices(state, emitEvent);
           emitEvent('LOOP_COMPLETED', { playerId: player.id, loopIndex: nextLoopIndex, partyCrystalGain: 1 });
-          return;
-        }
-        if (resolution.action === 'descend') {
-          advanceToNextFloor(state, emitEvent, 1, { allowPastMax: true, runLoopIndex: state.runLoopIndex });
           return;
         }
         return;
@@ -9637,7 +9670,7 @@
   function advanceToNextFloor(state, emitEvent, floorSteps = 1, options = {}) {
     const steps = Math.trunc(Number(floorSteps || 1)) || 1;
     const requestedFloor = options.targetFloor == null ? Number(state.floorNumber || 1) + steps : Number(options.targetFloor);
-    const nextFloorNumber = Math.max(1, options.allowPastMax ? Math.trunc(requestedFloor) : Math.min(MAX_FLOOR, Math.trunc(requestedFloor)));
+    const nextFloorNumber = Math.max(1, Math.min(MAX_FLOOR, Math.trunc(requestedFloor)));
     const runLoopIndex = Math.max(0, Math.trunc(Number(options.runLoopIndex ?? state.runLoopIndex ?? state.floorState?.runLoopIndex) || 0));
     const floorSeed = `${state.matchSeed}|floor:${nextFloorNumber}`;
     const layout = typeof generateFloorLayout === 'function'
@@ -9688,13 +9721,17 @@
     applyPartyRivalCurses(state, emitEvent);
     schedulePartyRivalCompanions(state, emitEvent);
     scheduleRivalReturns(state, emitEvent);
-    emitEvent('FLOOR_ADVANCED', { floorNumber: nextFloorNumber, floorSeed, startRoomId: layout.startRoomId });
+    emitEvent('FLOOR_ADVANCED', {
+      floorNumber: nextFloorNumber,
+      floorSeed,
+      startRoomId: layout.startRoomId,
+      elapsedSeconds: Number(state.elapsedSeconds || 0),
+    });
   }
 
   function authorityGodEndgameOptions(state) {
     return {
       gameMode: state.gameMode || state.matchRules?.gameMode || 'normal',
-      endlessDescent: !!(state.matchRules?.endlessDescent || state.matchRules?.legacy?.endless_descent),
       width: Number(state.floorState?.width || 900),
       height: Number(state.floorState?.height || 700),
     };

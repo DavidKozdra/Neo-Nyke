@@ -373,7 +373,11 @@
     const weaponRandom = typeof options.weaponRandom === 'function' ? options.weaponRandom : random;
     const rollEliteItem = typeof options.rollEliteItem === 'function' ? options.rollEliteItem : () => '';
     const rollScroll = typeof options.rollScroll === 'function' ? options.rollScroll : () => '';
-    const scrollReward = !authoredRewardKey && floor > 3 && Number(scrollRandom()) < 0.2
+    // Scroll Scholar (legacy) raises this via scrollChanceMultiplier. Clamped to
+    // 1 so a large multiplier makes scrolls certain rather than overflowing past
+    // certainty and silently changing nothing.
+    const scrollChance = Math.max(0, Math.min(1, 0.2 * Math.max(0, Number(options.scrollChanceMultiplier ?? 1))));
+    const scrollReward = !authoredRewardKey && floor > 3 && Number(scrollRandom()) < scrollChance
       ? String(rollScroll(scrollRandom) || '') : '';
     const rewardKey = authoredRewardKey || scrollReward || String(rollEliteItem(random) || '');
     const weaponPool = Array.isArray(options.weaponPool) ? options.weaponPool : [];

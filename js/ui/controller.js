@@ -1339,21 +1339,219 @@ export function createUIController(view) {
       return `BUY ${def.cost} ${LC} · THEN TOGGLE`;
     }
 
-    function renderChallengeButtonContent(def, state) {
-      const status = getChallengeStatus(def, state);
+    // --- Mod card rendering (challenges / chaos / legacy) ---
+    // All three panes buy from the same Loop Crystal wallet, so they share one
+    // card shape: pixel icon, name, description, then a footer that is either a
+    // price tag (not owned) or an on/off pill (owned). Keeping the markup in one
+    // place is what makes "am I spending crystals or just toggling?" read the
+    // same everywhere.
+    //
+    // Buying is deliberately two-step. `armedModPurchase` holds the single card
+    // currently asking for confirmation; the first click arms it, the second
+    // spends. Only one card can be armed at a time, and any other panel action
+    // disarms it, so an armed card can never linger and catch a later click.
+    let armedModPurchase = '';
+
+    function isModPurchaseArmed(category, key) {
+      return armedModPurchase === `${category}:${key}`;
+    }
+
+    function armModPurchase(category, key) {
+      armedModPurchase = `${category}:${key}`;
+    }
+
+    function disarmModPurchase() {
+      const had = !!armedModPurchase;
+      armedModPurchase = '';
+      return had;
+    }
+
+    // The price footer is the load-bearing part of "it's clear we're buying":
+    // it always shows the cost against the wallet, and says plainly when the
+    // crystals aren't there.
+    function renderModPriceFooter(cost, canAfford, armed) {
+      if (armed) {
+        return `<span class="mod-card__buy mod-card__buy--armed"><span class="mod-card__buy-line">CONFIRM · SPEND ${cost} ${LC}</span><small>Click again to buy · Esc cancels</small></span>`;
+      }
+      if (!canAfford) {
+        return `<span class="mod-card__buy mod-card__buy--short"><span class="mod-card__buy-line">NEED ${cost} ${LC}</span><small>Not enough Loop Crystals</small></span>`;
+      }
+      return `<span class="mod-card__buy"><span class="mod-card__buy-line">BUY · ${cost} ${LC}</span><small>Spends Loop Crystals once</small></span>`;
+    }
+
+    function renderModToggleFooter(isSelected) {
+      return isSelected
+        ? '<span class="mod-card__toggle mod-card__toggle--on"><i aria-hidden="true">✓</i>ON THIS RUN<small>Click to turn off</small></span>'
+        : '<span class="mod-card__toggle"><i aria-hidden="true">○</i>OFF<small>Owned · click to turn on</small></span>';
+    }
+
+    // `state` carries isUnlocked / isOwned / isSelected / canAfford / armed.
+    // `options.permanent` marks legacy upgrades, which never toggle: once bought
+    // they are simply active forever, so they get an OWNED badge, not a switch.
+    function renderModCardContent(def, state, options = {}) {
+      const category = options.category || 'challenge';
       const accent = getChallengeAccent(def);
+      const iconKey = Neo.resolveModIconKey?.(def.key, category) || 'item';
+      const meta = options.metaLabel || def.theme || 'Challenge';
+      const reward = options.rewardLabel || def.reward || '';
+      let footer;
+      if (!state.isUnlocked) {
+        footer = `<span class="mod-card__buy mod-card__buy--locked"><span class="mod-card__buy-line">LOCKED</span><small class="mod-card__buy-line">Reach ${def.unlockLoops} ${LC} to unlock</small></span>`;
+      } else if (!state.isOwned) {
+        footer = renderModPriceFooter(def.cost, state.canAfford, state.armed);
+      } else if (options.permanent) {
+        footer = '<span class="mod-card__toggle mod-card__toggle--owned"><i aria-hidden="true">✓</i>OWNED<small>Active in every run</small></span>';
+      } else {
+        footer = renderModToggleFooter(state.isSelected);
+      }
       return `
-        <span class="challenge-btn__icon" style="--challenge-accent:${accent}">${Neo.escapeHtml(def.icon || '!')}</span>
-        <span class="challenge-btn__content">
+        <span class="mod-card__icon-frame" style="--challenge-accent:${accent}">
+          <canvas class="mod-card__icon" data-inv-ui-icon="${Neo.escapeHtml(iconKey)}" width="44" height="44" aria-hidden="true"></canvas>
+        </span>
+        <span class="challenge-btn__content mod-card__body">
           <span class="challenge-btn__top">
             <b>${Neo.escapeHtml(def.name)}</b>
-            <em>${status}</em>
+            <span class="mod-card__meta">${Neo.escapeHtml(meta)}</span>
           </span>
-          <span class="challenge-btn__meta">${Neo.escapeHtml(def.theme || 'Challenge')}</span>
           <span class="challenge-btn__desc">${Neo.escapeHtml(def.description)}</span>
-          <span class="challenge-btn__reward">${Neo.escapeHtml(def.reward || 'Challenge reward')}</span>
+          ${reward ? `<span class="challenge-btn__reward">${Neo.escapeHtml(reward)}</span>` : ''}
+          <span class="mod-card__footer">${footer}</span>
         </span>
       `;
+    }
+
+    // Repaints every mod-card canvas under a root. Cards are rebuilt with
+    // innerHTML on each update, so the canvases are fresh and always need a draw.
+    function paintModCardIcons(root) {
+      root?.querySelectorAll?.('.mod-card__icon[data-inv-ui-icon]').forEach(canvas => {
+        Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+      });
+    }
+
+    function renderChallengeButtonContent(def, state) {
+      return renderModCardContent(def, state, {
+        category: 'challenge',
+        metaLabel: def.theme || 'Challenge',
+        rewardLabel: def.reward || 'Challenge reward',
+      });
+    }
+
+    // --- Architect first-floor editor ---
+    // The editor works on a draft that only becomes the saved plan once it
+    // validates (start + ladder + a connected path). An invalid draft is kept in
+    // the UI so edits aren't lost, but never persisted as a usable plan.
+    const ARCHITECT_GRID_SIZE = 9;
+    const ARCHITECT_TYPE_LABELS = {
+      start: 'S', exit: 'L', combat: '', treasure: 'T', shop: '$', anvil: 'A',
+    };
+    let architectTool = 'start';
+    let architectDraft = null;
+
+    function getArchitectDraft() {
+      if (!architectDraft) {
+        const saved = Neo.metaProgress?.chaosFirstFloorPlan;
+        architectDraft = {
+          gridSize: ARCHITECT_GRID_SIZE,
+          cells: Array.isArray(saved?.cells) ? saved.cells.map(cell => ({ ...cell })) : [],
+        };
+      }
+      return architectDraft;
+    }
+
+    function paintArchitectCell(gx, gy) {
+      const draft = getArchitectDraft();
+      const index = draft.cells.findIndex(cell => cell.gx === gx && cell.gy === gy);
+      if (architectTool === 'erase') {
+        if (index >= 0) draft.cells.splice(index, 1);
+      } else {
+        // start and exit are unique roles, so painting one moves it rather than
+        // creating a second.
+        if (architectTool === 'start' || architectTool === 'exit') {
+          for (let i = draft.cells.length - 1; i >= 0; i -= 1) {
+            if (draft.cells[i].type === architectTool) draft.cells.splice(i, 1);
+          }
+        }
+        const existing = draft.cells.findIndex(cell => cell.gx === gx && cell.gy === gy);
+        if (existing >= 0) draft.cells[existing].type = architectTool;
+        else draft.cells.push({ gx, gy, type: architectTool });
+      }
+      const normalized = Neo.normalizeChaosFirstFloorPlan?.(draft) || null;
+      Neo.metaProgress.chaosFirstFloorPlan = normalized;
+      Neo.persistMetaSoon?.();
+      renderArchitectEditor();
+    }
+
+    function renderArchitectEditor() {
+      const editor = view.architectEditor;
+      if (!editor) return;
+      const active = (Neo.selectedChaos || []).includes('authored_first_floor');
+      editor.classList.toggle('hidden', !active);
+      if (!active) return;
+      const draft = getArchitectDraft();
+      const byKey = new Map(draft.cells.map(cell => [`${cell.gx},${cell.gy}`, cell]));
+      if (view.architectGrid) {
+        const cells = [];
+        for (let gy = 0; gy < ARCHITECT_GRID_SIZE; gy += 1) {
+          for (let gx = 0; gx < ARCHITECT_GRID_SIZE; gx += 1) {
+            const cell = byKey.get(`${gx},${gy}`);
+            const type = cell?.type || '';
+            cells.push(`<button type="button" class="architect-cell${type ? ` architect-cell--${Neo.escapeHtml(type)}` : ''}" data-gx="${gx}" data-gy="${gy}" aria-label="Room ${gx + 1}, ${gy + 1}${type ? `: ${Neo.escapeHtml(type)}` : ''}">${Neo.escapeHtml(ARCHITECT_TYPE_LABELS[type] ?? '')}</button>`);
+          }
+        }
+        view.architectGrid.innerHTML = cells.join('');
+        view.architectGrid.style.setProperty('--architect-cols', String(ARCHITECT_GRID_SIZE));
+      }
+      if (view.architectStatus) {
+        const hasStart = draft.cells.some(cell => cell.type === 'start');
+        const hasExit = draft.cells.some(cell => cell.type === 'exit');
+        const valid = !!Neo.normalizeChaosFirstFloorPlan?.(draft);
+        view.architectStatus.textContent = !hasStart
+          ? 'Place a start room.'
+          : !hasExit
+            ? 'Place a ladder room.'
+            : valid
+              ? `${draft.cells.length} rooms · plan ready`
+              : 'Ladder is not reachable from the start.';
+        view.architectStatus.classList.toggle('architect-status--bad', !valid);
+      }
+      view.architectTools?.forEach(button => {
+        button.classList.toggle('active', button.dataset.architectTool === architectTool);
+      });
+    }
+
+    function updateChaosSelection() {
+      const selected = new Set(Neo.normalizeChaosSelection?.(Neo.selectedChaos || []) || []);
+      const owned = Neo.getOwnedChaosSet?.() || new Set();
+      const loopCrystals = Math.max(0, Number(Neo.metaProgress?.loopCrystals || 0));
+      view.chaosButtons?.forEach(button => {
+        const key = button.dataset.chaos || '';
+        const def = Neo.CHAOS_DEFS?.[key];
+        if (!def) return;
+        const isOwned = owned.has(key);
+        const isSelected = selected.has(key);
+        const canAfford = loopCrystals >= Number(def.cost || 0);
+        const armed = isModPurchaseArmed('chaos', key);
+        button.style.setProperty('--challenge-accent', def.accent || '#8dd4ff');
+        button.classList.add('mod-card');
+        button.classList.toggle('purchased', isOwned);
+        button.classList.toggle('sel', isSelected);
+        button.classList.toggle('mod-card--buyable', !isOwned && canAfford);
+        button.classList.toggle('mod-card--unaffordable', !isOwned && !canAfford);
+        button.classList.toggle('mod-card--armed', armed);
+        button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        button.title = isOwned ? def.description : `${def.description} Cost: ${def.cost} Loop Crystals`;
+        button.innerHTML = renderModCardContent(def, {
+          isUnlocked: true, isOwned, isSelected, canAfford, armed,
+        }, { category: 'chaos', metaLabel: 'Chaos', rewardLabel: '' });
+      });
+      if (view.chaosHint) {
+        view.chaosHint.textContent = `${selected.size} ON THIS RUN${selected.size ? ' · NO CRYSTAL BONUS' : ''}`;
+      }
+      const chaosLoopCount = document.getElementById('chaosLoopCount');
+      if (chaosLoopCount) chaosLoopCount.textContent = loopCrystals;
+      drawLoopCrystalIcons(document.getElementById('challengePanel') || document);
+      paintModCardIcons(view.modsChaosPane || document);
+      renderArchitectEditor();
     }
 
     function getMetaChallengeContext() {
@@ -2040,13 +2238,20 @@ export function createUIController(view) {
       view.challengePanel?.setAttribute('aria-hidden', challengePanelOpen ? 'false' : 'true');
       view.challengeToggle?.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
       if (!challengePanelOpen) legacyPanelOpen = false;
+      // Never leave a purchase half-confirmed across an open/close cycle.
+      if (disarmModPurchase()) Neo.updateCharacterSelectionUI?.();
     }
 
     let legacyPanelOpen = false;
+    const MODS_TABS = new Set(['challenges', 'chaos', 'legacy']);
     function setModsTab(tab = 'challenges') {
-      const next = tab === 'legacy' ? 'legacy' : 'challenges';
+      const next = MODS_TABS.has(tab) ? tab : 'challenges';
       legacyPanelOpen = next === 'legacy';
+      // Leaving a pane cancels its pending buy, so returning later never lands
+      // on a card that is still one click from spending.
+      const wasArmed = disarmModPurchase();
       view.modsChallengesPane?.classList.toggle('hidden', next !== 'challenges');
+      view.modsChaosPane?.classList.toggle('hidden', next !== 'chaos');
       view.modsLegacyPane?.classList.toggle('hidden', next !== 'legacy');
       view.modsTabs?.forEach(button => {
         const active = button.dataset.modsTab === next;
@@ -2054,6 +2259,7 @@ export function createUIController(view) {
         button.setAttribute('aria-selected', active ? 'true' : 'false');
         button.tabIndex = active ? 0 : -1;
       });
+      if (wasArmed) Neo.updateCharacterSelectionUI?.();
     }
 
     function setLegacyPanelOpen(open) {
@@ -3758,6 +3964,28 @@ export function createUIController(view) {
             setModsTab(nextTab.dataset.modsTab || 'challenges');
           }));
         });
+        view.chaosButtons?.forEach(button => {
+          button.addEventListener('click', () => {
+            handlers.onChaosSelect(button.dataset.chaos || '');
+          });
+        });
+        view.architectTools?.forEach(button => {
+          button.addEventListener('click', () => {
+            architectTool = button.dataset.architectTool || 'start';
+            renderArchitectEditor();
+          });
+        });
+        view.architectGrid?.addEventListener('click', event => {
+          const cell = event.target?.closest?.('.architect-cell');
+          if (!cell) return;
+          paintArchitectCell(Number(cell.dataset.gx), Number(cell.dataset.gy));
+        });
+        view.architectClear?.addEventListener('click', () => {
+          architectDraft = { gridSize: ARCHITECT_GRID_SIZE, cells: [] };
+          Neo.metaProgress.chaosFirstFloorPlan = null;
+          Neo.persistMetaSoon?.();
+          renderArchitectEditor();
+        });
         view.legacyButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onLegacySelect(button.dataset.legacy || '');
@@ -4207,6 +4435,9 @@ export function createUIController(view) {
       setSaveState(text) { view.saveState.textContent = text; },
       setChallengePanelOpen,
       setLegacyPanelOpen,
+      isModPurchaseArmed,
+      armModPurchase,
+      disarmModPurchase,
       setRunHistoryOpen,
       setSandboxPanelOpen,
       setCustomCharacterPanelOpen,
@@ -4388,10 +4619,16 @@ export function createUIController(view) {
           const isUnlocked = unlocked.has(key);
           const isOwned = owned.has(key);
           const isSelected = selected.includes(key);
+          const canAfford = loopCrystals >= Number(def.cost || 0);
+          const armed = isModPurchaseArmed('challenge', key);
           button.style.setProperty('--challenge-accent', getChallengeAccent(def));
+          button.classList.add('mod-card');
           button.classList.toggle('locked', !isUnlocked);
           button.classList.toggle('purchased', isOwned);
           button.classList.toggle('sel', isSelected);
+          button.classList.toggle('mod-card--buyable', isUnlocked && !isOwned && canAfford);
+          button.classList.toggle('mod-card--unaffordable', isUnlocked && !isOwned && !canAfford);
+          button.classList.toggle('mod-card--armed', armed);
           button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
           button.disabled = !isUnlocked;
           button.title = !isUnlocked
@@ -4399,8 +4636,11 @@ export function createUIController(view) {
             : isOwned
               ? def.description
               : `${def.description} Cost: ${def.cost} Loop Crystals`;
-          button.innerHTML = renderChallengeButtonContent(def, { isUnlocked, isOwned, isSelected });
+          button.innerHTML = renderChallengeButtonContent(def, {
+            isUnlocked, isOwned, isSelected, canAfford, armed,
+          });
         });
+        paintModCardIcons(view.modsChallengesPane || document);
         if (view.challengeHint) {
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
@@ -4416,6 +4656,7 @@ export function createUIController(view) {
           drawLoopCrystalIcons(view.rhInfoContent);
         }
       },
+      updateChaosSelection,
       updateLegacySelection(owned, loopCrystals) {
         view.legacyButtons.forEach(button => {
           const key = button.dataset.legacy || '';
@@ -4423,18 +4664,25 @@ export function createUIController(view) {
           if (!def) return;
           const isOwned = owned.has(key);
           const canAfford = loopCrystals >= def.cost;
+          const armed = isModPurchaseArmed('legacy', key);
+          // Legacy defs carry no accent of their own; the pane's green reads as
+          // "permanent" against the challenge/chaos colors.
+          button.style.setProperty('--challenge-accent', '#9fdca9');
+          button.classList.add('mod-card', 'mod-card--legacy');
           button.classList.toggle('owned', isOwned);
+          button.classList.toggle('purchased', isOwned);
+          button.classList.toggle('mod-card--buyable', !isOwned && canAfford);
+          button.classList.toggle('mod-card--unaffordable', !isOwned && !canAfford);
+          button.classList.toggle('mod-card--armed', armed);
           button.disabled = isOwned;
-          const status = isOwned ? 'UNLOCKED' : canAfford ? `BUY ${def.cost} ${LC}` : `NEED ${def.cost} ${LC}`;
-          button.innerHTML = `
-            <span class="legacy-btn__top">
-              <b>${Neo.escapeHtml(def.name)}</b>
-              <em>${status}</em>
-            </span>
-            <span class="legacy-btn__desc">${Neo.escapeHtml(def.description)}</span>
-            <span class="legacy-btn__effect">${Neo.escapeHtml(def.effect)}</span>
-          `;
+          button.title = isOwned
+            ? `${def.description} (already unlocked)`
+            : `${def.description} Cost: ${def.cost} Loop Crystals`;
+          button.innerHTML = renderModCardContent(def, {
+            isUnlocked: true, isOwned, isSelected: false, canAfford, armed,
+          }, { category: 'legacy', metaLabel: 'Permanent', rewardLabel: def.effect, permanent: true });
         });
+        paintModCardIcons(view.modsLegacyPane || document);
         if (view.legacyHint) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
           view.legacyHint.textContent = `${ownedCount} / ${Neo.LEGACY_ORDER.length} UNLOCKED`;

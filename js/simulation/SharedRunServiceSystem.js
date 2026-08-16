@@ -69,7 +69,11 @@
     }
     if (type === 'FORGE_COMMITTED' && local) intents.push({ kind: 'tutorial', name: 'forge-confirm', data });
     if (type === 'FLOOR_ADVANCED') {
-      intents.push({ kind: 'achievement', name: 'floor:reached', data: { floor: data.floorNumber } });
+      intents.push({
+        kind: 'achievement',
+        name: 'floor:reached',
+        data: { floor: data.floorNumber, elapsedSeconds: Number(data.elapsedSeconds || 0) },
+      });
       intents.push({ kind: 'tutorial', name: 'ladder-use', data });
     }
     if (type === 'CHALLENGE_COMPLETED') intents.push({ kind: 'achievement', name: 'challenge:beaten', data: { challengeType: data.achievementType || data.challengeType } });

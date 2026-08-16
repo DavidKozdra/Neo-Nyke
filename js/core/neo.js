@@ -113,6 +113,13 @@ window.Neo = {
   // --- difficulty ---
   selectedDifficulty: 'medium',
   selectedChallenges: [],
+  // Chaos mods active for this run (see CHAOS_DEFS). Free toggles that rewrite a
+  // rule rather than tightening difficulty, so they carry no crystal bonus.
+  selectedChaos: [],
+  // Floor number a Reincarnation respawn was last spent on (0 = unspent), and
+  // whether First Light has already upgraded a relic this run.
+  chaosReincarnationFloor: 0,
+  chaosFirstLightSpent: false,
   practiceVariant: 'standard',
   customDifficultySettings: {
     waveBonus: 0,

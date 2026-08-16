@@ -12,11 +12,99 @@
     boss.ladderBossHealthModifier = floorNumberModifier;
   }
 
+  // Swap the player into a new character mid-run without rebuilding them: the
+  // run's progress (level, XP, items, coins, weapons) is untouched, and only the
+  // character-derived pieces are recomputed. maxHp is rescaled by the ratio of
+  // the two characters' multipliers so a swap neither heals nor kills, and the
+  // current HP keeps its proportion.
+  function applyChaosCharacterSwap(nextKey) {
+    const player = Neo.player;
+    if (!player || !nextKey || nextKey === player.character) return false;
+    const previousDef = Neo.CHARACTER_DEFS[player.character];
+    const nextDef = Neo.CHARACTER_DEFS[nextKey];
+    if (!nextDef) return false;
+    const previousMultiplier = Math.max(0.01, Number(previousDef?.hpMultiplier || 1));
+    const nextMultiplier = Math.max(0.01, Number(nextDef.hpMultiplier || 1));
+    const hpFraction = Math.max(0, Math.min(1, Number(player.hp || 0) / Math.max(1, Number(player.maxHp || 1))));
+    player.character = nextKey;
+    player.maxHp = Math.max(1, Math.round(Number(player.maxHp || 1) * (nextMultiplier / previousMultiplier)));
+    player.hp = Math.max(1, Math.round(player.maxHp * hpFraction));
+    // The new character's own kit is owned outright, otherwise a swap could
+    // strand a slot with a move the new body is not allowed to hold.
+    const defaults = Neo.getDefaultMovesForCharacter?.(nextKey) || {};
+    player.ownedMoves = player.ownedMoves || {};
+    Object.entries(defaults).forEach(([slot, moveKey]) => {
+      if (!moveKey) return;
+      player.ownedMoves[moveKey] = true;
+      if (!Neo.isMoveAllowedForCharacter?.(player.equippedMoves?.[slot], nextKey)) {
+        player.equippedMoves = player.equippedMoves || {};
+        player.equippedMoves[slot] = moveKey;
+      }
+    });
+    Neo.invalidateRunStatCaches?.();
+    return true;
+  }
+
+  // Shapeshifter and Loose Grip both reroll on every new floor. Shapeshifter runs
+  // first so Loose Grip filters its candidates against the body just rolled.
+  function applyChaosFloorRerolls() {
+    const chaos = globalThis.NeoNyke?.simulation;
+    if (!Neo.player || !chaos) return;
+    if (Neo.isChaosActive?.('random_character')) {
+      // Custom characters are excluded: their stats come from user settings
+      // rather than CHARACTER_DEFS, so the swap's HP rescale has nothing to read.
+      const candidates = (Neo.metaProgress?.unlockedCharacters || [])
+        .filter(key => key && Neo.CHARACTER_DEFS?.[key] && !Neo.isCustomCharacterKey?.(key));
+      const nextKey = chaos.rollChaosCharacter?.({
+        currentCharacter: Neo.player.character,
+        candidates,
+        random: () => Neo.nextRandom('world'),
+      });
+      if (applyChaosCharacterSwap(nextKey)) {
+        const name = Neo.CHARACTER_DEFS[nextKey]?.name || nextKey;
+        Neo.spawnParticle?.({ x: Neo.START_X, y: Neo.START_Y - 46, life: 1.8, text: `NOW: ${String(name).toUpperCase()}`, c: '#ff8dd2' });
+      }
+    }
+    if (Neo.isChaosActive?.('random_loadout')) {
+      const ownedMoves = Object.keys(Neo.player.ownedMoves || {}).filter(key => Neo.player.ownedMoves[key]);
+      const rolled = chaos.rollChaosLoadout?.({
+        equippedMoves: Neo.player.equippedMoves || {},
+        ownedMoves,
+        slotOf: key => Neo.MOVE_DEFS?.[key]?.slot || '',
+        isAllowed: key => Neo.isMoveAllowedForCharacter?.(key, Neo.player.character) !== false,
+        random: () => Neo.nextRandom('world'),
+      });
+      if (rolled) {
+        Neo.player.equippedMoves = { ...(Neo.player.equippedMoves || {}), ...rolled };
+        Neo.spawnParticle?.({ x: Neo.START_X, y: Neo.START_Y - 66, life: 1.8, text: 'MOVES REROLLED', c: '#7fd0ff' });
+        Neo.invalidateRunStatCaches?.();
+      }
+    }
+  }
+
   function generateFloor() {
     // Every floor the player enters funnels through here exactly once (normal
     // ladder, secret warp, floor-skip, and the loop reset all call generateFloor).
     // Run starts reset floorsEntered in resetScene() so the first floor lands on 1.
     Neo.floorsEntered = Math.max(1, Number(Neo.floorsEntered || 0) + 1);
+    // Achievements count floors here rather than at each call site: the ladder,
+    // jester portal, floor-skip and loop reset all land in generateFloor, and
+    // only this one spot is guaranteed to fire exactly once per floor entered.
+    // elapsedSeconds rides along so the sub-5-minute floor-10 sprint can be
+    // judged on the run clock at the moment the floor opens.
+    window.achievementEvents?.emit('floor:reached', {
+      floor: Neo.floor,
+      elapsedSeconds: Number(Neo.gameElapsedTime || 0),
+    });
+    // Turtle Boy's signature: a free laser tier every 3 floors descended. Keyed
+    // to floorsEntered (not `floor`, which resets each loop) so looping keeps
+    // paying it out, and granted here so every descent counts.
+    if (Neo.player?.character === 'turtle_boy' && Neo.floorsEntered > 1 && Neo.floorsEntered % 3 === 0) {
+      Neo.player.turtleLaserSteps = Number(Neo.player.turtleLaserSteps || 0) + 1;
+      Neo.spawnParticle?.({ x: Neo.START_X, y: Neo.START_Y - 28, life: 1.1, text: 'LASER +', c: '#7fe0ff' });
+      Neo.ringBurst?.(Neo.START_X, Neo.START_Y, 40, '#7fe0ff', 0.5);
+      Neo.playSfx?.('powerup');
+    }
     Neo.syncSeedState();
     Neo.resetRngStreams();
     Neo.rooms = [];
@@ -30,7 +118,22 @@
       shuffle: values => Neo.shuffle(values, 'world'),
       chance: probability => Neo.nextRandom('world') < probability,
     };
-    const layout = floorGenerator({
+    // Architect replaces generation for floor 1 of the first loop only: later
+    // floors and every loop after the first generate normally, so the drawn plan
+    // is a starting position rather than the whole run.
+    const architectLayout = Neo.isChaosActive?.('authored_first_floor')
+      && Neo.floor === 1 && Number(Neo.runLoopIndex || 0) === 0
+      ? globalThis.NeoNyke?.simulation?.createChaosFirstFloorLayout?.(
+        Neo.metaProgress?.chaosFirstFloorPlan,
+        {
+          runLoopIndex: Neo.runLoopIndex,
+          matchSeed: Neo.baseSeedStr,
+          floorSeed: Neo.getFloorSeed?.() || Neo.seedStr,
+          contentVersion: globalThis.NeoNyke?.simulation?.CAMPAIGN_CONTENT_VERSION,
+        },
+      )
+      : null;
+    const layout = architectLayout || floorGenerator({
       matchSeed: Neo.baseSeedStr,
       floorSeed: Neo.getFloorSeed?.() || Neo.seedStr,
       floorNumber: Neo.floor,
@@ -84,6 +187,9 @@
 
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
+    // Chaos rerolls land after the floor exists but before enterRoom, so the
+    // player walks into the first room already wearing the new form/loadout.
+    applyChaosFloorRerolls();
     if (!Neo.isTutorialRun?.() && Neo.gameMode !== 'story') spawnRivals();
     const curses = applyRivalCurses();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
@@ -4208,6 +4314,8 @@
 
   // Expose on Neo
   Neo.generateFloor = generateFloor;
+  Neo.applyChaosCharacterSwap = applyChaosCharacterSwap;
+  Neo.applyChaosFloorRerolls = applyChaosFloorRerolls;
   Neo.configureStartRoomDifficultyEncounter = configureStartRoomDifficultyEncounter;
   Neo.decorateRoomData = decorateRoomData;
   Neo.decorateRoomStructures = decorateRoomStructures;

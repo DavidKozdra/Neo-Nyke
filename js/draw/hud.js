@@ -297,6 +297,13 @@
         doors.w ? 1 : 0, doors.e ? 1 : 0, ladder, chestState, enemyState,
       ].join(':');
     }).join('|');
+    const multiplayerPlayerState = (Neo.multiplayerMapPlayerSlots || []).map(slot => {
+      const player = slot?.getEntity?.();
+      return [
+        slot?.id || '', player?.roomId || '', slot?.color || '',
+        slot?.isLocal ? 1 : 0, slot?.getDead?.() ? 1 : 0,
+      ].join(':');
+    }).join('|');
     return [
       Neo.canvas.width, Neo.canvas.height, window.innerWidth, window.innerHeight,
       minimapEntry.scale ?? '', minimapEntry.x ?? 0, minimapEntry.y ?? 0,
@@ -307,6 +314,7 @@
       Neo.hasLegacy?.('elite_tracker') ? 1 : 0,
       Neo.player?.activeBounty?.targetRoomKey || '',
       Neo.player?.activeBounty?.targetSpawned ? 1 : 0,
+      multiplayerPlayerState,
       roomState,
     ].join(';');
   }
@@ -824,6 +832,42 @@
       Neo.ctx.lineWidth = Math.max(1.5, Math.round(size * 0.18));
       Neo.ctx.strokeRect(yx + 0.5, yy + 0.5, size - 1, size - 1);
     }
+
+    // Network heroes outside the viewpoint room are absent from
+    // presentationPlayerSlots, so the multiplayer adapter publishes a separate
+    // all-room list for the map. Group markers by room and fan them around the
+    // tile center so a full four-player party remains individually visible.
+    const remotePlayersByRoom = new Map();
+    (Neo.multiplayerMapPlayerSlots || []).forEach(slot => {
+      if (!slot || slot.isLocal) return;
+      const player = slot.getEntity?.();
+      if (!player?.roomId) return;
+      const roomPlayers = remotePlayersByRoom.get(player.roomId) || [];
+      roomPlayers.push(slot);
+      remotePlayersByRoom.set(player.roomId, roomPlayers);
+    });
+    Neo.rooms.forEach(room => {
+      if (room.secret) return;
+      const roomPlayers = remotePlayersByRoom.get(room.id);
+      if (!roomPlayers?.length) return;
+      const roomCenterX = cellOriginX + room.gx * (size + gap) + size / 2;
+      const roomCenterY = cellOriginY + room.gy * (size + gap) + size / 2;
+      const markerRadius = Math.max(2, Math.min(5, size * 0.15));
+      const orbitRadius = roomPlayers.length > 1 ? size * 0.2 : 0;
+      roomPlayers.forEach((slot, index) => {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * index) / roomPlayers.length;
+        const markerX = roomCenterX + Math.cos(angle) * orbitRadius;
+        const markerY = roomCenterY + Math.sin(angle) * orbitRadius;
+        Neo.ctx.globalAlpha = slot.getDead?.() ? 0.55 : 1;
+        Neo.ctx.fillStyle = slot.color || '#ffffff';
+        Neo.ctx.strokeStyle = '#080b10';
+        Neo.ctx.lineWidth = Math.max(1, size * 0.08);
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(markerX, markerY, markerRadius, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+      });
+    });
 
     Neo.ctx.restore();
 

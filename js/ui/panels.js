@@ -120,6 +120,13 @@ export function bindInput() {
         if (event.key === 'Escape') { event.preventDefault(); Neo.cancelVoucherRedeem?.(); }
         return;
       }
+      // A mod card waiting on buy confirmation swallows the first Escape, so
+      // cancelling the purchase never also closes the panel behind it.
+      if (event.key === 'Escape' && Neo.uiController?.disarmModPurchase?.()) {
+        event.preventDefault();
+        Neo.updateCharacterSelectionUI?.();
+        return;
+      }
       if (event.key === 'Escape' && Neo.isPanelOpen?.(document.getElementById('specialRoomPanel'))) {
         event.preventDefault();
         Neo.setSpecialRoomPanelOpen?.(false);
@@ -259,19 +266,66 @@ export function bindInput() {
         const owned = Neo.getOwnedChallengeSet();
         if (!owned.has(challengeKey)) {
           if ((Neo.metaProgress.loopCrystals || 0) < def.cost) {
+            Neo.uiController.disarmModPurchase?.();
             Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 0.9, text: 'Not enough Loop Crystals', c: '#ff6f7f' });
+            Neo.updateCharacterSelectionUI();
             return;
           }
+          // Spending is never a single click: the first press arms the card and
+          // the second one actually pays.
+          if (!Neo.uiController.isModPurchaseArmed?.('challenge', challengeKey)) {
+            Neo.uiController.armModPurchase?.('challenge', challengeKey);
+            Neo.updateCharacterSelectionUI();
+            return;
+          }
+          Neo.uiController.disarmModPurchase?.();
           Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) - def.cost;
           Neo.metaProgress.unlockedChallenges = Neo.normalizeChallengeSelection([...(Neo.metaProgress.unlockedChallenges || []), challengeKey]);
           Neo.selectedChallenges = Neo.normalizeChallengeSelection([...Neo.selectedChallenges, challengeKey]);
           Neo.persistMetaSoon();
         } else if (Neo.selectedChallenges.includes(challengeKey)) {
+          // Toggling an owned mod is a different intent than buying, so it
+          // cancels any card left waiting on a buy confirmation.
+          Neo.uiController.disarmModPurchase?.();
           Neo.selectedChallenges = Neo.selectedChallenges.filter(key => key !== challengeKey);
         } else {
+          Neo.uiController.disarmModPurchase?.();
           Neo.selectedChallenges = Neo.normalizeChallengeSelection([...Neo.selectedChallenges, challengeKey]);
         }
         Neo.metaProgress.selectedChallenges = Neo.normalizeChallengeSelection(Neo.selectedChallenges);
+        Neo.persistMetaSoon();
+        Neo.updateCharacterSelectionUI();
+      },
+      onChaosSelect(chaosKey) {
+        const def = Neo.CHAOS_DEFS[chaosKey];
+        if (!def) return;
+        // First click buys the mod with Loop Crystals; after that it is a free
+        // per-run toggle, matching how challenges are purchased.
+        const owned = Neo.getOwnedChaosSet();
+        if (!owned.has(chaosKey)) {
+          if ((Neo.metaProgress.loopCrystals || 0) < def.cost) {
+            Neo.uiController.disarmModPurchase?.();
+            Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 0.9, text: 'Not enough Loop Crystals', c: '#ff6f7f' });
+            Neo.updateCharacterSelectionUI();
+            return;
+          }
+          if (!Neo.uiController.isModPurchaseArmed?.('chaos', chaosKey)) {
+            Neo.uiController.armModPurchase?.('chaos', chaosKey);
+            Neo.updateCharacterSelectionUI();
+            return;
+          }
+          Neo.uiController.disarmModPurchase?.();
+          Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) - def.cost;
+          Neo.metaProgress.unlockedChaos = Neo.normalizeChaosSelection([...(Neo.metaProgress.unlockedChaos || []), chaosKey]);
+          Neo.selectedChaos = Neo.normalizeChaosSelection([...Neo.selectedChaos, chaosKey]);
+        } else if (Neo.selectedChaos.includes(chaosKey)) {
+          Neo.uiController.disarmModPurchase?.();
+          Neo.selectedChaos = Neo.selectedChaos.filter(key => key !== chaosKey);
+        } else {
+          Neo.uiController.disarmModPurchase?.();
+          Neo.selectedChaos = Neo.normalizeChaosSelection([...Neo.selectedChaos, chaosKey]);
+        }
+        Neo.metaProgress.selectedChaos = Neo.normalizeChaosSelection(Neo.selectedChaos);
         Neo.persistMetaSoon();
         Neo.updateCharacterSelectionUI();
       },
@@ -290,8 +344,20 @@ export function bindInput() {
         if (!def) return;
         if (Neo.hasLegacy(legacyKey)) return;
         if ((Neo.metaProgress.loopCrystals || 0) < def.cost) {
+          // Previously a silent no-op; say why nothing happened.
+          Neo.uiController.disarmModPurchase?.();
+          Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 0.9, text: 'Not enough Loop Crystals', c: '#ff6f7f' });
+          Neo.updateCharacterSelectionUI();
           return;
         }
+        // Legacy upgrades are permanent and the priciest things in the panel, so
+        // they get the same two-step confirmation as challenges and chaos mods.
+        if (!Neo.uiController.isModPurchaseArmed?.('legacy', legacyKey)) {
+          Neo.uiController.armModPurchase?.('legacy', legacyKey);
+          Neo.updateCharacterSelectionUI();
+          return;
+        }
+        Neo.uiController.disarmModPurchase?.();
         Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) - def.cost;
         Neo.metaProgress.unlockedLegacy = Neo.normalizeLegacySelection([...(Neo.metaProgress.unlockedLegacy || []), legacyKey]);
         Neo.persistMetaSoon();
@@ -1778,18 +1844,27 @@ export function isOverlayBlockingInput() {
 export function isGodSweepUnlocked() {
     return Number(Neo.metaProgress.godsKilled || 0) > 0 && Number(Neo.metaProgress.loopCrystals || 0) >= 5;
   }
+  // NetworkGameView projects authority-owned arrays by reference. Rendering them
+  // must be read-only: local restocking or repricing would rewrite the snapshot.
+  function usesAuthorityProjectedShopStock() {
+    return !!Neo.multiplayerGameView?.active;
+  }
 
 export function getShopMoveOffers() {
     if (!Neo.isShopRoomActive?.()) return [];
-    if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
-    Neo.refreshRoomShopCosts(Neo.currentRoom);
+    if (!usesAuthorityProjectedShopStock()) {
+      if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
+      Neo.refreshRoomShopCosts(Neo.currentRoom);
+    }
     return Array.isArray(Neo.currentRoom.shopMoveOffers) ? Neo.currentRoom.shopMoveOffers : [];
   }
 
 export function getShopWeaponOffers() {
     if (!Neo.isShopRoomActive?.()) return [];
-    if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
-    Neo.refreshRoomShopCosts(Neo.currentRoom);
+    if (!usesAuthorityProjectedShopStock()) {
+      if (Neo.currentRoom.type === 'shop') Neo.ensureShopHasMinimumItemOffers?.(Neo.currentRoom);
+      Neo.refreshRoomShopCosts(Neo.currentRoom);
+    }
     return Array.isArray(Neo.currentRoom.shopWeaponOffers) ? Neo.currentRoom.shopWeaponOffers : [];
   }
   function getShopPurchaseState(offer, { owned = false, blocked = false } = {}) {
@@ -2008,7 +2083,9 @@ export function getShopWeaponOffers() {
   }
 
   function renderShopTradeCard(noItemsChallenge = false) {
-    const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
+    const tradeOffer = usesAuthorityProjectedShopStock()
+      ? Neo.currentRoom?.shopTradeOffer
+      : Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
     if (!tradeOffer || tradeOffer.unavailable || !tradeOffer.key) return '';
     const item = Neo.itemRegistry.get(tradeOffer.key) || Neo.ITEM_DEFS[tradeOffer.key];
     const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
@@ -2312,7 +2389,7 @@ export function renderShopPanel() {
     if (Neo.ui.shopCoins) Neo.ui.shopCoins.textContent = String(Math.max(0, Math.floor(Number(Neo.player.coins || 0))));
     drawGoldCoinIcons(Neo.ui.shopPanel);
     Neo.refreshShopVoucherBanner?.();
-    Neo.refreshRoomShopCosts(Neo.currentRoom);
+    if (!usesAuthorityProjectedShopStock()) Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     const noItemsChallenge = Neo.isChallengeActive('no_items');
     Neo.ui.shopTabs.forEach(tab => {

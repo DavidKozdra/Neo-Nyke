@@ -237,6 +237,31 @@ describe('authoritative network combat system', () => {
       && event.data.itemKey === 'mateos_bag')).toHaveLength(1);
   });
 
+  test('records a SPECIAL_ROOM_CHOICE teleport destination as visited before serialization', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    const portal = state.floorState.layout.rooms.find(room => room.id === player.roomId);
+    const destination = state.floorState.layout.rooms.find(room => room !== portal);
+    state.floorState.layout.rooms.forEach(room => {
+      if (room !== portal) room.type = 'combat';
+    });
+    Object.assign(portal, { type: 'portal', serviceUsed: false });
+    Object.assign(destination, { type: 'treasure', visited: false });
+    state.floorState.visitedRoomIds = [portal.id];
+
+    simulation.updateGame({
+      p1: { actions: [{ action: 'SPECIAL_ROOM_CHOICE', choiceId: 'vault' }] },
+    }, 0.05);
+
+    expect(player.roomId).toBe(destination.id);
+    expect(state.floorState.visitedRoomIds).toContain(destination.id);
+    expect(JSON.parse(simulation.serialize()).floorState.visitedRoomIds).toContain(destination.id);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'SPECIAL_ROOM_CHOICE_APPLIED',
+      data: expect.objectContaining({ playerId: player.id, transitionToRoomId: destination.id }),
+    }));
+  });
+
   test('materializes and resolves the shared circuit challenge switches on authority', () => {
     const { state, simulation, events } = combatHarness();
     const player = state.players.p1;
@@ -488,7 +513,7 @@ describe('authoritative network combat system', () => {
     }));
   });
 
-  test('resolves God loop and endless-descent choices as authoritative floor transitions', () => {
+  test('resolves the God loop choice as an authoritative floor transition and ignores retired descents', () => {
     const loop = combatHarness();
     const loopPlayer = loop.state.players.p1;
     loop.state.pickups.loopGate = {
@@ -503,6 +528,8 @@ describe('authoritative network combat system', () => {
     ]));
     expect(loop.events).toContainEqual(expect.objectContaining({ eventType: 'LOOP_COMPLETED', data: expect.objectContaining({ loopIndex: 1 }) }));
 
+    // Endless Descent is retired. A 'descend' gate carried in an old save must
+    // not advance the floor past MAX_FLOOR or emit an endgame choice.
     const descent = combatHarness();
     const descentPlayer = descent.state.players.p1;
     descent.state.floorNumber = 10;
@@ -512,11 +539,9 @@ describe('authoritative network combat system', () => {
       x: descentPlayer.x, y: descentPlayer.y, radius: 26, spawnTick: descent.state.tick,
     };
     descent.simulation.updateGame({}, 0.05);
-    expect(descent.state.floorNumber).toBe(11);
-    expect(descent.state.floorState.layout.rooms.find(room => room.id === descent.state.floorState.layout.exitRoomId).type)
-      .not.toBe('god');
-    expect(descent.events).toContainEqual(expect.objectContaining({
-      eventType: 'GOD_ENDGAME_CHOICE_SELECTED', data: expect.objectContaining({ pickupType: 'descend', action: 'descend' }),
+    expect(descent.state.floorNumber).toBe(10);
+    expect(descent.events).not.toContainEqual(expect.objectContaining({
+      eventType: 'GOD_ENDGAME_CHOICE_SELECTED',
     }));
   });
 

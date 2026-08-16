@@ -39,4 +39,72 @@ describe('shared special-room choices', () => {
     expect(h.state.matchRules.rivalCurses).toMatchObject({ obscureMap: false, reducePotions: true });
     expect(h.state.floorState.layout.rooms.filter(room => !room.secret).every(room => room.explored)).toBe(true);
   });
+
+  test('portal vault follows an active bounty target before treasure and service rooms', () => {
+    const h = harness('portal', { activeBounty: { targetRoomKey: '7,4' } });
+    h.state.floorState.layout.rooms.splice(
+      1,
+      0,
+      { id: 'service', gx: 4, gy: 4, type: 'prison', visited: false },
+      { id: 'treasure', gx: 5, gy: 4, type: 'treasure', visited: false },
+      { id: 'quarry', gx: 7, gy: 4, type: 'combat', visited: true },
+    );
+
+    expect(applySpecialRoomChoice(h.state, h.room, h.player, 'vault', h.random)).toMatchObject({
+      ok: true,
+      transitionToRoomId: 'quarry',
+      result: 'Portal locked onto the quarry',
+    });
+  });
+
+  test('portal vault prefers treasure, then an unvisited service, and otherwise rejects', () => {
+    const treasure = harness('portal');
+    treasure.state.floorState.layout.rooms.splice(
+      1,
+      0,
+      { id: 'service', gx: 4, gy: 4, type: 'oracle', visited: false },
+      { id: 'treasure', gx: 5, gy: 4, type: 'treasure', visited: false },
+    );
+    expect(applySpecialRoomChoice(treasure.state, treasure.room, treasure.player, 'vault', treasure.random)).toMatchObject({
+      ok: true,
+      transitionToRoomId: 'treasure',
+    });
+
+    const service = harness('portal');
+    service.state.floorState.layout.rooms.splice(
+      1,
+      service.state.floorState.layout.rooms.length - 1,
+      { id: 'visited-treasure', gx: 5, gy: 4, type: 'treasure', visited: true },
+      { id: 'service', gx: 4, gy: 4, type: 'oracle', visited: false },
+    );
+    expect(applySpecialRoomChoice(service.state, service.room, service.player, 'vault', service.random)).toMatchObject({
+      ok: true,
+      transitionToRoomId: 'service',
+    });
+
+    const nowhere = harness('portal');
+    nowhere.state.floorState.layout.rooms.splice(1);
+    expect(applySpecialRoomChoice(nowhere.state, nowhere.room, nowhere.player, 'vault', nowhere.random)).toEqual({
+      ok: false,
+      reason: 'NO_DESTINATION',
+    });
+    expect(nowhere.room.serviceUsed).toBe(false);
+  });
+
+  test('portal vault uses visitedRoomIds to exclude visited treasure and service destinations', () => {
+    const h = harness('portal');
+    h.state.floorState.layout.rooms.splice(
+      1,
+      h.state.floorState.layout.rooms.length - 1,
+      { id: 'treasure', gx: 5, gy: 4, type: 'treasure', visited: false },
+      { id: 'service', gx: 4, gy: 4, type: 'oracle', visited: false },
+    );
+    h.state.floorState.visitedRoomIds = [h.room.id, 'treasure', 'service'];
+
+    expect(applySpecialRoomChoice(h.state, h.room, h.player, 'vault', h.random)).toEqual({
+      ok: false,
+      reason: 'NO_DESTINATION',
+    });
+    expect(h.room.serviceUsed).toBe(false);
+  });
 });

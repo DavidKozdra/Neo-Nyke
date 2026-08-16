@@ -1500,18 +1500,6 @@
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText('LOOP', 0, 3);
-      } else if (pickup.type === 'descend') {
-        Neo.ctx.strokeStyle = '#c9a8f0';
-        Neo.ctx.shadowColor = '#c9a8f0';
-        Neo.ctx.shadowBlur = 22;
-        Neo.ctx.lineWidth = 3;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 20, 0, Math.PI * 2);
-        Neo.ctx.stroke();
-        Neo.ctx.fillStyle = '#c9a8f0';
-        Neo.ctx.font = 'bold 9px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText('DESCEND', 0, 3);
       } else if (pickup.type === 'secretWarp') {
         const color = pickup.delta >= 0 ? '#8dffcf' : '#8dd4ff';
         Neo.ctx.strokeStyle = color;

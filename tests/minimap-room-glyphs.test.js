@@ -1,5 +1,31 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+
+function createRecordingContext() {
+  const target = {
+    calls: [],
+    currentPath: [],
+    beginPath() {
+      this.currentPath = [];
+    },
+    arc(x, y, radius) {
+      this.currentPath.push({ type: 'arc', x, y, radius });
+    },
+    fill() {
+      this.calls.push({ op: 'fill', style: this.fillStyle, path: [...this.currentPath] });
+    },
+    stroke() {
+      this.calls.push({ op: 'stroke', style: this.strokeStyle, path: [...this.currentPath] });
+    },
+  };
+  return new Proxy(target, {
+    get(context, key) {
+      if (key in context) return context[key];
+      return () => {};
+    },
+  });
+}
 
 describe('minimap room icons', () => {
   const specialRooms = fs.readFileSync(path.join(__dirname, '../js/game/specialRooms.js'), 'utf8');
@@ -63,5 +89,73 @@ describe('minimap room icons', () => {
     expect(hud).toContain('const chestFrame = chestOpen ? 4 : 0');
     expect(hud).toContain('roomChests.every(chest => chest?.open)');
     expect(hud).toContain('drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored, { chestOpen })');
+  });
+
+  test('draws color-coded remote players in their authoritative rooms', () => {
+    const cacheContext = createRecordingContext();
+    const liveContext = createRecordingContext();
+    const cacheCanvas = { width: 0, height: 0, getContext: () => cacheContext };
+    const canvas = {
+      width: 900,
+      height: 700,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 700 }),
+    };
+    const rooms = [
+      { id: 'r1', gx: 0, gy: 0, explored: true, visited: true, secret: false, doors: {} },
+      { id: 'r2', gx: 1, gy: 0, explored: true, visited: true, secret: false, doors: {} },
+    ];
+    const playerSlot = (id, roomId, color, isLocal = false) => ({
+      id,
+      color,
+      isLocal,
+      getEntity: () => ({ id, roomId }),
+      getDead: () => false,
+    });
+    const Neo = {
+      canvas,
+      ctx: liveContext,
+      rooms,
+      currentRoom: rooms[0],
+      player: {},
+      pickups: [],
+      chests: [],
+      enemies: [],
+      gameElapsedTime: 1,
+      gameState: 'play',
+      floorRivalCurses: {},
+      SPECIAL_ROOM_DEFS: {},
+      multiplayerMapPlayerSlots: [
+        playerSlot('p1', 'r1', '#00f001', true),
+        playerSlot('p2', 'r1', '#2457ff'),
+        playerSlot('p3', 'r2', '#ff4bc1'),
+      ],
+      clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
+      getItemStats: () => ({}),
+      hasLegacy: () => false,
+      getAdaptiveQualityLevel: () => 0,
+    };
+    const window = {
+      innerWidth: 900,
+      innerHeight: 700,
+      NeoSettings: { getHudElements: () => ({ minimap: {} }) },
+      addEventListener: () => {},
+    };
+
+    vm.runInNewContext(hud, {
+      Neo,
+      window,
+      document: { createElement: () => cacheCanvas },
+      performance: { now: () => 1_000 },
+    });
+    Neo.drawMinimap();
+
+    const markerArc = color => cacheContext.calls
+      .find(call => call.op === 'fill' && call.style === color)
+      ?.path.find(entry => entry.type === 'arc');
+    const sameRoomMarker = markerArc('#2457ff');
+    const nextRoomMarker = markerArc('#ff4bc1');
+    expect(sameRoomMarker).toEqual(expect.objectContaining({ radius: expect.any(Number) }));
+    expect(nextRoomMarker.x).toBeGreaterThan(sameRoomMarker.x);
+    expect(markerArc('#00f001')).toBeUndefined();
   });
 });

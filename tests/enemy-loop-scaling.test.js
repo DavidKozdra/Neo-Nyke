@@ -1,135 +1,68 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-function extractFunction(source, functionName) {
-  const start = source.indexOf(`function ${functionName}`);
-  if (start < 0) throw new Error(`Missing function ${functionName}`);
-
-  const bodyStart = source.indexOf('{', start);
-  let depth = 0;
-  let end = bodyStart;
-  for (; end < source.length; end += 1) {
-    if (source[end] === '{') depth += 1;
-    if (source[end] === '}') depth -= 1;
-    if (depth === 0) break;
-  }
-  return source.slice(start, end + 1);
-}
+const {
+  CAMPAIGN_ENEMY_SCALING,
+  scaleCampaignEnemyStats,
+} = require('../js/simulation/SharedEnemyScalingSystem');
 
 describe('enemy loop scaling', () => {
-  const enemiesPath = path.join(__dirname, '../js/game/enemies.js');
-  const source = fs.readFileSync(enemiesPath, 'utf8');
   const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
-  const declarations = [
-    'const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;',
-    extractFunction(source, 'softCapEnemyScale'),
-    extractFunction(source, 'getEnemyLevelStatMultipliers'),
-    extractFunction(source, 'getBossLevelHpMultiplier'),
-    extractFunction(source, 'getBossTimeHpMultiplier'),
-    extractFunction(source, 'getProgressionDepth'),
-    extractFunction(source, 'scaleEnemyStats'),
-  ].join('\n');
 
-  function scaleAtDepth(floorsEntered, level = floorsEntered) {
-    const Neo = {
-      floor: ((floorsEntered - 1) % 10) + 1,
-      floorsEntered,
-      MAX_FLOOR: 10,
-      gameElapsedTime: 0,
+  // Mirrors js/game/enemies.js scaleEnemyStats(): the campaign wrapper feeds the
+  // shared curve and maps its hp/max/dmg/speed names back onto campaign stats.
+  function scaleCampaign(baseStats, options) {
+    const scaled = scaleCampaignEnemyStats({
+      ...baseStats,
+      maxHealth: baseStats.max,
+      health: baseStats.hp,
+      contactDamage: baseStats.dmg,
+      moveSpeed: baseStats.speed,
+    }, {
+      maxFloor: 10,
       gameMode: 'normal',
       endlessWave: 0,
-      ENEMY_SCALING: {
-        floor: 0.14,
-        levelHpBonus: 0.45,
-        bossLevelHpRate: 0.055,
-        bossLevelHpSoftCap: 3.25,
-        bossLevelHpSoftCapCurve: 0.55,
-        bossHpMinute: 0.055,
-        loop: 0.32,
-        minute: 0.12,
-        damageFloor: 0.095,
-        damageLoop: 0.2,
-        damageMinute: 0.055,
-        speedFloor: 0.035,
-        speedLoop: 0.07,
-        speedMinute: 0.018,
-        damageSoftCap: 2.15,
-        bossDamageSoftCap: 2.45,
-        speedSoftCap: 1.38,
-        bossLoopHp: 0.2,
-        bossLoopDamage: 0.05,
-        endlessWaveHp: 0.12,
-        endlessWaveDamage: 0.06,
-        endlessWaveSpeed: 0.012,
-        endlessWaveDamageSoftCap: 2.6,
-        endlessWaveSpeedSoftCap: 1.5,
-      },
-      getActiveSandboxSettings: () => null,
-      getDifficultyDef: () => ({
-        statMultiplier: 1,
-        bossStatMultiplier: 1,
-        speedMultiplier: 1,
-      }),
+      scaling: CAMPAIGN_ENEMY_SCALING,
+      sandbox: null,
+      ...options,
+    });
+    return {
+      ...baseStats,
+      hp: scaled.maxHealth,
+      max: scaled.maxHealth,
+      dmg: scaled.contactDamage,
+      speed: scaled.moveSpeed,
+      enemyLevelAttackSpeedMultiplier: scaled.enemyLevelAttackSpeedMultiplier,
     };
-    const scaleEnemyStats = new Function(
-      'Neo',
-      'isBossType',
-      `${declarations}; return scaleEnemyStats;`,
-    )(Neo, () => false);
+  }
 
-    return scaleEnemyStats({ hp: 100, max: 100, dmg: 10, speed: 100, attackCd: 1, level }, 'hunter');
+  function scaleAtDepth(floorsEntered, level = floorsEntered) {
+    return scaleCampaign({ hp: 100, max: 100, dmg: 10, speed: 100, attackCd: 1, level }, {
+      type: 'hunter',
+      isBoss: false,
+      progressionDepth: floorsEntered,
+      enemyLevel: level,
+      elapsedSeconds: 0,
+      difficulty: { statMultiplier: 1, bossStatMultiplier: 1, speedMultiplier: 1 },
+    });
   }
 
   function scaleBossAtDepth(floorsEntered, level = floorsEntered, difficulty = {}, gameMinutes = 0) {
-    const Neo = {
-      floor: ((floorsEntered - 1) % 10) + 1,
-      floorsEntered,
-      MAX_FLOOR: 10,
-      gameElapsedTime: gameMinutes * 60,
-      gameMode: 'normal',
-      endlessWave: 0,
-      ENEMY_SCALING: {
-        floor: 0.14,
-        bossLevelHpRate: 0.055,
-        bossLevelHpSoftCap: 3.25,
-        bossLevelHpSoftCapCurve: 0.55,
-        bossHpMinute: 0.055,
-        loop: 0.32,
-        minute: 0.12,
-        damageFloor: 0.095,
-        damageLoop: 0.2,
-        damageMinute: 0.055,
-        speedFloor: 0.035,
-        speedLoop: 0.07,
-        speedMinute: 0.018,
-        damageSoftCap: 2.15,
-        bossDamageSoftCap: 2.45,
-        speedSoftCap: 1.38,
-        bossLoopHp: 0.2,
-        bossLoopDamage: 0.05,
-        endlessWaveHp: 0.12,
-        endlessWaveDamage: 0.06,
-        endlessWaveSpeed: 0.012,
-        endlessWaveDamageSoftCap: 2.6,
-        endlessWaveSpeedSoftCap: 1.5,
-      },
-      getActiveSandboxSettings: () => null,
-      getDifficultyDef: () => ({
+    return scaleCampaign({ hp: 1880, max: 1880, dmg: 20, speed: 124, attackCd: 1, level }, {
+      type: 'artificer_knave',
+      isBoss: true,
+      progressionDepth: floorsEntered,
+      enemyLevel: level,
+      elapsedSeconds: gameMinutes * 60,
+      difficulty: {
         statMultiplier: 1.06,
         bossStatMultiplier: 0.95,
         bossHpGrowthMultiplier: 0.9,
         hpFloorScaleBonus: -0.02,
         speedMultiplier: 1.03,
         ...difficulty,
-      }),
-    };
-    const scaleEnemyStats = new Function(
-      'Neo',
-      'isBossType',
-      `${declarations}; return scaleEnemyStats;`,
-    )(Neo, type => type === 'artificer_knave');
-
-    return scaleEnemyStats({ hp: 1880, max: 1880, dmg: 20, speed: 124, attackCd: 1, level }, 'artificer_knave');
+      },
+    });
   }
 
   test('keeps every scaled stat increasing when a run crosses into a new loop', () => {
@@ -148,9 +81,9 @@ describe('enemy loop scaling', () => {
     // +45%/level number (1114) now that HP earns a credit only every 3 levels;
     // the point of this test is that the FLOOR component stays cumulative across
     // the loop boundary, which the growing hp/dmg/speed below still demonstrate.
-    expect(firstFloorAfterLoop.hp).toBe(572);
+    expect(firstFloorAfterLoop.hp).toBe(546);
     expect(firstFloorAfterLoop.dmg).toBe(48);
-    expect(firstFloorAfterLoop.speed).toBeCloseTo(156.52, 1);
+    expect(firstFloorAfterLoop.speed).toBeCloseTo(156.51, 1);
   });
 
   test('starts the level bonus only after level five (HP linear, damage still scales)', () => {

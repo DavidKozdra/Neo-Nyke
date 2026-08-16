@@ -33,6 +33,9 @@ export function resumeGame() {
       unlockedChallenges: [],
       selectedDifficulty: 'medium',
       selectedChallenges: [],
+      unlockedChaos: [],
+      selectedChaos: [],
+      chaosFirstFloorPlan: null,
       selectedCharacter: 'thorn_knight',
       characterKitChoices: {},
       customCharacters: normalizeCustomCharactersSettings(),
@@ -1189,6 +1192,9 @@ export function resumeGame() {
           unlockedChallenges: normalizeChallengeSelection(savedMeta.unlockedChallenges),
           selectedDifficulty: normalizeDifficulty(savedMeta.selectedDifficulty),
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
+          unlockedChaos: normalizeChaosSelection(savedMeta.unlockedChaos),
+          selectedChaos: normalizeChaosSelection(savedMeta.selectedChaos),
+          chaosFirstFloorPlan: normalizeChaosFirstFloorPlan(savedMeta.chaosFirstFloorPlan),
           selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
@@ -1204,6 +1210,7 @@ export function resumeGame() {
         warnIfUnlocksDropped('unlockedItems', savedMeta.unlockedItems || savedMeta.unlockedRelics, Neo.metaProgress.unlockedItems);
         warnIfUnlocksDropped('unlockedCharacters', savedMeta.unlockedCharacters, Neo.metaProgress.unlockedCharacters);
         warnIfUnlocksDropped('unlockedLegacy', savedMeta.unlockedLegacy, Neo.metaProgress.unlockedLegacy);
+        warnIfUnlocksDropped('unlockedChaos', savedMeta.unlockedChaos, Neo.metaProgress.unlockedChaos);
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
       syncMetaRecordsFromRunHistory();
@@ -1215,6 +1222,7 @@ export function resumeGame() {
       }
       Neo.selectedDifficulty = normalizeDifficulty(Neo.metaProgress.selectedDifficulty);
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
+      Neo.selectedChaos = normalizeChaosSelection(Neo.metaProgress.selectedChaos);
       {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
@@ -1334,6 +1342,64 @@ export function resumeGame() {
   function normalizeChallengeSelection(input) {
     if (!Array.isArray(input)) return [];
     return [...new Set(input.filter(key => Neo.CHALLENGE_DEFS[key]))];
+  }
+
+  // Room types the Architect editor may place. Deliberately excludes boss/god
+  // and secret rooms: those carry their own placement rules in the generator.
+  const CHAOS_PLAN_ROOM_TYPES = new Set(['start', 'exit', 'combat', 'treasure', 'shop', 'anvil']);
+
+  function normalizeChaosSelection(input) {
+    if (!Array.isArray(input)) return [];
+    return [...new Set(input.filter(key => Neo.CHAOS_DEFS[key]))];
+  }
+
+  // The Architect grid plan is player-drawn, so it is validated rather than
+  // trusted: cells must sit inside the grid, and the plan is only usable when a
+  // start and an exit exist and the exit is actually reachable from the start.
+  // An invalid plan normalizes to null and the floor generates normally.
+  function normalizeChaosFirstFloorPlan(input) {
+    if (!input || typeof input !== 'object') return null;
+    const gridSize = Math.max(3, Math.min(9, Math.trunc(Number(input.gridSize)) || 9));
+    const inBounds = cell => Number.isFinite(cell?.gx) && Number.isFinite(cell?.gy)
+      && cell.gx >= 0 && cell.gx < gridSize && cell.gy >= 0 && cell.gy < gridSize;
+    const seen = new Set();
+    const cells = (Array.isArray(input.cells) ? input.cells : [])
+      .map(cell => ({
+        gx: Math.trunc(Number(cell?.gx)),
+        gy: Math.trunc(Number(cell?.gy)),
+        type: String(cell?.type || 'combat'),
+      }))
+      .filter(cell => {
+        if (!inBounds(cell) || !CHAOS_PLAN_ROOM_TYPES.has(cell.type)) return false;
+        const key = `${cell.gx},${cell.gy}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    const start = cells.find(cell => cell.type === 'start');
+    const exit = cells.find(cell => cell.type === 'exit');
+    if (!start || !exit || !isChaosPlanConnected(cells, start, exit)) return null;
+    return { gridSize, cells };
+  }
+
+  // Orthogonal flood fill from the start cell. Rooms only connect edge-to-edge,
+  // matching how the generator's doors work, so a diagonal-only chain is not a
+  // path and the plan is rejected.
+  function isChaosPlanConnected(cells, start, exit) {
+    const byKey = new Map(cells.map(cell => [`${cell.gx},${cell.gy}`, cell]));
+    const queue = [start];
+    const visited = new Set([`${start.gx},${start.gy}`]);
+    while (queue.length > 0) {
+      const cell = queue.shift();
+      if (cell.gx === exit.gx && cell.gy === exit.gy) return true;
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+        const key = `${cell.gx + dx},${cell.gy + dy}`;
+        if (visited.has(key) || !byKey.has(key)) return;
+        visited.add(key);
+        queue.push(byKey.get(key));
+      });
+    }
+    return false;
   }
 
   function isSplitScreen() {
@@ -1584,6 +1650,17 @@ export function resumeGame() {
 
   function isChallengeActive(key) {
     return Neo.selectedChallenges.includes(key);
+  }
+
+  // Chaos mods are bought once, then toggle free per run. They deliberately
+  // grant no crystal bonus, so they never feed
+  // getActiveChallengeCrystalBonusMultiplier.
+  function isChaosActive(key) {
+    return (Neo.selectedChaos || []).includes(key);
+  }
+
+  function getOwnedChaosSet() {
+    return new Set(normalizeChaosSelection(Neo.metaProgress.unlockedChaos || []));
   }
 
   function getActiveChallengeCrystalBonusMultiplier() {
@@ -2930,6 +3007,11 @@ export function resumeGame() {
       Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
       Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
+      // An unowned chaos mod can never stay selected, so a save that predates a
+      // mod's cost cannot leave it silently active.
+      const ownedChaos = getOwnedChaosSet();
+      Neo.selectedChaos = normalizeChaosSelection(Neo.selectedChaos).filter(key => ownedChaos.has(key));
+      Neo.metaProgress.selectedChaos = normalizeChaosSelection(Neo.selectedChaos);
     }
     // A pending tutorial replay can't run as Sarge until the rest of the roster
     // is unlocked. Nudge the selection off Sarge so the player isn't staring at
@@ -2952,6 +3034,7 @@ export function resumeGame() {
     Neo.uiController.updateCharacterSelection(isCompetitive ? competitiveUnlocked : storyUnlocked, activeChar);
     Neo.uiController.updateDifficultySelection(unlockedDifficulties, isCompetitive ? 'hard' : Neo.selectedDifficulty, Neo.metaProgress.loopCrystals || 0);
     Neo.uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, isCompetitive ? [] : Neo.selectedChallenges, Neo.metaProgress.loopCrystals || 0, Neo.metaProgress.coins || 0);
+    Neo.uiController.updateChaosSelection?.();
     Neo.uiController.updateLegacySelection(ownedLegacy, Neo.metaProgress.loopCrystals || 0);
     Neo.syncCharacterUiTheme();
   }
@@ -3103,9 +3186,17 @@ export function resumeGame() {
       Neo.selectedChallenges = storyRun || shouldRunTutorial
         ? []
         : normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
+      // Story and tutorial runs are authored experiences; chaos would break the
+      // scripted beats, so they start clean like challenges do.
+      Neo.selectedChaos = storyRun || shouldRunTutorial
+        ? []
+        : normalizeChaosSelection(Neo.metaProgress.selectedChaos);
       Neo.runLoopIndex = 0;
       Neo.runRevivesUsed = 0;
       Neo.runCrystalsEarned = 0;
+      // Floor a Reincarnation respawn was last spent on; 0 means unspent.
+      Neo.chaosReincarnationFloor = 0;
+      Neo.chaosFirstLightSpent = false;
       Neo.lastDeathEntryId = '';
       syncSeedState();
       Neo.floor = storySkipTutorial ? 2 : 1;
@@ -3124,6 +3215,7 @@ export function resumeGame() {
       if (Neo.gameMode === 'sandbox') {
         Neo.player.coins = Number(Neo.sandboxSettings.startingCoins || 0);
         Neo.selectedChallenges = [];
+        Neo.selectedChaos = [];
         const startItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
           ? Neo.sandboxSettings.startingItems
           : {};
@@ -3170,6 +3262,7 @@ export function resumeGame() {
     Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3204,6 +3297,7 @@ export function resumeGame() {
     Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3259,6 +3353,7 @@ export function resumeGame() {
     Neo.baseSeedStr = serverSeed;
     Neo.selectedDifficulty = 'hard';
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3296,6 +3391,7 @@ export function resumeGame() {
     Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3335,6 +3431,7 @@ export function resumeGame() {
       ? normalizeDifficulty(Neo.selectedDifficulty)
       : Neo.practiceVariant === 'beams' ? 'hard' : 'easy';
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3562,6 +3659,7 @@ export function resumeGame() {
     Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -3837,6 +3935,7 @@ export function resumeGame() {
     Neo.baseSeedStr = getConfiguredRunSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
+    Neo.selectedChaos = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
     Neo.runCrystalsEarned = 0;
@@ -4615,6 +4714,11 @@ export function resumeGame() {
   Neo.getOwnedChallengeSet = getOwnedChallengeSet;
   Neo.getUnlockedChallengeSet = getUnlockedChallengeSet;
   Neo.isChallengeActive = isChallengeActive;
+  Neo.isChaosActive = isChaosActive;
+  Neo.getOwnedChaosSet = getOwnedChaosSet;
+  Neo.normalizeChaosSelection = normalizeChaosSelection;
+  Neo.normalizeChaosFirstFloorPlan = normalizeChaosFirstFloorPlan;
+  Neo.CHAOS_PLAN_ROOM_TYPES = CHAOS_PLAN_ROOM_TYPES;
   Neo.getActiveChallengeCrystalBonusMultiplier = getActiveChallengeCrystalBonusMultiplier;
   Neo.createRandomSeed = createRandomSeed;
   Neo.syncSeedState = syncSeedState;

@@ -3395,7 +3395,6 @@
     const result = globalThis.NeoNyke.simulation.useCampaignJesterGate(runState, pickup, { maxFloor: Neo.MAX_FLOOR });
     if (!result.ok) return false;
     Neo.floor = runState.floor;
-    window.achievementEvents?.emit('floor:reached', { floor: Neo.floor });
     Neo.refreshFloorChargeStates();
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
     Neo.persistMetaSoon();
@@ -3974,37 +3973,9 @@
         }
       }
 
-      if (pickup.type === 'descend') {
-        const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
-          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
-        });
-        if (endgameChoice && !endgameChoice.ok) return;
-        Neo.floor += 1;
-        // Turtle Boy's signature: a free laser tier every 3 floors descended
-        // (floors 3, 6, 9, ...). Each step permanently buffs his Turtle Wave.
-        if (Neo.player?.character === 'turtle_boy' && Neo.floor % 3 === 0) {
-          Neo.player.turtleLaserSteps = Number(Neo.player.turtleLaserSteps || 0) + 1;
-          Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.1, text: 'LASER +', c: '#7fe0ff' });
-          Neo.ringBurst?.(Neo.player.x, Neo.player.y, 40, '#7fe0ff', 0.5);
-          Neo.playSfx?.('powerup');
-        }
-        window.achievementEvents?.emit('floor:reached', { floor: Neo.floor });
-        Neo.refreshFloorChargeStates();
-        Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
-        Neo.persistMetaSoon();
-        Neo.showFloorTransition = true;
-        Neo.floorTransitionTime = 0;
-        Neo.player.x = Neo.START_X;
-        Neo.player.y = Neo.START_Y;
-        Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
-        Neo.generateFloor();
-        Neo.scheduleRunSave();
-        return;
-      }
-
       if (pickup.type === 'returnGate') {
         const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
-          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
+          gameMode: Neo.gameMode,
         });
         if (endgameChoice && !endgameChoice.ok) return;
         if (endgameChoice?.action === 'victory' || Neo.gameMode === 'competitive') {
@@ -4017,7 +3988,7 @@
 
       if (pickup.type === 'crown') {
         const endgameChoice = globalThis.NeoNyke?.simulation?.resolveCampaignGodEndgameChoice?.(pickup.type, {
-          gameMode: Neo.gameMode, endlessDescent: !!Neo.hasLegacy?.('endless_descent'),
+          gameMode: Neo.gameMode,
         });
         if (endgameChoice && !endgameChoice.ok) return;
         Neo.win();
@@ -4432,6 +4403,20 @@
     window.achievementEvents?.emit('meta:coins', { total: Neo.metaProgress.coins });
   }
 
+  // Debug/console helper: grant Loop Crystals straight into meta progress.
+  // Negative amounts spend (clamped at 0). Returns the new balance.
+  function giveLoopCrystals(amount) {
+    const delta = Math.round(Number(amount) || 0);
+    const next = Math.max(0, Number(Neo.metaProgress.loopCrystals || 0) + delta);
+    Neo.metaProgress.loopCrystals = next;
+    if (delta > 0 && Neo.player && Neo.gameState === 'play') {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 54, life: 1.1, text: `+${delta} LC`, c: '#83f3ff' });
+    }
+    Neo.persistMetaSoon();
+    Neo.refreshMenuState?.();
+    return next;
+  }
+
   // Expose on Neo
   Neo.updatePlayer2 = updatePlayer2;
   Neo.updatePlayerN = updatePlayerN;
@@ -4496,3 +4481,8 @@
   Neo.spawnLoopBlueRewardChoices = spawnLoopBlueRewardChoices;
   Neo.returnToFloorOne = returnToFloorOne;
   Neo.addCoins = addCoins;
+  Neo.giveLoopCrystals = giveLoopCrystals;
+  // Console shortcut: giveLoopCrystals(5). Guarded because world.js is also
+  // evaluated in DOM-free contexts (tests, the authority) where `window` is
+  // undefined and a bare reference would throw at load.
+  if (typeof window !== 'undefined') window.giveLoopCrystals = giveLoopCrystals;
