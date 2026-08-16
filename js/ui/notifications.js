@@ -656,17 +656,32 @@ const INVENTORY_UI_ICON_DEFS = {
     pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
     accentPixels: [[3,2],[3,3],[4,3],[5,3]],
   },
-  'mode-endless': { // infinity loop
+  'mode-endless': { // infinity loop: two open rings crossing at the centre
     color: '#8dd4ff',
     accent: '#e4f6ff',
-    pixels: [[1,2],[2,2],[5,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[2,5],[5,5],[6,5]],
-    accentPixels: [[3,3],[4,4]],
+    pixels: [
+      [1,2],[2,2],[5,2],[6,2],
+      [0,3],[3,3],[4,3],[7,3],
+      [0,4],[3,4],[4,4],[7,4],
+      [1,5],[2,5],[5,5],[6,5],
+    ],
+    accentPixels: [[3,3],[4,4],[4,3],[3,4]],
   },
-  'mode-boss_rush': { // horned boss skull
+  'mode-boss_rush': { // horned skull with sunken eyes and a jaw
     color: '#ff6f7f',
     accent: '#ffe0e6',
-    pixels: [[0,1],[7,1],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[1,3],[6,3],[1,4],[6,4],[2,5],[3,5],[4,5],[5,5],[2,6],[5,6]],
-    accentPixels: [[2,3],[5,3],[3,4],[4,4]],
+    pixels: [
+      [0,0],[7,0],
+      [0,1],[2,1],[3,1],[4,1],[5,1],[7,1],
+      [1,2],[2,2],[3,2],[4,2],[5,2],[6,2],
+      // Row 3 leaves 2 and 5 empty: the gaps are the eye sockets, so the skull
+      // reads by its holes rather than by drawn-on detail.
+      [1,3],[3,3],[4,3],[6,3],
+      [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+      [2,5],[3,5],[4,5],[5,5],
+      [2,6],[4,6],
+    ],
+    accentPixels: [[0,0],[7,0],[3,5],[4,5]],
   },
   'mode-rival_rumble': { // crossed duelling swords
     color: '#d8b0ff',

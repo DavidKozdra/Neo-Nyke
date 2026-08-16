@@ -40,31 +40,152 @@
     endlessWaveSpeedSoftCap: 1.5,
   });
 
-  // Legacy clients did not send a room difficulty. Preserve the campaign's
-  // default Medium curve for those rooms rather than silently using neutral 1x.
-  const DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY = Object.freeze({
-    key: 'medium',
-    statMultiplier: 1.06,
-    bossStatMultiplier: 0.95,
-    bossHpGrowthMultiplier: 0.9,
-    hpFloorScaleBonus: -0.02,
-    speedMultiplier: 1.03,
-    eliteHpMultiplier: 1,
-    eliteChance: 0.16,
-    eliteFloor: 8,
-    miniBossChanceMultiplier: 1.18,
-    roomWeightBonus: 0.05,
-    bossProjectileSpeedMultiplier: 0.9,
-    enemyReactionMultiplier: 1.06,
-    rangedCadenceMultiplier: 0.95,
-    supportPowerMultiplier: 1.08,
-    shopPriceMultiplier: 1.08,
-    itemDropChanceMultiplier: 1.1,
-    ccResistScale: 0.12,
-    statusResistScale: 0.06,
+  // Network room creation accepts a difficulty key from clients, but named
+  // presets are authority-owned. Keeping the gameplay fields here gives the
+  // browser campaign and server one canonical preset table; only `custom`
+  // accepts sanitized client-provided overrides.
+  const CAMPAIGN_ENEMY_DIFFICULTY_PRESETS = Object.freeze({
+    easy: Object.freeze({
+      key: 'easy',
+      waveBonus: 0,
+      eliteFloor: 8,
+      eliteChance: 0.12,
+      miniBossChanceMultiplier: 1,
+      roomWeightBonus: 0,
+      statMultiplier: 1,
+      bossStatMultiplier: 0.8,
+      bossHpGrowthMultiplier: 0.65,
+      hpFloorScaleBonus: -0.045,
+      eliteHpMultiplier: 0.6,
+      itemDropChanceMultiplier: 1.15,
+      speedMultiplier: 1,
+      bossProjectileSpeedMultiplier: 0.75,
+      enemyReactionMultiplier: 1,
+      rangedCadenceMultiplier: 1,
+      supportPowerMultiplier: 1,
+      shopPriceMultiplier: 1,
+      ccResistScale: 0.04,
+      statusResistScale: 0,
+    }),
+    medium: Object.freeze({
+      key: 'medium',
+      waveBonus: 0,
+      eliteFloor: 8,
+      eliteChance: 0.16,
+      miniBossChanceMultiplier: 1.18,
+      roomWeightBonus: 0.05,
+      statMultiplier: 1.06,
+      bossStatMultiplier: 0.95,
+      bossHpGrowthMultiplier: 0.9,
+      itemDropChanceMultiplier: 1.1,
+      hpFloorScaleBonus: -0.02,
+      speedMultiplier: 1.03,
+      bossProjectileSpeedMultiplier: 0.9,
+      enemyReactionMultiplier: 1.06,
+      rangedCadenceMultiplier: 0.95,
+      supportPowerMultiplier: 1.08,
+      shopPriceMultiplier: 1.08,
+      ccResistScale: 0.12,
+      statusResistScale: 0.06,
+    }),
+    hard: Object.freeze({
+      key: 'hard',
+      waveBonus: 1,
+      eliteFloor: 7,
+      eliteChance: 0.2,
+      miniBossChanceMultiplier: 1.35,
+      roomWeightBonus: 0.1,
+      statMultiplier: 1.12,
+      bossStatMultiplier: 1.16,
+      bossHpGrowthMultiplier: 1.15,
+      hpFloorScaleBonus: 0.02,
+      speedMultiplier: 1.06,
+      bossProjectileSpeedMultiplier: 1.2,
+      enemyReactionMultiplier: 1.12,
+      rangedCadenceMultiplier: 0.9,
+      supportPowerMultiplier: 1.14,
+      shopPriceMultiplier: 1.16,
+      ccResistScale: 0.30,
+      statusResistScale: 0.16,
+      enemyBleedDamageMultiplier: 0.8,
+      itemDropChanceMultiplier: 0.8,
+      shopItemOffers: 2,
+    }),
+    impossible: Object.freeze({
+      key: 'impossible',
+      waveBonus: 3,
+      eliteFloor: 6,
+      eliteChance: 0.26,
+      miniBossChanceMultiplier: 1.6,
+      roomWeightBonus: 0.16,
+      statMultiplier: 1.22,
+      bossStatMultiplier: 1.28,
+      bossHpGrowthMultiplier: 1.35,
+      hpFloorScaleBonus: 0.05,
+      speedMultiplier: 1.1,
+      bossProjectileSpeedMultiplier: 1.3,
+      enemyReactionMultiplier: 1.2,
+      rangedCadenceMultiplier: 0.82,
+      supportPowerMultiplier: 1.22,
+      shopPriceMultiplier: 1.28,
+      ccResistScale: 0.45,
+      statusResistScale: 0.28,
+      enemyLoopDamageReduction: 0.05,
+      enemyBleedDamageMultiplier: 0.65,
+      itemDropChanceMultiplier: 0.45,
+      shopItemOffers: 2,
+    }),
+    god: Object.freeze({
+      key: 'god',
+      waveBonus: 4,
+      eliteFloor: 5,
+      eliteChance: 0.32,
+      miniBossChanceMultiplier: 1.9,
+      roomWeightBonus: 0.22,
+      statMultiplier: 1.5,
+      bossStatMultiplier: 1.6,
+      bossHpGrowthMultiplier: 1.65,
+      hpFloorScaleBonus: 0.08,
+      speedMultiplier: 1.14,
+      bossProjectileSpeedMultiplier: 1.4,
+      enemyReactionMultiplier: 1.28,
+      rangedCadenceMultiplier: 0.74,
+      supportPowerMultiplier: 1.3,
+      shopPriceMultiplier: 1.42,
+      ccResistScale: 0.6,
+      statusResistScale: 0.4,
+      enemyLoopDamageReduction: 0.05,
+      enemyBleedDamageMultiplier: 0.5,
+      itemDropChanceMultiplier: 0.3,
+      shopItemOffers: 1,
+      startRoomEliteCount: 2,
+      rivalItemsPerFloor: 5,
+      rivalLevelBonusPerFloor: 2,
+    }),
+    custom: Object.freeze({
+      key: 'custom',
+      waveBonus: 0,
+      eliteFloor: 8,
+      eliteChance: 0.12,
+      miniBossChanceMultiplier: 1,
+      roomWeightBonus: 0,
+      statMultiplier: 1,
+      bossStatMultiplier: 1,
+      bossHpGrowthMultiplier: 1,
+      hpFloorScaleBonus: 0,
+      speedMultiplier: 1,
+      enemyReactionMultiplier: 1,
+      rangedCadenceMultiplier: 1,
+      supportPowerMultiplier: 1,
+      shopPriceMultiplier: 1,
+      ccResistScale: 0,
+      statusResistScale: 0,
+    }),
   });
+  const DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.medium;
 
   const DIFFICULTY_NUMERIC_BOUNDS = Object.freeze({
+    waveBonus: [0, 20],
     statMultiplier: [0.1, 10],
     bossStatMultiplier: [0.1, 10],
     bossHpGrowthMultiplier: [0.1, 10],
@@ -113,6 +234,18 @@
     return result;
   }
 
+  function resolveCampaignEnemyDifficulty(source) {
+    const input = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+    const requestedKey = String(input.key || 'medium').toLowerCase();
+    const key = Object.prototype.hasOwnProperty.call(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS, requestedKey)
+      ? requestedKey
+      : 'medium';
+    const preset = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[key];
+    return key === 'custom'
+      ? sanitizeCampaignEnemyDifficulty(input, preset)
+      : { ...preset };
+  }
+
   function softCapEnemyScale(value, cap, curve = 0.35) {
     const numericValue = Math.max(1, Number(value) || 1);
     const numericCap = Math.max(1, Number(cap) || 1);
@@ -149,6 +282,14 @@
     return 1 + Math.max(0, Number(gameMinutes || 0)) * perMinuteRate;
   }
 
+  function getCampaignGodRunPressure(elapsedSeconds = 0) {
+    const minutes = Math.max(0, Number(elapsedSeconds) || 0) / 60;
+    return {
+      minutes,
+      damageMultiplier: Math.min(1.9, 1.18 + minutes * 0.045),
+    };
+  }
+
   function scaleCampaignEnemyStats(baseStats = {}, options = {}) {
     const scaling = options.scaling && typeof options.scaling === 'object'
       ? { ...CAMPAIGN_ENEMY_SCALING, ...options.scaling }
@@ -158,11 +299,13 @@
       : DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY;
     const progressionDepth = Math.max(1, Number(options.progressionDepth) || 1);
     const enemyLevel = Math.max(1, Number(options.enemyLevel ?? baseStats.level) || progressionDepth);
-    const gameMinutes = Math.max(0, Number(options.elapsedSeconds) || 0) / 60;
+    const elapsedSeconds = Math.max(0, Number(options.elapsedSeconds) || 0);
+    const gameMinutes = elapsedSeconds / 60;
     const gameMode = String(options.gameMode || 'normal');
     const endlessWaveIndex = gameMode === 'endless' ? Math.max(0, Number(options.endlessWave) || 0) : 0;
     const type = String(options.type || baseStats.type || '');
     const isBoss = options.isBoss === true;
+    const partySize = Math.max(1, Math.trunc(Number(options.partySize) || 1));
     const levelMultipliers = isBoss
       ? {
         hp: getBossLevelHpMultiplier(enemyLevel, difficulty, scaling),
@@ -227,6 +370,19 @@
       contactDamage = Math.max(1, Math.round(contactDamage * Math.max(0, Number(options.sandbox.enemyStatMultiplier) || 0)));
       moveSpeed *= Math.max(0, Number(options.sandbox.enemySpeedMultiplier) || 0);
     }
+    // These are part of the campaign spawn contract, not caller-owned boss
+    // patches. Keeping them here makes browser and authority stats identical.
+    if (isBoss) maxHealth = Math.max(1, Math.round(maxHealth * 2));
+    if (type === 'god') {
+      const pressure = getCampaignGodRunPressure(elapsedSeconds);
+      maxHealth = Math.max(1, Math.round(maxHealth * 5));
+      contactDamage = Math.max(1, Math.round(contactDamage * 2.2 * pressure.damageMultiplier));
+      moveSpeed *= 1.06;
+    }
+    // One hero is exact campaign parity. Each extra network hero contributes one
+    // campaign hero's damage budget, so authority HP scales linearly while enemy
+    // damage and movement stay at the authored campaign values.
+    maxHealth = Math.max(1, Math.round(maxHealth * partySize));
     return {
       ...baseStats,
       level: enemyLevel,
@@ -242,11 +398,14 @@
     ENEMY_UNIVERSAL_STAT_MULTIPLIER,
     CAMPAIGN_ENEMY_SCALING,
     DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY,
+    CAMPAIGN_ENEMY_DIFFICULTY_PRESETS,
     sanitizeCampaignEnemyDifficulty,
+    resolveCampaignEnemyDifficulty,
     softCapEnemyScale,
     getEnemyLevelStatMultipliers,
     getBossLevelHpMultiplier,
     getBossTimeHpMultiplier,
+    getCampaignGodRunPressure,
     scaleCampaignEnemyStats,
   };
 });

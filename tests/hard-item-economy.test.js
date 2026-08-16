@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -16,24 +17,21 @@ function extractFunction(source, functionName) {
 }
 
 describe('hard difficulty item economy', () => {
-  const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
   const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
-  const difficultySource = coreSource.slice(coreSource.indexOf('export const DIFFICULTY_DEFS = {'));
-
-  function getDifficultyBlock(key, nextKey) {
-    return difficultySource.slice(
-      difficultySource.indexOf(`  ${key}: {`),
-      difficultySource.indexOf(`  ${nextKey}: {`),
-    );
-  }
 
   test('tunes random relic frequency and shop stock from Hard upward', () => {
-    expect(getDifficultyBlock('hard', 'impossible')).toContain('itemDropChanceMultiplier: 0.8');
-    expect(getDifficultyBlock('hard', 'impossible')).toContain('shopItemOffers: 2');
-    expect(getDifficultyBlock('impossible', 'god')).toContain('itemDropChanceMultiplier: 0.45');
-    expect(getDifficultyBlock('impossible', 'god')).toContain('shopItemOffers: 2');
-    expect(getDifficultyBlock('god', 'custom')).toContain('itemDropChanceMultiplier: 0.3');
-    expect(getDifficultyBlock('god', 'custom')).toContain('shopItemOffers: 1');
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard).toEqual(expect.objectContaining({
+      itemDropChanceMultiplier: 0.8,
+      shopItemOffers: 2,
+    }));
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.impossible).toEqual(expect.objectContaining({
+      itemDropChanceMultiplier: 0.45,
+      shopItemOffers: 2,
+    }));
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god).toEqual(expect.objectContaining({
+      itemDropChanceMultiplier: 0.3,
+      shopItemOffers: 1,
+    }));
   });
 
   test.each([

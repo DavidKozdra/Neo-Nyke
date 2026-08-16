@@ -10,7 +10,7 @@ const {
 
 // Build a running match parked in its exit room with the encounter already
 // cleared, so the stairs are eligible to spawn on the next tick.
-function progressionHarness({ floorNumber = 1, players } = {}) {
+function progressionHarness({ floorNumber = 1, floorsEntered = floorNumber, players } = {}) {
   const floorState = createNetworkFloorState({ matchSeed: 'prog-seed', floorSeed: `prog-seed|floor:${floorNumber}`, floorNumber });
   const exitRoomId = floorState.layout.exitRoomId;
   floorState.currentRoomId = exitRoomId;
@@ -21,6 +21,7 @@ function progressionHarness({ floorNumber = 1, players } = {}) {
     matchSeed: 'prog-seed',
     floorSeed: `prog-seed|floor:${floorNumber}`,
     floorNumber,
+    floorsEntered,
     status: 'running',
     floorState,
     players: players || {
@@ -54,6 +55,7 @@ describe('floor progression, run end, and revive', () => {
     state.floorState.rewards = { 'room-4-4': { status: 'claimed', interactableIds: ['old-chest'] } };
     stepMany(simulation, 60); // spawn stairs + fill the dwell timer
     expect(state.floorNumber).toBe(2);
+    expect(state.floorsEntered).toBe(2);
     expect(Object.keys(state.interactables)).toHaveLength(0); // reset on new floor
     expect(Object.keys(state.enemies)).toHaveLength(0);
     expect(state.floorState.rewards).toEqual({});
@@ -81,6 +83,24 @@ describe('floor progression, run end, and revive', () => {
     advanceToNextFloor(b.state, () => {});
     expect(a.state.floorState.layout.exitRoomId).toBe(b.state.floorState.layout.exitRoomId);
     expect(a.state.floorState.layout.rooms.length).toBe(b.state.floorState.layout.rooms.length);
+  });
+
+  test('counts generated floors rather than numeric distance across skips and loops', () => {
+    const skipped = progressionHarness({ floorNumber: 2, floorsEntered: 2 });
+    advanceToNextFloor(skipped.state, () => {}, 3);
+    expect(skipped.state).toEqual(expect.objectContaining({
+      floorNumber: 5,
+      floorsEntered: 3,
+      runLoopIndex: 0,
+    }));
+
+    const looped = progressionHarness({ floorNumber: MAX_FLOOR, floorsEntered: MAX_FLOOR });
+    advanceToNextFloor(looped.state, () => {}, 0, { targetFloor: 1, runLoopIndex: 1 });
+    expect(looped.state).toEqual(expect.objectContaining({
+      floorNumber: 1,
+      floorsEntered: MAX_FLOOR + 1,
+      runLoopIndex: 1,
+    }));
   });
 
   test('a downed player is revived by an ally standing over them', () => {

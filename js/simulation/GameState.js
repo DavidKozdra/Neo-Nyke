@@ -55,6 +55,7 @@
       generationVersion: Math.max(1, Math.trunc(Number(source.generationVersion) || 1)),
       contentVersion: String(source.contentVersion || 'development'),
       floorNumber: Math.max(1, Math.trunc(Number(source.floorNumber) || 1)),
+      floorsEntered: Math.max(1, Math.trunc(Number(source.floorsEntered) || Number(source.floorNumber) || 1)),
       runLoopIndex: Math.max(0, Math.trunc(Number(source.runLoopIndex) || 0)),
       floorSkipPending: Math.max(0, Math.trunc(Number(source.floorSkipPending) || 0)),
       gameMode: String(source.gameMode || source.matchRules?.gameMode || 'normal'),

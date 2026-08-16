@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Lancer de couteau",
   "moves.antony_knife_throw.desc": "Lance le couteau d’Anthony en ligne droite à travers la rangée d’ennemis la plus proche.",
   "moves.antony_freeze_ball.name": "Orbe de givre",
-  "moves.antony_freeze_ball.desc": "Tire l’énorme orbe de givre à tête chercheuse d’Anthony. Il explose à l’impact et ralentit tout ce qui se trouve dans la zone d’explosion."
+  "moves.antony_freeze_ball.desc": "Tire l’énorme orbe de givre à tête chercheuse d’Anthony. Il explose à l’impact et ralentit tout ce qui se trouve dans la zone d’explosion.",
+  "difficulties.medium.name": "Moyen",
+  "difficulties.medium.description": "Des jets ennemis légèrement plus coriaces avec des chutes de reliques supplémentaires.",
+  "difficulties.hard.name": "Difficile",
+  "difficulties.hard.description": "Plus de pression et une mise à l’échelle plus forte. Les dégâts de saignement contre les ennemis sont 20 % moins efficaces.",
+  "difficulties.impossible.name": "Impossible",
+  "difficulties.impossible.description": "Se débloque après 5 boucles. Forte pression des élites et des miniboss. Les dégâts de saignement contre les ennemis sont 35% moins efficaces.",
+  "difficulties.god.name": "Dieu",
+  "difficulties.god.description": "Se débloque après 10 boucles. Des reliques rares, des ouvertures d'étage d'élite, des rivaux fortement améliorés et des dégâts de saignement ennemis 50 % moins efficaces.",
+  "difficulties.custom.name": "Personnalisé",
+  "difficulties.custom.description": "Ajustez vous-même chaque multiplicateur."
 }

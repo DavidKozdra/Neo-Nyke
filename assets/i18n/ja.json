@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "ナイフ投げ",
   "moves.antony_knife_throw.desc": "アンソニーの狙いを定めたナイフを、最も近い敵の列へ一直線に投げて貫通させる。",
   "moves.antony_freeze_ball.name": "フリーズボール",
-  "moves.antony_freeze_ball.desc": "アンソニーの巨大な追尾する氷結オーブを放つ。命中時に爆発し、爆風に巻き込まれたすべてを鈍足にする。"
+  "moves.antony_freeze_ball.desc": "アンソニーの巨大な追尾する氷結オーブを放つ。命中時に爆発し、爆風に巻き込まれたすべてを鈍足にする。",
+  "difficulties.medium.name": "中",
+  "difficulties.medium.description": "わずかに強力な敵のロールには追加のレリックドロップが含まれます。",
+  "difficulties.hard.name": "ハード",
+  "difficulties.hard.description": "さらなる圧力と強力なスケーリング。敵に対する出血ダメージの効果が 20% 減少します。",
+  "difficulties.impossible.name": "不可能",
+  "difficulties.impossible.description": "5回ループするとロックが解除されます。エリートとミニボスの重圧。敵に対する出血ダメージの効果が 35% 減少します。",
+  "difficulties.god.name": "神",
+  "difficulties.god.description": "10ループ後にロックが解除されます。希少な遺物、エリートフロアの開口部、大幅にブーストされたライバル、そして効果的な敵の出血ダメージが50％減少します。",
+  "difficulties.custom.name": "カスタム",
+  "difficulties.custom.description": "すべての乗数を自分で調整します。"
 }

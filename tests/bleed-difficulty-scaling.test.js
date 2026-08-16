@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -17,7 +18,6 @@ function extractFunction(source, functionName) {
 }
 
 describe('enemy bleed damage difficulty scaling', () => {
-  const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
   const scaleDeclaration = extractFunction(combatSource, 'scaleBleedDamageAgainstEnemy');
 
@@ -43,14 +43,9 @@ describe('enemy bleed damage difficulty scaling', () => {
   }
 
   test('configures the requested Hard, Impossible, and God curve', () => {
-    const difficultySource = coreSource.slice(
-      coreSource.indexOf('export const DIFFICULTY_DEFS'),
-      coreSource.indexOf('export const CHALLENGE_DEFS'),
-    );
-
-    expect(difficultySource).toContain('enemyBleedDamageMultiplier: 0.8');
-    expect(difficultySource).toContain('enemyBleedDamageMultiplier: 0.65');
-    expect(difficultySource).toContain('enemyBleedDamageMultiplier: 0.5');
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard.enemyBleedDamageMultiplier).toBe(0.8);
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.impossible.enemyBleedDamageMultiplier).toBe(0.65);
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god.enemyBleedDamageMultiplier).toBe(0.5);
   });
 
   test('reduces all enemy bleed ticks by the configured effectiveness', () => {

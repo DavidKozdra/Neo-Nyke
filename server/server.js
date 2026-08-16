@@ -17,6 +17,18 @@ import '../js/simulation/CampaignSimulation.js';
 import '../js/multiplayer/NetworkTransport.js';
 import '../js/protocol/ProtocolV1.js';
 import '../js/multiplayer/LocalMultiplayerSession.js';
+const { resolveCampaignEnemyDifficulty } = globalThis.NeoNyke?.simulation || {};
+
+function normalizeRoomDifficulty(options = {}) {
+  if (typeof resolveCampaignEnemyDifficulty !== 'function') {
+    throw new Error('Shared campaign difficulty resolution is unavailable');
+  }
+  return resolveCampaignEnemyDifficulty({
+    ...(options.difficulty || {}),
+    ...(options.difficultyKey ? { key: options.difficultyKey } : {}),
+  });
+}
+
 
 // Cloudflare Worker — NeoNyke backend
 // Bindings required (wrangler.toml):
@@ -297,11 +309,15 @@ export class MultiplayerRoom {
       maxPlayers,
       mode,
       deferFloorGeneration: true,
+      difficultyKey: room.difficultyKey,
+      difficulty: room.difficulty,
     });
     authority.mode = mode;
     authority.simulation.state.matchRules = {
       mode,
       gameMode: mode,
+      difficultyKey: authority.difficulty.key || 'medium',
+      difficulty: authority.difficulty,
       friendlyFire: mode === 'rival',
       reviveEnabled: mode === 'coop',
       floorAdvance: mode === 'rival' ? 'first' : 'all-living',
@@ -478,6 +494,7 @@ export class MultiplayerRoom {
     const options = await request.json().catch(() => ({}));
     const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    const difficulty = normalizeRoomDifficulty(options);
     const requestedRoomCode = normalizeRoomCode(options.roomCode);
     if (!requestedRoomCode) return json({ error: 'Room code is required' }, 400);
     this.roomCode = requestedRoomCode;
@@ -487,6 +504,8 @@ export class MultiplayerRoom {
       createdAt: Date.now(),
       maxPlayers,
       mode,
+      difficultyKey: difficulty.key,
+      difficulty,
       region: normalizeRegionHint(options.region),
       status: 'waiting',
     };
@@ -1080,6 +1099,7 @@ async function handleRequest(request, env) {
     }
     const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    const difficulty = normalizeRoomDifficulty(options);
     const region = options.region == null || options.region === '' ? null : normalizeRegionHint(options.region);
     if (options.region != null && options.region !== '' && !region) {
       return json({ error: 'Unsupported multiplayer region', code: 'INVALID_REGION' }, 400);
@@ -1097,7 +1117,7 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region }),
+        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) return json({ error: 'That code is already in use', code: 'ROOM_CODE_TAKEN' }, 409);
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -1106,6 +1126,7 @@ async function handleRequest(request, env) {
         status: 'waiting',
         maxPlayers,
         mode,
+        difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${requested}/socket`,
       }, 201);
@@ -1117,7 +1138,7 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode, mode, maxPlayers, region }),
+        body: JSON.stringify({ roomCode, mode, maxPlayers, region, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) continue;
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -1126,6 +1147,7 @@ async function handleRequest(request, env) {
         status: 'waiting',
         maxPlayers,
         mode,
+        difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,
       }, 201);

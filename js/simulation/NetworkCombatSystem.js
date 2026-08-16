@@ -507,7 +507,52 @@
       endlessWave: state.endlessWave,
       maxFloor: MAX_FLOOR,
       difficulty: state.matchRules?.difficulty || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY,
+      partySize: activePlayers(state).length,
     });
+  }
+
+  function applyAuthorityEliteProfile(state, enemy, enemyLevel, random = authorityFallbackRandom) {
+    const profile = resolveCampaignEliteProfile({
+      maxHealth: enemy.maxHealth,
+      health: enemy.health,
+      damage: enemy.contactDamage,
+      moveSpeed: enemy.moveSpeed,
+      radius: enemy.radius,
+      attackCooldown: enemy.attackCd,
+      statusResistances: enemy.statusResistances,
+      stunResistance: enemy.stunResistance,
+      bleedResistance: enemy.bleedResistance,
+      defenseMultiplier: enemy.defenseMultiplier,
+    }, {
+      level: enemyLevel,
+      random,
+      eliteHpMultiplier: state.matchRules?.difficulty?.eliteHpMultiplier ?? 1,
+    });
+    Object.assign(enemy, {
+      level: enemyLevel,
+      maxHealth: profile.maxHealth,
+      health: profile.health,
+      contactDamage: profile.damage,
+      moveSpeed: profile.moveSpeed,
+      radius: profile.radius,
+      attackCd: profile.attackCooldown,
+      statusResistances: profile.statusResistances,
+      stunResistance: profile.stunResistance,
+      bleedResistance: profile.bleedResistance,
+      defenseMultiplier: profile.defenseMultiplier,
+      eliteTypes: profile.eliteTypes,
+      eliteInventory: profile.eliteInventory,
+      eliteBody: profile.eliteBody,
+      eliteKnightMult: profile.eliteKnightMult,
+      eliteUnfazed: profile.eliteUnfazed,
+      elitePowers: profile.elitePowers,
+      eliteProcs: profile.eliteProcs,
+      eliteDurabilityV2: profile.eliteDurabilityV2,
+      eliteLaserCd: profile.eliteLaserCd,
+      eliteLaserModeIndex: profile.eliteLaserModeIndex,
+      eliteCrit: profile.eliteCrit,
+    });
+    return enemy;
   }
 
   // Boss Rush is intentionally a serialized state machine: campaign uses
@@ -530,6 +575,10 @@
       // Keep the campaign's floor-five economy/difficulty and reward-stream
       // baseline. Boss levels advance independently from level two per stage.
       state.floorNumber = Math.max(5, Number(state.floorNumber || 1));
+      state.floorsEntered = Math.max(
+        Math.max(1, Math.trunc(Number(state.floorsEntered) || 1)),
+        Math.trunc(Number(state.floorNumber) || 5),
+      );
       const room = currentRoom(state);
       if (room) {
         room.type = 'combat';
@@ -745,6 +794,10 @@
       rumble.nextSpawnTick = 0;
       rumble.grantedPlayerIds = {};
       state.floorNumber = Math.max(5, Number(state.floorNumber || 1));
+      state.floorsEntered = Math.max(
+        Math.max(1, Math.trunc(Number(state.floorsEntered) || 1)),
+        Math.trunc(Number(state.floorNumber) || 5),
+      );
       const room = currentRoom(state);
       if (room) { room.type = 'combat'; room.cleared = false; room.doors = { n: false, s: false, e: false, w: false }; }
     }
@@ -1423,14 +1476,16 @@
       const scaledStats = scaleAuthorityEnemyStats(state, {
         type,
         level: enemyLevel,
-        maxHealth: Number(archetype.maxHealth || 1) * healthScale,
+        maxHealth: Number(archetype.maxHealth || 1),
         contactDamage: Number(archetype.contactDamage || 0),
-        moveSpeed: Number(archetype.moveSpeed || 0) * (room.type === 'challenge' ? 1.08 : 1),
+        moveSpeed: Number(archetype.moveSpeed || 0),
       }, {
         type,
         isBoss: !!archetype.boss,
         enemyLevel,
       });
+      const spawnMaxHealth = Math.max(1, Math.round(scaledStats.maxHealth * healthScale));
+      const spawnMoveSpeed = scaledStats.moveSpeed * (room.type === 'challenge' ? 1.08 : 1);
       const projectileDamageRatio = Number(archetype.projectileDamage || archetype.contactDamage * 0.75)
         / Math.max(1, Number(archetype.contactDamage || 1));
       const enemy = {
@@ -1444,9 +1499,9 @@
         vx: 0,
         vy: 0,
         radius: archetype.radius,
-        moveSpeed: scaledStats.moveSpeed,
-        maxHealth: scaledStats.maxHealth,
-        health: scaledStats.maxHealth,
+        moveSpeed: spawnMoveSpeed,
+        maxHealth: spawnMaxHealth,
+        health: spawnMaxHealth,
         contactDamage: scaledStats.contactDamage,
         projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
         enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
@@ -1492,34 +1547,9 @@
         ...(type === 'handsome_devil' ? { phase: 1, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, clawCd: 0.4, giantLaserCd: 3.6, beamRange: 560 } : {}),
         ...(type === 'god' ? { phase: 1, partitionAngles: [], partitionAngle: 0, partitionRotationDir: 1, partitionRotationSpeed: 0 } : {}),
       };
-      if (elite) {
-        const profile = resolveCampaignEliteProfile({
-          maxHealth: enemy.maxHealth, health: enemy.health, damage: enemy.contactDamage,
-          moveSpeed: enemy.moveSpeed, radius: enemy.radius, attackCooldown: enemy.attackCd,
-          statusResistances: enemy.statusResistances, stunResistance: enemy.stunResistance,
-          bleedResistance: enemy.bleedResistance, defenseMultiplier: enemy.defenseMultiplier,
-        }, {
-          level: enemyLevel,
-          random: () => stream.next(),
-          eliteHpMultiplier: state.matchRules?.difficulty?.eliteHpMultiplier ?? 1,
-        });
-        Object.assign(enemy, {
-          level: enemyLevel,
-          maxHealth: profile.maxHealth, health: profile.health, contactDamage: profile.damage,
-          projectileDamage: Math.max(5, Math.round(Number(enemy.projectileDamage || 0) * Math.max(1, profile.damage / Math.max(1, archetype.contactDamage)))),
-          moveSpeed: profile.moveSpeed, radius: profile.radius, attackCd: profile.attackCooldown,
-          statusResistances: profile.statusResistances, stunResistance: profile.stunResistance,
-          bleedResistance: profile.bleedResistance, defenseMultiplier: profile.defenseMultiplier,
-          eliteTypes: profile.eliteTypes, eliteInventory: profile.eliteInventory,
-          eliteBody: profile.eliteBody, eliteKnightMult: profile.eliteKnightMult,
-          eliteUnfazed: profile.eliteUnfazed, elitePowers: profile.elitePowers,
-          eliteProcs: profile.eliteProcs, eliteDurabilityV2: profile.eliteDurabilityV2,
-          eliteLaserCd: profile.eliteLaserCd, eliteLaserModeIndex: profile.eliteLaserModeIndex,
-          eliteCrit: profile.eliteCrit,
-        });
-      } else {
-        enemy.level = enemyLevel;
-      }
+      if (elite) applyAuthorityEliteProfile(state, enemy, enemyLevel, () => stream.next());
+      else enemy.level = enemyLevel;
+      enemy.projectileDamage = Math.max(5, Math.round(enemy.contactDamage * projectileDamageRatio));
       state.enemies[enemyId] = enemy;
       enemyIds.push(enemyId);
       emitEvent('ENEMY_SPAWNED', {
@@ -1583,10 +1613,23 @@
       const height = Number(state.floorState?.height || 700);
       // Escaped targets come back tougher, matching the campaign's escalation.
       const escapes = Math.max(0, Number(bounty.escapes || 0));
-      const healthScale = 1.35 * (1 + escapes * 0.35);
-      const damageScale = 1.18 * (1 + escapes * 0.22);
+      const healthScale = 1 + escapes * 0.35;
+      const damageScale = 1 + escapes * 0.22;
+      const enemyLevel = Math.max(
+        authorityProgressionDepth(state),
+        ...activePlayers(state).map(candidate => Number(candidate.level || 1)),
+      );
+      const scaledStats = scaleAuthorityEnemyStats(state, {
+        type: def.enemyType,
+        level: enemyLevel,
+        maxHealth: Number(archetype.maxHealth || 1),
+        contactDamage: Number(archetype.contactDamage || 0),
+        moveSpeed: Number(archetype.moveSpeed || 0),
+      }, { type: def.enemyType, enemyLevel });
+      const projectileDamageRatio = Number(archetype.projectileDamage || archetype.contactDamage * 0.75)
+        / Math.max(1, Number(archetype.contactDamage || 1));
       const enemyId = state.allocateEntityId('enemy');
-      state.enemies[enemyId] = {
+      const enemy = {
         id: enemyId,
         type: def.enemyType,
         spriteKey: archetype.spriteKey,
@@ -1597,13 +1640,15 @@
         vx: 0,
         vy: 0,
         radius: archetype.radius,
-        moveSpeed: archetype.moveSpeed,
-        maxHealth: Math.max(1, Math.round(archetype.maxHealth * healthScale)),
-        health: Math.max(1, Math.round(archetype.maxHealth * healthScale)),
-        contactDamage: Math.max(1, Math.round(archetype.contactDamage * damageScale)),
-        projectileDamage: Math.max(5, Math.round(Number(archetype.projectileDamage || archetype.contactDamage * 0.75) * damageScale)),
+        moveSpeed: scaledStats.moveSpeed,
+        maxHealth: scaledStats.maxHealth,
+        health: scaledStats.maxHealth,
+        contactDamage: scaledStats.contactDamage,
+        projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+        enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
+        level: enemyLevel,
         elite: true,
-        eliteTypes: ['knight', 'bounty'],
+        eliteTypes: [],
         elitePowers: [],
         patterns: archetype.patterns || [],
         boss: false,
@@ -1632,6 +1677,12 @@
         bountyName: bounty.targetName || def.title,
         bountyEscapes: escapes,
       };
+      applyAuthorityEliteProfile(state, enemy, enemyLevel, () => stream.next());
+      enemy.maxHealth = Math.max(1, Math.round(enemy.maxHealth * healthScale));
+      enemy.health = enemy.maxHealth;
+      enemy.contactDamage = Math.max(1, Math.round(enemy.contactDamage * damageScale));
+      enemy.projectileDamage = Math.max(5, Math.round(enemy.contactDamage * projectileDamageRatio));
+      state.enemies[enemyId] = enemy;
       const encounter = state.floorState.encounters?.[room.id];
       if (encounter && Array.isArray(encounter.enemyIds)) encounter.enemyIds.push(enemyId);
       bounty.targetSpawned = true;
@@ -1832,11 +1883,25 @@
     if (!definition) return null;
     const id = state.allocateEntityId('enemy');
     const radius = Number(definition.radius || 36);
+    const enemyLevel = Math.max(
+      authorityProgressionDepth(state),
+      ...activePlayers(state).map(player => Number(player.level || 1)),
+    );
+    const scaledStats = scaleAuthorityEnemyStats(state, {
+      type: 'bowman_bane',
+      level: enemyLevel,
+      maxHealth: Number(definition.maxHealth || 2400),
+      contactDamage: Number(definition.contactDamage || 50),
+      moveSpeed: Number(definition.moveSpeed || 80),
+    }, { type: 'bowman_bane', isBoss: true, enemyLevel });
+    const projectileDamageRatio = Number(definition.projectileDamage || 32)
+      / Math.max(1, Number(definition.contactDamage || 50));
     const enemy = {
       id, type: 'bowman_bane', spriteKey: definition.spriteKey, behavior: definition.behavior, roomId: room.id,
       x: Number(state.floorState?.width || 900) / 2, y: Number(state.floorState?.height || 700) / 2 - 40,
-      vx: 0, vy: 0, radius, moveSpeed: Number(definition.moveSpeed || 80), maxHealth: Number(definition.maxHealth || 2400), health: Number(definition.maxHealth || 2400),
-      contactDamage: Number(definition.contactDamage || 50), projectileDamage: Number(definition.projectileDamage || 32),
+      vx: 0, vy: 0, radius, moveSpeed: scaledStats.moveSpeed, maxHealth: scaledStats.maxHealth, health: scaledStats.maxHealth,
+      contactDamage: scaledStats.contactDamage, projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+      enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier, level: enemyLevel,
       elite: false, eliteTypes: [], elitePowers: [], patterns: definition.patterns || [], boss: true, bleedImmune: true,
       statuses: createCampaignStatusMap(), contactCooldownUntilTick: 0, attackCooldownUntilTick: state.tick + 40, attackWindupUntilTick: 0,
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
@@ -6513,11 +6578,27 @@
       const desiredX = Math.max(inset, Math.min(Number(state.floorState?.width || 900) - inset, descriptor.x));
       const desiredY = Math.max(inset, Math.min(Number(state.floorState?.height || 700) - inset, descriptor.y));
       const placed = resolveRoomObstacleMovement(room, { x: desiredX, y: desiredY, radius }, desiredX, desiredY);
+      const enemyLevel = Math.max(
+        authorityProgressionDepth(state),
+        ...activePlayers(state).map(player => Number(player.level || 1)),
+      );
+      const scaledStats = scaleAuthorityEnemyStats(state, {
+        type,
+        level: enemyLevel,
+        maxHealth: Number(archetype.maxHealth || 40),
+        contactDamage: Number(archetype.contactDamage || 10),
+        moveSpeed: Number(archetype.moveSpeed || 96),
+      }, { type, enemyLevel });
+      const spawnMaxHealth = Math.max(1, Math.round(scaledStats.maxHealth * 1.25));
+      const spawnMoveSpeed = scaledStats.moveSpeed * 1.08;
+      const projectileDamageRatio = Number(archetype.projectileDamage || archetype.contactDamage || 10)
+        / Math.max(1, Number(archetype.contactDamage || 10));
       state.enemies[id] = {
         id, type, spriteKey: archetype.spriteKey, behavior: archetype.behavior, roomId: room.id,
-        x: placed.x, y: placed.y, vx: 0, vy: 0, radius, moveSpeed: Number(archetype.moveSpeed || 96) * 1.08,
-        maxHealth: Math.round(Number(archetype.maxHealth || 40) * 1.25), health: Math.round(Number(archetype.maxHealth || 40) * 1.25),
-        contactDamage: Number(archetype.contactDamage || 10), projectileDamage: Math.max(5, Number(archetype.projectileDamage || archetype.contactDamage || 10)),
+        x: placed.x, y: placed.y, vx: 0, vy: 0, radius, moveSpeed: spawnMoveSpeed,
+        maxHealth: spawnMaxHealth, health: spawnMaxHealth,
+        contactDamage: scaledStats.contactDamage, projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+        enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier, level: enemyLevel,
         elite: false, eliteTypes: [], elitePowers: [], patterns: archetype.patterns || [], boss: false,
         bleedImmune: !!archetype.bleedImmune, fireImmune: !!archetype.fireImmune, poisonImmune: !!archetype.poisonImmune,
         statuses: createCampaignStatusMap(), contactCooldownUntilTick: 0,
@@ -6629,6 +6710,18 @@
     const wall = Number(state.floorState?.wallThickness || 28) + Number(definition.radius || 12);
     const x = Number.isFinite(Number(options.x)) ? Number(options.x) : summoner.x + Math.cos(angle) * 48;
     const y = Number.isFinite(Number(options.y)) ? Number(options.y) : summoner.y + Math.sin(angle) * 48;
+    const enemyLevel = Math.max(
+      authorityProgressionDepth(state),
+      ...activePlayers(state).map(player => Number(player.level || 1)),
+    );
+    const scaledStats = scaleAuthorityEnemyStats(state, {
+      type: definition.type,
+      level: enemyLevel,
+      maxHealth: Number(definition.maxHealth || 1),
+      contactDamage: Number(definition.contactDamage || 0),
+      moveSpeed: Number(definition.moveSpeed || 0),
+    }, { type: definition.type, isBoss: !!definition.boss, enemyLevel });
+    const projectileDamageRatio = 6 / Math.max(1, Number(definition.contactDamage || 1));
     state.enemies[enemyId] = {
       id: enemyId,
       type: definition.type,
@@ -6639,11 +6732,13 @@
       y: Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, y)),
       vx: 0, vy: 0,
       radius: definition.radius,
-      moveSpeed: definition.moveSpeed,
-      maxHealth: definition.maxHealth,
-      health: definition.maxHealth,
-      contactDamage: definition.contactDamage,
-      projectileDamage: 6,
+      moveSpeed: scaledStats.moveSpeed,
+      maxHealth: scaledStats.maxHealth,
+      health: scaledStats.maxHealth,
+      contactDamage: scaledStats.contactDamage,
+      projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+      enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
+      level: enemyLevel,
       contactCooldownUntilTick: 0,
       attackCooldownUntilTick: state.tick + 12,
       attackWindupUntilTick: 0,
@@ -6863,9 +6958,20 @@
     const enemyId = state.allocateEntityId('enemy');
     const wall = Number(state.floorState?.wallThickness || 28) + Number(definition.radius || 12);
     const elite = !!options.elite;
-    const healthScale = Math.max(0.1, Number(options.healthScale || 1)) * (elite ? 1.35 : 1);
-    const health = Math.round(Number(definition.maxHealth || 40) * healthScale);
-    state.enemies[enemyId] = {
+    const healthScale = Math.max(0.1, Number(options.healthScale || 1));
+    const enemyLevel = Math.max(
+      authorityProgressionDepth(state),
+      ...activePlayers(state).map(player => Number(player.level || 1)),
+    );
+    const scaledStats = scaleAuthorityEnemyStats(state, {
+      type: definition.type,
+      level: enemyLevel,
+      maxHealth: Number(definition.maxHealth || 40),
+      contactDamage: Number(definition.contactDamage || 8),
+      moveSpeed: Number(definition.moveSpeed || 0),
+    }, { type: definition.type, isBoss: !!definition.boss, enemyLevel });
+    const projectileDamageRatio = 0.75;
+    const enemy = {
       id: enemyId,
       type: definition.type,
       spriteKey: definition.spriteKey,
@@ -6875,13 +6981,15 @@
       y: Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, Number(y))),
       vx: 0, vy: 0,
       radius: definition.radius,
-      moveSpeed: definition.moveSpeed,
-      maxHealth: health,
-      health,
-      contactDamage: Math.round(Number(definition.contactDamage || 8) * (elite ? 1.18 : 1)),
-      projectileDamage: Math.max(5, Math.round(Number(definition.contactDamage || 8) * 0.75)),
+      moveSpeed: scaledStats.moveSpeed,
+      maxHealth: scaledStats.maxHealth,
+      health: scaledStats.maxHealth,
+      contactDamage: scaledStats.contactDamage,
+      projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * projectileDamageRatio)),
+      enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
+      level: enemyLevel,
       elite,
-      eliteTypes: elite ? ['knight'] : [],
+      eliteTypes: [],
       elitePowers: [],
       patterns: definition.patterns || [],
       boss: !!definition.boss,
@@ -6894,13 +7002,22 @@
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
       summonedBy: summoner.id,
       stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
-      attackCd: options.hastened ? Math.min(0.8, Number(definition.attackCooldown || 1)) : Number(definition.attackCooldown || 1),
+      attackCd: Number(definition.attackCooldown || 1),
       // Council bosses need their own kit seeds so their authored bodies run.
       ...(definition.type === 'queen_cult' ? { summonCd: 2.4, novaCd: 3, novaTimer: 0 } : {}),
       ...(definition.type === 'bulk_golem' ? { splitReady: true, aoeTime: 3, jumpCd: 1.2 } : {}),
       ...(definition.type === 'artificer_knave' ? { phase: 1 } : {}),
       ...(definition.type === 'antony_blemmye' ? { phase: 1, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 } : {}),
     };
+    if (elite) {
+      const stream = combatRandomByState.get(state)?.scoped?.(`boss-minion:elite:${enemyId}`);
+      applyAuthorityEliteProfile(state, enemy, enemyLevel, stream ? () => stream.next() : authorityFallbackRandom);
+    }
+    enemy.maxHealth = Math.max(1, Math.round(enemy.maxHealth * healthScale));
+    enemy.health = enemy.maxHealth;
+    if (options.hastened) enemy.attackCd = Math.min(0.8, Number(enemy.attackCd || 1));
+    enemy.projectileDamage = Math.max(5, Math.round(enemy.contactDamage * projectileDamageRatio));
+    state.enemies[enemyId] = enemy;
     state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
     emitEvent('ENEMY_SPAWNED', { enemyId, roomId: summoner.roomId, enemyType: definition.type, summonedBy: summoner.id, elite });
     return state.enemies[enemyId];
@@ -6914,8 +7031,19 @@
     const encounter = state.floorState?.encounters?.[spawner.roomId];
     delete state.enemies[spawner.id];
     const bossId = state.allocateEntityId('enemy');
-    // The campaign spawns the summoned boss at 72% of its normal health.
-    const health = Math.round(Number(definition.maxHealth || 900) * 0.72);
+    const enemyLevel = Math.max(
+      authorityProgressionDepth(state),
+      ...activePlayers(state).map(player => Number(player.level || 1)),
+    );
+    const scaledStats = scaleAuthorityEnemyStats(state, {
+      type: definition.type,
+      level: enemyLevel,
+      maxHealth: Number(definition.maxHealth || 900),
+      contactDamage: Number(definition.contactDamage || 12),
+      moveSpeed: Number(definition.moveSpeed || 0),
+    }, { type: definition.type, isBoss: true, enemyLevel });
+    // Campaign applies the summon penalty after normal boss scaling.
+    const health = Math.max(1, Math.round(scaledStats.maxHealth * 0.72));
     state.enemies[bossId] = {
       id: bossId,
       type: definition.type,
@@ -6926,11 +7054,13 @@
       y: spawner.y,
       vx: 0, vy: 0,
       radius: definition.radius,
-      moveSpeed: definition.moveSpeed,
+      moveSpeed: scaledStats.moveSpeed,
       maxHealth: health,
       health,
-      contactDamage: definition.contactDamage,
-      projectileDamage: Math.max(5, Math.round(Number(definition.contactDamage || 12) * 0.75)),
+      contactDamage: scaledStats.contactDamage,
+      projectileDamage: Math.max(5, Math.round(scaledStats.contactDamage * 0.75)),
+      enemyLevelAttackSpeedMultiplier: scaledStats.enemyLevelAttackSpeedMultiplier,
+      level: enemyLevel,
       elite: false, eliteTypes: [], elitePowers: [],
       patterns: definition.patterns || [],
       boss: true,
@@ -9701,6 +9831,10 @@
       : state.floorState.layout;
     state.floorNumber = nextFloorNumber;
     state.runLoopIndex = runLoopIndex;
+    // Campaign increments floorsEntered once per generated floor, including
+    // loop resets and multi-floor warps. It counts entered layouts rather than
+    // the numeric distance skipped by a portal.
+    state.floorsEntered = Math.max(1, Math.trunc(Number(state.floorsEntered) || 1)) + 1;
     state.floorSeed = floorSeed;
     state.enemies = {};
     state.projectiles = {};

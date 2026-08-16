@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Messerwurf",
   "moves.antony_knife_throw.desc": "Wirf Anthonys gezieltes Messer gerade durch die nächstgelegene Reihe von Gegnern.",
   "moves.antony_freeze_ball.name": "Frostkugel",
-  "moves.antony_freeze_ball.desc": "Feuere Anthonys riesige zielsuchende Frostkugel ab. Beim Aufprall explodiert sie und verlangsamt alles im Explosionsradius."
+  "moves.antony_freeze_ball.desc": "Feuere Anthonys riesige zielsuchende Frostkugel ab. Beim Aufprall explodiert sie und verlangsamt alles im Explosionsradius.",
+  "difficulties.medium.name": "Mittel",
+  "difficulties.medium.description": "Etwas härtere Gegnerwürfe mit zusätzlichen Relikt-Drops.",
+  "difficulties.hard.name": "Schwer",
+  "difficulties.hard.description": "Mehr Druck und stärkere Skalierung. Blutungsschaden gegen Feinde ist 20 % weniger effektiv.",
+  "difficulties.impossible.name": "Unmöglich",
+  "difficulties.impossible.description": "Wird nach 5 Schleifen freigeschaltet. Starker Elite- und Miniboss-Druck. Blutungsschaden gegen Feinde ist 35 % weniger effektiv.",
+  "difficulties.god.name": "Gott",
+  "difficulties.god.description": "Wird nach 10 Schleifen freigeschaltet. Seltene Relikte, Elite-Bodenöffnungen, stark verstärkte Rivalen und 50 % weniger effektiver Blutungsschaden bei Feinden.",
+  "difficulties.custom.name": "Benutzerdefiniert",
+  "difficulties.custom.description": "Passen Sie jeden Multiplikator selbst an."
 }

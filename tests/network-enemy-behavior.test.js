@@ -3,6 +3,7 @@ const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState } = require('../js/multiplayer/LocalMultiplayerSession');
 const { getEnemyDefinition, ENEMY_CATALOG } = require('../js/simulation/SharedEnemyContent');
+const { scaleCampaignEnemyStats } = require('../js/simulation/SharedEnemyScalingSystem');
 const {
   BULK_GOLEM_KNOCKBACK_MULTIPLIER,
   createCampaignEnemyBehaviors,
@@ -237,8 +238,19 @@ describe('authored campaign enemy behaviors on the authority', () => {
     expect(state.enemies[spawner.id]).toBeUndefined();
     const boss = Object.values(state.enemies).find(enemy => enemy.boss && !enemy.dead);
     expect(boss).toBeTruthy();
-    const catalogHealth = Number(ENEMY_CATALOG[boss.type].maxHealth);
-    expect(boss.health).toBe(Math.round(catalogHealth * 0.72));
+    const definition = ENEMY_CATALOG[boss.type];
+    const scaled = scaleCampaignEnemyStats(definition, {
+      type: boss.type,
+      isBoss: true,
+      progressionDepth: state.floorsEntered || state.floorNumber,
+      enemyLevel: boss.level,
+      elapsedSeconds: state.elapsedSeconds,
+      gameMode: state.matchRules?.gameMode || 'normal',
+      maxFloor: 10,
+      difficulty: state.matchRules?.difficulty,
+      partySize: 1,
+    });
+    expect(boss.health).toBe(Math.round(scaled.maxHealth * 0.72));
     expect(events.some(event => event.eventType === 'ENEMY_SPAWNED' && event.data.enemyId === boss.id && event.data.boss)).toBe(true);
   });
 
@@ -450,6 +462,20 @@ describe('authored campaign enemy behaviors on the authority', () => {
       type: 'queen_cult', level: 2, bossRushBoss: true, bossRushStage: 0,
     }));
     const firstBoss = Object.values(state.enemies).find(enemy => !enemy.dead);
+    const expectedFirstBoss = scaleCampaignEnemyStats(getEnemyDefinition('queen_cult'), {
+      type: 'queen_cult',
+      isBoss: true,
+      progressionDepth: state.floorsEntered,
+      enemyLevel: firstBoss.level,
+      elapsedSeconds: state.elapsedSeconds,
+      gameMode: 'boss_rush',
+      maxFloor: 10,
+      difficulty: state.matchRules?.difficulty,
+      partySize: 1,
+    });
+    expect(firstBoss.maxHealth).toBe(expectedFirstBoss.maxHealth);
+    expect(firstBoss.contactDamage).toBe(expectedFirstBoss.contactDamage);
+    expect(firstBoss.moveSpeed).toBeCloseTo(expectedFirstBoss.moveSpeed);
     player.x = firstBoss.x - 12;
     player.y = firstBoss.y;
     firstBoss.health = 1;

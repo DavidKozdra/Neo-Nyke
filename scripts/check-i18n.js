@@ -33,6 +33,9 @@ const unchangedStrictValues = new Set([
   'Mooggy',
   'Sarge',
 ]);
+const unchangedStrictKeysByLocale = new Set([
+  'fr:difficulties.impossible.name',
+]);
 
 function isPunctuationOnly(value) {
   return /^[\s.?!,;:()[\]{}'"`~*_\-–—…]+$/.test(value);
@@ -245,6 +248,7 @@ files.forEach(file => {
       if (typeof sourceValue !== 'string' || typeof localeValue !== 'string') return false;
       if (!sourceValue.trim()) return false;
       if (isStrictlyIgnorableText(sourceValue)) return false;
+      if (unchangedStrictKeysByLocale.has(`${locale}:${key}`)) return false;
       return localeValue.trim() === sourceValue.trim();
     });
     if (untranslated.length) {

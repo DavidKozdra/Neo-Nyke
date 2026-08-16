@@ -208,6 +208,37 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.simulation.state.matchRules).toEqual(expect.objectContaining({ mode: 'boss_rush', gameMode: 'boss_rush' }));
     expect(authority.simulation.state.floorState.layout.rooms).toHaveLength(1);
     expect(authority.simulation.state.floorNumber).toBe(5);
+    expect(authority.simulation.state.floorsEntered).toBe(5);
+  });
+
+  test('resolves legacy, named, and custom room difficulties on the authority', () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const legacy = new LocalMultiplayerAuthority({
+      transport: transport(network, 'legacy-authority', 'Legacy Authority'),
+    });
+    const hard = new LocalMultiplayerAuthority({
+      transport: transport(network, 'hard-authority', 'Hard Authority'),
+      difficultyKey: 'hard',
+      difficulty: { key: 'hard', statMultiplier: 0.1, waveBonus: 0 },
+    });
+    const custom = new LocalMultiplayerAuthority({
+      transport: transport(network, 'custom-authority', 'Custom Authority'),
+      difficultyKey: 'custom',
+      difficulty: { key: 'custom', statMultiplier: 20, waveBonus: 2, eliteChance: -1 },
+    });
+
+    expect(legacy.difficulty).toEqual(expect.objectContaining({
+      key: 'medium', statMultiplier: 1.06, bossStatMultiplier: 0.95, waveBonus: 0,
+    }));
+    // Named presets are server-owned; conflicting client numbers cannot weaken
+    // or strengthen the canonical room rules.
+    expect(hard.difficulty).toEqual(expect.objectContaining({
+      key: 'hard', statMultiplier: 1.12, bossStatMultiplier: 1.16, waveBonus: 1,
+    }));
+    expect(custom.difficulty).toEqual(expect.objectContaining({
+      key: 'custom', statMultiplier: 10, waveBonus: 2, eliteChance: 0,
+    }));
   });
 
   test('keeps lobby slots stable and reports intentional leaves versus dropped connections', async () => {
@@ -856,6 +887,10 @@ describe('protocol-driven local multiplayer session', () => {
     enemy.x = player.x + 100;
     enemy.y = player.y;
     enemy.moveSpeed = 0;
+    // This contract covers replicated death/drop delivery, not health scaling.
+    // Keep two authoritative attacks sufficient as party-size HP changes.
+    enemy.maxHealth = 40;
+    enemy.health = 40;
 
     clientA.sendAction('ATTACK', 0);
     clock.runAll();

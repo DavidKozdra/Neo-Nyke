@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Lempar Pisau",
   "moves.antony_knife_throw.desc": "Lempar pisau bidikan Anthony lurus menembus barisan musuh terdekat.",
   "moves.antony_freeze_ball.name": "Bola Beku",
-  "moves.antony_freeze_ball.desc": "Tembakkan bola es raksasa berpemandu milik Anthony. Bola ini meledak saat mengenai sasaran dan memperlambat semua yang terkena ledakan."
+  "moves.antony_freeze_ball.desc": "Tembakkan bola es raksasa berpemandu milik Anthony. Bola ini meledak saat mengenai sasaran dan memperlambat semua yang terkena ledakan.",
+  "difficulties.medium.name": "Sedang",
+  "difficulties.medium.description": "Musuh yang sedikit lebih tangguh berguling dengan tambahan relik.",
+  "difficulties.hard.name": "Keras",
+  "difficulties.hard.description": "Lebih banyak tekanan dan penskalaan yang lebih kuat. Kerusakan yang dikeluarkan terhadap musuh 20% kurang efektif.",
+  "difficulties.impossible.name": "Tidak mungkin",
+  "difficulties.impossible.description": "Buka kunci setelah 5 putaran. Tekanan berat dari elite dan miniboss. Kerusakan yang dikeluarkan terhadap musuh 35% kurang efektif.",
+  "difficulties.god.name": "Tuhan",
+  "difficulties.god.description": "Buka kunci setelah 10 loop. Peninggalan yang langka, bukaan lantai elit, lawan yang diperkuat secara besar-besaran, dan kerusakan pendarahan musuh yang 50% lebih sedikit efektifnya.",
+  "difficulties.custom.name": "Adat",
+  "difficulties.custom.description": "Sesuaikan sendiri setiap pengganda."
 }

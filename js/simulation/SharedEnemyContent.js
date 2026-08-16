@@ -42,7 +42,7 @@
     bowman_bane: enemy('bowman_bane', 'boss', { radius: 36, maxHealth: 2400, moveSpeed: 80, contactDamage: 50, attackCooldown: 1.4 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['columns', 'burst', 'warp', 'thunder_smash']) }),
     antony_blemmye: enemy('antony_blemmye', 'boss', { radius: 42, maxHealth: 1250, moveSpeed: 78, contactDamage: 24, attackCooldown: 1.35 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['hammer', 'bite', 'slash', 'death_ball']) }),
     handsome_devil: enemy('handsome_devil', 'boss', { radius: 34, maxHealth: 1700, moveSpeed: 104, contactDamage: 50, attackCooldown: 1.1 }, { boss: true, fireImmune: true, patterns: Object.freeze(['spikes', 'lava_grid', 'laser', 'claw']) }),
-    god: enemy('god', 'boss', { radius: 34, maxHealth: 4600, moveSpeed: 108, contactDamage: 40, attackCooldown: 1.4 }, { boss: true, patterns: Object.freeze(['laser', 'sweep', 'partition', 'charge', 'sword_ring']) }),
+    god: enemy('god', 'boss', { radius: 34, maxHealth: 920, moveSpeed: 108, contactDamage: 18, attackCooldown: 1.4 }, { boss: true, patterns: Object.freeze(['laser', 'sweep', 'partition', 'charge', 'sword_ring']) }),
     mirror_knight: enemy('mirror_knight', 'mirror', { radius: 18, maxHealth: 180, moveSpeed: 180, contactDamage: 20, attackCooldown: 0.8 }, { spriteKey: 'thorn_knight' }),
     rival: enemy('rival', 'mirror', { radius: 18, maxHealth: 220, moveSpeed: 228, contactDamage: 22, attackCooldown: 0.7 }, { spriteKey: 'thorn_knight' }),
     mooggy: enemy('mooggy', 'assassin', { radius: 15, maxHealth: 120, moveSpeed: 228, contactDamage: 14, attackCooldown: 0.2 }),

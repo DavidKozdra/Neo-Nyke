@@ -1,50 +1,20 @@
-const fs = require('node:fs');
-const path = require('node:path');
 const { getCampaignEnemyDamageTakenMultiplier } = require('../js/simulation/SharedDamageSystem');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 
-function extractFunction(source, functionName) {
-  const start = source.indexOf(`function ${functionName}`);
-  if (start < 0) throw new Error(`Missing function ${functionName}`);
-
-  const bodyStart = source.indexOf('{', start);
-  let depth = 0;
-  let end = bodyStart;
-  for (; end < source.length; end += 1) {
-    if (source[end] === '{') depth += 1;
-    if (source[end] === '}') depth -= 1;
-    if (depth === 0) break;
-  }
-  return source.slice(start, end + 1);
-}
 
 describe('enemy loop damage reduction', () => {
-  const corePath = path.join(__dirname, '../js/core/game-core.js');
-  const coreSource = fs.readFileSync(corePath, 'utf8');
   function getMultiplier({ difficulty, loopNumber, elite = false }) {
-    const reductionRates = {
-      impossible: 0.05,
-      god: 0.05,
-    };
-    return getCampaignEnemyDamageTakenMultiplier({ elite }, {
-      loopNumber,
-      enemyLoopDamageReduction: reductionRates[difficulty] || 0,
-    });
+    return getCampaignEnemyDamageTakenMultiplier(
+      { elite },
+      { ...CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[difficulty], loopNumber },
+    );
   }
 
   test('configures the reduction only on progression difficulties after Hard', () => {
-    const difficultySource = coreSource.slice(
-      coreSource.indexOf('export const DIFFICULTY_DEFS'),
-      coreSource.indexOf('export const CHALLENGE_DEFS'),
-    );
-    const hardBlock = difficultySource.slice(difficultySource.indexOf('  hard: {'), difficultySource.indexOf('  impossible: {'));
-    const impossibleBlock = difficultySource.slice(difficultySource.indexOf('  impossible: {'), difficultySource.indexOf('  god: {'));
-    const godBlock = difficultySource.slice(difficultySource.indexOf('  god: {'), difficultySource.indexOf('  custom: {'));
-    const customBlock = difficultySource.slice(difficultySource.indexOf('  custom: {'));
-
-    expect(hardBlock).not.toContain('enemyLoopDamageReduction');
-    expect(impossibleBlock).toContain('enemyLoopDamageReduction: 0.05');
-    expect(godBlock).toContain('enemyLoopDamageReduction: 0.05');
-    expect(customBlock).not.toContain('enemyLoopDamageReduction');
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard.enemyLoopDamageReduction).toBeUndefined();
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.impossible.enemyLoopDamageReduction).toBe(0.05);
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god.enemyLoopDamageReduction).toBe(0.05);
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.custom.enemyLoopDamageReduction).toBeUndefined();
   });
 
   test('does not reduce loop damage on Hard or lower difficulties', () => {

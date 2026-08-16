@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Bıçak Atışı",
   "moves.antony_knife_throw.desc": "Anthony'nin nişanlı bıçağını en yakın düşman sırasının içinden dümdüz fırlat.",
   "moves.antony_freeze_ball.name": "Dondurucu Küre",
-  "moves.antony_freeze_ball.desc": "Anthony'nin devasa güdümlü ayaz küresini ateşle. Çarptığında patlar ve patlamaya yakalanan her şeyi yavaşlatır."
+  "moves.antony_freeze_ball.desc": "Anthony'nin devasa güdümlü ayaz küresini ateşle. Çarptığında patlar ve patlamaya yakalanan her şeyi yavaşlatır.",
+  "difficulties.medium.name": "Orta",
+  "difficulties.medium.description": "Ekstra kutsal eşyalarla biraz daha sert düşman atışları.",
+  "difficulties.hard.name": "Sert",
+  "difficulties.hard.description": "Daha fazla baskı ve daha güçlü ölçeklendirme. Düşmanlara karşı kanama hasarı %20 daha az etkilidir.",
+  "difficulties.impossible.name": "İmkansız",
+  "difficulties.impossible.description": "5 döngüden sonra kilidi açılır. Ağır elit ve mini patron baskısı. Düşmanlara karşı kanama hasarı %35 daha az etkilidir.",
+  "difficulties.god.name": "Tanrı",
+  "difficulties.god.description": "10 döngüden sonra kilidi açılır. Kıt emanetler, elit zemin açıklıkları, büyük ölçüde güçlendirilmiş rakipler ve %50 daha az etkili düşman kanama hasarı.",
+  "difficulties.custom.name": "Özel",
+  "difficulties.custom.description": "Her çarpanı kendiniz ayarlayın."
 }

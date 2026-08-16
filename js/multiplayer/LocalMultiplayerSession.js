@@ -14,6 +14,7 @@
   const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
   const combatApi = typeof require === 'function' ? require('../simulation/NetworkCombatSystem.js') : browserSimulationApi;
   const runServiceApi = typeof require === 'function' ? require('../simulation/SharedRunServiceSystem.js') : browserSimulationApi;
+  const enemyScalingApi = typeof require === 'function' ? require('../simulation/SharedEnemyScalingSystem.js') : browserSimulationApi;
   const worldContentApi = typeof require === 'function' ? require('../simulation/SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
@@ -30,6 +31,7 @@
   } = campaignApi;
   const { applyCampaignHeroProfile, sanitizeKitChoices, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const { applyAuthorityRunEvent = () => ({ ok: false }) } = runServiceApi;
+  const { resolveCampaignEnemyDifficulty } = enemyScalingApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -298,6 +300,13 @@
       this.baseMatchId = String(options.matchId || 'local-match');
       this.mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
       this.deferFloorGeneration = options.deferFloorGeneration === true;
+      if (typeof resolveCampaignEnemyDifficulty !== 'function') {
+        throw new Error('Shared campaign difficulty resolution is unavailable');
+      }
+      this.difficulty = resolveCampaignEnemyDifficulty({
+        ...(options.difficulty || {}),
+        ...(options.difficultyKey ? { key: options.difficultyKey } : {}),
+      });
       this.rematchSerial = 0;
       this.chatSequence = 0;
       this.outgoingSequence = 0;
@@ -488,7 +497,12 @@
         generationVersion: this.generationVersion,
         contentVersion: this.contentVersion,
         status: 'waiting',
-        matchRules: { mode: this.mode, gameMode: this.mode },
+        matchRules: {
+          mode: this.mode,
+          gameMode: this.mode,
+          difficultyKey: this.difficulty.key || 'medium',
+          difficulty: this.difficulty,
+        },
         floorState,
       });
       if (typeof createCampaignSimulation !== 'function') throw new Error('Campaign authority is unavailable');

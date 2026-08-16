@@ -339,11 +339,11 @@ const BOUNTY_DEFS = {
 };
 
 const BOUNTY_NAMES = Object.freeze({
-  hunter: ['Vexa', 'Orin', 'Mara', 'Calder', 'Nyx'],
-  charger: ['Brakk', 'Iona', 'Rook', 'Tarn', 'Sable'],
-  sniper: ['Silas', 'Kestrel', 'Morrow', 'Vale', 'Ash'],
+  hunter: ['Vexa', 'Orion', 'Mara', 'Cinders', 'Nyx'],
+  charger: ['Brakk', 'Icona', 'Rook', 'Tarn', 'Sable'],
+  sniper: ['Silas', 'Kestrel', 'Morrow', 'Ray-man', 'Awp'],
 });
-const BOUNTY_EPITHETS = Object.freeze(['the Relentless', 'the Unbroken', 'Godmarked', 'the Red Hand', 'Last of the Host']);
+const BOUNTY_EPITHETS = Object.freeze(['the Regretful', 'the PennyFilled', 'Godmarked', 'the Red Chipped', 'Last of the Host', "Of Sand"]);
 const BOUNTY_WEAKNESSES = Object.freeze(['bleed', 'fire', 'poison', 'slow', 'static']);
 
 function getBountyProfile(room, kind) {

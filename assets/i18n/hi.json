@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "चाकू फेंक",
   "moves.antony_knife_throw.desc": "एंथनी का निशाना लगाया हुआ चाकू दुश्मनों की सबसे नज़दीकी कतार के आर-पार सीधा फेंको।",
   "moves.antony_freeze_ball.name": "हिम गोला",
-  "moves.antony_freeze_ball.desc": "एंथनी का विशाल लक्ष्य का पीछा करने वाला हिम गोला दागो। टकराते ही यह फटता है और विस्फोट में फँसी हर चीज़ को धीमा करता है।"
+  "moves.antony_freeze_ball.desc": "एंथनी का विशाल लक्ष्य का पीछा करने वाला हिम गोला दागो। टकराते ही यह फटता है और विस्फोट में फँसी हर चीज़ को धीमा करता है।",
+  "difficulties.medium.name": "मध्यम",
+  "difficulties.medium.description": "अतिरिक्त अवशेष बूंदों के साथ थोड़ा कठिन दुश्मन रोल।",
+  "difficulties.hard.name": "कठिन",
+  "difficulties.hard.description": "अधिक दबाव और मजबूत स्केलिंग। दुश्मनों के खिलाफ खून से होने वाली क्षति 20% कम प्रभावी है।",
+  "difficulties.impossible.name": "असंभव",
+  "difficulties.impossible.description": "5 लूप के बाद अनलॉक हो जाता है। भारी अभिजात वर्ग और मिनीबॉस का दबाव। शत्रुओं के विरुद्ध रक्त क्षति 35% कम प्रभावी है।",
+  "difficulties.god.name": "भगवान",
+  "difficulties.god.description": "10 लूप के बाद अनलॉक हो जाता है। दुर्लभ अवशेष, विशिष्ट मंजिल के उद्घाटन, भारी रूप से बढ़े हुए प्रतिद्वंद्वी, और 50% कम प्रभावी दुश्मन के खून से होने वाली क्षति।",
+  "difficulties.custom.name": "कस्टम",
+  "difficulties.custom.description": "प्रत्येक गुणक को स्वयं संशोधित करें।"
 }

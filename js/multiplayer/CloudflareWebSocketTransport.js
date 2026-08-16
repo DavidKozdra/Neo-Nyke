@@ -90,6 +90,10 @@
         body: JSON.stringify({
           maxPlayers: options.maxPlayers || 4,
           mode: ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop',
+          ...(options.difficultyKey ? { difficultyKey: String(options.difficultyKey) } : {}),
+          ...(options.difficulty && typeof options.difficulty === 'object'
+            ? { difficulty: options.difficulty }
+            : {}),
           // Placement is honored only while the room is first created.
           ...(options.region ? { region: options.region } : {}),
           // Omitted unless the host typed one, so the server keeps generating

@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Lanzamiento de cuchillo",
   "moves.antony_knife_throw.desc": "Lanza el cuchillo de Anthony en línea recta atravesando la fila de enemigos más cercana.",
   "moves.antony_freeze_ball.name": "Orbe congelante",
-  "moves.antony_freeze_ball.desc": "Dispara el enorme orbe de escarcha teledirigido de Anthony. Explota al impactar y ralentiza todo lo que alcanza la explosión."
+  "moves.antony_freeze_ball.desc": "Dispara el enorme orbe de escarcha teledirigido de Anthony. Explota al impactar y ralentiza todo lo que alcanza la explosión.",
+  "difficulties.medium.name": "Medio",
+  "difficulties.medium.description": "Tiradas enemigas ligeramente más difíciles con caídas de reliquias adicionales.",
+  "difficulties.hard.name": "duro",
+  "difficulties.hard.description": "Más presión y escalamiento más fuerte. El daño de sangrado contra enemigos es un 20% menos efectivo.",
+  "difficulties.impossible.name": "Imposible",
+  "difficulties.impossible.description": "Se desbloquea después de 5 bucles. Fuerte presión de élite y minijefes. El daño de sangrado contra enemigos es un 35% menos efectivo.",
+  "difficulties.god.name": "Dios",
+  "difficulties.god.description": "Se desbloquea después de 10 bucles. Reliquias escasas, aberturas de piso de élite, rivales muy potenciados y un 50% menos de daño de sangrado enemigo efectivo.",
+  "difficulties.custom.name": "personalizado",
+  "difficulties.custom.description": "Modifica cada multiplicador tú mismo."
 }

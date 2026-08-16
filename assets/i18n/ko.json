@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "단검 투척",
   "moves.antony_knife_throw.desc": "앤서니의 조준된 단검을 가장 가까운 적 대열을 향해 일직선으로 던져 관통시킵니다.",
   "moves.antony_freeze_ball.name": "빙결 구체",
-  "moves.antony_freeze_ball.desc": "앤서니의 거대한 유도 서리 구체를 발사합니다. 적중 시 폭발하며 폭발에 휘말린 모든 대상을 둔화시킵니다."
+  "moves.antony_freeze_ball.desc": "앤서니의 거대한 유도 서리 구체를 발사합니다. 적중 시 폭발하며 폭발에 휘말린 모든 대상을 둔화시킵니다.",
+  "difficulties.medium.name": "중간",
+  "difficulties.medium.description": "추가 유물 드롭으로 약간 더 강한 적 굴림.",
+  "difficulties.hard.name": "하드",
+  "difficulties.hard.description": "더 많은 압력과 더 강력한 스케일링. 적에게 출혈 피해를 입히는 효과가 20% 감소합니다.",
+  "difficulties.impossible.name": "불가능하다",
+  "difficulties.impossible.description": "5회 반복 후에 잠금이 해제됩니다. 무거운 엘리트와 미니보스의 압박. 적에 대한 출혈 피해의 효과가 35% 감소합니다.",
+  "difficulties.god.name": "신",
+  "difficulties.god.description": "10회 반복 후에 잠금이 해제됩니다. 희귀한 유물, 엘리트 층 개방, 강력한 강화된 라이벌, 50% 적은 유효 적의 출혈 피해.",
+  "difficulties.custom.name": "맞춤",
+  "difficulties.custom.description": "모든 승수를 직접 조정하세요."
 }

@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "飞刀投掷",
   "moves.antony_knife_throw.desc": "将安东尼瞄准的飞刀直线掷出，贯穿最近一列敌人。",
   "moves.antony_freeze_ball.name": "冰冻法球",
-  "moves.antony_freeze_ball.desc": "发射安东尼的巨型追踪寒霜法球。命中时爆炸，并使爆炸范围内的所有目标减速。"
+  "moves.antony_freeze_ball.desc": "发射安东尼的巨型追踪寒霜法球。命中时爆炸，并使爆炸范围内的所有目标减速。",
+  "difficulties.medium.name": "中等",
+  "difficulties.medium.description": "稍微强硬的敌人会掉落额外的遗物。",
+  "difficulties.hard.name": "硬",
+  "difficulties.hard.description": "压力更大，结垢能力更强。对敌人的流血伤害降低 20%。",
+  "difficulties.impossible.name": "不可能",
+  "difficulties.impossible.description": "5次循环后解锁。沉重的精英和小老板压力。对敌人的流血伤害降低 35%。",
+  "difficulties.god.name": "上帝",
+  "difficulties.god.description": "10次循环后解锁。稀缺的文物、精英层的开口、大幅增强的对手以及减少 50% 的有效敌人流血伤害。",
+  "difficulties.custom.name": "定制",
+  "difficulties.custom.description": "自己调整每个乘数。"
 }

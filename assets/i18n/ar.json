@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "رمية السكين",
   "moves.antony_knife_throw.desc": "ارمِ سكين أنثوني الموجّهة عبر أقرب صف من الأعداء.",
   "moves.antony_freeze_ball.name": "كرة التجميد",
-  "moves.antony_freeze_ball.desc": "أطلق كرة الصقيع الضخمة المتتبعة الخاصة بأنثوني. تنفجر عند الاصطدام وتبطئ كل من يقع في نطاق الانفجار."
+  "moves.antony_freeze_ball.desc": "أطلق كرة الصقيع الضخمة المتتبعة الخاصة بأنثوني. تنفجر عند الاصطدام وتبطئ كل من يقع في نطاق الانفجار.",
+  "difficulties.medium.name": "متوسط",
+  "difficulties.medium.description": "يتدحرج عدو أكثر صرامة قليلاً مع قطرات بقايا إضافية.",
+  "difficulties.hard.name": "صعب",
+  "difficulties.hard.description": "المزيد من الضغط والتحجيم أقوى. ضرر النزيف ضد الأعداء أقل فعالية بنسبة 20%.",
+  "difficulties.impossible.name": "مستحيل",
+  "difficulties.impossible.description": "يفتح بعد 5 حلقات. النخبة الثقيلة وضغط miniboss. ضرر النزيف ضد الأعداء أقل فعالية بنسبة 35%.",
+  "difficulties.god.name": "الله",
+  "difficulties.god.description": "يفتح بعد 10 حلقات. الآثار النادرة، وفتحات الأرضيات المميزة، والمنافسين المعززين بشكل كبير، وضرر نزيف العدو الأقل فعالية بنسبة 50%.",
+  "difficulties.custom.name": "مخصص",
+  "difficulties.custom.description": "قم بتعديل كل مضاعف بنفسك."
 }

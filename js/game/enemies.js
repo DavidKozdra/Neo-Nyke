@@ -976,18 +976,6 @@
       }
     }
 
-    if (isBossType(type)) {
-      base.hp = Math.round(base.hp * 2);
-      base.max = base.hp;
-    }
-
-    if (type === 'god') {
-      const runPressure = getGodRunPressure();
-      base.hp = Math.round(base.hp * 5);
-      base.max = base.hp;
-      base.dmg = Math.round(base.dmg * 2.2 * runPressure.damageMultiplier);
-      base.speed *= 1.06;
-    }
 
     if (base.elite) applyEliteTypes(base);
 

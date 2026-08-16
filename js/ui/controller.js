@@ -1019,6 +1019,18 @@ export function createUIController(view) {
       }
     }
 
+    function getBrowserMultiplayerCreateOptions(mode, extra = {}) {
+      const difficultyKey = String(Neo.selectedDifficulty || 'medium');
+      const difficulty = Neo.getDifficultyDef?.(difficultyKey);
+      return {
+        mode,
+        maxPlayers: 4,
+        difficultyKey,
+        ...(difficulty ? { difficulty } : {}),
+        ...extra,
+      };
+    }
+
     function joinBrowserMultiplayerInviteFromLocation() {
       const readInviteRoomCode = globalThis.NeoNyke?.multiplayer?.readMultiplayerInviteRoomCode;
       if (typeof readInviteRoomCode !== 'function') return false;
@@ -3995,7 +4007,7 @@ export function createUIController(view) {
           Neo.persistMetaSoon?.();
           renderArchitectEditor();
         });
-        view.legacyButtons.forEach(button => {
+        view.legacyButtons?.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onLegacySelect(button.dataset.legacy || '');
           });
@@ -4096,7 +4108,7 @@ export function createUIController(view) {
         });
         view.multiplayerCreateRoom?.addEventListener('click', () => {
           const mode = ['rival', 'boss_rush'].includes(view.multiplayerMode?.value) ? view.multiplayerMode.value : 'coop';
-          void runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4 }));
+          void runBrowserMultiplayerAction(session => session.createRoom(getBrowserMultiplayerCreateOptions(mode)));
         });
         view.multiplayerJoinRoom?.addEventListener('click', () => {
           const code = view.multiplayerRoomCode?.value || '';
@@ -4205,7 +4217,7 @@ export function createUIController(view) {
           // runBrowserMultiplayerAction handles its own failures (it renders a
           // rejected snapshot rather than rethrowing), so confirm success by
           // checking the code we actually ended up with instead of catching.
-          await runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4, roomCode: raw }));
+          await runBrowserMultiplayerAction(session => session.createRoom(getBrowserMultiplayerCreateOptions(mode, { roomCode: raw })));
           const applied = String(browserMultiplayerSession?.roomCode || '').toUpperCase();
           if (applied === raw) {
             setRoomCodeEditing(false);

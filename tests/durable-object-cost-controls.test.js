@@ -109,7 +109,7 @@ describe('Durable Object daily usage controls', () => {
     expect(server).toContain('const requestedRoomCode = normalizeRoomCode(options.roomCode)');
     expect(server).toContain('this.roomCode = normalizeRoomCode(room.roomCode) || this.roomCode');
     expect(server).toContain('this.transport.roomCode = this.roomCode');
-    expect(server).toContain('body: JSON.stringify({ roomCode, mode, maxPlayers, region })');
+    expect(server).toContain('body: JSON.stringify({ roomCode, mode, maxPlayers, region, difficultyKey: difficulty.key, difficulty })');
   });
 
   test('rejects invalid socket upgrades before invoking the Durable Object', () => {

@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Knife Throw",
   "moves.antony_knife_throw.desc": "Throw Anthony’s aimed knife straight through the nearest line of enemies.",
   "moves.antony_freeze_ball.name": "Freeze Ball",
-  "moves.antony_freeze_ball.desc": "Fire Anthony’s huge homing frost orb. Its impact explodes and slows everything caught in the blast."
+  "moves.antony_freeze_ball.desc": "Fire Anthony’s huge homing frost orb. Its impact explodes and slows everything caught in the blast.",
+  "difficulties.medium.name": "Medium",
+  "difficulties.medium.description": "Slightly tougher enemy rolls with extra relic drops.",
+  "difficulties.hard.name": "Hard",
+  "difficulties.hard.description": "More pressure and stronger scaling. Bleed damage against enemies is 20% less effective.",
+  "difficulties.impossible.name": "Impossible",
+  "difficulties.impossible.description": "Unlocks after 5 loops. Heavy elite and miniboss pressure. Bleed damage against enemies is 35% less effective.",
+  "difficulties.god.name": "God",
+  "difficulties.god.description": "Unlocks after 10 loops. Scarce relics, elite floor openings, heavily boosted rivals, and 50% less effective enemy bleed damage.",
+  "difficulties.custom.name": "Custom",
+  "difficulties.custom.description": "Tweak every multiplier yourself."
 }

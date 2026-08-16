@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { RandomService } = require('../js/simulation/RandomService');
 const { stockCampaignShop } = require('../js/simulation/SharedShopSystem');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -19,22 +20,18 @@ function extractFunction(source, functionName) {
 }
 
 describe('God difficulty progression rules', () => {
-  const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
   const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
   const roomsSource = fs.readFileSync(path.join(__dirname, '../js/game/rooms.js'), 'utf8');
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
 
   test('defines the post-Impossible scarcity and progression settings', () => {
-    const godBlock = coreSource.slice(
-      coreSource.indexOf('  god: {'),
-      coreSource.indexOf('  custom: {'),
-    );
-
-    expect(godBlock).toContain('itemDropChanceMultiplier: 0.3');
-    expect(godBlock).toContain('shopItemOffers: 1');
-    expect(godBlock).toContain('startRoomEliteCount: 2');
-    expect(godBlock).toContain('rivalItemsPerFloor: 5');
-    expect(godBlock).toContain('rivalLevelBonusPerFloor: 2');
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god).toEqual(expect.objectContaining({
+      itemDropChanceMultiplier: 0.3,
+      shopItemOffers: 1,
+      startRoomEliteCount: 2,
+      rivalItemsPerFloor: 5,
+      rivalLevelBonusPerFloor: 2,
+    }));
   });
 
   test('reduces random relic chances to 30% while retaining item bonuses', () => {

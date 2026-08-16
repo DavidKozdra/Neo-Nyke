@@ -73,6 +73,29 @@ describe('CloudflareWebSocketTransport', () => {
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
+  test('sends the host difficulty contract when creating a room', async () => {
+    const fetch = jest.fn(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ roomCode: 'HARD24', status: 'waiting', maxPlayers: 4, difficultyKey: 'hard' }),
+    }));
+    const transport = new CloudflareWebSocketTransport({
+      apiBase: 'https://game.example/api/multiplayer',
+      fetch,
+      WebSocket: FakeWebSocket,
+    });
+    await transport.createSession({
+      difficultyKey: 'hard',
+      difficulty: { key: 'hard', statMultiplier: 1.12 },
+    });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      mode: 'coop',
+      maxPlayers: 4,
+      difficultyKey: 'hard',
+      difficulty: { key: 'hard', statMultiplier: 1.12 },
+    });
+  });
+
   test('preserves Boss Rush as a multiplayer room mode', async () => {
     const fetch = jest.fn(async () => ({
       ok: true, status: 201,

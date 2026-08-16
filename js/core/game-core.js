@@ -646,190 +646,53 @@ export const KILLER_DEATH_QUOTES = {
   no_hit: ['The challenge marks your failure.', 'One mistake ended the run.', 'No-hit broken.'],
 };
 export const RUN_HISTORY_LIMIT = 200;
+const SHARED_CAMPAIGN_DIFFICULTY_PRESETS = globalThis.NeoNyke?.simulation?.CAMPAIGN_ENEMY_DIFFICULTY_PRESETS;
+if (!SHARED_CAMPAIGN_DIFFICULTY_PRESETS) {
+  throw new Error('Shared campaign difficulty presets are unavailable');
+}
 export const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god', 'custom'];
 export const DIFFICULTY_DEFS = {
   easy: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.easy,
     key: 'easy',
     name: 'Easy',
     description: 'Easy uses a lighter enemy curve and extra relic drops.',
     unlockLoops: 0,
-    waveBonus: 0,
-    eliteFloor: 8,
-    eliteChance: 0.12,
-    miniBossChanceMultiplier: 1,
-    roomWeightBonus: 0,
-    statMultiplier: 1,
-    // Boss-only baseline: 20% less health/damage, with a softer level/time HP
-    // curve. Every named boss goes through this shared multiplier.
-    bossStatMultiplier: 0.8,
-    bossHpGrowthMultiplier: 0.65,
-    // Easy's HP curve is the gentlest: a NEGATIVE hpFloorScaleBonus drops the
-    // per-floor HP slope below the 0.14 base down to ~0.095/floor (~60% of Hard's
-    // 0.16). Combined with the reduced boss baseline this keeps even the loop-1
-    // boss very beatable, and only bites if you grind deep into loops — never an
-    // early wall. This is the lever that makes "hard to die, even on the boss" true.
-    hpFloorScaleBonus: -0.045,
-    // Easy elites keep their traits but are far less of a max-HP wall: the base
-    // elite durability boost in applyEliteTraits is scaled down by this.
-    eliteHpMultiplier: 0.6,
-    itemDropChanceMultiplier: 1.15,
-    speedMultiplier: 1,
-    bossProjectileSpeedMultiplier: 0.75,
-    enemyReactionMultiplier: 1,
-    rangedCadenceMultiplier: 1,
-    supportPowerMultiplier: 1,
-    shopPriceMultiplier: 1,
-    // How fast enemies build knockback/stun resistance with run depth + time.
-    // 0 = none; higher = steeper. See getEnemyCcLevel() in combat.js. Kept tiny
-    // on Easy so the player's stuns/knockback keep working all run long.
-    ccResistScale: 0.04,
-    // Generic (non-bleed) status resistance scale — see STATUS_RESIST_SCALING.
-    // 0 on Easy: fire/poison/slow/shock builds always land at full strength.
-    statusResistScale: 0,
   },
   medium: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.medium,
     key: 'medium',
     name: 'Medium',
     description: 'Slightly tougher enemy rolls with extra relic drops.',
     unlockLoops: 0,
-    waveBonus: 0,
-    eliteFloor: 8,
-    eliteChance: 0.16,
-    miniBossChanceMultiplier: 1.18,
-    roomWeightBonus: 0.05,
-    statMultiplier: 1.06,
-    // Bosses stay above Easy but sit below the old Medium baseline: about 12%
-    // less base health/damage plus a gentler level/time HP curve.
-    bossStatMultiplier: 0.95,
-    bossHpGrowthMultiplier: 0.9,
-    itemDropChanceMultiplier: 1.1,
-    // Per-floor HP slope offset on top of ENEMY_SCALING.floor (0.14). Medium lands
-    // at ~0.12/floor — a touch gentler than the 0.14 base, clearly above Easy and
-    // below Hard. The flat statMultiplier stays small now that the per-floor SLOPE
-    // (not a flat wall) is what separates the difficulties.
-    hpFloorScaleBonus: -0.02,
-    speedMultiplier: 1.03,
-    bossProjectileSpeedMultiplier: 0.9,
-    enemyReactionMultiplier: 1.06,
-    rangedCadenceMultiplier: 0.95,
-    supportPowerMultiplier: 1.08,
-    shopPriceMultiplier: 1.08,
-    ccResistScale: 0.12,
-    statusResistScale: 0.06,
   },
   hard: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.hard,
     key: 'hard',
     name: 'Hard',
     description: 'More pressure and stronger scaling. Bleed damage against enemies is 20% less effective.',
     unlockLoops: 0,
-    waveBonus: 1,
-    eliteFloor: 7,
-    eliteChance: 0.2,
-    miniBossChanceMultiplier: 1.35,
-    roomWeightBonus: 0.1,
-    statMultiplier: 1.12,
-    bossStatMultiplier: 1.16,
-    bossHpGrowthMultiplier: 1.15,
-    // Hard is the reference STEEP HP slope: ~0.16/floor (vs Easy's 0.095). Most of
-    // Hard's extra threat lives here in the slope and in its denser elites/
-    // minibosses + faster boss projectiles — not in a flat HP wall.
-    hpFloorScaleBonus: 0.02,
-    speedMultiplier: 1.06,
-    bossProjectileSpeedMultiplier: 1.2,
-    enemyReactionMultiplier: 1.12,
-    rangedCadenceMultiplier: 0.9,
-    supportPowerMultiplier: 1.14,
-    shopPriceMultiplier: 1.16,
-    ccResistScale: 0.30,
-    statusResistScale: 0.16,
-    enemyBleedDamageMultiplier: 0.8,
-    itemDropChanceMultiplier: 0.8,
-    shopItemOffers: 2,
   },
   impossible: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.impossible,
     key: 'impossible',
     name: 'Impossible',
     description: 'Unlocks after 5 loops. Heavy elite and miniboss pressure. Bleed damage against enemies is 35% less effective.',
     unlockLoops: 5,
-    waveBonus: 3,
-    eliteFloor: 6,
-    eliteChance: 0.26,
-    miniBossChanceMultiplier: 1.6,
-    roomWeightBonus: 0.16,
-    statMultiplier: 1.22,
-    bossStatMultiplier: 1.28,
-    bossHpGrowthMultiplier: 1.35,
-    // ~0.19/floor — steeper than Hard, plus the heavier elite/miniboss pressure
-    // this tier already carries.
-    hpFloorScaleBonus: 0.05,
-    speedMultiplier: 1.1,
-    bossProjectileSpeedMultiplier: 1.3,
-    enemyReactionMultiplier: 1.2,
-    rangedCadenceMultiplier: 0.82,
-    supportPowerMultiplier: 1.22,
-    shopPriceMultiplier: 1.28,
-    ccResistScale: 0.45,
-    statusResistScale: 0.28,
-    enemyLoopDamageReduction: 0.05,
-    enemyBleedDamageMultiplier: 0.65,
-    itemDropChanceMultiplier: 0.45,
-    shopItemOffers: 2,
   },
   god: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.god,
     key: 'god',
     name: 'God',
     description: 'Unlocks after 10 loops. Scarce relics, elite floor openings, heavily boosted rivals, and 50% less effective enemy bleed damage.',
     unlockLoops: 10,
-    waveBonus: 4,
-    eliteFloor: 5,
-    eliteChance: 0.32,
-    miniBossChanceMultiplier: 1.9,
-    roomWeightBonus: 0.22,
-    // God no longer relies on a flat HP wall (was a brute-force 2.72 / 2.84,
-    // "double Impossible"). Its lethality now comes from the STEEPEST HP slope
-    // (~0.22/floor), the densest elites/rivals, fastest projectiles and harshest
-    // CC resistance — a flat ~1.5 / 1.6 just keeps base rolls threatening without
-    // turning every enemy into an instant bullet sponge on floor 1.
-    statMultiplier: 1.5,
-    bossStatMultiplier: 1.6,
-    bossHpGrowthMultiplier: 1.65,
-    hpFloorScaleBonus: 0.08,
-    speedMultiplier: 1.14,
-    bossProjectileSpeedMultiplier: 1.4,
-    enemyReactionMultiplier: 1.28,
-    rangedCadenceMultiplier: 0.74,
-    supportPowerMultiplier: 1.3,
-    shopPriceMultiplier: 1.42,
-    ccResistScale: 0.6,
-    statusResistScale: 0.4,
-    enemyLoopDamageReduction: 0.05,
-    enemyBleedDamageMultiplier: 0.5,
-    itemDropChanceMultiplier: 0.3,
-    shopItemOffers: 1,
-    startRoomEliteCount: 2,
-    rivalItemsPerFloor: 5,
-    rivalLevelBonusPerFloor: 2,
   },
   custom: {
+    ...SHARED_CAMPAIGN_DIFFICULTY_PRESETS.custom,
     key: 'custom',
     name: 'Custom',
     description: 'Tweak every multiplier yourself.',
     unlockLoops: 0,
-    waveBonus: 0,
-    eliteFloor: 8,
-    eliteChance: 0.12,
-    miniBossChanceMultiplier: 1,
-    roomWeightBonus: 0,
-    statMultiplier: 1,
-    bossStatMultiplier: 1,
-    bossHpGrowthMultiplier: 1,
-    speedMultiplier: 1,
-    enemyReactionMultiplier: 1,
-    rangedCadenceMultiplier: 1,
-    supportPowerMultiplier: 1,
-    shopPriceMultiplier: 1,
-    ccResistScale: 0,
-    statusResistScale: 0,
   },
 };
 export const CHALLENGE_DEFS = {

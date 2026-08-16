@@ -1,13 +1,12 @@
-const fs = require('node:fs');
-const path = require('node:path');
 
 const {
   CAMPAIGN_ENEMY_SCALING,
+  CAMPAIGN_ENEMY_DIFFICULTY_PRESETS,
+  getCampaignGodRunPressure,
   scaleCampaignEnemyStats,
 } = require('../js/simulation/SharedEnemyScalingSystem');
 
 describe('enemy loop scaling', () => {
-  const coreSource = fs.readFileSync(path.join(__dirname, '../js/core/game-core.js'), 'utf8');
 
   // Mirrors js/game/enemies.js scaleEnemyStats(): the campaign wrapper feeds the
   // shared curve and maps its hp/max/dmg/speed names back onto campaign stats.
@@ -151,24 +150,22 @@ describe('enemy loop scaling', () => {
     expect(harderLateBoss.hp / harderBoss.hp).toBeGreaterThan(mediumLateBoss.hp / mediumBoss.hp);
   });
 
-  test('keeps the Easy and Medium boss nerfs in the shared difficulty table', () => {
-    const difficultySource = coreSource.slice(
-      coreSource.indexOf('export const DIFFICULTY_DEFS'),
-      coreSource.indexOf('export const CHALLENGE_DEFS'),
-    );
-    const easyBlock = difficultySource.slice(difficultySource.indexOf('  easy: {'), difficultySource.indexOf('  medium: {'));
-    const mediumBlock = difficultySource.slice(difficultySource.indexOf('  medium: {'), difficultySource.indexOf('  hard: {'));
-    const hardBlock = difficultySource.slice(difficultySource.indexOf('  hard: {'), difficultySource.indexOf('  impossible: {'));
-
-    expect(easyBlock).toContain('bossStatMultiplier: 0.8');
-    expect(easyBlock).toContain('bossHpGrowthMultiplier: 0.65');
-    expect(easyBlock).toContain('bossProjectileSpeedMultiplier: 0.75');
-    expect(mediumBlock).toContain('bossStatMultiplier: 0.95');
-    expect(mediumBlock).toContain('bossHpGrowthMultiplier: 0.9');
-    expect(mediumBlock).toContain('bossProjectileSpeedMultiplier: 0.9');
-    expect(hardBlock).toContain('bossStatMultiplier: 1.16');
-    expect(hardBlock).toContain('bossHpGrowthMultiplier: 1.15');
-    expect(hardBlock).toContain('bossProjectileSpeedMultiplier: 1.2');
+  test('keeps Easy, Medium, and Hard boss tuning in the shared difficulty table', () => {
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.easy).toEqual(expect.objectContaining({
+      bossStatMultiplier: 0.8,
+      bossHpGrowthMultiplier: 0.65,
+      bossProjectileSpeedMultiplier: 0.75,
+    }));
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.medium).toEqual(expect.objectContaining({
+      bossStatMultiplier: 0.95,
+      bossHpGrowthMultiplier: 0.9,
+      bossProjectileSpeedMultiplier: 0.9,
+    }));
+    expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard).toEqual(expect.objectContaining({
+      bossStatMultiplier: 1.16,
+      bossHpGrowthMultiplier: 1.15,
+      bossProjectileSpeedMultiplier: 1.2,
+    }));
   });
 
   test('reduces Easy and Medium boss health and damage from their previous profiles', () => {
@@ -192,5 +189,83 @@ describe('enemy loop scaling', () => {
     expect(easyBoss.dmg).toBeLessThan(previousEasyBoss.dmg);
     expect(mediumBoss.hp).toBeLessThan(previousMediumBoss.hp);
     expect(mediumBoss.dmg).toBeLessThan(previousMediumBoss.dmg);
+  });
+
+  test('owns campaign boss, God, and multiplayer party modifiers in the shared calculation', () => {
+    const common = {
+      progressionDepth: 1,
+      enemyLevel: 1,
+      elapsedSeconds: 0,
+      difficulty: { statMultiplier: 1, bossStatMultiplier: 1, speedMultiplier: 1 },
+    };
+    const normal = scaleCampaignEnemyStats(
+      { type: 'hunter', maxHealth: 100, contactDamage: 10, moveSpeed: 100 },
+      { ...common, type: 'hunter' },
+    );
+    const boss = scaleCampaignEnemyStats(
+      { type: 'queen_cult', maxHealth: 100, contactDamage: 10, moveSpeed: 100 },
+      { ...common, type: 'queen_cult', isBoss: true },
+    );
+    const god = scaleCampaignEnemyStats(
+      { type: 'god', maxHealth: 100, contactDamage: 10, moveSpeed: 100 },
+      { ...common, type: 'god', isBoss: true },
+    );
+    const party = scaleCampaignEnemyStats(
+      { type: 'hunter', maxHealth: 100, contactDamage: 10, moveSpeed: 100 },
+      { ...common, type: 'hunter', partySize: 4 },
+    );
+
+    expect(boss.maxHealth).toBe(normal.maxHealth * 2);
+    expect(god.maxHealth).toBe(boss.maxHealth * 5);
+    expect(god.contactDamage).toBe(Math.round(boss.contactDamage * 2.2 * getCampaignGodRunPressure(0).damageMultiplier));
+    expect(god.moveSpeed).toBeCloseTo(boss.moveSpeed * 1.06);
+    expect(party.maxHealth).toBe(normal.maxHealth * 4);
+    expect(party.contactDamage).toBe(normal.contactDamage);
+    expect(party.moveSpeed).toBe(normal.moveSpeed);
+  });
+
+  test.each([
+    {
+      label: 'floor 1 Easy solo',
+      base: { type: 'hunter', maxHealth: 84, contactDamage: 15, moveSpeed: 92, level: 1 },
+      options: { type: 'hunter', progressionDepth: 1, enemyLevel: 1, elapsedSeconds: 0, difficultyKey: 'easy', partySize: 1 },
+      expected: { maxHealth: 80, contactDamage: 14, moveSpeed: 87.4, attackSpeed: 1 },
+    },
+    {
+      label: 'floor 10 Hard duo',
+      base: { type: 'hunter', maxHealth: 84, contactDamage: 15, moveSpeed: 92, level: 12 },
+      options: { type: 'hunter', progressionDepth: 10, enemyLevel: 12, elapsedSeconds: 480, difficultyKey: 'hard', partySize: 2 },
+      expected: { maxHealth: 828, contactDamage: 91, moveSpeed: 151.070554, attackSpeed: 1.605781 },
+    },
+    {
+      label: 'loop 2 Impossible trio',
+      base: { type: 'cult_mage', maxHealth: 84, contactDamage: 18, moveSpeed: 58, level: 18 },
+      options: { type: 'cult_mage', progressionDepth: 14, enemyLevel: 18, elapsedSeconds: 900, difficultyKey: 'impossible', partySize: 3 },
+      expected: { maxHealth: 3576, contactDamage: 271, moveSpeed: 113.262559, attackSpeed: 2.25 },
+    },
+    {
+      label: 'floor 7 Medium timed Cult Queen',
+      base: { type: 'queen_cult', maxHealth: 912, contactDamage: 20, moveSpeed: 96, level: 9 },
+      options: { type: 'queen_cult', isBoss: true, progressionDepth: 7, enemyLevel: 9, elapsedSeconds: 600, difficultyKey: 'medium', partySize: 1 },
+      expected: { maxHealth: 6230, contactDamage: 75, moveSpeed: 130.248992, attackSpeed: 1.171659 },
+    },
+    {
+      label: 'loop 2 God difficulty four-player final boss',
+      base: { type: 'god', maxHealth: 920, contactDamage: 18, moveSpeed: 108, level: 20 },
+      options: { type: 'god', isBoss: true, progressionDepth: 20, enemyLevel: 20, elapsedSeconds: 1200, difficultyKey: 'god', partySize: 4 },
+      expected: { maxHealth: 4957480, contactDamage: 272, moveSpeed: 170.540439, attackSpeed: 1 },
+    },
+  ])('locks the shared parity matrix for $label', ({ base, options, expected }) => {
+    const { difficultyKey, ...scalingOptions } = options;
+    const result = scaleCampaignEnemyStats(base, {
+      ...scalingOptions,
+      maxFloor: 10,
+      difficulty: CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[difficultyKey],
+    });
+
+    expect(result.maxHealth).toBe(expected.maxHealth);
+    expect(result.contactDamage).toBe(expected.contactDamage);
+    expect(result.moveSpeed).toBeCloseTo(expected.moveSpeed, 5);
+    expect(result.enemyLevelAttackSpeedMultiplier).toBeCloseTo(expected.attackSpeed, 5);
   });
 });

@@ -564,5 +564,15 @@
   "moves.antony_knife_throw.name": "Arremesso de Faca",
   "moves.antony_knife_throw.desc": "Arremesse a faca de Anthony em linha reta, atravessando a fileira de inimigos mais próxima.",
   "moves.antony_freeze_ball.name": "Orbe Congelante",
-  "moves.antony_freeze_ball.desc": "Dispare o enorme orbe de gelo teleguiado de Anthony. Ele explode ao atingir o alvo e desacelera tudo que for pego na explosão."
+  "moves.antony_freeze_ball.desc": "Dispare o enorme orbe de gelo teleguiado de Anthony. Ele explode ao atingir o alvo e desacelera tudo que for pego na explosão.",
+  "difficulties.medium.name": "Médio",
+  "difficulties.medium.description": "Rolagens inimigas um pouco mais difíceis com relíquias extras.",
+  "difficulties.hard.name": "Difícil",
+  "difficulties.hard.description": "Mais pressão e escala mais forte. O dano de sangramento contra inimigos é 20% menos eficaz.",
+  "difficulties.impossible.name": "Impossível",
+  "difficulties.impossible.description": "Desbloqueia após 5 loops. Pressão pesada da elite e dos miniboss. O dano de sangramento contra inimigos é 35% menos eficaz.",
+  "difficulties.god.name": "Deus",
+  "difficulties.god.description": "Desbloqueia após 10 loops. Relíquias escassas, aberturas de piso de elite, rivais fortemente reforçados e dano de sangramento inimigo 50% menos efetivo.",
+  "difficulties.custom.name": "Personalizado",
+  "difficulties.custom.description": "Ajuste você mesmo cada multiplicador."
 }
