@@ -3,16 +3,20 @@
     ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
+  const worldContentApi = typeof require === 'function'
+    ? require('./SharedWorldContent.js')
+    : (root.NeoNyke?.content || {});
+  const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi, worldContentApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi, floorApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi, floorApi, worldContentApi) {
   'use strict';
 
   const generateFloorLayout = floorApi?.generateFloorLayout || browserApi?.generateFloorLayout;
+  const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi?.CAMPAIGN_PLAYER_RADIUS || 14);
   const MAX_FLOOR = 10;
   const STAIRS_DWELL_TICKS = 30; // ~1.5s at 20 Hz — a deliberate hold, not a walk-over.
   const REVIVE_DWELL_TICKS = 40; // ~2s standing over a downed ally to bring them back.
@@ -442,6 +446,13 @@
     // Charge pools are built lazily per move by ensureMoveChargeState (which reads
     // the character's base charges), so a character swap can't strand a stale pool.
     player.moveChargeState = {};
+    // Weapon charge pools use the campaign's flat serialized fields. Reset them
+    // with the selected weapon so a character swap cannot inherit another
+    // weapon's ready pips or recharge timers.
+    player.weaponChargeKey = '';
+    player.weaponCharges = 0;
+    player.weaponMaxCharges = 0;
+    player.weaponChargeTimers = [];
     player.statusUntilTick = {};
     player.statuses = createCampaignStatusMap();
     player.barrier = 0;
@@ -2514,7 +2525,7 @@
     const projectileId = state.allocateEntityId('projectile');
     const muzzleDistance = Number.isFinite(Number(definition.spawnDistance))
       ? Number(definition.spawnDistance)
-      : Number(player.radius || 18) + 13;
+      : Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + 13;
     const randomService = combatRandomByState.get(state);
     const lifeTicks = Number(definition.lifeTicks || PROJECTILE_LIFETIME_TICKS);
     const projectile = {
@@ -3063,7 +3074,7 @@
       // The campaign gives pots extra reach/arc forgiveness so swings connect.
       const pot = prop.kind === 'pot';
       if (distance > range + propRadius + (pot ? 24 : 8)) return;
-      const touching = distance <= Number(player.radius || 18) + propRadius + (pot ? 32 : 18);
+      const touching = distance <= Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + propRadius + (pot ? 32 : 18);
       const difference = angleDifference(Math.atan2(prop.y - player.y, prop.x - player.x), angle);
       if (!touching && difference > arc + (pot ? 0.45 : 0.25)) return;
       damageNetworkDestructible(state, player.roomId, prop, 1, emitEvent, random, { playerId: player.id });
@@ -3379,6 +3390,13 @@
       attackMode: 'charged_sweep', attackKind: 'mooggy_swipe', weaponKey: 'mooggy_swipe',
       aimDirection: angle, originX: Number(player.x), originY: Number(player.y),
       range: swipe.range, arc: swipe.arc, targetIds, chargeRatio: swipe.chargeRatio,
+      moveChargeState: (() => {
+        const pool = readMoveChargeState(player, 'mooggy_swipe');
+        if (!pool.timers.length || !Number.isFinite(Number(action.cooldownTicks))) return pool;
+        const timers = pool.timers.slice();
+        timers[timers.length - 1] = state.tick + Math.max(1, Number(action.cooldownTicks));
+        return { ...pool, timers };
+      })(),
     });
     return { definition: swipe, targetIds };
   }
@@ -3405,6 +3423,9 @@
             : unarmedMeleeMove === 'slash'
               ? { weaponKey: 'slash', mode: 'campaign_slash', ...(MOVE_BASE_STATS.slash || {}) }
               : getCampaignWeaponAttack(player.equippedWeapon, player.characterKey);
+    const usesWeaponCharges = !!player.equippedWeapon
+      && weaponChargeCapacity(player, player.equippedWeapon) > 1;
+    if (usesWeaponCharges && !hasWeaponCharge(player, player.equippedWeapon)) return null;
     const usesMoveStats = !player.equippedWeapon && ['narwal_fight', 'fire_balls', 'smite', 'slash', 'antony_bite'].includes(authoredDefinition.weaponKey);
     const upgradedStats = applyForgeStats(player, usesMoveStats ? 'move' : 'weapon', authoredDefinition.weaponKey,
       usesMoveStats ? MOVE_BASE_STATS[authoredDefinition.weaponKey] : WEAPON_BASE_STATS[authoredDefinition.weaponKey]);
@@ -3580,9 +3601,11 @@
 
     // God mode drops the melee cadence to a 0.2s cooldown (4 ticks).
     const godMeleeTicks = godModeActive(state, player) ? 4 : Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS);
-    player.attackCooldownUntilTick = state.tick + Math.max(1, Math.ceil(godMeleeTicks
+    const attackReadyAtTick = state.tick + Math.max(1, Math.ceil(godMeleeTicks
       * Math.max(0.45, Number(player.cooldownMultiplier || 1))
       / getNetworkCampaignAttackSpeed(state, player)));
+    if (usesWeaponCharges) spendWeaponCharge(player, player.equippedWeapon, attackReadyAtTick);
+    else player.attackCooldownUntilTick = attackReadyAtTick;
     player.action = 'attack';
     player.actionTick = state.tick;
     player.actionKind = definition.weaponKey;
@@ -3605,6 +3628,8 @@
       projectileIds,
       targetIds,
       segments,
+      attackCooldownUntilTick: Number(player.attackCooldownUntilTick || 0),
+      ...(usesWeaponCharges ? { weaponChargeState: readWeaponChargeState(player, player.equippedWeapon) } : {}),
     });
     projectileIds.forEach(projectileId => {
       if (action.predictionId && state.projectiles?.[projectileId]) state.projectiles[projectileId].predictionId = action.predictionId;
@@ -3664,6 +3689,95 @@
       damagePlayer(state, target, playerDamage(state, player.id, damage), player.id, emitEvent, attackKind);
       targetIds.push(target.id);
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Weapon charges.
+  //
+  // Campaign weapons with maxCharges > 1 spend one pip per press and reload
+  // each pip independently. The authority keeps the same flat serialized
+  // fields used by the campaign player so snapshots and the existing HUD can
+  // consume the state directly.
+  function weaponChargeCapacity(player, weaponKey) {
+    const base = Math.max(1, Math.floor(Number(WEAPON_BASE_STATS[weaponKey]?.maxCharges || 1)));
+    const overrideMax = Math.max(0, Math.floor(Number(player?.weaponChargeOverrides?.[weaponKey] || 0)));
+    return Math.max(base, overrideMax);
+  }
+
+  function readWeaponChargeState(player, weaponKey) {
+    const maxCharges = weaponChargeCapacity(player, weaponKey);
+    if (maxCharges <= 1) return { charges: 1, maxCharges: 1, timers: [] };
+    if (player?.weaponChargeKey !== weaponKey || Number(player.weaponMaxCharges || 0) !== maxCharges) {
+      return { charges: maxCharges, maxCharges, timers: [] };
+    }
+    const charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(player.weaponCharges ?? maxCharges))));
+    return {
+      charges,
+      maxCharges,
+      timers: Array.isArray(player.weaponChargeTimers)
+        ? player.weaponChargeTimers.map(Number).filter(value => value > 0).slice(0, maxCharges - charges)
+        : [],
+    };
+  }
+
+  function ensureWeaponChargeState(player, weaponKey) {
+    const maxCharges = weaponChargeCapacity(player, weaponKey);
+    if (player.weaponChargeKey !== weaponKey || Number(player.weaponMaxCharges || 0) !== maxCharges) {
+      player.weaponChargeKey = weaponKey;
+      player.weaponCharges = maxCharges;
+      player.weaponMaxCharges = maxCharges;
+      player.weaponChargeTimers = [];
+    }
+    const charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(player.weaponCharges ?? maxCharges))));
+    const timers = Array.isArray(player.weaponChargeTimers)
+      ? player.weaponChargeTimers.map(Number).filter(value => value > 0).slice(0, maxCharges - charges)
+      : [];
+    player.weaponCharges = charges;
+    player.weaponMaxCharges = maxCharges;
+    player.weaponChargeTimers = timers;
+    return { charges, maxCharges, timers };
+  }
+
+  function syncWeaponCooldownMirror(player, pool) {
+    player.attackCooldownUntilTick = pool.charges > 0
+      ? 0
+      : pool.timers.length ? Math.min(...pool.timers) : 0;
+  }
+
+  function hasWeaponCharge(player, weaponKey) {
+    return ensureWeaponChargeState(player, weaponKey).charges > 0;
+  }
+
+  function spendWeaponCharge(player, weaponKey, readyAtTick) {
+    const pool = ensureWeaponChargeState(player, weaponKey);
+    if (pool.charges <= 0) return false;
+    pool.charges -= 1;
+    pool.timers.push(readyAtTick);
+    player.weaponCharges = pool.charges;
+    player.weaponMaxCharges = pool.maxCharges;
+    player.weaponChargeTimers = pool.timers;
+    syncWeaponCooldownMirror(player, pool);
+    return true;
+  }
+
+  function tickWeaponCharges(state) {
+    for (const player of Object.values(state.players || {})) {
+      const weaponKey = player?.equippedWeapon;
+      if (!weaponKey || weaponChargeCapacity(player, weaponKey) <= 1) continue;
+      const pool = ensureWeaponChargeState(player, weaponKey);
+      if (pool.timers.length) {
+        const pending = [];
+        let restored = 0;
+        pool.timers.forEach(readyAtTick => {
+          if (Number(readyAtTick) <= state.tick) restored += 1;
+          else pending.push(Number(readyAtTick));
+        });
+        pool.timers.splice(0, pool.timers.length, ...pending);
+        if (restored > 0) pool.charges = Math.min(pool.maxCharges, pool.charges + restored);
+        player.weaponCharges = pool.charges;
+      }
+      syncWeaponCooldownMirror(player, pool);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -3867,6 +3981,7 @@
       const result = charge.slot === 'melee'
         ? resolveMooggySwipeAttack(state, player, charge.angle, ratio, emitEvent, random, {
           predictionId: charge.predictionId,
+          cooldownTicks: charge.cooldownTicks,
         })
         : resolvePlayerAbility(state, player, {
           action: charge.slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: charge.moveKey, aimDirection: charge.angle,
@@ -4471,7 +4586,7 @@
       } else {
         // Blink-strike dashes (warp, zip_lightning, knight_slash_dash) teleport
         // and slash the line they cross — they are teleports in the campaign too.
-        const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
+        const minimum = Number(floor.wallThickness || 28) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS);
         const before = { x: player.x, y: player.y };
         if (moveKey === 'warp') {
           const fallbackDistance = 300;
@@ -4661,8 +4776,8 @@
             kind: ball.kind, attackKind: moveKey, damage: ball.damage,
             speed: 0, radius: ball.radius, lifeTicks: 9999, ghostBall: true,
             ghostBallEffect: ball, targetX: action.targetX, targetY: action.targetY,
-            originX: player.x + Math.cos(angle) * (Number(player.radius || 18) + ball.startRadius * 0.4),
-            originY: player.y + Math.sin(angle) * (Number(player.radius || 18) + ball.startRadius * 0.4),
+            originX: player.x + Math.cos(angle) * (Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + ball.startRadius * 0.4),
+            originY: player.y + Math.sin(angle) * (Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + ball.startRadius * 0.4),
             spawnDistance: 0,
           }, angle).id);
         } else {
@@ -5260,7 +5375,7 @@
           lifeTicks: Math.round(ball.lifeSeconds * 20),
           pierce: ball.pierce,
           knockback: ball.knockback,
-          spawnDistance: Number(player.radius || 18) + ball.radius * 0.4,
+          spawnDistance: Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + ball.radius * 0.4,
         }, angle).id);
         player.vx = Number(player.vx || 0) - Math.cos(angle) * ball.recoil;
         player.vy = Number(player.vy || 0) - Math.sin(angle) * ball.recoil;
@@ -5356,6 +5471,14 @@
     const destinationY = Number(player.y);
     const actionAngle = slot === 'dash' ? dashAngle : angle;
     setPlayerAction(state, player, slot, moveKey, actionAngle);
+    const moveChargeState = readMoveChargeState(player, moveKey);
+    if (execution.releaseHeldCharge && moveChargeState.timers.length) {
+      const timers = moveChargeState.timers.slice();
+      timers[timers.length - 1] = moveKey === 'ghost_ball'
+        ? state.tick + 1200
+        : state.tick + scaledCooldownTicks;
+      moveChargeState.timers = timers;
+    }
     emitEvent('PLAYER_ABILITY_USED', {
       playerId: player.id,
       ...(action.predictionId ? { predictionId: action.predictionId } : {}),
@@ -5378,6 +5501,7 @@
       spawnedProjectiles,
       abilityEntityIds,
       targetIds,
+      moveChargeState,
     });
     projectileIds.forEach(projectileId => {
       if (action.predictionId && state.projectiles?.[projectileId]) state.projectiles[projectileId].predictionId = action.predictionId;
@@ -5445,7 +5569,7 @@
     const target = state.interactables?.[action.targetEntityId];
     if (!target || target.opened || target.activated || target.roomId !== player.roomId) return false;
     if (Math.hypot(Number(target.x) - Number(player.x), Number(target.y) - Number(player.y))
-      > Number(target.radius || 30) + Number(player.radius || 18) + 38) return false;
+      > Number(target.radius || 30) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + 38) return false;
     if (target.kind === 'endless_chest' || target.kind === 'intermission_chest') {
       const intermissionKey = authorityGameMode(state) === 'boss_rush'
         ? `boss-rush:chest:${state.bossRush?.stage || 0}:${target.id}`
@@ -5650,8 +5774,19 @@
           }
         });
         if (!result && attack.predictionId) {
+          const weaponKey = player.equippedWeapon;
+          const meleeMove = !weaponKey ? player.equippedMoves?.melee : '';
           emitEvent('ACTION_REJECTED', {
-            playerId: player.id, predictionId: attack.predictionId,
+            playerId: player.id,
+            predictionId: attack.predictionId,
+            action: 'ATTACK',
+            weaponKey,
+            attackCooldownUntilTick: Number(player.attackCooldownUntilTick || 0),
+            ...(weaponKey && weaponChargeCapacity(player, weaponKey) > 1
+              ? { weaponChargeState: readWeaponChargeState(player, weaponKey) }
+              : meleeMove === 'mooggy_swipe'
+                ? { moveChargeState: readMoveChargeState(player, meleeMove) }
+                : {}),
             reason: player.downed ? 'DOWNED' : 'COOLDOWN_OR_INVALID',
           });
         }
@@ -5661,7 +5796,11 @@
           const result = resolvePlayerAbility(state, player, action, emitEvent, random);
           if (!result && action.predictionId) {
             emitEvent('ACTION_REJECTED', {
-              playerId: player.id, predictionId: action.predictionId,
+              playerId: player.id,
+              predictionId: action.predictionId,
+              action: action.action,
+              abilityId: action.abilityId,
+              moveChargeState: readMoveChargeState(player, action.abilityId),
               reason: player.downed ? 'DOWNED' : 'COOLDOWN_OR_INVALID',
             });
           }
@@ -5936,7 +6075,7 @@
         if (hazard.fuse > 0) return;
         const damage = Math.max(1, Math.round(Number(hazard.baseDamage || 250) * (1 + Math.max(0, Number(state.floorNumber || 1) - 1) * 0.07 + Math.max(0, Number(state.elapsedSeconds || 0) / 60) * 0.04)));
         players.forEach(player => {
-          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.blastRadius || 150) + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.blastRadius || 150) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, damage, hazard.ownerId, emitEvent, hazard.source || 'bomb_aoe', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
             knockback: Number(hazard.knockback || 240),
@@ -5989,7 +6128,7 @@
         if (hazard.tick <= 0) {
           hazard.tick = Number(hazard.interval || 0.38);
           players.forEach(player => {
-            if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 44) + Number(player.radius || 18)) return;
+            if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 44) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
             damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'lightning_column', {
               angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
               knockback: 120,
@@ -6011,7 +6150,7 @@
         hazard.tick = interval;
         const damage = Math.max(1, Math.round(Number(hazard.damagePerSecond || 0) * interval));
         players.forEach(player => {
-          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 100) + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 100) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, damage, hazard.ownerId, emitEvent, 'healing_zone', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x), knockback: 35,
           });
@@ -6034,7 +6173,7 @@
           random: () => stream ? stream.next() : 0.5,
         });
         players.forEach(player => {
-          if (Math.hypot(player.x - eruption.x, player.y - eruption.y) > eruption.radius + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - eruption.x, player.y - eruption.y) > eruption.radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, eruption.damage, hazard.ownerId, emitEvent, 'chaos_burst', {
             angle: Math.atan2(player.y - eruption.y, player.x - eruption.x), knockback: 120,
           });
@@ -6056,7 +6195,7 @@
         if (hazard.tick > 0) return;
         hazard.tick = Math.max(0.05, Number(hazard.interval || 0.6));
         players.forEach(player => {
-          if (Math.hypot(player.x - target.x, player.y - target.y) > Number(hazard.burstRadius || 56) + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - target.x, player.y - target.y) > Number(hazard.burstRadius || 56) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, Number(hazard.damage || 17), hazard.ownerId, emitEvent, 'holy_turrets', {
             angle: Number(hazard.aimAngle || desiredAngle), knockback: 120,
           });
@@ -6068,7 +6207,7 @@
         if (hazard.impactDelay > 0 || hazard.impacted) return;
         hazard.impacted = true;
         players.forEach(player => {
-          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 76) + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 76) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, Number(hazard.damage || 46), hazard.ownerId, emitEvent, 'excalibur_strike', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x), knockback: 180,
           });
@@ -6084,7 +6223,7 @@
         if (hazard.tick <= 0) {
           hazard.tick = Number(hazard.interval || 0.12);
           players.forEach(player => {
-            const hit = segmentHitsCircle(hazard.x1, hazard.y1, hazard.x2, hazard.y2, player.x, player.y, Number(hazard.r || 30) + Number(player.radius || 18));
+            const hit = segmentHitsCircle(hazard.x1, hazard.y1, hazard.x2, hazard.y2, player.x, player.y, Number(hazard.r || 30) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS));
             if (!hit) return;
             damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'lightning_strike', {
               angle: hit.angle,
@@ -6099,7 +6238,7 @@
         if (hazard.armTime > 0 || hazard.hit) return;
         players.forEach(player => {
           if (hazard.hit) return;
-          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 34) + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 34) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           hazard.hit = true;
           damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'red_spikes', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
@@ -6636,7 +6775,7 @@
   }
 
   function behaviorPlayerAlias(player) {
-    return { id: player.id, x: Number(player.x), y: Number(player.y), r: Number(player.radius || 18) };
+    return { id: player.id, x: Number(player.x), y: Number(player.y), r: Number(player.radius || CAMPAIGN_PLAYER_RADIUS) };
   }
 
   function obstacleRect(obstacle) {
@@ -6937,7 +7076,7 @@
       const state = behaviorRuntime.state;
       livingRoomPlayers(state, enemy.roomId).forEach(player => {
         const playerDistance = Math.hypot(player.x - x, player.y - y);
-        if (playerDistance > radius + Number(player.radius || 18)) return;
+        if (playerDistance > radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
         const angle = Math.atan2(player.y - y, player.x - x);
         // Optional distance falloff (Queen finisher: 5x at center → 1x at edge).
         const falloff = options.playerDamageFalloff;
@@ -7233,7 +7372,7 @@
       blade.hitCooldownUntilTick = Math.max(0, Number(blade.hitCooldownUntilTick || 0));
       livingRoomPlayers(state, enemy.roomId).forEach(player => {
         if (state.tick < blade.hitCooldownUntilTick) return;
-        if (Math.hypot(player.x - blade.x, player.y - blade.y) > Number(effect.radius || 16) + Number(player.radius || 18)) return;
+        if (Math.hypot(player.x - blade.x, player.y - blade.y) > Number(effect.radius || 16) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
         blade.hitCooldownUntilTick = state.tick + Math.max(1, Math.ceil(Number(effect.contactCooldownSeconds || 0.22) * 20));
         damagePlayer(state, player, effect.damage, enemy.id, emitEvent, 'blade_justice', {
           angle: Math.atan2(player.y - enemy.y, player.x - enemy.x), knockback: effect.knockback,
@@ -7862,7 +8001,7 @@
           return true;
         }
         const radius = enemy.mirrorPendingSmash === 'kicky_kick' ? 142 : 156;
-        if (target.distance <= radius + Number(player.radius || 18)) {
+        if (target.distance <= radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) {
           damagePlayer(state, player, Math.max(Number(enemy.smashDamage || 0), Number(enemy.contactDamage || 20)), enemy.id, emitEvent, 'mirror_smash', {
             angle, knockback: enemy.mirrorPendingSmash === 'kicky_kick' ? 680 : 300,
           });
@@ -8059,7 +8198,7 @@
           range: Number(profile.range || (moveKey === 'god_sweep' ? 360 : moveKey === 'turtle_wave' ? 440 : 430)),
           maxBounces: 1, rects: campaignBeamReflectRects(state, room) }));
         enemy.rivalBeamPaths = paths;
-        const hit = paths.map(path => campaignBeamPathHitsCircle(path, player.x, player.y, Number(player.radius || 18) + Number(profile.padding || 6))).find(Boolean);
+        const hit = paths.map(path => campaignBeamPathHitsCircle(path, player.x, player.y, Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + Number(profile.padding || 6))).find(Boolean);
         if (hit) {
           const damage = moveKey === 'turtle_wave' ? Math.max(Number(enemy.beamDamage || 0), 32)
             : moveKey === 'god_sweep' ? Math.max(10, Math.round(Number(enemy.beamDamage || enemy.contactDamage || 20) * 0.55))
@@ -8099,7 +8238,7 @@
       if (collision.blockedY) enemy.vy *= -0.4;
       enemy.x = collision.x;
       enemy.y = collision.y;
-      if (Math.hypot(Number(player.x) - Number(enemy.x), Number(player.y) - Number(enemy.y)) <= Number(enemy.radius || 16) + Number(player.radius || 18) + 6) {
+      if (Math.hypot(Number(player.x) - Number(enemy.x), Number(player.y) - Number(enemy.y)) <= Number(enemy.radius || 16) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + 6) {
         damagePlayer(state, player, Number(enemy.contactDamage || 20) + (dashMove === 'zip_lightning' ? 18 : 8), enemy.id, emitEvent,
           dashMove === 'zip_lightning' ? 'zip_lightning' : 'mirror_dash', { angle: enemy.dashAngle, knockback: dashMove === 'zip_lightning' ? 300 : 240 });
         delete enemy.mirrorDashUntilTick;
@@ -8113,7 +8252,7 @@
       const combo = enemy.rivalClawCombo || planCampaignRivalClawGauntlets({
         baseDamage: Number(enemy.contactDamage || 20), knockback: Number(enemy.mirrorWeaponStats?.knockback || 260),
       });
-      if (target.distance <= Number(enemy.radius || 16) + Number(player.radius || 18) + combo.rangePadding) {
+      if (target.distance <= Number(enemy.radius || 16) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS) + combo.rangePadding) {
         const followupAngle = angle + combo.followupAngleOffset;
         damagePlayer(state, player, combo.followupDamage, enemy.id, emitEvent, 'claw_gauntlets_followup', {
           angle: followupAngle, knockback: combo.knockback,
@@ -8230,7 +8369,7 @@
           life: config.life, damage, knockback, fireStacks: config.fireStacks, fireDuration: config.fireDuration,
         });
       }
-    } else if (target.distance <= Math.max(72, Number(weaponStats.range || 72)) + Number(player.radius || 18)) {
+    } else if (target.distance <= Math.max(72, Number(weaponStats.range || 72)) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) {
       damagePlayer(state, player, damage, enemy.id, emitEvent, `mirror_${weapon || 'slash'}`, { angle, knockback });
       if (weapon === 'thorns_bleed_blade') applyAuthorityStatus(state, player, 'bleed', 1, 5, enemy.id);
       if (isRival && weapon === 'claw_gauntlets') {
@@ -8304,7 +8443,7 @@
       }
       const angle = Math.atan2(target.player.y - enemy.y, target.player.x - enemy.x);
       const room = currentRoom(state, enemy.roomId);
-      const contactDistance = Number(enemy.radius || 20) + Number(target.player.radius || 18) + 4;
+      const contactDistance = Number(enemy.radius || 20) + Number(target.player.radius || CAMPAIGN_PLAYER_RADIUS) + 4;
       if (enemy.behavior === 'summoner' && state.tick >= Number(enemy.summonCooldownUntilTick || 0)) {
         const liveSummons = livingEncounterEnemies(state, enemy.roomId).filter(candidate => candidate.summonedBy === enemy.id).length;
         if (liveSummons < 2) spawnSummonedEnemy(state, enemy, emitEvent);
@@ -8618,7 +8757,7 @@
       if (projectile.hostile) {
         const targetIds = [];
         livingRoomPlayers(state, projectile.roomId).forEach(player => {
-          if (Math.hypot(player.x - x, player.y - y) > radius + Number(player.radius || 18)) return;
+          if (Math.hypot(player.x - x, player.y - y) > radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, projectile.damage, projectile.ownerId, emitEvent, projectile.attackKind, {
             angle: Math.atan2(player.y - y, player.x - x), knockback: Number(projectile.knockback || 200),
           });
@@ -8654,7 +8793,7 @@
       const blast = resolveCampaignEnemyProjectileBlast(projectile);
       if (!blast || !projectile.hostile) return false;
       livingRoomPlayers(state, projectile.roomId).forEach(player => {
-        if (Math.hypot(player.x - x, player.y - y) > blast.radius + Number(player.radius || 18)) return;
+        if (Math.hypot(player.x - x, player.y - y) > blast.radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
         damagePlayer(state, player, blast.damage, projectile.ownerId, emitEvent, `${projectile.attackKind}_blast`, {
           angle: Math.atan2(player.y - y, player.x - x), knockback: blast.knockback,
         });
@@ -8758,7 +8897,7 @@
       const previous = advanceCampaignProjectile(projectile, fixedDelta);
       if (projectile.returning && projectile.returnPhase === 'back') {
         const owner = state.players?.[projectile.ownerId];
-        if (owner && Math.hypot(owner.x - projectile.x, owner.y - projectile.y) <= Number(owner.radius || 18) + Number(projectile.radius || 8) + 6) {
+        if (owner && Math.hypot(owner.x - projectile.x, owner.y - projectile.y) <= Number(owner.radius || CAMPAIGN_PLAYER_RADIUS) + Number(projectile.radius || 8) + 6) {
           delete state.projectiles[projectileId];
           resolveBoomerangCatch(projectile);
           return;
@@ -9712,7 +9851,7 @@
           return;
         }
         const onStairs = Math.hypot(Number(player.x) - stairs.x, Number(player.y) - stairs.y)
-          <= Number(stairs.radius || 30) + Number(player.radius || 18);
+          <= Number(stairs.radius || 30) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS);
         if (!onStairs) {
           delete stairs.dwellByPlayer[player.id];
           return;
@@ -9853,6 +9992,7 @@
       updateChestProximity(state, emitEvent, random);
       // Refill before actions resolve so a charge whose timer expires on this tick
       // is spendable on this tick, rather than a tick late.
+      tickWeaponCharges(state);
       tickMoveCharges(state);
       updatePlayerActions(state, inputs, emitEvent, random);
       updatePlayerHeldCharges(state, inputs, emitEvent, random);
@@ -9914,6 +10054,8 @@
     livingEncounterEnemies,
     resolvePlayerAbility,
     readMoveChargeState,
+    readWeaponChargeState,
+    weaponChargeCapacity,
     moveChargeCapacity,
     createNetworkCombatSystem,
     createFloorProgressionSystem,

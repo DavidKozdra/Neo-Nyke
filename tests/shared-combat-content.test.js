@@ -15,7 +15,9 @@ describe('shared Neo Nyke combat content', () => {
       sarge: 'sarges_hammer',
       knave: 'knave_blade',
     });
-    expect(content.WEAPON_BASE_STATS.princess_wand).toEqual({ damage: 30, cooldown: 0.77, range: 120, knockback: 160 });
+    expect(content.WEAPON_BASE_STATS.princess_wand).toEqual({
+      damage: 30, cooldown: 0.77, range: 120, knockback: 160, maxCharges: 3,
+    });
     expect(content.DEFAULT_WEAPON_ATTACKS.metao_fire_staff).toEqual(expect.objectContaining({
       mode: 'volley', count: 3, spread: 0.18, speed: 560, splash: 48, fireStacks: 2,
     }));

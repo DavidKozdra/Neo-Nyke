@@ -31,8 +31,9 @@
   const { createCampaignCombatSystem, createCampaignProgressionSystem, applyCampaignHeroProfile } = combatApi;
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
+  const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi.CAMPAIGN_PLAYER_RADIUS || 14);
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v28';
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v30';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
@@ -225,7 +226,7 @@
       displayName: String(options.displayName || 'Player'),
       x: Number.isFinite(Number(options.x)) ? Number(options.x) : 450,
       y: Number.isFinite(Number(options.y)) ? Number(options.y) : CAMPAIGN_ROOM.height / 2,
-      vx: 0, vy: 0, radius: 18, moveSpeed: 228,
+      vx: 0, vy: 0, radius: CAMPAIGN_PLAYER_RADIUS, moveSpeed: 228,
       maxHp: 100, hp: 100, coins: 0, level: 1, xp: 0, xpToNext: 20,
       damageMultiplier: 1, kills: 0, playerKills: 0, deaths: 0,
       downed: false, action: 'idle', actionTick: -1, attackCooldownUntilTick: 0, stunnedUntilTick: 0,

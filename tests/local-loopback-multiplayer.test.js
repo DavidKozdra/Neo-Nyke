@@ -392,6 +392,8 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.floorState).toEqual(authority.simulation.state.floorState);
     expect(authority.simulation.state.players[clientA.playerId].characterKey).toBe('thorn_knight');
     expect(authority.simulation.state.players[clientB.playerId].characterKey).toBe('metao');
+    expect(authority.simulation.state.players[clientA.playerId].radius).toBe(14);
+    expect(authority.simulation.state.players[clientB.playerId].radius).toBe(14);
 
     for (let repeat = 0; repeat < 12; repeat += 1) {
       clientA.sendInput({ moveX: 1, moveY: 0, aimDirection: 0 });
@@ -405,6 +407,8 @@ describe('protocol-driven local multiplayer session', () => {
     const authoritativePlayers = authority.simulation.state.snapshot().players;
     expect(clientA.state.players).toEqual(authoritativePlayers);
     expect(clientB.state.players).toEqual(authoritativePlayers);
+    expect(clientA.state.players[clientA.playerId].radius).toBe(14);
+    expect(clientB.state.players[clientB.playerId].radius).toBe(14);
     expect(clientA.state).not.toBe(authority.simulation.state);
     expect(clientB.state).not.toBe(clientA.state);
     expect(authoritativePlayers[clientA.playerId].x).toBeGreaterThan(300);
@@ -446,6 +450,28 @@ describe('protocol-driven local multiplayer session', () => {
     expect(delta.entities.enemies).toEqual({});
     expect(delta.floorState).toBeNull();
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
+  });
+
+  test('holds peer deltas until its effective full snapshot is acknowledged', async () => {
+    const { authority, clientATransport } = await createRunningHarness({
+      latencyMs: 100, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const peerId = clientATransport.identity.id;
+
+    // Missing per-peer signatures promote this ordinary publication to the
+    // first reliable full snapshot at sequence zero.
+    authority._publishSnapshot(false, [peerId]);
+    expect(authority.pendingFullSnapshotByPeer.get(peerId)).toBe(0);
+    expect(authority.snapshotSequenceByPeer.get(peerId)).toBe(1);
+
+    authority.simulation.state.players[authority.playerIdByPeer.get(peerId)].x += 1;
+    authority._publishSnapshot(false, [peerId]);
+    expect(authority.snapshotSequenceByPeer.get(peerId)).toBe(1);
+
+    authority._handleSnapshotAck(peerId, { snapshotSequence: 0 });
+    expect(authority.pendingFullSnapshotByPeer.has(peerId)).toBe(false);
+    authority._publishSnapshot(false, [peerId]);
+    expect(authority.snapshotSequenceByPeer.get(peerId)).toBe(2);
   });
 
   test('full correction repairs divergent floor-owned pot state', async () => {
@@ -783,12 +809,18 @@ describe('protocol-driven local multiplayer session', () => {
     const network = new LocalLoopbackNetwork({ clock });
     const restored = new LocalMultiplayerAuthority({ transport: transport(network, 'restored-authority', 'Authority') });
     restored.simulation.state = GameState.deserialize(authority.simulation.serialize());
+    Object.values(restored.simulation.state.players).forEach(player => {
+      player.radius = 18;
+    });
 
     expect(restored.restoreRuntimeCheckpoint(runtime)).toBe(true);
     expect(restored.playerIdByPeer.get('client-a')).toBe(clientA.playerId);
     expect(restored.playerIdByPeer.get('client-b')).toBe(clientB.playerId);
     expect(restored.peerRecords.get('client-a')).toEqual(expect.objectContaining({ playerId: clientA.playerId }));
     expect(restored.lastProcessedInput).toEqual(authority.lastProcessedInput);
+    expect(Object.values(restored.simulation.state.players).every(player => player.radius === 14)).toBe(true);
+    expect(restored.simulation.state.contentVersion).toBe(restored.contentVersion);
+    expect(restored.simulation.state.floorState.layout.contentVersion).toBe(restored.contentVersion);
   });
 
   test('rejects stale input sequences even when the envelope itself is new', async () => {

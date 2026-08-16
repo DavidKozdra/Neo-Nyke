@@ -51,6 +51,19 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('otherPlayers: pools.players.size');
   });
 
+  test('keeps remote weapon channels in the same authored beam pose as the local player', () => {
+    expect(renderer).toContain('const beamActive = !!actor.beamChannel');
+    expect(renderer).toContain('Neo.getActorSpriteActionState?.(actor, { beamActive })');
+    expect(renderer).toMatch(/attackProgress:[^\n]+\n\s+beamActive,\n\s+action: spriteActionState\.action/);
+  });
+
+  test('keeps remote player concealment, recoil, and downed pose on the campaign path', () => {
+    expect(renderer).toContain('function playerActorAlpha(actor)');
+    expect(renderer).toContain('alpha: playerActorAlpha(actor)');
+    expect(renderer).toContain('recoil: armRecoilRemaining / armRecoilDuration');
+    expect(renderer).toContain('if (downed) body.position.y = Math.max(4, (actor.r || 14) * SPRITE_SIZE_MULT * 0.28);');
+  });
+
   test('carries shared chaos, oak, and shop-card visuals into 3D', () => {
     expect(renderer).toContain("if (hazard.kind === 'chaos_burst') return makeChaosBurstObject();");
     expect(renderer).toContain('function updateChaosBurst(hazard, group)');
@@ -98,6 +111,8 @@ describe('3D renderer gameplay parity', () => {
   test('keeps shared ragdolls, melee telegraphs, and Zip Lightning bursts in 3D', () => {
     expect(renderer).toContain('function syncPlayerMeleeIndicator()');
     expect(renderer).toContain('function makeMeleeIndicator()');
+    expect(renderer).toContain('function updateMeleeIndicator(actor, indicator, weaponKey, fallbackAngle = 0)');
+    expect(renderer).toContain('updateMeleeIndicator(actor, indicator, actor.equippedWeapon, actor.aimDirection);');
     expect(renderer).toContain('if (particle.ring && sprite.isMesh)');
     expect(renderer).toContain("mesh.name = 'corpse';");
     expect(renderer).toContain('Number(body.angularOffset || 0)');

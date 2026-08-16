@@ -1524,6 +1524,56 @@ function syncPlayerDashTrail(player, spriteKey, flip) {
   }
 }
 
+function updateMeleeIndicator(actor, indicator, weaponKey, fallbackAngle = 0) {
+  const total = Math.max(0.01, Number(Neo.ATTACKS?.melee?.active || 0.32));
+  const progress = Math.max(0, Math.min(1, 1 - Number(actor.swing || 0) / total));
+  const staff = weaponKey === 'extending_staff';
+  const godActive = Number(Neo.getActorGodTime?.(actor) || (actor === Neo.player ? Neo.godTimer : 0) || 0) > 0;
+  const color = staff ? '#ff3333' : godActive ? '#f6e8c8' : actor.character === 'gelleh' ? '#bfe4ff' : '#d86d87';
+  const fade = 0.9 * Math.max(0, Math.min(1, Number(actor.swing || 0) / total));
+  const glow = indicator.getObjectByName('glow');
+  const edge = indicator.getObjectByName('edge');
+  const tip = indicator.getObjectByName('tip');
+  const swingAngle = Number(actor.swingA);
+  const angle = Number.isFinite(swingAngle) ? swingAngle : Number(fallbackAngle || actor.aimDirection || 0);
+  indicator.visible = true;
+  glow.material.color.set(color);
+  glow.material.opacity = fade * 0.42;
+  edge.material.opacity = fade;
+  if (actor.stabSwing) {
+    const lunge = Math.sin(progress * Math.PI);
+    const reach = 30 + lunge * 60;
+    const points = [
+      { x: actor.x + Math.cos(angle) * 12, y: 8, z: actor.y + Math.sin(angle) * 12 },
+      { x: actor.x + Math.cos(angle) * reach, y: 8, z: actor.y + Math.sin(angle) * reach },
+    ];
+    writeMeleeLine(glow, points);
+    writeMeleeLine(edge, points);
+    tip.position.set(points[1].x, points[1].y, points[1].z);
+    tip.scale.set(14, 14, 1);
+    tip.material.color.set(color);
+    tip.material.opacity = fade;
+    return;
+  }
+  const range = staff ? 130 : 55;
+  const arc = staff ? 1.45 : Number(Neo.ATTACKS?.melee?.arc || 0.9);
+  const direction = Number(actor.swingFacing || 1) < 0 ? 1 : -1;
+  const current = angle + arc * direction + (-2 * arc * direction) * progress;
+  const trailStart = current + arc * 0.55 * direction;
+  const points = [];
+  for (let index = 0; index < 33; index += 1) {
+    const theta = trailStart + (current - trailStart) * (index / 32);
+    points.push({ x: actor.x + Math.cos(theta) * range, y: 7, z: actor.y + Math.sin(theta) * range });
+  }
+  writeMeleeLine(glow, points);
+  writeMeleeLine(edge, points);
+  const end = points[points.length - 1];
+  tip.position.set(end.x, end.y, end.z);
+  tip.scale.set(staff ? 16 : 11, staff ? 16 : 11, 1);
+  tip.material.color.set(color);
+  tip.material.opacity = fade;
+}
+
 function syncRemoteMeleeIndicator(actor) {
   let indicator = remoteMeleeIndicators.get(actor);
   const active = !actor.networkDowned && Number(actor.swing || 0) > 0;
@@ -1534,31 +1584,7 @@ function syncRemoteMeleeIndicator(actor) {
   if (!indicator) return;
   indicator.visible = active;
   if (!active) return;
-  const total = Math.max(0.01, Number(Neo.ATTACKS?.melee?.active || 0.32));
-  const progress = Math.max(0, Math.min(1, 1 - Number(actor.swing || 0) / total));
-  const angle = Number(actor.swingA || actor.aimDirection || 0);
-  const arc = Number(Neo.ATTACKS?.melee?.arc || 0.9);
-  const range = 55;
-  const direction = Number(actor.swingFacing || 1) < 0 ? 1 : -1;
-  const current = angle + arc * direction + (-2 * arc * direction) * progress;
-  const trailStart = current + arc * 0.55 * direction;
-  const points = [];
-  for (let index = 0; index < 33; index += 1) {
-    const theta = trailStart + (current - trailStart) * (index / 32);
-    points.push({ x: actor.x + Math.cos(theta) * range, y: 7, z: actor.y + Math.sin(theta) * range });
-  }
-  const glow = indicator.getObjectByName('glow');
-  const edge = indicator.getObjectByName('edge');
-  const tip = indicator.getObjectByName('tip');
-  writeMeleeLine(glow, points);
-  writeMeleeLine(edge, points);
-  const fade = Math.max(0, Math.min(1, Number(actor.swing || 0) / total));
-  glow.material.opacity = fade * 0.42;
-  edge.material.opacity = fade;
-  const end = points[points.length - 1];
-  tip.position.set(end.x, end.y, end.z);
-  tip.scale.set(11, 11, 1);
-  tip.material.opacity = fade;
+  updateMeleeIndicator(actor, indicator, actor.equippedWeapon, actor.aimDirection);
 }
 
 function makeMeleeIndicator() {
@@ -1714,54 +1740,7 @@ function syncPlayerMeleeIndicator() {
     return;
   }
   if (!playerMeleeIndicator) playerMeleeIndicator = makeMeleeIndicator();
-  const total = Math.max(0.01, Number(Neo.ATTACKS?.melee?.active || 0.32));
-  const progress = Math.max(0, Math.min(1, 1 - Number(p.swing || 0) / total));
-  const staff = Neo.getEquippedWeapon?.() === 'extending_staff';
-  const color = staff ? '#ff3333' : Neo.godTimer > 0 ? '#f6e8c8' : p.character === 'gelleh' ? '#bfe4ff' : '#d86d87';
-  const fade = 0.9 * Math.max(0, Math.min(1, Number(p.swing || 0) / total));
-  const glow = playerMeleeIndicator.getObjectByName('glow');
-  const edge = playerMeleeIndicator.getObjectByName('edge');
-  const tip = playerMeleeIndicator.getObjectByName('tip');
-  playerMeleeIndicator.visible = true;
-  glow.material.color.set(color);
-  glow.material.opacity = fade * 0.42;
-  edge.material.opacity = fade;
-  const angle = Number(p.swingA || Neo.angleToMouse?.() || 0);
-  if (p.stabSwing) {
-    const lunge = Math.sin(progress * Math.PI);
-    const reach = 30 + lunge * 60;
-    const points = [
-      { x: p.x + Math.cos(angle) * 12, y: 8, z: p.y + Math.sin(angle) * 12 },
-      { x: p.x + Math.cos(angle) * reach, y: 8, z: p.y + Math.sin(angle) * reach },
-    ];
-    writeMeleeLine(glow, points);
-    writeMeleeLine(edge, points);
-    tip.position.copy(new THREE.Vector3(points[1].x, points[1].y, points[1].z));
-    tip.scale.set(14, 14, 1);
-    tip.material.color.set(color);
-    tip.material.opacity = fade;
-    return;
-  }
-  const range = staff ? 130 : 55;
-  const arc = staff ? 1.45 : Number(Neo.ATTACKS?.melee?.arc || 0.9);
-  const direction = Number(p.swingFacing || 1) < 0 ? 1 : -1;
-  const start = angle + arc * direction;
-  const end = angle - arc * direction;
-  const current = start + (end - start) * progress;
-  const trailStart = current + arc * 0.55 * direction;
-  const points = [];
-  for (let index = 0; index < 33; index += 1) {
-    const t = index / 32;
-    const theta = trailStart + (current - trailStart) * t;
-    points.push({ x: p.x + Math.cos(theta) * range, y: 7, z: p.y + Math.sin(theta) * range });
-  }
-  writeMeleeLine(glow, points);
-  writeMeleeLine(edge, points);
-  const finalPoint = points[points.length - 1];
-  tip.position.set(finalPoint.x, finalPoint.y, finalPoint.z);
-  tip.scale.set(staff ? 16 : 11, staff ? 16 : 11, 1);
-  tip.material.color.set(color);
-  tip.material.opacity = fade;
+  updateMeleeIndicator(p, playerMeleeIndicator, Neo.getEquippedWeapon?.(), Neo.angleToMouse?.());
 }
 
 function syncPlayerDeathPool(anim, size, fallEase) {
@@ -1791,6 +1770,14 @@ function walkBob(actor, seedX = 0) {
   const t = (Number(Neo.gameElapsedTime) || performance.now() / 1000) * 11 + seedX * 0.13;
   const s = Math.abs(Math.sin(t));
   return { hop: s * 6, squashX: 1 + (1 - s) * 0.06, squashY: 1 - (1 - s) * 0.05 };
+}
+
+function playerActorAlpha(actor) {
+  const capeActive = Number(actor?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
+    && (Neo.isPlayerHidden?.(actor) ?? true);
+  if (capeActive) return 0.34;
+  const reduceFlash = window.NeoSettings?.getAccess?.()?.reduceFlash;
+  return !reduceFlash && (Number(actor?.inv || 0) > 0 || Number(actor?.stun || 0) > 0) ? 0.68 : 1;
 }
 
 function syncPlayer() {
@@ -1853,9 +1840,7 @@ function syncPlayer() {
     bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
   }
   const godTime = Number(Neo.getActorGodTime?.(p) || Neo.godTimer || 0);
-  const capeActive = Number(p?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
-    && (Neo.isPlayerHidden?.(p) ?? true);
-  let alpha = capeActive ? 0.34 : 1;
+  const alpha = playerActorAlpha(p);
   const hitFlash = !anim && !networkDowned && isActorDamageFlashActive(p);
   let tint = godTime > 0 && !hitFlash ? 0xfff5dc : 0xffffff;
   let fallEase = 0;
@@ -1928,23 +1913,34 @@ function syncOtherPlayers() {
       const baseKey = actorPlayerSpriteKey(actor);
       const slot = slotByActor.get(actor);
       const downed = !!actor.networkDowned || !!slot?.getDead?.();
-      const spriteActionState = Neo.getActorSpriteActionState?.(actor)
+      const beamActive = !!actor.beamChannel
+        || Number(actor.weaponBeamTime || 0) > 0
+        || !!actor.pvpBeamActive;
+      const spriteActionState = Neo.getActorSpriteActionState?.(actor, { beamActive })
         || { action: null, progress: null };
-      const aim = Number.isFinite(Number(actor.swingA))
+      const swingActive = Number(actor.swing || 0) > 0;
+      const armRecoilDuration = Math.max(0.01, Number(actor.armRecoilDuration || 0.16));
+      const armRecoilRemaining = Math.max(0, Number(actor.armRecoilUntil || 0) - Number(Neo.gameElapsedTime || 0));
+      const aim = swingActive && Number.isFinite(Number(actor.swingA))
         ? Number(actor.swingA)
-        : Number(actor.aimDirection || 0);
+        : armRecoilRemaining > 0 && Number.isFinite(Number(actor.armRecoilA))
+          ? Number(actor.armRecoilA)
+          : Number(actor.aimDirection || 0);
       const beamFacingAngle = Number.isFinite(Number(actor.beamChannel?.angle))
         ? Number(actor.beamChannel.angle)
         : aim;
-      const flip = Number(actor.swingFacing || 0)
+      const flip = swingActive && Number(actor.swingFacing || 0)
         ? Number(actor.swingFacing) < 0
-        : (Neo.getActorActionFacingDirection?.(actor, spriteActionState.action, beamFacingAngle)
-          ?? facingOf(actor, aim)) < 0;
+        : armRecoilRemaining > 0 && Number(actor.armRecoilFacing || 0)
+          ? Number(actor.armRecoilFacing) < 0
+          : (Neo.getActorActionFacingDirection?.(actor, spriteActionState.action, beamFacingAngle)
+            ?? facingOf(actor, aim)) < 0;
       const swingTotal = Neo.ATTACKS?.melee?.active || 0.32;
       const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, actor, {
         maxSpeed: actor.mooggyZoomiesTime > 0 ? 640 : actor.princessFlightTime > 0 ? 420 : 260,
         stepRate: actor.mooggyZoomiesTime > 0 ? 11 : 7.5,
         attackProgress: Math.max(0, 1 - Number(actor.swing || 0) / swingTotal),
+        beamActive,
         action: spriteActionState.action,
         actionProgress: spriteActionState.progress,
         seedKey: `player:${actor.id || actor.displayName || 'remote'}`,
@@ -1961,11 +1957,9 @@ function syncOtherPlayers() {
       group.position.set(actor.x, 0, actor.y);
       const actorScale = Number(Neo.getActorSpriteScale?.(actor) || 1);
       const actorGodTime = Number(Neo.getActorGodTime?.(actor) || 0);
-      const capeActive = Number(actor?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
-        && (Neo.isPlayerHidden?.(actor) ?? true);
       updateActorSprite(group, frameKey, (actor.r || 14) * actorScale, flip, {
         ...bob,
-        alpha: capeActive ? 0.34 : 1,
+        alpha: playerActorAlpha(actor),
         tint: actorGodTime > 0 && !hitFlash ? 0xfff5dc : tint,
         hitFlash,
       });
@@ -1974,12 +1968,14 @@ function syncOtherPlayers() {
         body.renderOrder = 6;
         body.material.rotation = downed ? (flip ? -1 : 1) * Math.PI / 2 : 0;
         body.center.set(0.5, downed ? 0.5 : 0);
+        if (downed) body.position.y = Math.max(4, (actor.r || 14) * SPRITE_SIZE_MULT * 0.28);
       }
       syncPlayerArm(group, baseKey, actor, aim, flip, {
         hidden: downed || !!Neo.shouldHideActorAimArm?.(baseKey, spriteActionState.action),
         attackProgress: Number(actor.swing || 0) > 0
           ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
           : 0,
+        recoil: armRecoilRemaining / armRecoilDuration,
         hitFlash,
       });
       if (!downed) {

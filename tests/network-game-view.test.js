@@ -22,8 +22,8 @@ describe('network multiplayer game view', () => {
   });
 
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v34');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v28');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v36');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v30');
   });
 
   test('starts the shared campaign frame loop for multiplayer visual systems', () => {
@@ -93,6 +93,7 @@ describe('network multiplayer game view', () => {
     view.localPredictionTick = 20;
     view.lastLocalPredictionAt = 1_000;
     view.keys.add('KeyD');
+    view.lastLocalPredictionInput = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
 
     const positions = [1_016, 1_032, 1_048].map(now => view._renderedPlayers(now).p1.x);
 
@@ -150,6 +151,94 @@ describe('network multiplayer game view', () => {
     } finally {
       globalThis.performance = originalPerformance;
     }
+  });
+
+  test('does not reconcile local movement again for metadata at the same snapshot sequence', () => {
+    const originalPerformance = globalThis.performance;
+    globalThis.performance = { now: () => 1_000 };
+    try {
+      const view = new NetworkGameView({ session: { playerId: 'p1', status: 'running' }, neo: {} });
+      const gameState = {
+        tick: 10,
+        floorNumber: 1,
+        players: { p1: { id: 'p1', roomId: 'r1', x: 450, y: 350, vx: 0, vy: 0, radius: 18 } },
+        floorState: { width: 900, height: 700, wallThickness: 28, transitionsByPlayer: {} },
+      };
+      view._onSnapshot({
+        playerId: 'p1', stateEpoch: 1, snapshotSequence: 0, lastAcknowledgedInput: -1, gameState,
+      });
+      view.localPredictedPlayer.x = 500;
+
+      view._onSnapshot({
+        playerId: 'p1', stateEpoch: 1, snapshotSequence: 0, lastAcknowledgedInput: -1, gameState,
+        gameplayEvents: [{ eventId: 'event-1', eventType: 'ROOM_CLEARED', data: {} }],
+      });
+
+      expect(view.localPredictedPlayer.x).toBe(500);
+      expect(view.reconciliationOffset).toBeNull();
+      expect(view.seenGameplayEvents.has('event-1')).toBe(true);
+    } finally {
+      globalThis.performance = originalPerformance;
+    }
+  });
+
+
+  test('advances prediction in authority-sized steps and preserves a 200 ms active-frame gap', () => {
+    const view = new NetworkGameView({ session: { playerId: 'p1', status: 'running' }, neo: {} });
+    const floorState = { width: 900, height: 700, wallThickness: 28 };
+    const player = {
+      id: 'p1', roomId: 'r1', x: 100, y: 350, vx: 0, vy: 0, radius: 18, moveSpeed: 228,
+    };
+    const input = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
+    view.currentSample = { tick: 10, state: { tick: 10, floorState, players: { p1: player } } };
+    view.localPredictedPlayer = { ...player };
+    view.localPredictedPlayerId = 'p1';
+    view.localPredictionTick = 10;
+    view.lastLocalPredictionAt = 1_000;
+    view.lastLocalPredictionInput = input;
+    view.lastMovementInputSequence = 3;
+
+    view._advanceLocalPrediction(1_200);
+
+    let expected = { ...player };
+    for (let tick = 10; tick < 14; tick += 1) {
+      expected = predictPosition(expected, input, 0.05, floorState, tick);
+    }
+    expect(view.localPredictedPlayer.x).toBeCloseTo(expected.x);
+    expect(view.localPredictedPlayer.vx).toBeCloseTo(expected.vx);
+    expect(view.localPredictionTick).toBe(14);
+    expect(view.pendingInputHistory.map(entry => entry.predictionTick)).toEqual([11, 12, 13, 14]);
+    expect(view.pendingInputHistory.every(entry => entry.sequence === 3)).toBe(true);
+  });
+
+  test('matches the authority stun boundary and disables predicted dash movement', () => {
+    const player = {
+      id: 'p1', roomId: 'r1', x: 450, y: 350, vx: 100, vy: 0, radius: 18, moveSpeed: 228,
+      stunnedUntilTick: 11, dashUntilTick: 20, dashVx: 500, dashVy: 0,
+    };
+    const floorState = { width: 900, height: 700, wallThickness: 28 };
+
+    const stunned = predictPosition(player, { moveX: 1, moveY: 0 }, 0.05, floorState, 10);
+    const recovered = predictPosition(stunned, { moveX: 1, moveY: 0 }, 0.05, floorState, 11);
+
+    expect(stunned.x).toBe(450);
+    expect(stunned.vx).toBe(0);
+    expect(recovered.x).toBeGreaterThan(stunned.x);
+  });
+
+  test('uses the campaign exponential camera smoothing', () => {
+    const view = new NetworkGameView({
+      session: {},
+      neo: {},
+      canvas: { width: 900, height: 700 },
+      context: {},
+    });
+    view.camera = { x: 0, y: 0, roomId: 'r1' };
+
+    view._updateCamera({ x: 550, y: 350, vx: 0, vy: 0, roomId: 'r1' }, 0.05);
+
+    expect(view.camera.x).toBeCloseTo(100 * (1 - Math.exp(-0.4)));
+    expect(view.camera.y).toBeCloseTo(0);
   });
 
   test('predicts with the same status speed and responsive velocity used by authority', () => {
@@ -785,6 +874,50 @@ describe('network multiplayer game view', () => {
     });
   });
 
+  test('advances the multiplayer presentation clock every frame without rewinding behind authority', () => {
+    const neo = {};
+    const view = new NetworkGameView({ session: {}, neo });
+
+    expect(view._advancePresentationClock(4, 1 / 60)).toBe(4);
+    expect(view._advancePresentationClock(4, 0.05)).toBeCloseTo(4.05);
+    expect(view._advancePresentationClock(5, 0.05)).toBe(5);
+    expect(view._advancePresentationClock(4.9, 0.05)).toBeCloseTo(5.05);
+    expect(neo.gameElapsedTime).toBeCloseTo(5.05);
+  });
+
+  test('keeps network action timelines stable while presentation advances between snapshots', () => {
+    const neo = { gameElapsedTime: 10, ATTACKS: { melee: { active: 0.17 } } };
+    const view = new NetworkGameView({ session: {}, neo });
+    const player = {
+      id: 'p1', x: 10, y: 10, characterKey: 'thorn_knight',
+      action: 'ability', actionMode: 'smash', actionKind: 'crimson_smash', actionTick: 100,
+      aimDirection: 0,
+    };
+    const state = { tick: 100 };
+
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', state, 1 / 60);
+    const actor = view.presentationPlayerSlots[0].getEntity();
+    const startedAt = actor.spriteActionStartedAt;
+    expect(actor.spriteAction).toBe('smash');
+
+    neo.gameElapsedTime += 0.1;
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', state, 1 / 60);
+    expect(actor.spriteActionStartedAt).toBe(startedAt);
+    expect(actor.spriteActionUntil - neo.gameElapsedTime).toBeCloseTo(0.5);
+
+    player.action = 'attack';
+    player.actionKind = 'slash';
+    neo.gameElapsedTime = 20;
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', state, 1 / 60);
+    const recoilUntil = actor.armRecoilUntil;
+    const firstSwing = actor.swing;
+    neo.gameElapsedTime += 0.08;
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', state, 1 / 60);
+    expect(actor.swing).toBeLessThan(firstSwing);
+    expect(actor.swing).toBeCloseTo(0.09);
+    expect(actor.armRecoilUntil).toBe(recoilUntil);
+  });
+
   // These render fields used to be derived only for the local player, so
   // teammates never showed that they were burning, poisoned or dashing.
   test('derives status, dash and flight render fields for remote players too', () => {
@@ -795,7 +928,10 @@ describe('network multiplayer game view', () => {
       p1: { id: 'p1', x: 10, y: 10, action: 'idle' },
       p2: {
         id: 'p2', x: 50, y: 50, action: 'dash', actionTick: 100,
-        statuses: burning, statusUntilTick: { flying_unhitable: 140 },
+        statuses: burning, statusUntilTick: { flying_unhitable: 140, mooggy_zoomies: 120 },
+        items: { dragon_orb: 2 }, equipmentEffects: { el_bartos_cape: { time: 1 } },
+        invulnerableUntilTick: 110, stunnedUntilTick: 120, godUntilTick: 140,
+        barrier: 24, maxHp: 120,
       },
     }, {}, 'p1', { tick: 100 }, 1 / 60);
 
@@ -803,6 +939,14 @@ describe('network multiplayer game view', () => {
     expect(remote.statuses).toEqual(burning);
     expect(remote.dashTime).toBe(0.2);
     expect(remote.princessFlightTime).toBeCloseTo(2);
+    expect(remote.mooggyZoomiesTime).toBeCloseTo(1);
+    expect(remote.r).toBe(14);
+    expect(remote.items).toEqual({ dragon_orb: 2 });
+    expect(remote.equipmentEffects).toEqual({ el_bartos_cape: { time: 1 } });
+    expect(remote.inv).toBe(1);
+    expect(remote.stun).toBeCloseTo(1);
+    expect(remote.godTimer).toBeCloseTo(2);
+    expect(remote.overhealBarrier).toBe(24);
 
     // The local hero keeps the values the HUD block used to set by hand.
     const local = view.presentationPlayerSlots.find(slot => slot.id === 'p1').getEntity();
@@ -1468,6 +1612,128 @@ describe('network multiplayer game view', () => {
 
     expect(sent).toEqual([['ATTACK', 0]]);
     expect(view.pendingCombatPredictions).toHaveLength(1);
+  });
+
+  test('does not replay a confirmed primary attack during its authoritative cooldown', () => {
+    const sent = [];
+    const session = {
+      playerId: 'p1',
+      status: 'running',
+      combatPredictionCorrelation: true,
+      sendAction: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    const player = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200,
+      equippedWeapon: 'thorns_bleed_blade', equippedMoves: { melee: 'slash' },
+      attackCooldownUntilTick: 0,
+    };
+    view.active = true;
+    view.localPredictedPlayer = { ...player };
+    view.currentSample = { tick: 100, receivedAt: performance.now(), state: { tick: 100, players: { p1: player } } };
+
+    view._attack();
+    const predictionId = sent[0][2].predictionId;
+    view._consumeGameplayEvents([{
+      eventId: 'accepted-attack',
+      eventType: 'PLAYER_ATTACKED',
+      data: {
+        playerId: 'p1', roomId: 'r1', weaponKey: 'thorns_bleed_blade',
+        predictionId, tick: 101, attackCooldownUntilTick: 108,
+      },
+    }], 101);
+    view._attack();
+
+    expect(sent).toHaveLength(1);
+    expect(view.pendingCombatPredictions).toHaveLength(0);
+    expect(view.combatEffects.map(effect => effect.eventId)).toEqual(['accepted-attack']);
+
+    const readyPlayer = { ...player, attackCooldownUntilTick: 108 };
+    view.currentSample = { tick: 108, receivedAt: performance.now(), state: { tick: 108, players: { p1: readyPlayer } } };
+    view._attack();
+    expect(sent).toHaveLength(2);
+  });
+
+  test('allows each campaign weapon charge once, then suppresses speculative attack spam', () => {
+    const sent = [];
+    const session = {
+      playerId: 'p1',
+      status: 'running',
+      combatPredictionCorrelation: true,
+      sendAction: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    const player = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200,
+      equippedWeapon: 'metao_fire_staff', equippedMoves: { melee: 'slash' },
+      attackCooldownUntilTick: 0,
+    };
+    view.active = true;
+    view.localPredictedPlayer = { ...player };
+    view.currentSample = { tick: 100, receivedAt: performance.now(), state: { tick: 100, players: { p1: player } } };
+
+    view._attack();
+    view._consumeGameplayEvents([{
+      eventId: 'accepted-fireball-1',
+      eventType: 'PLAYER_ATTACKED',
+      data: {
+        playerId: 'p1', roomId: 'r1', weaponKey: 'metao_fire_staff',
+        predictionId: sent[0][2].predictionId, tick: 101,
+        weaponChargeState: { charges: 1, maxCharges: 2, timers: [136] },
+      },
+    }], 101);
+    view._attack();
+    view._consumeGameplayEvents([{
+      eventId: 'accepted-fireball-2',
+      eventType: 'PLAYER_ATTACKED',
+      data: {
+        playerId: 'p1', roomId: 'r1', weaponKey: 'metao_fire_staff',
+        predictionId: sent[1][2].predictionId, tick: 102,
+        weaponChargeState: { charges: 0, maxCharges: 2, timers: [136, 137] },
+      },
+    }], 102);
+    view._attack();
+
+    expect(sent).toHaveLength(2);
+    expect(view.pendingCombatPredictions).toHaveLength(0);
+    expect(view.combatEffects.map(effect => effect.eventId)).toEqual([
+      'accepted-fireball-1',
+      'accepted-fireball-2',
+    ]);
+  });
+
+  test('does not replay a confirmed ability until an authoritative charge is ready', () => {
+    const sent = [];
+    const session = {
+      playerId: 'p1',
+      status: 'running',
+      combatPredictionCorrelation: true,
+      sendAbility: (...args) => sent.push(args),
+    };
+    const view = new NetworkGameView({ session, neo: {} });
+    const player = {
+      id: 'p1', roomId: 'r1', x: 100, y: 200,
+      equippedMoves: { smash: 'crimson_smash' },
+      moveChargeState: {},
+    };
+    view.active = true;
+    view.localPredictedPlayer = { ...player };
+    view.currentSample = { tick: 100, receivedAt: performance.now(), state: { tick: 100, players: { p1: player } } };
+
+    view._useSlot('smash');
+    view._consumeGameplayEvents([{
+      eventId: 'accepted-smash',
+      eventType: 'PLAYER_ABILITY_USED',
+      data: {
+        playerId: 'p1', roomId: 'r1', slot: 'smash', abilityId: 'crimson_smash',
+        predictionId: sent[0][2].predictionId, tick: 101,
+        moveChargeState: { charges: 0, maxCharges: 1, timers: [145] },
+      },
+    }], 101);
+    view._useSlot('smash');
+
+    expect(sent).toHaveLength(1);
+    expect(view.pendingCombatPredictions).toHaveLength(0);
   });
 
   test('shows a held charge before the authority has sent its first snapshot', () => {

@@ -136,6 +136,8 @@ function runLocalSmoothness(durationMs = 1_000) {
   view.localPredictionTick = 20;
   view.lastLocalPredictionAt = startedAt;
   view.keys.add('KeyD');
+  view.lastLocalPredictionInput = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
+  view.lastMovementInputSequence = 0;
   let previousX = player.x;
   let movingFrames = 0;
   let stalledFrames = 0;
@@ -221,7 +223,13 @@ async function createHarness(options) {
 
   const session = {
     get status() { return client.status; },
-    snapshot: () => ({ status: client.status, playerId: client.playerId, lastAcknowledgedInput: client.lastAcknowledgedInput }),
+    snapshot: () => ({
+      status: client.status,
+      playerId: client.playerId,
+      stateEpoch: client.stateEpoch,
+      snapshotSequence: client.latestSnapshotSequence,
+      lastAcknowledgedInput: client.lastAcknowledgedInput,
+    }),
     sendInput: input => client.sendInput(input),
   };
   const view = new NetworkGameView({ session, neo: {} });
@@ -229,7 +237,13 @@ async function createHarness(options) {
   let currentInput = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
   view._readMovement = () => ({ moveX: currentInput.moveX, moveY: currentInput.moveY });
   view._isInputBlocked = () => false;
-  view._onSnapshot({ gameState: client.getStateSnapshot(), playerId: client.playerId });
+  view._onSnapshot({
+    gameState: client.getStateSnapshot(),
+    playerId: client.playerId,
+    stateEpoch: client.stateEpoch,
+    snapshotSequence: client.latestSnapshotSequence,
+    lastAcknowledgedInput: client.lastAcknowledgedInput,
+  });
 
   const corrections = [];
   const correctionDetails = [];
@@ -245,8 +259,15 @@ async function createHarness(options) {
     if (lastObservedAt !== null) snapshotIntervalsMs.push(Math.max(0, clock.now() - lastObservedAt));
     lastObservedAt = clock.now();
     const authorityPlayer = client.state.players[client.playerId];
-    const previousPredicted = view.localPredictedPlayer && { ...view.localPredictedPlayer };
-    view._onSnapshot({ gameState: client.getStateSnapshot(), playerId: client.playerId });
+    view._advanceLocalPrediction(clock.now());
+    const previousPredicted = view._localPredictionPreview();
+    view._onSnapshot({
+      gameState: client.getStateSnapshot(),
+      playerId: client.playerId,
+      stateEpoch: client.stateEpoch,
+      snapshotSequence: client.latestSnapshotSequence,
+      lastAcknowledgedInput: client.lastAcknowledgedInput,
+    });
     const reconciledPlayer = view.localPredictedPlayer;
     if (authorityPlayer && previousPredicted && reconciledPlayer && clock.now() >= measurementStartMs) {
       const distance = Math.hypot(
@@ -312,16 +333,28 @@ async function runScenario(options) {
   // designed to shrink.
     authority._publishSnapshot(true);
     clock.runAll();
-    view._onSnapshot({ gameState: client.getStateSnapshot(), playerId: client.playerId });
+    view._onSnapshot({
+      gameState: client.getStateSnapshot(),
+      playerId: client.playerId,
+      stateEpoch: client.stateEpoch,
+      snapshotSequence: client.latestSnapshotSequence,
+      lastAcknowledgedInput: client.lastAcknowledgedInput,
+    });
 
     const input = { moveX: 1, moveY: 0, aimDirection: 0, buttons: 0 };
+    const advanceAuthorityTick = () => {
+      for (let frame = 0; frame < 3; frame += 1) {
+        clock.advanceBy(50 / 3);
+        view._renderedPlayers(clock.now());
+      }
+    };
     const warmupTicks = 40;
     for (let tick = 0; tick < warmupTicks; tick += 1) {
       setInput(input);
       view._sendInput();
       advanceBusyState(authority, client.playerId, authority.pendingInputs[client.playerId] || input);
       if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
-      clock.advanceBy(50);
+      advanceAuthorityTick();
     }
     clock.runAll();
     corrections.length = 0;
@@ -346,12 +379,12 @@ async function runScenario(options) {
       view._sendInput();
       advanceBusyState(authority, client.playerId, authority.pendingInputs[client.playerId] || input);
       if ((tick + 1) % SNAPSHOT_INTERVAL_TICKS === 0) authority._publishSnapshot(false);
-      clock.advanceBy(50);
+      advanceAuthorityTick();
     }
     clock.runAll();
     const smoothedCorrectionVelocity = corrections
       .filter(distance => distance > 0.01 && distance < MAX_SMOOTH_RECONCILIATION_PX)
-      .map(distance => distance / (Math.max(120, Math.min(240, distance * 3)) / 1000));
+      .map(distance => distance / (Math.max(120, Math.min(320, distance * 3)) / 1000));
     return {
       correction: summary(corrections),
       smoothedCorrectionVelocity: summary(smoothedCorrectionVelocity),

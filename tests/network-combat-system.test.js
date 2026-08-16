@@ -1158,6 +1158,39 @@ describe('authoritative network combat system', () => {
     expect(player.actionKind).toBe('thorns_bleed_blade');
   });
 
+  test('spends campaign weapon charges and rejects primary spam until a pip reloads', () => {
+    const { state, simulation, events } = combatHarness('metao');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'metao');
+    simulation.updateGame({}, 0.05);
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0, predictionId: 'shot-1' }] } }, 0.05);
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0, predictionId: 'shot-2' }] } }, 0.05);
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0, predictionId: 'shot-3' }] } }, 0.05);
+
+    expect(events.filter(event => event.eventType === 'PLAYER_ATTACKED')).toHaveLength(2);
+    expect(player.weaponChargeKey).toBe('metao_fire_staff');
+    expect(player.weaponCharges).toBe(0);
+    expect(player.weaponMaxCharges).toBe(2);
+    expect(player.weaponChargeTimers).toHaveLength(2);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ACTION_REJECTED',
+      data: expect.objectContaining({
+        predictionId: 'shot-3',
+        action: 'ATTACK',
+        weaponChargeState: expect.objectContaining({ charges: 0, maxCharges: 2 }),
+      }),
+    }));
+
+    const firstReadyAtTick = Math.min(...player.weaponChargeTimers);
+    while (state.tick <= firstReadyAtTick) simulation.updateGame({}, 0.05);
+    expect(player.weaponCharges).toBe(1);
+    expect(player.weaponChargeTimers).toHaveLength(1);
+
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0, predictionId: 'shot-4' }] } }, 0.05);
+    expect(events.filter(event => event.eventType === 'PLAYER_ATTACKED')).toHaveLength(3);
+  });
+
   test('runs an equipped Magenta P90 as its authored timed five-shot burst', () => {
     const { state, simulation, random, events } = combatHarness('princess');
     const player = state.players.p1;

@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { CAMPAIGN_ROOM_GEOMETRY } = require('../js/simulation/SharedWorldContent');
-const { CAMPAIGN_ROOM } = require('../js/simulation/CampaignSimulation');
+const { CAMPAIGN_PLAYER_RADIUS, CAMPAIGN_ROOM_GEOMETRY } = require('../js/simulation/SharedWorldContent');
+const { CAMPAIGN_ROOM, createCampaignPlayer } = require('../js/simulation/CampaignSimulation');
 const { TEST_ROOM } = require('../js/multiplayer/LocalMultiplayerSession');
 
 describe('shared campaign world content', () => {
@@ -16,6 +16,17 @@ describe('shared campaign world content', () => {
     expect(browserCore).toContain('CAMPAIGN_ROOM_GEOMETRY');
     expect(campaign).not.toContain('width: 900, height: 700');
     expect(session).not.toContain('width: 900, height: 700');
+  });
+
+  test('campaign and multiplayer authorities share the player collision and render radius', () => {
+    expect(CAMPAIGN_PLAYER_RADIUS).toBe(14);
+    expect(createCampaignPlayer({ id: 'p1' }).radius).toBe(CAMPAIGN_PLAYER_RADIUS);
+
+    const browserState = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
+    const session = fs.readFileSync(path.join(__dirname, '../js/multiplayer/LocalMultiplayerSession.js'), 'utf8');
+    expect(browserState).toContain('CAMPAIGN_PLAYER_RADIUS');
+    expect(session).toContain('radius: CAMPAIGN_PLAYER_RADIUS');
+    expect(session).not.toContain('radius: 18');
   });
 
   test('network presentation synchronizes the same camera consumed by Neo.draw', () => {

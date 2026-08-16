@@ -288,6 +288,8 @@
         status: this.client.status,
         playerId: this.client.playerId,
         lastAcknowledgedInput: this.client.lastAcknowledgedInput,
+        stateEpoch: this.client.stateEpoch,
+        snapshotSequence: this.client.latestSnapshotSequence,
         lobbyState: this.client.lobbyState,
         gameState: this.client.getStateSnapshot(),
         gameplayEvents: this.client.gameplayEvents.slice(),

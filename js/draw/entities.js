@@ -307,7 +307,7 @@
     }
     if (walkFrames.length && speed > 10) {
       const stepRate = Number(speedOverride.stepRate ?? options.stepRate ?? 10);
-      const index = Math.floor(Date.now() / 1000 * stepRate + seed) % walkFrames.length;
+      const index = Math.floor(clock * stepRate + seed) % walkFrames.length;
       return resolve(walkFrames[index]);
     }
 
@@ -345,7 +345,7 @@
     const maxSpeed = Math.max(1, Number(options.maxSpeed || 220));
     const moving = Neo.clamp((speed - 8) / maxSpeed, 0, 1);
     const seed = getActorAnimSeed(actor, options.seedKey);
-    const now = Date.now() / 1000;
+    const now = Number(Neo.gameElapsedTime || 0);
     const stepRate = Number(getSpriteAnimSpeedOverride(spriteKey).stepRate ?? options.stepRate ?? 10);
     const phase = now * stepRate + seed;
     const step = Math.sin(phase);
@@ -1858,36 +1858,21 @@
         ? (Neo.player.armRecoilFacing < 0 ? -1 : 1)
         : getActorActionFacingDirection(Neo.player, playerActionState.action, beamFacingAngle);
     const godTime = getActorGodTime(Neo.player);
-    const shadowColor = godTime > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
-    const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
-    // The cape only renders the player near-invisible while actually concealed (first
-    // half of its duration); after the midpoint they fade back into view.
-    const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
-      && (Neo.isPlayerHidden?.(Neo.player) ?? true);
     const hitFlash = isActorHitFlashActive(Neo.player);
     drawActorStatusRings(Neo.player);
     drawWarpPreview();
     drawActorOverhealBarrier(Neo.player);
     const playerSize = Math.max(34, Neo.player.r * 2.5) * getActorSpriteScale(Neo.player);
-    drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
-      alpha: capeActive ? 0.34 : (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
-      flipX: facing < 0,
-      shadowColor,
-      shadowBlur: godTime > 0 ? 18 : 6,
-      tint: !hitFlash && godTime > 0 ? 'rgba(255,245,220,0.6)' : null,
+    const playerSpriteOptions = getPlayerSpriteRenderOptions(Neo.player, {
+      godTime,
       hitFlash,
-      animation: {
-        maxSpeed: Neo.player.mooggyZoomiesTime > 0 ? 640 : Neo.player.princessFlightTime > 0 ? 420 : 260,
-        stepRate: Neo.player.mooggyZoomiesTime > 0 ? 11 : 7.5,
-        dashPulse: Neo.player.dashTime > 0 ? 1 : 0,
-        actionPulse: getAttackPulse(Neo.player.swing, Neo.ATTACKS.melee.active),
-        attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
-        castPulse: Neo.laserActive || Neo.player.weaponBeamTime > 0 ? 0.32 : 0,
-        beamActive: Neo.laserActive || Neo.player.weaponBeamTime > 0,
-        action: playerActionState.action,
-        actionProgress: playerActionState.progress,
-        seedKey: 'player',
-      },
+      beamActive: Neo.laserActive || Neo.player.weaponBeamTime > 0,
+      actionState: playerActionState,
+      seedKey: 'player',
+    });
+    drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
+      ...playerSpriteOptions,
+      flipX: facing < 0,
     });
     drawStunStars(Neo.player, Neo.player.y);
     drawEnemyStatusIconRow(Neo.player, Neo.player.y);
@@ -1896,12 +1881,11 @@
     drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
       hidden: shouldHideActorAimArm(getPlayerSpriteKey(), playerActionState.action),
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
-      recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
+      recoil: playerSpriteOptions.armRecoilProgress,
       hitFlash,
     });
     drawPlayerWeaponAnimation(Neo.player, Neo.getEquippedWeapon(), aimAngle, facing, {
       godActive: godTime > 0,
-      showRangePreview: true,
       previewAngle: currentAimAngle,
     });
     Neo.ctx.restore();
@@ -1998,6 +1982,45 @@
     return 0;
   }
 
+  function getPlayerSpriteRenderOptions(actor, options = {}) {
+    const actionState = options.actionState || getActorSpriteActionState(actor, {
+      beamActive: options.beamActive,
+    });
+    const godTime = Number.isFinite(Number(options.godTime))
+      ? Number(options.godTime)
+      : getActorGodTime(actor);
+    const hitFlash = !!options.hitFlash;
+    const reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const beamActive = !!options.beamActive;
+    const zooming = Number(actor?.mooggyZoomiesTime || 0) > 0;
+    const flying = Number(actor?.princessFlightTime || 0) > 0;
+    const meleeActive = Number(Neo.ATTACKS?.melee?.active || 0.17);
+    const capeActive = Number(actor?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
+      && (Neo.isPlayerHidden?.(actor) ?? true);
+    const armRecoilDuration = Math.max(0.01, Number(actor?.armRecoilDuration || 0.16));
+    const armRecoilRemaining = Math.max(0, Number(actor?.armRecoilUntil || 0) - Number(Neo.gameElapsedTime || 0));
+    return {
+      alpha: capeActive ? 0.34 : !reduceFlash && (Number(actor?.inv || 0) > 0 || Number(actor?.stun || 0) > 0) ? 0.68 : 1,
+      shadowColor: godTime > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)',
+      shadowBlur: godTime > 0 ? 18 : 6,
+      armRecoilProgress: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
+      tint: !hitFlash && godTime > 0 ? 'rgba(255,245,220,0.6)' : null,
+      hitFlash,
+      animation: {
+        maxSpeed: zooming ? 640 : flying ? 420 : 260,
+        stepRate: zooming ? 11 : 7.5,
+        dashPulse: Number(actor?.dashTime || 0) > 0 ? 1 : 0,
+        actionPulse: getAttackPulse(actor?.swing, meleeActive),
+        attackProgress: getAttackProgress(actor?.swing, meleeActive),
+        castPulse: beamActive ? 0.32 : 0,
+        beamActive,
+        action: actionState.action,
+        actionProgress: actionState.progress,
+        seedKey: options.seedKey || actor?.id || actor?.character || 'player',
+      },
+    };
+  }
+
   function drawPlayerSlot(slot) {
     const pn = slot?.getEntity?.();
     if (!pn) return;
@@ -2048,34 +2071,27 @@
     drawActorOverhealBarrier(pn);
     const slotGodTime = getActorGodTime(pn);
     const hitFlash = isActorHitFlashActive(pn);
-    drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
-      alpha: pn.inv > 0 ? 0.55 : 1,
-      flipX: facing < 0,
-      // A god-mode teammate keeps the golden glow drawPlayer gives the local
-      // hero, rather than reading as an ordinary player.
-      shadowColor: slotGodTime > 0 ? 'rgba(255,248,210,0.65)' : hexToRgba(tintColor, 0.45),
-      shadowBlur: slotGodTime > 0 ? 18 : 10,
-      tint: hitFlash ? null : slotGodTime > 0 ? 'rgba(255,245,220,0.6)' : hexToRgba(tintColor, 0.25),
+    const beamActive = !!pn.beamChannel || Number(pn.weaponBeamTime || 0) > 0 || !!pn.pvpBeamActive;
+    const slotSpriteOptions = getPlayerSpriteRenderOptions(pn, {
+      godTime: slotGodTime,
       hitFlash,
-      animation: {
-        maxSpeed: 260,
-        stepRate: 7.5,
-        dashPulse: pn.dashTime > 0 ? 1 : 0,
-        actionPulse: getAttackPulse(pn.swing, Neo.ATTACKS.melee.active),
-        attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
-        action: slotActionState.action,
-        actionProgress: slotActionState.progress,
-        seedKey: label || charKey,
-      },
+      beamActive,
+      actionState: slotActionState,
+      seedKey: pn.id || label || charKey,
+    });
+    drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
+      ...slotSpriteOptions,
+      flipX: facing < 0,
     });
     drawStunStars(pn, pn.y);
     drawEnemyStatusIconRow(pn, pn.y);
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
-    drawAimIndicator(aimAngle, spriteKey, tintColor, slotSize, facing, {
+    drawAimIndicator(aimAngle, spriteKey, '#f5f1e8', slotSize, facing, {
       hidden: shouldHideActorAimArm(spriteKey, slotActionState.action),
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
       hitFlash,
+      recoil: slotSpriteOptions.armRecoilProgress,
     });
     drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing, { godActive: slotGodTime > 0 });
     Neo.ctx.restore();
@@ -2440,6 +2456,7 @@
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;
   Neo.getActorSpriteScale = getActorSpriteScale;
   Neo.getActorGodTime = getActorGodTime;
+  Neo.getPlayerSpriteRenderOptions = getPlayerSpriteRenderOptions;
   Neo.drawWarpPreview = drawWarpPreview;
   Neo.drawSpriteFrame = drawSpriteFrame;
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;

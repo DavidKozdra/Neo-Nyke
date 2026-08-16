@@ -73,6 +73,18 @@ describe('browser multiplayer background connection recovery', () => {
     return { transport, session };
   }
 
+  test('exposes the applied world epoch and snapshot sequence to presentation subscribers', async () => {
+    const { session } = await connectedSession();
+    session.client.stateEpoch = 3;
+    session.client.latestSnapshotSequence = 7;
+
+    expect(session.snapshot()).toEqual(expect.objectContaining({
+      stateEpoch: 3,
+      snapshotSequence: 7,
+    }));
+    session.dispose();
+  });
+
   test('sends protocol heartbeats even outside the gameplay input loop', async () => {
     const { transport, session } = await connectedSession();
     session.client.status = 'running';

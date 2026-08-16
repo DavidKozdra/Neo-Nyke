@@ -39,10 +39,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v34';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v36';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
-  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v28';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   // Cadence reacts to the age of the oldest unacknowledged snapshot instead of
@@ -55,6 +55,7 @@
   const SNAPSHOT_BASELINE_HISTORY = 16;
   const RESYNC_MIN_TICKS = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
+  const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi.CAMPAIGN_PLAYER_RADIUS || 14);
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', 'knave']);
   // Background tabs and sleeping mobile browsers can suspend JavaScript well
@@ -312,6 +313,7 @@
       this.snapshotFloorSignatureByPeer = new Map();
       this.snapshotBossSignatureByPeer = new Map();
       this.pendingSnapshotBaselinesByPeer = new Map();
+      this.pendingFullSnapshotByPeer = new Map();
       this.lastDeliveryResultByPeer = new Map();
       this.diagnosticSessionByPeer = new Map();
       this.peerRecords = new Map();
@@ -417,6 +419,16 @@
         .map(([peerId, sequences]) => [peerId, new Set(Array.isArray(sequences) ? sequences : [])]));
       this.lastReplaceableSequence = new Map(Array.isArray(runtime.lastReplaceableSequence) ? runtime.lastReplaceableSequence : []);
       this.invalidMessageCount = new Map(Array.isArray(runtime.invalidMessageCount) ? runtime.invalidMessageCount : []);
+      this.simulation.state.contentVersion = this.contentVersion;
+      if (this.simulation.state.floorState?.layout) {
+        this.simulation.state.floorState.layout.contentVersion = this.contentVersion;
+      }
+      // Checkpoints created before the shared player-geometry contract stored
+      // an 18 px multiplayer-only radius. Normalize on wake so hibernated rooms
+      // cannot keep the oversized collision body and 45 px character art.
+      Object.values(this.simulation.state.players || {}).forEach(player => {
+        player.radius = CAMPAIGN_PLAYER_RADIUS;
+      });
       // Connected clients keep their authoritative state while the room
       // hibernates. Prime the delta baseline so a wake does not immediately
       // resend the full floor and every entity.
@@ -437,6 +449,7 @@
       this.snapshotFloorSignatureByPeer.clear();
       this.snapshotBossSignatureByPeer.clear();
       this.pendingSnapshotBaselinesByPeer.clear();
+      this.pendingFullSnapshotByPeer.clear();
     }
 
     _createSimulation(matchSeed, matchId) {
@@ -514,7 +527,7 @@
         y: TEST_ROOM.height / 2,
         vx: 0,
         vy: 0,
-        radius: 18,
+        radius: CAMPAIGN_PLAYER_RADIUS,
         moveSpeed: 180,
         maxHp: 100,
         hp: 100,
@@ -952,6 +965,10 @@
         this.snapshotFloorSignatureByPeer.set(peerId, baseline.floorSignature);
         this.snapshotBossSignatureByPeer.set(peerId, baseline.bossSignature);
       }
+      const pendingFullSequence = this.pendingFullSnapshotByPeer.get(peerId);
+      if (pendingFullSequence !== undefined && acknowledged >= pendingFullSequence) {
+        this.pendingFullSnapshotByPeer.delete(peerId);
+      }
       pending?.forEach((_value, sequence) => {
         if (sequence <= acknowledged) pending.delete(sequence);
       });
@@ -992,6 +1009,7 @@
       this.snapshotFloorSignatureByPeer.clear();
       this.snapshotBossSignatureByPeer.clear();
       this.pendingSnapshotBaselinesByPeer.clear();
+      this.pendingFullSnapshotByPeer.clear();
       this.lastDeliveryResultByPeer.clear();
       this.diagnosticSessionByPeer.clear();
       this.snapshotFloorSignature = '';
@@ -1159,6 +1177,7 @@
       cleaned = this.snapshotFloorSignatureByPeer.delete(peerId) || cleaned;
       cleaned = this.snapshotBossSignatureByPeer.delete(peerId) || cleaned;
       cleaned = this.pendingSnapshotBaselinesByPeer.delete(peerId) || cleaned;
+      cleaned = this.pendingFullSnapshotByPeer.delete(peerId) || cleaned;
       cleaned = this.lastDeliveryResultByPeer.delete(peerId) || cleaned;
       cleaned = this.diagnosticSessionByPeer.delete(peerId) || cleaned;
       const replaceablePrefix = `${peerId}|`;
@@ -1364,6 +1383,7 @@
         }
         const roomChanged = this.enableSnapshotPacking && this.lastSnapshotRoomByPlayer[playerId] !== player.roomId;
         const previousSignatures = this.snapshotEntitySignaturesByPeer.get(peerId);
+        if (this.pendingFullSnapshotByPeer.has(peerId) && !full && !roomChanged) return;
         const clientFull = full || roomChanged || !previousSignatures;
         this.lastSnapshotRoomByPlayer[playerId] = player.roomId;
         const nextSignatures = {};
@@ -1434,6 +1454,7 @@
         if (deliveryResult?.dropped) {
           this.metrics.droppedSnapshots += 1;
         } else {
+          if (clientFull) this.pendingFullSnapshotByPeer.set(peerId, payload.snapshotSequence);
           const pending = this.pendingSnapshotBaselinesByPeer.get(peerId) || new Map();
           pending.set(payload.snapshotSequence, {
             entitySignatures: nextSignatures,
@@ -1486,6 +1507,7 @@
       this.state = null;
       this.lobbyState = null;
       this.latestSnapshotSequence = -1;
+      this.stateEpoch = 0;
       this.pendingSnapshotResync = false;
       this.snapshotStateHistory = new Map();
       this.lastAcknowledgedInput = -1;
@@ -1523,6 +1545,9 @@
       const joined = await this.transport.joinSession(sessionId);
       this.sessionId = joined.sessionId;
       this.authorityPeerId = joined.authorityPeerId;
+      this.latestSnapshotSequence = -1;
+      this.pendingSnapshotResync = false;
+      this.snapshotStateHistory.clear();
       this.status = 'connecting';
       this._send('CLIENT_HELLO', {
         buildVersion: this.buildVersion,
@@ -1713,6 +1738,7 @@
           break;
         case 'INITIAL_STATE':
           this.state = new GameState(message.payload.state);
+          this.stateEpoch += 1;
           this.lastAcknowledgedInput = message.payload.lastProcessedInput[this.playerId] ?? -1;
           this.pendingSnapshotResync = false;
           this.snapshotStateHistory.clear();

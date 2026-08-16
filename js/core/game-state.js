@@ -1038,7 +1038,7 @@ export function resumeGame() {
       character: character.key,
       x: Neo.START_X,
       y: Neo.START_Y,
-      r: 14,
+      r: Number(globalThis.NeoNyke?.content?.CAMPAIGN_PLAYER_RADIUS || 14),
       vx: 0,
       vy: 0,
       hp: maxHp,

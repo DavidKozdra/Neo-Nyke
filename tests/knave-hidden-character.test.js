@@ -198,7 +198,7 @@ describe('Knave, the hidden playable character', () => {
     expect(combatContent.getCharacterDefaultWeapon('knave')).toBe('knave_blade');
     // The blade is a real weapon too, with authored stats and a sweep behavior.
     expect(combatContent.WEAPON_BASE_STATS.knave_blade).toEqual(
-      expect.objectContaining({ damage: 36, cooldown: 0.44 }));
+      expect.objectContaining({ damage: 36, cooldown: 0.35 }));
     expect(combatContent.DEFAULT_WEAPON_ATTACKS.knave_blade).toEqual(expect.objectContaining({
       mode: 'sweep', bleedChance: 0.35, bleedStacks: 2,
     }));
