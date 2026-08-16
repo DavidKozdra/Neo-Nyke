@@ -1798,7 +1798,6 @@ export function resumeGame() {
       challengeTimerMultiplier: 1 - roomPressure * 0.2,
       potionHealMultiplier: 1 - statPressure * 0.16,
       coinRewardMultiplier: 1 + economyPressure * 0.24,
-      xpRewardMultiplier: 1 + statPressure * 0.16,
       bribeCostMultiplier: 1 + economyPressure * 0.22,
       memoryMatchMaxFlips: Math.max(2, 6 - Math.round(statPressure * 2)),
     };
@@ -1810,7 +1809,6 @@ export function resumeGame() {
       challengeTimerMultiplier: Number(config.challengeTimerMultiplier || 1),
       potionHealMultiplier: Number(config.potionHealMultiplier || 1),
       coinRewardMultiplier: Number(config.coinRewardMultiplier || 1),
-      xpRewardMultiplier: Number(config.xpRewardMultiplier || 1),
     };
   }
 

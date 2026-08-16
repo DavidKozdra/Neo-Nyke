@@ -25,6 +25,15 @@ describe('shared special-room choices', () => {
     expect(applySpecialRoomChoice(h.state, h.room, h.player, 'veteran', h.random)).toMatchObject({ ok: false });
   });
 
+  test('returns Reliquary XP for the caller to run through campaign progression', () => {
+    const h = harness('reliquary', { xp: 19, xpToNext: 20, items: { neo_knife: 1 } });
+
+    const result = applySpecialRoomChoice(h.state, h.room, h.player, 'distill', h.random);
+
+    expect(result).toMatchObject({ ok: true, xp: 15 });
+    expect(h.player.xp).toBe(19);
+  });
+
   test('oracle map vision dispels the Princess map curse', () => {
     const h = harness('oracle');
     h.state.floorState.curses = { obscureMap: true };

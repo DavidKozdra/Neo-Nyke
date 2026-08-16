@@ -8,6 +8,29 @@
   'use strict';
 
   const KNOCKBACK_BONUS_PER_LEVEL = 0.02;
+  const EXPERIENCE_STAT_PRESSURE_RANGE = 0.52;
+  const EXPERIENCE_DIFFICULTY_BONUS = 0.16;
+  const EXPERIENCE_TIME_STEP_SECONDS = 300;
+  const EXPERIENCE_TIME_STEP_BONUS = 0.05;
+
+  function resolveCampaignExperienceGain(baseAmount, options = {}) {
+    const difficulty = options.difficulty || {};
+    const statMultiplier = Number(difficulty.statMultiplier || 1);
+    const statPressure = Math.min(1, Math.max(
+      0,
+      (statMultiplier - 1) / EXPERIENCE_STAT_PRESSURE_RANGE,
+    ));
+    const difficultyMultiplier = 1 + statPressure * EXPERIENCE_DIFFICULTY_BONUS;
+    const elapsedSeconds = Math.max(0, Number(options.elapsedSeconds) || 0);
+    const timeMultiplier = 1
+      + Math.floor(elapsedSeconds / EXPERIENCE_TIME_STEP_SECONDS) * EXPERIENCE_TIME_STEP_BONUS;
+    const xpGainMultiplier = Math.max(0, Number(options.xpGainMultiplier || 1));
+    const scaledAmount = Number(baseAmount || 0)
+      * difficultyMultiplier
+      * timeMultiplier
+      * xpGainMultiplier;
+    return Math.max(1, Math.round(scaledAmount));
+  }
 
   function getEntityLevelKnockbackMultiplier(entityOrLevel) {
     const rawLevel = typeof entityOrLevel === 'object' && entityOrLevel !== null
@@ -107,6 +130,7 @@
     getMilestoneChargeBonus,
     getLevelMoveSpeedBonus,
     getEntityLevelKnockbackMultiplier,
+    resolveCampaignExperienceGain,
     applyCampaignLevelUp,
   };
 });

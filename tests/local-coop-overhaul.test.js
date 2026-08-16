@@ -71,11 +71,6 @@ describe('local co-op systems use active player slots', () => {
     expect(world).toContain('healPickupPlayer(potionHeal)');
   });
 
-  test('shared XP advances each active co-op character', () => {
-    expect(combat).toContain("if (Neo.gameMode === 'coop')");
-    expect(combat).toContain('(Neo.getActivePlayerSlots?.() || []).forEach');
-    expect(combat).toContain('applyCampaignLevelUp?.(actor)');
-  });
 
   test('gamepad interaction identifies its player for ladders and room services', () => {
     expect(gamepad).toContain('game?.triggerInteract?.(slotIndex + 1)');

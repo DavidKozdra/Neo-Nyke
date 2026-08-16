@@ -16,6 +16,12 @@ if (!globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY) {
 if (!SHARED_ROOM_GEOMETRY || SHARED_ROOM_GEOMETRY.width == null || SHARED_ROOM_GEOMETRY.height == null) {
   throw new Error('Shared campaign room geometry is invalid');
 }
+
+const CAMPAIGN_HERO_STAT_BASES = globalThis.NeoNyke?.content?.CAMPAIGN_HERO_STAT_BASES;
+const BUILT_IN_HERO_COMBAT_PROFILES = globalThis.NeoNyke?.content?.BUILT_IN_HERO_COMBAT_PROFILES;
+if (!CAMPAIGN_HERO_STAT_BASES || !BUILT_IN_HERO_COMBAT_PROFILES) {
+  throw new Error('Shared built-in hero combat profiles are unavailable');
+}
 export const ROOM_W = SHARED_ROOM_GEOMETRY.width;
 export const ROOM_H = SHARED_ROOM_GEOMETRY.height;
 export const WALL = SHARED_ROOM_GEOMETRY.wallThickness;
@@ -23,8 +29,8 @@ export const DOOR = SHARED_ROOM_GEOMETRY.doorWidth;
 export const MAX_FLOOR = 10;
 export const START_X = ROOM_W / 2;
 export const START_Y = ROOM_H / 2;
-export const PLAYER_BASE_MAX_HP = 120;
-export const PLAYER_BASE_MOVE_SPEED = 228;
+export const PLAYER_BASE_MAX_HP = CAMPAIGN_HERO_STAT_BASES.maxHp;
+export const PLAYER_BASE_MOVE_SPEED = CAMPAIGN_HERO_STAT_BASES.moveSpeed;
 
 export const ATTACKS = {
   melee: { baseCooldown: 0.35, range: 72, arc: 1.04, damage: 24, active: 0.17, push: 220 },
@@ -941,39 +947,28 @@ export const CHARACTER_DEFS = {
     key: 'princess',
     name: 'Princess',
     rarity: 'princess',
-    // Global 5% base-stat nerf: health, damage, movement, and AOE all retain
-    // Princess's identity while sitting one step below their previous values.
-    damageMultiplier: 1.14,
-    hpMultiplier: 1.0925,
-    moveSpeedMultiplier: 0.95,
-    aoeRadiusMultiplier: 0.95,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.princess,
     skills: { melee: 'Royal Strike', laser: 'Petal Beam', smash: 'Blossom Burst', dash: 'Graceful Step' },
   },
   thorn_knight: {
     key: 'thorn_knight',
     name: 'Thorn Knight',
     rarity: 'knight',
-    damageMultiplier: 1.08,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.thorn_knight,
     skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash', dash: 'Dash' },
   },
   metao: {
     key: 'metao',
     name: 'Metao',
     rarity: 'wizard',
-    damageMultiplier: 0.5,
-    aoeRadiusMultiplier: 1.2,
-    aoeDamageMultiplier: 1.35,
-    // +20% on the default laser cooldown (4.2s → 5.04s) to offset the wizard's
-    // wide AoE laser. Applied via the per-character laserCooldownMultiplier the
-    // cooldown resolvers already honor (game-state.js, enemies.js).
-    laserCooldownMultiplier: 1.2,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.metao,
     skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
   },
   gelleh: {
     key: 'gelleh',
     name: 'Gelleh',
     rarity: 'god',
-    damageMultiplier: 1,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.gelleh,
     skills: { melee: 'Spear of Lightning', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
     unlock: 'godslain',
   },
@@ -981,8 +976,7 @@ export const CHARACTER_DEFS = {
     key: 'mooggy',
     name: 'Mooggy',
     rarity: 'knave',
-    damageMultiplier: 0.6,
-    hpMultiplier: 1.08,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.mooggy,
     skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Random Pounce', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },
@@ -990,8 +984,7 @@ export const CHARACTER_DEFS = {
     key: 'turtle_boy',
     name: 'Turtle Boy',
     rarity: 'knight',
-    damageMultiplier: 0.8,
-    hpMultiplier: 1.2,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.turtle_boy,
     // Turtle Boy trades raw output for survivability: a thick shell, a draining
     // wave laser, and a free laser tier every 3 floors (see grantTurtleLaserStep).
     skills: { melee: 'Extending Staff', laser: 'Turtle Wave', smash: 'Death Ball', dash: 'Riptide Roll' },
@@ -1001,8 +994,7 @@ export const CHARACTER_DEFS = {
     key: 'sarge',
     name: 'Sarge',
     rarity: 'knight',
-    damageMultiplier: 1.05,
-    hpMultiplier: 0.9,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.sarge,
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god
     // item (Sarge's Hammer) rewards rapid double-kills with a homing hammer.
     skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },
@@ -1014,9 +1006,7 @@ export const CHARACTER_DEFS = {
     rarity: 'knave',
     // The dungeon's own footsoldier, turned playable: glass-cannon speed. Hits
     // hard and moves fastest on the roster, but folds under return fire.
-    damageMultiplier: 0.95,
-    hpMultiplier: 0.82,
-    moveSpeedMultiplier: 1.18,
+    ...BUILT_IN_HERO_COMBAT_PROFILES.knave,
     skills: { melee: 'Slash', laser: 'Laser Shockwave', smash: 'Crimson Smash', dash: 'Dash' },
     unlock: 'credits_studio',
   },

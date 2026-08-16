@@ -45,7 +45,6 @@
     if (key) inventoryApi.collectCampaignItem(player, key);
     return key;
   };
-  const grantXp = (player, value) => { player.xp = Math.max(0, Number(player.xp || 0) + Math.max(0, Number(value || 0))); };
   const roomsOf = state => state.floorState?.layout?.rooms || [];
   const roomKey = room => `${room?.gx},${room?.gy}`;
   const hasVisitedRoom = (state, room) => {
@@ -67,6 +66,10 @@
     let rewardKey = '';
     let transitionToRoomId = '';
     let advanceFloor = false;
+    let xp = 0;
+    const grantXp = value => {
+      xp += Math.max(0, Number(value || 0));
+    };
 
     if (room.type === 'shrine') {
       if (choiceId === 'blood') {
@@ -101,7 +104,7 @@
       } else if (choiceId === 'distill') {
         const relic = relics[relics.length - 1];
         if (!relic || !removeItem(player, relic.key)) return { ok: false, reason: 'NO_RELIC' };
-        grantXp(player, Math.max(10, Math.round(Number(player.xpToNext || 20) * 0.75))); result = 'Relic distilled';
+        grantXp(Math.max(10, Math.round(Number(player.xpToNext || 20) * 0.75))); result = 'Relic distilled';
       } else if (Number(player.bountyTrophies || 0) > 0) {
         player.bountyTrophies -= 1; player.maxHp += 5; player.hp += 5; player.attackPower = Number(player.attackPower || 0) + 2;
         inventoryApi.collectCampaignItem(player, 'forge_voucher'); result = 'Trophy tempered';
@@ -163,14 +166,14 @@
         roomsOf(state).filter(candidate => ['ladder', 'boss', 'god', 'shop', 'anvil', ...SPECIAL_ROOM_TYPES].includes(candidate.type)).forEach(candidate => { candidate.explored = true; });
         result = 'Scout rescued';
       } else if (choiceId === 'medic') { player.maxHp += 15; player.hp = player.maxHp; result = 'Medic rescued'; }
-      else { player.attackPower = Number(player.attackPower || 0) + 3 + Math.ceil(floor / 3); grantXp(player, 20 + floor * 5); result = 'Veteran rescued'; }
+      else { player.attackPower = Number(player.attackPower || 0) + 3 + Math.ceil(floor / 3); grantXp(20 + floor * 5); result = 'Veteran rescued'; }
     } else if (room.type === 'wishing_well') {
       const smallCost = 25; const deepCost = 75; const hpCost = Math.max(10, Math.round(Number(player.maxHp || 120) * 0.1));
       if (choiceId === 'small') {
         if (!spend(player, smallCost)) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
         const roll = Math.floor(random.next() * 4);
         if (roll === 0) player.hp = player.maxHp;
-        else if (roll === 1) grantXp(player, 45 + floor * 4);
+        else if (roll === 1) grantXp(45 + floor * 4);
         else if (roll === 2) player.coins += 60;
         else rewardKey = grantItem(player, random, false);
         result = 'The well answers';
@@ -187,7 +190,7 @@
       }
     } else if (room.type === 'chronicle') {
       if (choiceId === 'recall') {
-        grantXp(player, Math.max(30, Math.round(Number(player.xpToNext || 20) * 1.5)));
+        grantXp(Math.max(30, Math.round(Number(player.xpToNext || 20) * 1.5)));
         result = 'Every battle remembered';
       } else if (choiceId === 'atlas') {
         roomsOf(state).forEach(candidate => {
@@ -210,7 +213,7 @@
         result = 'Living plate fitted';
       } else {
         inventoryApi.collectCampaignItem(player, 'forge_voucher', { amount: 2 });
-        grantXp(player, Math.max(20, Number(player.xpToNext || 20)));
+        grantXp(Math.max(20, Number(player.xpToNext || 20)));
         result = 'The arsenal is yours';
       }
     } else if (room.type === 'mutation_lab') {
@@ -236,7 +239,7 @@
         rewardKey = grantItem(player, random, true); result = 'A dead star is caught';
       } else {
         player.moveSpeed = Number(player.moveSpeed || 228) + 12;
-        grantXp(player, 40);
+        grantXp(40);
         result = 'Fast orbit achieved';
       }
     } else if (room.type === 'void_market') {
@@ -252,13 +255,13 @@
         const relic = relics[relics.length - 1];
         if (!relic || !removeItem(player, relic.key)) return { ok: false, reason: 'NO_RELIC' };
         inventoryApi.collectCampaignItem(player, 'forge_voucher', { amount: 3 });
-        grantXp(player, Math.max(20, Number(player.xpToNext || 20)));
+        grantXp(Math.max(20, Number(player.xpToNext || 20)));
         result = 'A relic is unmade';
       }
     }
     room.serviceUsed = true;
     room.serviceResult = result;
-    return { ok: true, roomType: room.type, choiceId, result, rewardKey, transitionToRoomId, advanceFloor };
+    return { ok: true, roomType: room.type, choiceId, result, rewardKey, xp, transitionToRoomId, advanceFloor };
   }
 
   return { SPECIAL_ROOM_TYPES, CHOICE_IDS, applySpecialRoomChoice };

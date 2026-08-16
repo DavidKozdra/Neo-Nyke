@@ -16,6 +16,68 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedCombatContentApi(enemyContent) {
   'use strict';
 
+  const CAMPAIGN_HERO_STAT_BASES = Object.freeze({
+    maxHp: 120,
+    moveSpeed: 228,
+  });
+
+  const DEFAULT_BUILT_IN_HERO_COMBAT_PROFILE = Object.freeze({
+    damageMultiplier: 1,
+    hpMultiplier: 1,
+    moveSpeedMultiplier: 1,
+    aoeRadiusMultiplier: 1,
+    aoeDamageMultiplier: 1,
+    laserCooldownMultiplier: 1,
+  });
+
+  const builtInHeroCombatProfile = overrides => Object.freeze({
+    ...DEFAULT_BUILT_IN_HERO_COMBAT_PROFILE,
+    ...overrides,
+  });
+
+  // Canonical headless-safe combat tuning for the built-in campaign heroes.
+  // Presentation, unlocks, custom characters, and selectable-roster policy stay
+  // in their existing adapters; both adapters consume these exact multipliers.
+  const BUILT_IN_HERO_COMBAT_PROFILES = Object.freeze({
+    princess: builtInHeroCombatProfile({
+      damageMultiplier: 1.14,
+      hpMultiplier: 1.0925,
+      moveSpeedMultiplier: 0.95,
+      aoeRadiusMultiplier: 0.95,
+    }),
+    thorn_knight: builtInHeroCombatProfile({ damageMultiplier: 1.08 }),
+    metao: builtInHeroCombatProfile({
+      damageMultiplier: 0.5,
+      aoeRadiusMultiplier: 1.2,
+      aoeDamageMultiplier: 1.35,
+      laserCooldownMultiplier: 1.2,
+    }),
+    gelleh: builtInHeroCombatProfile({}),
+    mooggy: builtInHeroCombatProfile({
+      damageMultiplier: 0.6,
+      hpMultiplier: 1.08,
+    }),
+    turtle_boy: builtInHeroCombatProfile({
+      damageMultiplier: 0.8,
+      hpMultiplier: 1.2,
+    }),
+    sarge: builtInHeroCombatProfile({
+      damageMultiplier: 1.05,
+      hpMultiplier: 0.9,
+    }),
+    knave: builtInHeroCombatProfile({
+      damageMultiplier: 0.95,
+      hpMultiplier: 0.82,
+      moveSpeedMultiplier: 1.18,
+    }),
+  });
+
+  function getBuiltInHeroCombatProfile(characterKey) {
+    return Object.prototype.hasOwnProperty.call(BUILT_IN_HERO_COMBAT_PROFILES, characterKey)
+      ? BUILT_IN_HERO_COMBAT_PROFILES[characterKey]
+      : null;
+  }
+
   // This is the canonical, headless-safe source for weapon values used by both
   // the legacy browser game and multiplayer authority. Keep presentation out.
   const WEAPON_BASE_STATS = Object.freeze({
@@ -155,6 +217,9 @@
   }
 
   return {
+    CAMPAIGN_HERO_STAT_BASES,
+    BUILT_IN_HERO_COMBAT_PROFILES,
+    getBuiltInHeroCombatProfile,
     WEAPON_BASE_STATS,
     PROJECTILE_TYPE_DEFS,
     WEAPON_PROJECTILE_ATTACKS,

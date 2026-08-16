@@ -6200,32 +6200,38 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     return applyScrollReplacement(rolled);
   }
 
-  function grantXp(amount) {
-    const stats = Neo.getItemStats();
-    // Small time bonus: +5% XP for every 5 minutes survived this run, so longer
-    // runs stay worth grinding even though base kill XP is flat.
-    const timeScale = 1 + Math.floor(Math.max(0, Number(Neo.gameElapsedTime || 0)) / 300) * 0.05;
-    const gained = Math.max(1, Math.round(amount * Neo.getRunDifficultyScalars().xpRewardMultiplier * (stats.xpGainMultiplier || 1) * timeScale));
-    Neo.player.xp += gained;
-    while (Neo.player.xp >= Neo.player.xpToNext) {
-      Neo.player.xp -= Neo.player.xpToNext;
-      levelUp();
+  function grantXp(amount, options = {}) {
+    const activeSlots = options.recipient
+      ? [{ id: 1, color: '#7dff9e', getEntity: () => options.recipient }]
+      : Neo.gameMode === 'coop' ? (Neo.getActivePlayerSlots?.() || []) : [];
+    const recipients = activeSlots.slice();
+    if (!options.recipient && !recipients.some(slot => slot.getEntity?.() === Neo.player)) {
+      recipients.unshift({ id: 1, color: '#7dff9e', getEntity: () => Neo.player });
     }
-    if (Neo.gameMode === 'coop') {
-      (Neo.getActivePlayerSlots?.() || []).forEach(slot => {
-        if (slot.id === 1) return;
-        const actor = slot.getEntity?.();
-        if (!actor) return;
-        actor.xp = Number(actor.xp || 0) + gained;
-        actor.xpToNext = Math.max(1, Number(actor.xpToNext || Neo.player.xpToNext || 60));
-        while (actor.xp >= actor.xpToNext) {
-          actor.xp -= actor.xpToNext;
-          const result = globalThis.NeoNyke?.simulation?.applyCampaignLevelUp?.(actor);
-          if (!result) break;
-          Neo.spawnParticle({ x: actor.x, y: actor.y - 20, life: 0.9, text: `LV ${actor.level}`, c: slot.color || '#7dff9e' });
-        }
+    recipients.forEach(slot => {
+      const actor = slot.getEntity?.();
+      if (!actor) return;
+      const stats = actor === Neo.player
+        ? Neo.getItemStats()
+        : globalThis.NeoNyke?.simulation?.deriveCampaignItemStats?.(actor) || {};
+      const gained = globalThis.NeoNyke.simulation.resolveCampaignExperienceGain(amount, {
+        difficulty: Neo.getDifficultyDef(),
+        elapsedSeconds: Neo.gameElapsedTime,
+        xpGainMultiplier: stats.xpGainMultiplier,
       });
-    }
+      actor.xp = Math.max(0, Number(actor.xp || 0)) + gained;
+      actor.xpToNext = Math.max(1, Number(actor.xpToNext || 20));
+      while (actor.xp >= actor.xpToNext) {
+        actor.xp -= actor.xpToNext;
+        if (actor === Neo.player) {
+          levelUp();
+          continue;
+        }
+        const result = globalThis.NeoNyke?.simulation?.applyCampaignLevelUp?.(actor);
+        if (!result) break;
+        Neo.spawnParticle({ x: actor.x, y: actor.y - 20, life: 0.9, text: `LV ${actor.level}`, c: slot.color || '#7dff9e' });
+      }
+    });
   }
 
   function levelUp() {

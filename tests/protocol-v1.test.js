@@ -137,7 +137,7 @@ describe('gameplay protocol v1 runtime validation', () => {
     }), { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
   });
 
-  test('requires snapshots to state whether nullable boss state changed', () => {
+  test('requires snapshots to carry a valid authoritative beam-struggle map', () => {
     const snapshot = createEnvelope('WORLD_SNAPSHOT', 9, 40, {
       snapshotSequence: 3,
       baselineSequence: 2,
@@ -146,11 +146,22 @@ describe('gameplay protocol v1 runtime validation', () => {
       lastProcessedInput: {},
       entities: {},
       removedEntityIds: [],
+      beamStruggles: {
+        p1: { playerId: 'p1', enemyId: 'enemy-1', progress: 0.6 },
+      },
       floorState: null,
       bossState: null,
       bossStateChanged: false,
     });
     expect(validateEnvelope(snapshot, { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
+    const withoutBeamStruggles = { ...snapshot.payload };
+    delete withoutBeamStruggles.beamStruggles;
+    expect(validateEnvelope({ ...snapshot, payload: withoutBeamStruggles }, {
+      direction: AUTHORITY_TO_CLIENT,
+    }).errors).toContain('payload.beamStruggles is required');
+    expect(validateEnvelope({ ...snapshot, payload: { ...snapshot.payload, beamStruggles: [] } }, {
+      direction: AUTHORITY_TO_CLIENT,
+    }).errors).toContain('payload.beamStruggles must be object');
   });
 
   test('rejects wrong direction, unknown fields, invalid movement, and oversized messages', () => {

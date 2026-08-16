@@ -47,6 +47,11 @@
   // button release cannot leave the authority applying stale input for a full
   // second. Four tiny samples per second are negligible beside snapshots.
   const INPUT_HEARTBEAT_MS = 250;
+  // Neutral intent stays on the same sequenced, replaceable input channel as
+  // ordinary intent. Bounded retries reduce loss risk without keeping an
+  // abandoned room awake indefinitely while input remains suspended.
+  const NEUTRAL_INPUT_RETRY_INTERVAL_MS = INPUT_HEARTBEAT_MS;
+  const MAX_NEUTRAL_INPUT_SEND_ATTEMPTS = 8;
   const INPUT_VECTOR_EPSILON = 0.01;
   const INPUT_AIM_EPSILON = 0.02;
   const INTERPOLATION_DELAY_MS = 100;
@@ -585,6 +590,10 @@
       this.paused = false;
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
+      this.inputSuspended = false;
+      this.pendingNeutralInputSequence = null;
+      this.neutralInputSendAttempts = 0;
+      this.lastNeutralInputSentAt = null;
       // Every locally integrated movement sample is tagged with the most
       // recent input sequence. Snapshot acknowledgement lets us rebuild the
       // local hero from authority state instead of repeatedly blending drift.
@@ -633,18 +642,12 @@
       this.boundContextMenu = event => {
         if (this.active && event.target === this.canvas) event.preventDefault();
       };
-      this.boundBlur = () => {
-        this.keys.clear();
-        this.laserHeld = false;
-        this.keyboardLaserHeld = false;
-        this.gamepadLaserHeld = false;
-        this.touchLaserHeld = false;
-        this.keyboardSmashHeld = false;
-        this.gamepadSmashHeld = false;
-        this.touchSmashHeld = false;
-        this.keyboardDashHeld = false;
-        this.gamepadDashHeld = false;
-        this.touchDashHeld = false;
+      this.boundBlur = () => this._suspendInput();
+      this.boundFocus = () => this._resumeInput();
+      this.boundVisibilityChange = () => {
+        if (this.document?.hidden === true || this.document?.visibilityState === 'hidden') {
+          this._suspendInput();
+        }
       };
       this.boundPauseResume = event => {
         event?.preventDefault?.();
@@ -797,6 +800,10 @@
       void this.neo.preloadSfx?.(NETWORK_SFX_PRELOAD_IDS);
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
+      this.inputSuspended = this.document?.hidden === true || this.document?.visibilityState === 'hidden';
+      this.pendingNeutralInputSequence = null;
+      this.neutralInputSendAttempts = 0;
+      this.lastNeutralInputSentAt = null;
       // Use the campaign's real presentation/UI state. The main update loop
       // explicitly skips local simulation while this adapter is active, so this
       // enables canonical mouse-look, panels, pause and settings without running
@@ -812,6 +819,8 @@
       root.addEventListener?.('pointerup', this.boundPointerUp);
       root.addEventListener?.('contextmenu', this.boundContextMenu);
       root.addEventListener?.('blur', this.boundBlur);
+      root.addEventListener?.('focus', this.boundFocus);
+      this.document?.addEventListener?.('visibilitychange', this.boundVisibilityChange);
       this.pointerWasLocked = this.document?.pointerLockElement === this.canvas;
       this.document?.addEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume, true);
@@ -838,6 +847,7 @@
 
     stop() {
       if (!this.active) return;
+      this._flushNeutralInput();
       this.active = false;
       root.clearInterval?.(this.inputTimer);
       this.inputTimer = null;
@@ -857,6 +867,8 @@
       root.removeEventListener?.('pointerup', this.boundPointerUp);
       root.removeEventListener?.('contextmenu', this.boundContextMenu);
       root.removeEventListener?.('blur', this.boundBlur);
+      this.document?.removeEventListener?.('visibilitychange', this.boundVisibilityChange);
+      root.removeEventListener?.('focus', this.boundFocus);
       this.document?.removeEventListener?.('pointerlockchange', this.boundPointerLockChange);
       this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume, true);
       this.document?.getElementById('pauseSettings')?.removeEventListener('click', this.boundPauseSettings, true);
@@ -866,21 +878,13 @@
       this._closeChat();
       this.document?.getElementById('multiplayerChat')?.classList.add('hidden');
       this.document?.getElementById('multiplayerSpectator')?.classList.add('hidden');
-      this.keys.clear();
+      this._clearHeldInputSources();
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
-      this.laserHeld = false;
-      this.keyboardLaserHeld = false;
-      this.gamepadLaserHeld = false;
-      this.touchLaserHeld = false;
-      this.keyboardSmashHeld = false;
-      this.gamepadSmashHeld = false;
-      this.touchSmashHeld = false;
-      this.keyboardDashHeld = false;
-      this.gamepadDashHeld = false;
-      this.touchDashHeld = false;
-      this.previousTouchActions = { slash: false, laser: false, smash: false, ascend: false, dash: false, beamMash: false };
-      this.previousGamepadActions = { slash: false, laser: false, smash: false, dash: false };
+      this.inputSuspended = false;
+      this.pendingNeutralInputSequence = null;
+      this.neutralInputSendAttempts = 0;
+      this.lastNeutralInputSentAt = null;
       this.presentationPlayerSlots = [];
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
@@ -1019,11 +1023,7 @@
       const form = this.document?.getElementById('multiplayerChatForm');
       const input = this.document?.getElementById('multiplayerChatInput');
       if (!form || !input) return;
-      this.keys.clear();
-      this.laserHeld = false;
-      this.keyboardLaserHeld = false;
-      this.keyboardSmashHeld = false;
-      this.keyboardDashHeld = false;
+      this._flushNeutralInput();
       form.classList.remove('hidden');
       // Releasing pointer lock normally opens the multiplayer pause menu. Chat
       // is its own intentional focus transition, so disarm that edge first.
@@ -1186,6 +1186,16 @@
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
       this.sessionPlayerId = snapshot.playerId || this.sessionPlayerId;
       this.latestLobbyState = snapshot.lobbyState || this.latestLobbyState;
+      const acknowledgedInput = Number(snapshot.lastAcknowledgedInput);
+      if (Number.isInteger(acknowledgedInput) && acknowledgedInput >= -1) {
+        this.lastAcknowledgedInput = Math.max(Number(this.lastAcknowledgedInput ?? -1), acknowledgedInput);
+        if (this.pendingNeutralInputSequence != null
+          && acknowledgedInput >= this.pendingNeutralInputSequence) {
+          this.pendingNeutralInputSequence = null;
+          this.neutralInputSendAttempts = 0;
+          this.lastNeutralInputSentAt = null;
+        }
+      }
       this._renderChat(snapshot.chatMessages || []);
       const state = snapshot.gameState;
       const incomingEpoch = Number(snapshot.stateEpoch);
@@ -1258,7 +1268,7 @@
         this.localPredictionAccumulatorMs = 0;
         return;
       }
-      const acknowledgedInput = Number(snapshot.lastAcknowledgedInput ?? -1);
+      const acknowledgedInputForPrediction = Number(snapshot.lastAcknowledgedInput ?? -1);
       // A snapshot can arrive between presentation frames. Commit every complete
       // fixed prediction slice before comparing the currently displayed point.
       this._advanceLocalPrediction(receivedAt);
@@ -1296,7 +1306,7 @@
           }
           this.session.client._recordDiagnostic?.('correction', {
             distancePx: Number(correctionDistance.toFixed(2)),
-            acknowledgedInput,
+            acknowledgedInput: acknowledgedInputForPrediction,
           });
         }
         if (correctionDistance < MAX_SMOOTH_RECONCILIATION_PX) {
@@ -1327,7 +1337,10 @@
         ...this.pendingInputHistory.map(entry => Number(entry.predictionTick || 0)),
       );
       this.lastLocalPredictionAt = receivedAt;
-      this.lastAcknowledgedInput = acknowledgedInput;
+      this.lastAcknowledgedInput = Math.max(
+        Number(this.lastAcknowledgedInput ?? -1),
+        acknowledgedInputForPrediction,
+      );
     }
 
     _onKey(event, pressed) {
@@ -1561,8 +1574,7 @@
           if (this.pendingHeldCharge?.abilityId === 'mooggy_swipe') return;
           const predictionId = `predicted:${++this.predictedCombatSequence}`;
           this._startPredictedHeldCharge('mooggy_swipe', 'melee', BUTTON_MELEE_HELD, predictionId);
-          const movement = this._readMovement();
-          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: BUTTON_MELEE_HELD });
+          this._sendInput({ additionalButton: BUTTON_MELEE_HELD, syncHeldSources: false });
           const options = { predictionId, originServerTick: this.currentSample?.tick };
           if (this.session.combatPredictionCorrelation) this.session.sendAction('ATTACK', this.aimDirection, options);
           else this.session.sendAction('ATTACK', this.aimDirection);
@@ -1589,12 +1601,14 @@
       const player = this.localPredictedPlayer;
       const abilityId = player?.equippedMoves?.[slot];
       if (!abilityId) return;
-      const cursorTarget = Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))
-        ? { targetX: Number(this.neo.mouse.worldX), targetY: Number(this.neo.mouse.worldY) }
-        : {};
+
       if (this._hasPendingCombatPrediction('PLAYER_ABILITY_USED', abilityId)
         || this.pendingHeldCharge?.abilityId === abilityId) return;
       if (!this._localAbilityReady(abilityId)) return;
+      const cursorTarget = Number.isFinite(Number(this.neo.mouse?.worldX))
+        && Number.isFinite(Number(this.neo.mouse?.worldY))
+        ? { targetX: Number(this.neo.mouse.worldX), targetY: Number(this.neo.mouse.worldY) }
+        : {};
       try {
         const heldButton = HELD_BUTTON_BY_ABILITY[abilityId];
         if (heldButton) {
@@ -1603,8 +1617,7 @@
           // Put an explicit held sample on the socket first, in the same send
           // order as the action, so the authority cannot start a charge from an
           // old button-up snapshot and immediately release a tiny version.
-          const movement = this._readMovement();
-          this.session.sendInput?.({ ...movement, aimDirection: this.aimDirection, buttons: heldButton, ...cursorTarget });
+          this._sendInput({ additionalButton: heldButton, syncHeldSources: false });
         } else {
           const dashInput = slot === 'dash' ? this._readMovement() : null;
           const dashOptions = dashInput
@@ -2195,6 +2208,7 @@
           this.neo.setShopPanelOpen?.(false);
           this.neo.setInventoryPanelOpen?.(false);
           this.neo.clearGameplayInput?.();
+          this._flushNeutralInput();
           this.neo.uiController?.playDialogue?.(lines, { returnState: 'play' });
         }
       } else if (event.eventType === 'ENEMY_HIT' || event.eventType === 'PLAYER_HIT') {
@@ -2370,6 +2384,13 @@
         smash: !!pad.smash,
         dash: !!pad.dash,
       };
+      // Prime packets are emitted from the edge handlers below. Publish the
+      // complete physical sample first so those packets cannot clear another
+      // button that became held in the same controller poll.
+      this.gamepadLaserHeld = current.laser;
+      this.gamepadSmashHeld = current.smash;
+      this.gamepadDashHeld = current.dash;
+      this.gamepadMeleeHeld = current.slash;
       if (!this._isInputBlocked() && !this.localPredictedPlayer?.downed) {
         const consume = action => root.NeoGamepad?.consumeAction?.(0, action);
         const queued = {
@@ -2388,10 +2409,6 @@
           if (consume(`tool${index}`)) this.activateEquipmentSlot(index - 1);
         }
       }
-      this.gamepadLaserHeld = current.laser;
-      this.gamepadSmashHeld = current.smash;
-      this.gamepadDashHeld = current.dash;
-      this.gamepadMeleeHeld = current.slash;
       this.previousGamepadActions = current;
     }
 
@@ -2406,6 +2423,12 @@
         dash: !!touch?.active && !!touch.dash,
         beamMash: !!touch?.active && !!touch.beamMash,
       };
+      // Keep prime packets complete when multiple touch buttons begin in the
+      // same sample, before their reliable actions are sent.
+      this.touchLaserHeld = current.laser;
+      this.touchSmashHeld = current.smash;
+      this.touchDashHeld = current.dash;
+      this.touchMeleeHeld = current.slash;
       if (touch) touch.queuedActions = {};
       if (touch?.active && Math.hypot(Number(touch.lastAimX || 0), Number(touch.lastAimY || 0)) > 0.2) {
         this.aimDirection = Math.atan2(Number(touch.lastAimY || 0), Number(touch.lastAimX || 0));
@@ -2418,52 +2441,173 @@
         if (queued.ascend || current.ascend && !this.previousTouchActions.ascend) this._interact();
         if (queued.beamMash || current.beamMash && !this.previousTouchActions.beamMash) this._useSlot('laser');
       }
-      this.touchLaserHeld = current.laser;
-      this.touchSmashHeld = current.smash;
-      this.touchDashHeld = current.dash;
-      this.touchMeleeHeld = current.slash;
       this.previousTouchActions = current;
     }
 
-    _sendInput() {
-      // Status is scalar session metadata; do not deep-clone the complete
-      // authoritative GameState on every 20 Hz input sampling pass.
-      const sessionStatus = this._sessionStatus();
-      // Background timers can still fire (typically throttled to 1 Hz). Sending
-      // from them would keep an abandoned room awake and defeat idle cleanup.
-      if (root.document?.hidden === true || root.document?.visibilityState === 'hidden') return;
-      if (!this.active || sessionStatus !== 'running') return;
-      this._syncGamepadActions();
-      this._syncTouchActions();
-      const movement = this._isInputBlocked() || this.localPredictedPlayer?.downed
-        ? { moveX: 0, moveY: 0 }
-        : this._readMovement();
-      // The campaign uses first-person yaw as its canonical aim. Send that same
-      // direction to authority instead of the stale top-down pointer angle.
-      const firstPersonYaw = this.neo.getFirstPersonYaw?.();
-      if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
-      const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
-      const smashHeld = this.keyboardSmashHeld || this.gamepadSmashHeld || this.touchSmashHeld;
-      const dashHeld = this.keyboardDashHeld || this.gamepadDashHeld || this.touchDashHeld;
-      const meleeHeld = !!this.neo.isMouseActionHeld?.('slash') || this.gamepadMeleeHeld || this.touchMeleeHeld;
-      if (!beamHeld) {
-        this.pendingBeamPresentation = null;
-        this.localBeamReleaseRequested = true;
+    _clearHeldInputSources() {
+      this.keys.clear();
+      this.laserHeld = false;
+      this.keyboardLaserHeld = false;
+      this.gamepadLaserHeld = false;
+      this.touchLaserHeld = false;
+      this.keyboardSmashHeld = false;
+      this.gamepadSmashHeld = false;
+      this.touchSmashHeld = false;
+      this.keyboardDashHeld = false;
+      this.gamepadDashHeld = false;
+      this.touchDashHeld = false;
+      this.gamepadMeleeHeld = false;
+      this.touchMeleeHeld = false;
+      const pad = root.NeoGamepad?.[0];
+      const touch = root.NeoTouch;
+      const rawGamepads = root.navigator?.getGamepads?.();
+      let rawGamepad = null;
+      if (rawGamepads) {
+        for (let index = 0; index < rawGamepads.length; index += 1) {
+          if (rawGamepads[index]) {
+            rawGamepad = rawGamepads[index];
+            break;
+          }
+        }
       }
-      const input = {
+      this.gamepadAttackPressed = !!rawGamepad?.buttons?.[0]?.pressed;
+      this.previousTouchActions = {
+        slash: !!touch?.slash,
+        laser: !!touch?.laser,
+        smash: !!touch?.smash,
+        ascend: !!touch?.ascend,
+        dash: !!touch?.dash,
+        beamMash: !!touch?.beamMash,
+      };
+      this.previousGamepadActions = {
+        slash: !!pad?.slash, laser: !!pad?.laser, smash: !!pad?.smash, dash: !!pad?.dash,
+      };
+      this.neo.clearGameplayInput?.();
+      if (this.neo.mouse) {
+        this.neo.mouse.down = false;
+        this.neo.mouse.right = false;
+        this.neo.mouse.downQueued = false;
+        this.neo.mouse.rightQueued = false;
+      }
+      if (this.neo.keys) {
+        Object.keys(this.neo.keys).forEach(key => {
+          this.neo.keys[key] = false;
+        });
+      }
+      root.NeoGamepad?.clearQueuedActions?.(0);
+      if (touch) {
+        ['slash', 'laser', 'smash', 'ascend', 'dash', 'beamMash'].forEach(action => {
+          touch[action] = false;
+        });
+        touch.queuedActions = {};
+        touch.moveX = 0;
+        touch.moveY = 0;
+      }
+    }
+
+    _suspendInput() {
+      this.inputSuspended = true;
+      this._flushNeutralInput();
+    }
+
+    _resumeInput() {
+      // Snapshot every physical controller edge before accepting input again.
+      // A button queued or pressed while unfocused must require a fresh edge.
+      this._clearHeldInputSources();
+      this.inputSuspended = false;
+    }
+
+    _flushNeutralInput() {
+      this._clearHeldInputSources();
+      this._sendInput({
+        forceNeutral: true,
+        syncHeldSources: false,
+        trackNeutralAcknowledgement: true,
+      });
+    }
+
+    _buildInputSample({ additionalButton = 0, forceNeutral = false } = {}) {
+      const inputBlocked = forceNeutral || this._isInputBlocked() || this.localPredictedPlayer?.downed;
+      const movement = inputBlocked ? { moveX: 0, moveY: 0 } : this._readMovement();
+      let buttons = 0;
+      if (!inputBlocked) {
+        const beamHeld = this.laserHeld || this.keyboardLaserHeld || this.gamepadLaserHeld || this.touchLaserHeld;
+        const smashHeld = this.keyboardSmashHeld || this.gamepadSmashHeld || this.touchSmashHeld;
+        const dashHeld = this.keyboardDashHeld || this.gamepadDashHeld || this.touchDashHeld;
+        const meleeHeld = !!this.neo.isMouseActionHeld?.('slash') || this.gamepadMeleeHeld || this.touchMeleeHeld;
+        buttons = (beamHeld ? BUTTON_LASER_HELD : 0)
+          | (smashHeld ? BUTTON_SMASH_HELD : 0)
+          | (dashHeld ? BUTTON_DASH_HELD : 0)
+          | (meleeHeld ? BUTTON_MELEE_HELD : 0)
+          | additionalButton;
+      }
+      return {
         ...movement,
         aimDirection: this.aimDirection,
         ...(Number.isFinite(Number(this.neo.mouse?.worldX)) ? { targetX: Number(this.neo.mouse.worldX) } : {}),
         ...(Number.isFinite(Number(this.neo.mouse?.worldY)) ? { targetY: Number(this.neo.mouse.worldY) } : {}),
-        buttons: (beamHeld ? BUTTON_LASER_HELD : 0)
-          | (smashHeld ? BUTTON_SMASH_HELD : 0)
-          | (dashHeld ? BUTTON_DASH_HELD : 0)
-          | (meleeHeld ? BUTTON_MELEE_HELD : 0),
+        buttons,
       };
+    }
+
+    _sendInput({
+      additionalButton = 0,
+      forceNeutral = false,
+      syncHeldSources = true,
+      trackNeutralAcknowledgement = false,
+    } = {}) {
+      // Status is scalar session metadata; do not deep-clone the complete
+      // authoritative GameState on every 20 Hz input sampling pass.
+      const sessionStatus = this._sessionStatus();
+      if (!this.active || sessionStatus !== 'running') return;
+      const now = root.performance?.now?.() || Date.now();
+      const hidden = this.document?.hidden === true || this.document?.visibilityState === 'hidden';
+      const suspended = hidden || this.inputSuspended;
+      const neutralRetryPending = this.pendingNeutralInputSequence != null;
+      const neutralRetryDue = neutralRetryPending
+        && this.neutralInputSendAttempts < MAX_NEUTRAL_INPUT_SEND_ATTEMPTS
+        && (this.lastNeutralInputSentAt == null
+          || now - this.lastNeutralInputSentAt >= NEUTRAL_INPUT_RETRY_INTERVAL_MS);
+
+      if (!forceNeutral && neutralRetryDue) {
+        forceNeutral = true;
+        syncHeldSources = false;
+        trackNeutralAcknowledgement = true;
+      } else if (!forceNeutral && neutralRetryPending
+        && this.neutralInputSendAttempts < MAX_NEUTRAL_INPUT_SEND_ATTEMPTS) {
+        // Do not overtake an unacknowledged neutral boundary with freshly
+        // focused physical intent. The next due sample remains neutral.
+        return;
+      } else if (suspended && !forceNeutral) {
+        // A hidden or blurred client may only use its bounded neutral retry
+        // budget. Never poll physical sources and rebuild abandoned intent.
+        return;
+      }
+      if (!forceNeutral && (this._isInputBlocked() || this.localPredictedPlayer?.downed)) {
+        this._clearHeldInputSources();
+        forceNeutral = true;
+        syncHeldSources = false;
+        trackNeutralAcknowledgement = true;
+      }
+      if (trackNeutralAcknowledgement && neutralRetryPending && !neutralRetryDue) return;
+      if (trackNeutralAcknowledgement
+        && this.neutralInputSendAttempts >= MAX_NEUTRAL_INPUT_SEND_ATTEMPTS) return;
+      if (syncHeldSources && !forceNeutral) {
+        this._syncGamepadActions();
+        this._syncTouchActions();
+      }
+      // The campaign uses first-person yaw as its canonical aim. Send that same
+      // direction to authority instead of the stale top-down pointer angle.
+      const firstPersonYaw = this.neo.getFirstPersonYaw?.();
+      if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
+      const input = this._buildInputSample({ additionalButton, forceNeutral });
+      if (!(input.buttons & BUTTON_LASER_HELD)) {
+        this.pendingBeamPresentation = null;
+        this.localBeamReleaseRequested = true;
+      }
       if (this.pendingHeldCharge && !(input.buttons & this.pendingHeldCharge.button)) {
         this._releasePredictedHeldCharge();
       }
-      const now = root.performance?.now?.() || Date.now();
       // Keep prediction current even if a frame was delayed. In normal play
       // requestAnimationFrame advances it more frequently; this is the bounded
       // 20 Hz fallback for throttled/minimal presentation hosts.
@@ -2477,7 +2621,8 @@
       const targetChanged = !previous
         || Math.hypot(Number(input.targetX || 0) - Number(previous.targetX || 0), Number(input.targetY || 0) - Number(previous.targetY || 0)) > 4;
       const sinceLastSend = Math.max(0, now - this.lastInputSentAt);
-      const shouldTransmit = movementOrButtonChanged
+      const shouldTransmit = trackNeutralAcknowledgement
+        || movementOrButtonChanged
         || (aimChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || (targetChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || sinceLastSend >= INPUT_HEARTBEAT_MS;
@@ -2493,6 +2638,16 @@
             // never reinterpret that elapsed time under the new direction.
             this.localPredictionAccumulatorMs = 0;
           }
+          if (trackNeutralAcknowledgement) {
+            const numericInputSequence = Number(inputSequence);
+            if (Number.isInteger(numericInputSequence) && numericInputSequence >= 0) {
+              if (this.pendingNeutralInputSequence == null) {
+                this.pendingNeutralInputSequence = numericInputSequence;
+              }
+              this.neutralInputSendAttempts += 1;
+              this.lastNeutralInputSentAt = now;
+            }
+          }
           this.lastLocalPredictionInput = { ...input };
           this.lastTransmittedInput = { ...input };
           this.lastInputSentAt = now;
@@ -2503,8 +2658,10 @@
     }
 
     _togglePause(visible) {
+      const wasPaused = this.paused;
       this.paused = !!visible && this.active;
-      this.keys.clear();
+      if (this.paused && !wasPaused) this._flushNeutralInput();
+      else this.keys.clear();
       const title = this.document?.getElementById('pauseTitle');
       if (title) title.textContent = this.paused ? 'MULTIPLAYER' : 'PAUSED';
       this.document?.getElementById('pauseMain')?.classList.toggle('hidden', this.paused);
@@ -2518,7 +2675,10 @@
     }
 
     _isInputBlocked() {
-      return this.paused
+      return this.inputSuspended
+        || this.document?.hidden === true
+        || this.document?.visibilityState === 'hidden'
+        || this.paused
         || this._isChatOpen()
         || (!!this.neo.gameState && this.neo.gameState !== 'play')
         || !!this.neo.isOverlayBlockingInput?.()

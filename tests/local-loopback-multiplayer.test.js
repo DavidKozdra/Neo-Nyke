@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const {
   LocalMultiplayerAuthority,
   LocalMultiplayerClient,
+  LOCAL_BUILD_VERSION,
   TEST_ROOM,
   createNetworkFloorState,
   createPlayerMovementSystem,
@@ -483,6 +484,72 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.state.players[clientA.playerId].x).toBe(authority.simulation.state.players[clientA.playerId].x);
   });
 
+  test('round-trips the complete beam-struggle domain and clears it after resolution', async () => {
+    const { clock, authority, clientA, clientATransport } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const snapshots = [];
+    clientATransport.onMessage((_peerId, message) => {
+      if (message.type === 'WORLD_SNAPSHOT') snapshots.push(message.payload);
+    });
+
+    const struggle = {
+      playerId: clientA.playerId,
+      enemyId: 'beam-rival',
+      startTick: authority.simulation.state.tick,
+      endTick: authority.simulation.state.tick + 60,
+      progress: 0.62,
+      mashCount: 3,
+      x: 420,
+      y: 350,
+    };
+    authority.simulation.state.beamStruggles = { [clientA.playerId]: struggle };
+    authority.sendFullCorrection();
+    clock.runAll();
+    expect(snapshots.at(-1)).toEqual(expect.objectContaining({
+      full: true,
+      beamStruggles: {
+        [clientA.playerId]: expect.objectContaining({
+          enemyId: 'beam-rival',
+          progress: 0.62,
+          mashCount: 3,
+        }),
+      },
+    }));
+
+    authority._publishSnapshot(false);
+    clock.runAll();
+
+    expect(snapshots.at(-1)).toEqual(expect.objectContaining({
+      full: false,
+      beamStruggles: {
+        [clientA.playerId]: expect.objectContaining({
+          enemyId: 'beam-rival',
+          progress: 0.62,
+          mashCount: 3,
+        }),
+      },
+    }));
+    expect(clientA.state.beamStruggles[clientA.playerId]).toEqual(struggle);
+    expect(clientA.getStateSnapshot().beamStruggles[clientA.playerId]).toEqual(struggle);
+
+    authority.simulation.state.beamStruggles = {};
+    authority._publishSnapshot(false);
+    clock.runAll();
+    expect(snapshots.at(-1).beamStruggles).toEqual({});
+    expect(clientA.state.beamStruggles).toEqual({});
+    expect(clientA.getStateSnapshot().beamStruggles).toEqual({});
+
+    clientA.state.beamStruggles = { [clientA.playerId]: struggle };
+    authority.sendFullCorrection();
+    clock.runAll();
+    expect(snapshots.at(-1)).toEqual(expect.objectContaining({
+      full: true,
+      beamStruggles: {},
+    }));
+    expect(clientA.state.beamStruggles).toEqual({});
+  });
+
   test('holds peer deltas until its effective full snapshot is acknowledged', async () => {
     const { authority, clientATransport } = await createRunningHarness({
       latencyMs: 100, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
@@ -567,6 +634,7 @@ describe('protocol-driven local multiplayer session', () => {
       lastProcessedInput: {},
       entities: {},
       removedEntityIds: [],
+      beamStruggles: {},
       floorState: null,
       bossState: null,
       bossStateChanged: false,
@@ -589,7 +657,10 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
     const playerId = clientA.playerId;
     const baselineX = clientA.state.players[playerId].x;
-    const delta = (snapshotSequence, entities) => createEnvelope(
+    const struggle = {
+      playerId, enemyId: 'beam-rival', progress: 0.7, startTick: 10, endTick: 70,
+    };
+    const delta = (snapshotSequence, entities, beamStruggles = {}) => createEnvelope(
       'WORLD_SNAPSHOT',
       900 + snapshotSequence,
       authority.simulation.state.tick,
@@ -601,6 +672,7 @@ describe('protocol-driven local multiplayer session', () => {
         lastProcessedInput: { [playerId]: clientA.lastAcknowledgedInput },
         entities,
         removedEntityIds: [],
+        beamStruggles,
         floorState: null,
         bossState: null,
         bossStateChanged: false,
@@ -609,8 +681,9 @@ describe('protocol-driven local multiplayer session', () => {
 
     clientA._onMessage('authority', delta(1, {
       players: { [playerId]: { ...clientA.state.players[playerId], x: baselineX + 10 } },
-    }), getDeliveryIntent('WORLD_SNAPSHOT'));
+    }, { [playerId]: struggle }), getDeliveryIntent('WORLD_SNAPSHOT'));
     expect(clientA.state.players[playerId].x).toBe(baselineX + 10);
+    expect(clientA.state.beamStruggles[playerId]).toEqual(struggle);
 
     // Sequence 2 was also authored from sequence 0. An empty delta therefore
     // means the position reverted to the baseline; layering it over sequence 1
@@ -619,6 +692,7 @@ describe('protocol-driven local multiplayer session', () => {
 
     expect(clientA.latestSnapshotSequence).toBe(2);
     expect(clientA.state.players[playerId].x).toBe(baselineX);
+    expect(clientA.state.beamStruggles).toEqual({});
     expect(clientA.pendingSnapshotResync).toBe(false);
     expect(clientA.diagnostics.resyncRequests).toBe(0);
   });
@@ -1178,18 +1252,42 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.runEnd).toBeNull();
   });
 
-  test('rejects an incompatible build before joining', async () => {
+  test('rejects a client from the snapshot schema before the required beam-struggle field', async () => {
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v37');
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
     const authority = new LocalMultiplayerAuthority({ transport: transport(network, 'authority', 'Authority') });
     const client = new LocalMultiplayerClient({
       transport: transport(network, 'old-client', 'Old Client'),
-      contentHash: 'old-content',
+      buildVersion: '1.0.0-campaign-parity-v36',
     });
     await authority.start();
     await client.connect('neo-local-room');
     clock.runAll();
+
     expect(client.status).toBe('rejected');
+    expect(client.receivedTypes).not.toContain('SERVER_HELLO');
+    expect(client.receivedTypes).not.toContain('JOIN_ACCEPTED');
+    expect(client.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'VERSION_MISMATCH' })]));
+  });
+
+  test('rejects a current-schema client from an authority using the prior snapshot schema', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'old-authority', 'Old Authority'),
+      buildVersion: '1.0.0-campaign-parity-v36',
+    });
+    const client = new LocalMultiplayerClient({
+      transport: transport(network, 'current-client', 'Current Client'),
+    });
+    await authority.start();
+    await client.connect('neo-local-room');
+    clock.runAll();
+
+    expect(client.status).toBe('rejected');
+    expect(client.receivedTypes).not.toContain('SERVER_HELLO');
+    expect(client.receivedTypes).not.toContain('JOIN_ACCEPTED');
     expect(client.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'VERSION_MISMATCH' })]));
   });
 });

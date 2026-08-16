@@ -262,6 +262,37 @@ describe('authoritative network combat system', () => {
     }));
   });
 
+  test('routes shared special-room XP through scaling, level-ups, and authority events', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    Object.assign(room, { type: 'reliquary', serviceUsed: false });
+    Object.assign(player, {
+      level: 1,
+      xp: 19,
+      xpToNext: 20,
+      items: { neo_knife: 1 },
+    });
+    state.matchRules.difficulty = { statMultiplier: 1 };
+    state.elapsedSeconds = 299.95;
+
+    simulation.updateGame({
+      p1: { actions: [{ action: 'SPECIAL_ROOM_CHOICE', choiceId: 'distill' }] },
+    }, 0.05);
+
+    expect(player).toEqual(expect.objectContaining({ level: 2, xp: 15, xpToNext: 24 }));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_LEVELED',
+      data: expect.objectContaining({ playerId: player.id, level: 2 }),
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'XP_AWARDED',
+      data: expect.objectContaining({
+        playerId: player.id, roomId: room.id, source: 'special_room_choice', choiceId: 'distill', amount: 16,
+      }),
+    }));
+  });
+
   test('materializes and resolves the shared circuit challenge switches on authority', () => {
     const { state, simulation, events } = combatHarness();
     const player = state.players.p1;
@@ -275,6 +306,14 @@ describe('authoritative network combat system', () => {
     player.roomId = room.id;
     player.x = 450;
     player.y = 350;
+    state.players.p2 = {
+      ...player,
+      id: 'p2',
+      x: 400,
+      items: { scholar_seal: 1 },
+      ownedWeapons: {},
+    };
+    state.matchRules.difficulty = { statMultiplier: 1 };
     state.floorState.currentRoomId = room.id;
     state.pickups.circuitStarter = {
       id: 'circuitStarter', type: 'challengeStarter', trial: 'circuit', roomId: room.id,
@@ -305,12 +344,18 @@ describe('authoritative network combat system', () => {
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'CHALLENGE_SWITCH_CORRECT', data: expect.objectContaining({ roomId: room.id, progress: 1, total: 1 }),
     }));
-    expect(events).toContainEqual(expect.objectContaining({
-      eventType: 'XP_AWARDED', data: expect.objectContaining({ playerId: player.id, source: 'challenge_reward' }),
-    }));
+    const xpEvents = events.filter(event => event.eventType === 'XP_AWARDED'
+      && event.data.source === 'challenge_reward');
+    expect(xpEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ data: expect.objectContaining({ playerId: player.id, amount: 33 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ playerId: 'p2', amount: 38 }) }),
+    ]));
+    expect(xpEvents).toHaveLength(2);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'CHALLENGE_WEAPON_AWARDED', data: expect.objectContaining({ playerId: player.id, roomId: room.id }),
     }));
+    expect(state.players.p2.ownedWeapons).toEqual({});
+    expect(events.filter(event => event.eventType === 'CHALLENGE_WEAPON_AWARDED')).toHaveLength(1);
   });
 
   test('preserves secret-vendor relic history under multiplayer authority', () => {
@@ -331,6 +376,35 @@ describe('authoritative network combat system', () => {
     expect(player.lastSecretVendorRewardKey).toBe('neo_knife');
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'SECRET_VENDOR_PURCHASED', data: expect.objectContaining({ playerId: player.id, rewardKey: 'neo_knife' }),
+    }));
+  });
+
+  test('routes secret-vendor XP through tick-end scaling and every crossed level', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    Object.assign(room, { type: 'secret', secret: true, secretLifecycleInitialized: true });
+    Object.assign(player, { coins: 30, level: 1, xp: 19, xpToNext: 20 });
+    state.matchRules.difficulty = { statMultiplier: 1 };
+    state.elapsedSeconds = 299.95;
+    state.pickups.vendorXp = {
+      id: 'vendorXp', type: 'secretVendor', offerKind: 'xp', cost: 30, xpValue: 80,
+      roomId: room.id, x: player.x, y: player.y, radius: 16, spawnTick: state.tick,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    expect(player).toEqual(expect.objectContaining({ coins: 0, level: 4, xp: 30, xpToNext: 35 }));
+    expect(events.filter(event => event.eventType === 'PLAYER_LEVELED')).toHaveLength(3);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'XP_AWARDED',
+      data: expect.objectContaining({
+        playerId: player.id, roomId: room.id, source: 'secret_vendor', amount: 84,
+      }),
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'SECRET_VENDOR_PURCHASED',
+      data: expect.objectContaining({ playerId: player.id, offerKind: 'xp', xp: 80 }),
     }));
   });
 
@@ -416,7 +490,7 @@ describe('authoritative network combat system', () => {
     };
     simulation.updateGame({}, 0.05);
     expect(events).toContainEqual(expect.objectContaining({
-      eventType: 'XP_AWARDED', data: expect.objectContaining({ playerId: player.id, amount: 40 }),
+      eventType: 'XP_AWARDED', data: expect.objectContaining({ playerId: player.id, amount: 41 }),
     }));
 
     events.length = 0;
@@ -430,6 +504,29 @@ describe('authoritative network combat system', () => {
     };
     simulation.updateGame({}, 0.05);
     expect(events.some(event => event.eventType === 'XP_AWARDED')).toBe(false);
+  });
+
+  test('uses the tick-end elapsed phase when an encounter award crosses five minutes', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    state.matchRules.difficulty = { statMultiplier: 1 };
+    state.elapsedSeconds = 299.95;
+    state.enemies.boundaryBoss = {
+      id: 'boundaryBoss', type: 'bulk_golem', boss: true, roomId: player.roomId,
+      x: 220, y: 180, radius: 20, health: 1, maxHealth: 1, hp: 1,
+    };
+    state.projectiles.boundaryLethal = {
+      id: 'boundaryLethal', ownerId: player.id, roomId: player.roomId, x: 220, y: 180,
+      vx: 0, vy: 0, radius: 8, damage: 10, hostile: false, expiresTick: state.tick + 10,
+    };
+
+    simulation.updateGame({}, 0.05);
+
+    expect(state.elapsedSeconds).toBe(300);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'XP_AWARDED',
+      data: expect.objectContaining({ playerId: player.id, amount: 42 }),
+    }));
   });
 
   test('uses the campaign Bulk Golem split plan and keeps its children authoritative', () => {
@@ -1355,7 +1452,7 @@ describe('authoritative network combat system', () => {
     applyNetworkHeroProfile(player, 'turtle_boy');
     expect(player).toEqual(expect.objectContaining({
       characterKey: 'turtle_boy', maxHp: 144, hp: 72, moveSpeed: 228,
-      damageMultiplier: 1, items: { turtle_shell: 1, dragon_orb: 1 },
+      damageMultiplier: 0.8, items: { turtle_shell: 1, dragon_orb: 1 },
       equippedMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
     }));
     applyNetworkHeroProfile(player, 'mooggy');
@@ -1514,7 +1611,7 @@ describe('authoritative network combat system', () => {
     expect(player.barrier).toBe(27);
     expect(player.turtlePowerUpPower).toBeCloseTo(0.6);
     expect(player.turtlePowerUpUntilTick).toBeGreaterThan(state.tick + 100);
-    expect(enemy.health).toBe(56);
+    expect(enemy.health).toBe(65);
     expect(room.destructibles[0].broken).toBe(true);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'PLAYER_ABILITY_USED', data: expect.objectContaining({ abilityId: 'turtle_powerup', mode: 'support', effectRadius: 100 }),
@@ -1780,9 +1877,9 @@ describe('authoritative network combat system', () => {
     const fireballs = Object.values(state.projectiles).filter(projectile => projectile.attackKind === 'fire_balls');
     expect(fireballs).toHaveLength(3);
     expect(fireballs.map(projectile => ({ kind: projectile.kind, damage: projectile.damage, splash: projectile.splash, splashDamage: projectile.splashDamage }))).toEqual([
-      { kind: 'fireball', damage: 22, splash: 48, splashDamage: 14 },
-      { kind: 'fireball', damage: 22, splash: 48, splashDamage: 14 },
-      { kind: 'fireball', damage: 22, splash: 48, splashDamage: 14 },
+      { kind: 'fireball', damage: 30, splash: 48 * 1.2, splashDamage: 19 },
+      { kind: 'fireball', damage: 30, splash: 48 * 1.2, splashDamage: 19 },
+      { kind: 'fireball', damage: 30, splash: 48 * 1.2, splashDamage: 19 },
     ]);
     expect(player.vx).toBeLessThanOrEqual(-150);
   });
@@ -2068,11 +2165,12 @@ describe('authoritative network combat system', () => {
     expect(spikes.map(spike => spike.y)).toEqual(expect.arrayContaining([40, 638]));
   });
 
-  test('Chaos Burst creates the campaign opening volley and follow field', () => {
+  test('Chaos Burst keeps Metao canonical AOE damage through a full update before casting', () => {
     const { state, simulation } = combatHarness('metao');
     const player = state.players.p1;
     applyNetworkHeroProfile(player, 'metao');
     simulation.updateGame({}, 0.05);
+    expect(player.itemStats.aoeDamageMultiplier).toBe(1.35);
     const enemy = Object.values(state.enemies)[0];
     enemy.x = player.x + 80;
     enemy.y = player.y;
@@ -2082,7 +2180,7 @@ describe('authoritative network combat system', () => {
     simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'chaos_burst', aimDirection: 0 }] } }, 0.05);
     const field = Object.values(state.abilityEntities).find(entity => entity.abilityId === 'chaos_burst');
 
-    expect(field).toEqual(expect.objectContaining({ radius: 180, burstRadius: 52, damage: 18, followOwner: true, isMetao: true }));
+    expect(field).toEqual(expect.objectContaining({ radius: 180 * 1.2, burstRadius: 52 * 1.2, damage: 24, followOwner: true, isMetao: true }));
     expect(field.pulseIntervalTicks).toBeCloseTo(4.4);
     expect(enemy.health).toBeLessThan(1000);
     expect(enemy.statuses.poison).toBeDefined();

@@ -277,6 +277,7 @@
         // valid for quiet snapshots and bootstrap/full state stays explicit.
         packedDynamic: field('object'),
         removedEntityIds: field('array', { required: true, maxLength: 4096 }),
+        beamStruggles: field('object', { required: true }),
         floorState: field('nullableObject'),
         bossState: field('nullableObject'),
         bossStateChanged: field('boolean', { required: true }),

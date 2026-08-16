@@ -41,7 +41,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v36';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v37';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
@@ -1445,6 +1445,7 @@
           entities: scoped,
           ...(packedDynamic ? { packedDynamic } : {}),
           removedEntityIds: Array.from(scopedRemovedEntityIds),
+          beamStruggles: cloneSerializable(this.simulation.state.beamStruggles || {}),
           // A full correction must repair every authoritative state domain, not
           // only entity collections. Room-owned mutations (broken pots,
           // hazards, doors, rewards, etc.) live inside floorState; omitting it
@@ -1910,6 +1911,7 @@
       (snapshot.removedEntityIds || []).forEach(entityId => {
         SNAPSHOT_ENTITY_COLLECTIONS.forEach(collection => { delete this.state[collection]?.[entityId]; });
       });
+      this.state.beamStruggles = cloneSerializable(snapshot.beamStruggles);
       this.state.floorState = cloneSerializable(snapshot.floorState || this.state.floorState);
       if (snapshot.bossStateChanged) this.state.bossState = snapshot.bossState == null ? null : cloneSerializable(snapshot.bossState);
       this.lastAcknowledgedInput = snapshot.lastProcessedInput[this.playerId] ?? this.lastAcknowledgedInput;

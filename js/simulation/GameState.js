@@ -40,6 +40,32 @@
     return JSON.parse(json);
   }
 
+  function cloneBeamStruggles(value) {
+    const cloned = cloneSerializable(plainObject(value));
+    Object.values(cloned).forEach(struggle => {
+      if (!struggle || typeof struggle !== 'object' || Array.isArray(struggle)) return;
+      const playerId = typeof struggle.playerId === 'string' ? struggle.playerId : '';
+      const opponentPlayerId = typeof struggle.opponentPlayerId === 'string' ? struggle.opponentPlayerId : '';
+      if (!playerId || !opponentPlayerId) return;
+
+      // Rival struggles are deliberately stored under both player IDs. JSON
+      // cloning duplicates the value, so always elect the initiating player's
+      // entry as the canonical record and restore the shared-reference
+      // invariant for both mash directions.
+      const primary = cloned[playerId];
+      const canonical = primary
+        && typeof primary === 'object'
+        && !Array.isArray(primary)
+        && primary.playerId === playerId
+        && primary.opponentPlayerId === opponentPlayerId
+        ? primary
+        : struggle;
+      cloned[playerId] = canonical;
+      cloned[opponentPlayerId] = canonical;
+    });
+    return cloned;
+  }
+
   function normalizeRecord(source = {}) {
     const status = VALID_MATCH_STATUSES.has(source.status) ? source.status : 'waiting';
     const requestedMode = String(source.matchRules?.mode || 'coop');
@@ -85,6 +111,7 @@
       abilityEntities: cloneSerializable(plainObject(source.abilityEntities)),
       pickups: cloneSerializable(plainObject(source.pickups)),
       interactables: cloneSerializable(plainObject(source.interactables)),
+      beamStruggles: cloneBeamStruggles(source.beamStruggles),
       floorState: cloneSerializable(plainObject(source.floorState)),
       bossState: source.bossState == null ? null : cloneSerializable(source.bossState),
       randomState: source.randomState == null ? null : cloneSerializable(source.randomState),
@@ -105,7 +132,9 @@
     }
 
     snapshot() {
-      return cloneSerializable(this.toJSON());
+      // normalizeRecord already returns a detached, serializable record and
+      // restores domain-specific shared references such as rival struggles.
+      return this.toJSON();
     }
 
     serialize() {

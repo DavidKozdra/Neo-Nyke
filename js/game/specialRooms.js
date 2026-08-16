@@ -775,6 +775,7 @@ function applySharedSpecialChoice(choiceId) {
     matchRules: {},
   }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });
   if (!result?.ok) return false;
+  if (result.xp > 0) Neo.grantXp?.(result.xp, { recipient: Neo.player });
   consumeService(Neo.currentRoom, result.result);
   // Shared special-room rewards mutate inventory directly, so they do not pass
   // through collectItem's browser presentation. Restore the standard item card

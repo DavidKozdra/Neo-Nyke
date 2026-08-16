@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const enemyContent = require('../js/simulation/SharedEnemyContent');
+const combatContent = require('../js/simulation/SharedCombatContent');
 
 // Brace-matches a `{ ... }` block starting at `openIndex` (which must point at the `{`).
 function matchBraces(source, openIndex) {
@@ -70,6 +71,7 @@ function loadRealCharacterDefs() {
   );
   return extractObjectLiteral(source, 'export const CHARACTER_DEFS =', {
     PLAYABLE_ENEMY_CHARACTER_DEFS,
+    BUILT_IN_HERO_COMBAT_PROFILES: combatContent.BUILT_IN_HERO_COMBAT_PROFILES,
   });
 }
 

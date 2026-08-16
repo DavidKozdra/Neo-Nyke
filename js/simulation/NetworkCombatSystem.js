@@ -48,6 +48,8 @@
   // commitment encounters seal their doors until resolved.
   const LOCKING_ENCOUNTER_ROOM_TYPES = new Set(['challenge', 'ladder', 'boss', 'god']);
   const {
+    CAMPAIGN_HERO_STAT_BASES,
+    BUILT_IN_HERO_COMBAT_PROFILES,
     CHARACTER_DEFAULT_WEAPONS = {},
     CHARACTER_STARTING_ITEMS = {},
     PLAYABLE_ENEMY_ROSTER = [],
@@ -208,6 +210,7 @@
     resolveCampaignBoomerangCatch = () => ({ healedAmount: 0, health: 0, pickupImpulses: [] }),
     applyCampaignDestructibleDamage = () => ({ ok: false, drops: [] }),
     applyCampaignLevelUp = () => null,
+    resolveCampaignExperienceGain,
     getEntityLevelKnockbackMultiplier = () => 1,
     finishCampaignChallenge = () => ({ ok: false, reason: 'ROOM_LIFECYCLE_UNAVAILABLE' }),
     createCampaignChallengeRewardPlan = () => ({ ok: false, pickups: [], xp: 0, weaponKey: '' }),
@@ -291,11 +294,40 @@
     planCampaignWallOfToph = () => ({ aoeRadius: 150, slamDamage: 46, shards: [], barriers: [] }),
     resolveCampaignWallOfTophBarriers = () => [],
   } = contentApi || {};
+  if (!CAMPAIGN_HERO_STAT_BASES || !BUILT_IN_HERO_COMBAT_PROFILES) {
+    throw new Error('Shared built-in hero combat profiles are unavailable');
+  }
   const combatRandomByState = new WeakMap();
+  const awardElapsedSecondsByState = new WeakMap();
   // Authority code must never fall through to ambient randomness. The normal
   // simulation path always supplies RandomService; this deterministic value
   // also keeps direct/bootstrap calls reproducible when it is unavailable.
   const authorityFallbackRandom = () => 0.5;
+  function awardCampaignExperience(state, player, baseAmount, emitEvent, eventData = {}) {
+    if (!player || Number(baseAmount || 0) <= 0) return 0;
+    const amount = resolveCampaignExperienceGain(baseAmount, {
+      difficulty: state.matchRules?.difficulty || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY,
+      elapsedSeconds: awardElapsedSecondsByState.get(state) ?? state.elapsedSeconds,
+      xpGainMultiplier: player.itemStats?.xpGainMultiplier,
+    });
+    player.xp = Math.max(0, Number(player.xp || 0)) + amount;
+    player.level = Math.max(1, Number(player.level || 1));
+    player.xpToNext = Math.max(1, Number(player.xpToNext || 20));
+    while (player.xp >= player.xpToNext) {
+      player.xp -= player.xpToNext;
+      const result = applyCampaignLevelUp(player);
+      if (!result) break;
+      emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHp });
+    }
+    emitEvent('XP_AWARDED', {
+      ...eventData,
+      playerId: player.id,
+      amount,
+      xp: player.xp,
+      level: player.level,
+    });
+    return amount;
+  }
   const CONTINUOUS_BEAM_MOVE_SET = new Set(CONTINUOUS_BEAM_MOVES);
   // Input button bit the client holds while its laser button is down. A channel
   // that has seen the bit ends as soon as it clears (release-to-stop, like the
@@ -342,25 +374,30 @@
     })]),
   ));
   const ENEMY_ARCHETYPES = ENEMY_CATALOG;
-  // These are the campaign character multipliers applied to its 120 HP base.
-  // Keep the authority's selected hero identical to createDefaultPlayer(),
-  // rather than maintaining a separate multiplayer balance table.
+  function createAuthorityHeroProfile(profile) {
+    const hpMultiplier = Number(profile?.hpMultiplier ?? 1);
+    const moveSpeedMultiplier = Number(profile?.moveSpeedMultiplier ?? 1);
+    return Object.freeze({
+      ...profile,
+      damageMultiplier: Number(profile?.damageMultiplier ?? 1),
+      hpMultiplier,
+      moveSpeedMultiplier,
+      aoeRadiusMultiplier: Number(profile?.aoeRadiusMultiplier ?? 1),
+      aoeDamageMultiplier: Number(profile?.aoeDamageMultiplier ?? 1),
+      laserCooldownMultiplier: Number(profile?.laserCooldownMultiplier ?? 1),
+      maxHp: Math.round(Number(CAMPAIGN_HERO_STAT_BASES.maxHp) * hpMultiplier),
+      moveSpeed: Number(CAMPAIGN_HERO_STAT_BASES.moveSpeed) * moveSpeedMultiplier,
+      signatureMelee: !!profile?.signatureMelee,
+    });
+  }
+
+  // Retain one enumerable authority roster for rival rumble and rival profiles,
+  // while deriving every built-in hero directly from the shared campaign source.
   const HERO_BASE_STATS = Object.freeze({
-    princess: Object.freeze({ maxHp: 131, moveSpeed: 216.6, damageMultiplier: 1.14, aoeRadiusMultiplier: 0.95 }),
-    thorn_knight: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
-    metao: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 0.5 }),
-    gelleh: Object.freeze({ maxHp: 120, moveSpeed: 228, damageMultiplier: 1 }),
-    mooggy: Object.freeze({ maxHp: 130, moveSpeed: 228, damageMultiplier: 0.6 }),
-    turtle_boy: Object.freeze({ maxHp: 144, moveSpeed: 228, damageMultiplier: 1 }),
-    sarge: Object.freeze({ maxHp: 108, moveSpeed: 228, damageMultiplier: 1.05 }),
-    knave: Object.freeze({ maxHp: 98, moveSpeed: 269.04, damageMultiplier: 0.95 }),
-    ...Object.fromEntries(PLAYABLE_ENEMY_ROSTER.map(profile => [profile.characterKey, Object.freeze({
-      maxHp: Math.round(120 * Number(profile.hpMultiplier || 1)),
-      moveSpeed: 228 * Number(profile.moveSpeedMultiplier || 1),
-      damageMultiplier: Number(profile.damageMultiplier || 1),
-      aoeRadiusMultiplier: Number(profile.aoeRadiusMultiplier || 1),
-      signatureMelee: !!profile.signatureMelee,
-    })])),
+    ...Object.fromEntries(Object.entries(BUILT_IN_HERO_COMBAT_PROFILES)
+      .map(([characterKey, profile]) => [characterKey, createAuthorityHeroProfile(profile)])),
+    ...Object.fromEntries(PLAYABLE_ENEMY_ROSTER
+      .map(profile => [profile.characterKey, createAuthorityHeroProfile(profile)])),
   });
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
@@ -435,7 +472,9 @@
   }
 
   function applyNetworkHeroProfile(player, characterKey, kitChoices) {
-    const key = HERO_BASE_STATS[characterKey] ? characterKey : 'thorn_knight';
+    const key = Object.prototype.hasOwnProperty.call(HERO_BASE_STATS, characterKey)
+      ? characterKey
+      : 'thorn_knight';
     const profile = HERO_BASE_STATS[key];
     const previousMaximum = Math.max(1, Number(player.maxHp || profile.maxHp));
     const healthRatio = Math.max(0, Math.min(1, Number(player.hp ?? previousMaximum) / previousMaximum));
@@ -468,12 +507,17 @@
     player.hp = Math.round(profile.maxHp * healthRatio);
     player.moveSpeed = profile.moveSpeed;
     player.damageMultiplier = profile.damageMultiplier;
-    player.aoeRadiusMultiplier = Number(profile.aoeRadiusMultiplier || 1);
+    player.aoeRadiusMultiplier = profile.aoeRadiusMultiplier;
+    player.aoeDamageMultiplier = profile.aoeDamageMultiplier;
+    player.laserCooldownMultiplier = profile.laserCooldownMultiplier;
     // A network hero is immediately playable after character selection. Derive
     // the starter-item effects here rather than waiting for a later pickup or
     // tick, otherwise the authoritative damage path treats every hero as if
     // they had no items (notably Princess loses her 10% Glasses defense).
-    player.itemStats = deriveCampaignItemStats(player, { aoeRadiusMultiplier: player.aoeRadiusMultiplier });
+    player.itemStats = deriveCampaignItemStats(player, {
+      aoeRadiusMultiplier: player.aoeRadiusMultiplier,
+      aoeDamageMultiplier: player.aoeDamageMultiplier,
+    });
     return player;
   }
 
@@ -631,18 +675,12 @@
   }
 
   function awardAuthorityBossRushExperience(state, roomId, amount, emitEvent) {
-    activePlayers(state).filter(player => !player.downed && player.roomId === roomId).forEach(player => {
-      const gained = Math.max(1, Math.round(Number(amount || 0) * Math.max(0, Number(player.itemStats?.xpGainMultiplier || 1))));
-      player.xp = Math.max(0, Number(player.xp || 0)) + gained;
-      player.level = Math.max(1, Number(player.level || 1));
-      player.xpToNext = Math.max(1, Number(player.xpToNext || 20));
-      while (player.xp >= player.xpToNext) {
-        player.xp -= player.xpToNext;
-        applyCampaignLevelUp(player);
-        emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHp });
-      }
-      emitEvent('XP_AWARDED', { playerId: player.id, roomId, source: 'boss_rush_stage', amount: gained, xp: player.xp, level: player.level });
-    });
+    activePlayers(state)
+      .filter(player => !player.downed && player.roomId === roomId)
+      .forEach(player => awardCampaignExperience(state, player, amount, emitEvent, {
+        roomId,
+        source: 'boss_rush_stage',
+      }));
   }
 
   function resolveAuthorityBossRushStageClear(state, room, emitEvent) {
@@ -1711,8 +1749,13 @@
       owner.coins = Math.max(0, Number(owner.coins || 0)) + Math.round(90 * rewardMultiplier);
     } else if (bounty.kind === 'elite_charger') {
       collectSharedCampaignItem(owner, 'forge_voucher');
-      owner.xp = Math.max(0, Number(owner.xp || 0))
-        + Math.round((35 + Math.max(1, Number(state.floorNumber || 1)) * 5) * rewardMultiplier);
+      awardCampaignExperience(
+        state,
+        owner,
+        Math.round((35 + Math.max(1, Number(state.floorNumber || 1)) * 5) * rewardMultiplier),
+        emitEvent,
+        { roomId: enemy.roomId, source: 'bounty_reward' },
+      );
     } else if (bounty.kind === 'elite_sniper') {
       rewardKey = rollCampaignItem(stream ? () => stream.next() : authorityFallbackRandom, { elite: true }) || '';
       if (rewardKey) collectSharedCampaignItem(owner, rewardKey);
@@ -2119,6 +2162,13 @@
       emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result.reason });
       return false;
     }
+    if (result.xp > 0) {
+      awardCampaignExperience(state, player, result.xp, emitEvent, {
+        roomId: room.id,
+        source: 'special_room_choice',
+        choiceId: action.choiceId,
+      });
+    }
     if (result.transitionToRoomId) {
       const visited = new Set(Array.isArray(state.floorState?.visitedRoomIds) ? state.floorState.visitedRoomIds : []);
       visited.add(result.transitionToRoomId);
@@ -2358,19 +2408,11 @@
       boss: !!getEnemyDefinition(enemy.type)?.boss,
     });
     if (baseAmount <= 0) return;
-    const recipients = activePlayers(state).filter(player => !player.downed && player.roomId === enemy.roomId);
-    recipients.forEach(player => {
-      const amount = Math.max(1, Math.round(baseAmount * Math.max(0, Number(player.itemStats?.xpGainMultiplier || 1))));
-      player.xp = Math.max(0, Number(player.xp || 0)) + amount;
-      player.level = Math.max(1, Number(player.level || 1));
-      player.xpToNext = Math.max(1, Number(player.xpToNext || 20));
-      while (player.xp >= player.xpToNext) {
-        player.xp -= player.xpToNext;
-        applyCampaignLevelUp(player);
-        emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHp });
-      }
-      emitEvent('XP_AWARDED', { playerId: player.id, sourcePlayerId: playerId, amount, xp: player.xp, level: player.level });
-    });
+    activePlayers(state)
+      .filter(player => !player.downed && player.roomId === enemy.roomId)
+      .forEach(player => awardCampaignExperience(state, player, baseAmount, emitEvent, {
+        sourcePlayerId: playerId,
+      }));
     const stats = state.runStats || (state.runStats = { killsByPlayer: {}, playerKills: {}, deathsByPlayer: {} });
     stats.killsByPlayer = stats.killsByPlayer || {};
     stats.killsByPlayer[playerId] = Number(stats.killsByPlayer[playerId] || 0) + 1;
@@ -2414,21 +2456,13 @@
     }
     const baseExperience = Math.max(0, Number(reward?.experience || 0));
     if (baseExperience <= 0) return;
-    activePlayers(state).filter(candidate => !candidate.downed && candidate.roomId === enemy.roomId).forEach(candidate => {
-      const amount = Math.max(1, Math.round(baseExperience * Math.max(0, Number(candidate.itemStats?.xpGainMultiplier || 1))));
-      candidate.xp = Math.max(0, Number(candidate.xp || 0)) + amount;
-      candidate.level = Math.max(1, Number(candidate.level || 1));
-      candidate.xpToNext = Math.max(1, Number(candidate.xpToNext || 20));
-      while (candidate.xp >= candidate.xpToNext) {
-        candidate.xp -= candidate.xpToNext;
-        applyCampaignLevelUp(candidate);
-        emitEvent('PLAYER_LEVELED', { playerId: candidate.id, level: candidate.level, maxHealth: candidate.maxHp });
-      }
-      emitEvent('XP_AWARDED', {
-        playerId: candidate.id, sourcePlayerId: playerId, enemyId: enemy.id,
-        source: 'rival_reward', amount, xp: candidate.xp, level: candidate.level,
-      });
-    });
+    activePlayers(state)
+      .filter(candidate => !candidate.downed && candidate.roomId === enemy.roomId)
+      .forEach(candidate => awardCampaignExperience(state, candidate, baseExperience, emitEvent, {
+        sourcePlayerId: playerId,
+        enemyId: enemy.id,
+        source: 'rival_reward',
+      }));
   }
 
   function playerDamage(state, playerId, amount) {
@@ -4460,8 +4494,12 @@
     const godCooldownMult = godModeActive(state, player)
       ? (slot === 'laser' ? 2.8 / Math.max(0.5, Number(stats.cooldown || 3.2)) : slot === 'smash' ? 2 / Math.max(0.5, Number(stats.cooldown || 4.2)) : 0.7)
       : 1;
+    const characterCooldownMult = slot === 'laser'
+      ? Number(player.laserCooldownMultiplier || 1)
+      : 1;
     const cooldownTicks = Math.max(1, Math.ceil(
-      Number(stats.cooldown || 0.5) * 20 * godCooldownMult / getNetworkCampaignAttackSpeed(state, player),
+      Number(stats.cooldown || 0.5) * 20 * godCooldownMult * characterCooldownMult
+        / getNetworkCampaignAttackSpeed(state, player),
     ));
     if (HOLD_TO_CHARGE_MOVES[moveKey] && !execution.releaseHeldCharge) {
       return beginHeldCharge(state, player, moveKey, slot, angle, cooldownTicks, emitEvent, action);
@@ -8823,17 +8861,13 @@
           const pickupId = state.allocateEntityId('pickup');
           state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId, radius: 13, spawnTick: state.tick };
         });
-        if (rewardOwner && plan.xp > 0) {
-          const amount = Math.max(1, Math.round(plan.xp * Math.max(0, Number(rewardOwner.itemStats?.xpGainMultiplier || 1))));
-          rewardOwner.xp = Math.max(0, Number(rewardOwner.xp || 0)) + amount;
-          rewardOwner.level = Math.max(1, Number(rewardOwner.level || 1));
-          rewardOwner.xpToNext = Math.max(1, Number(rewardOwner.xpToNext || 20));
-          while (rewardOwner.xp >= rewardOwner.xpToNext) {
-            rewardOwner.xp -= rewardOwner.xpToNext;
-            applyCampaignLevelUp(rewardOwner);
-            emitEvent('PLAYER_LEVELED', { playerId: rewardOwner.id, level: rewardOwner.level, maxHealth: rewardOwner.maxHp });
-          }
-          emitEvent('XP_AWARDED', { playerId: rewardOwner.id, source: 'challenge_reward', amount, xp: rewardOwner.xp, level: rewardOwner.level });
+        if (plan.xp > 0) {
+          activePlayers(state)
+            .filter(player => !player.downed && player.roomId === roomId)
+            .forEach(player => awardCampaignExperience(state, player, plan.xp, emitEvent, {
+              roomId,
+              source: 'challenge_reward',
+            }));
         }
         if (rewardOwner && plan.weaponKey) {
           rewardOwner.ownedWeapons = rewardOwner.ownedWeapons || {};
@@ -9531,8 +9565,12 @@
           }, emitEvent);
         } else if (purchase.offerKind === 'vitality') {
           player.hp = Math.min(player.maxHp, Number(player.hp || 0) + purchase.heal * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
-        } else if (purchase.offerKind === 'xp') player.xp = Number(player.xp || 0) + purchase.xp;
-        else player.coins = Number(player.coins || 0) + purchase.coins;
+        } else if (purchase.offerKind === 'xp') {
+          awardCampaignExperience(state, player, purchase.xp, emitEvent, {
+            roomId: pickup.roomId,
+            source: 'secret_vendor',
+          });
+        } else player.coins = Number(player.coins || 0) + purchase.coins;
         delete state.pickups[pickupId];
         emitEvent('SECRET_VENDOR_PURCHASED', { playerId: player.id, roomId: pickup.roomId, ...purchase });
         return;
@@ -10148,6 +10186,10 @@
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
       combatRandomByState.set(state, random);
+      awardElapsedSecondsByState.set(
+        state,
+        Math.max(0, Number(state.elapsedSeconds) || 0) + Math.max(0, Number(fixedDelta) || 0),
+      );
       // Item effects are authoritative combat inputs, not render metadata.
       // Refresh before movement/actions so starter and newly acquired stats
       // apply immediately; refresh again after equipment activation below so

@@ -22,7 +22,7 @@ describe('network multiplayer game view', () => {
   });
 
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v36');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v37');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v30');
   });
 
@@ -406,20 +406,141 @@ describe('network multiplayer game view', () => {
     expect(sent[1]).toEqual(expect.objectContaining({ moveX: 1, moveY: 0 }));
   });
 
-  test('refreshes unchanged input quickly and sends nothing while hidden', () => {
+  test('keeps a visible blurred controller neutral until authority acknowledgement', () => {
     expect(INPUT_HEARTBEAT_MS).toBe(250);
-    const sendInput = jest.fn();
+    const originalPerformance = globalThis.performance;
+    let now = 1_000;
+    globalThis.performance = { now: () => now };
+    const sent = [];
+    const queued = new Set();
+    const sendAbility = jest.fn();
+    const document = { hidden: false, visibilityState: 'visible', getElementById: () => null };
+    globalThis.NeoGamepad = [{
+      active: true, connected: true, moveX: 1, moveY: 0, hasAim: false,
+      slash: false, laser: true, smash: false, dash: false,
+    }];
+    globalThis.NeoGamepad.consumeAction = (_slot, action) => queued.delete(action);
+    globalThis.NeoGamepad.clearQueuedActions = jest.fn(() => queued.clear());
+    const neo = {
+      mouse: { down: true, right: true, downQueued: true, rightQueued: true },
+      isMouseActionHeld: action => action === 'slash' && neo.mouse.down,
+    };
     const view = new NetworkGameView({
-      session: { status: 'running', sendInput },
-      neo: {},
+      session: {
+        status: 'running',
+        sendAbility,
+        sendInput: input => {
+          sent.push(input);
+          return sent.length - 1;
+        },
+      },
+      neo,
+      document,
     });
     view.active = true;
-    globalThis.document = { hidden: true, visibilityState: 'hidden' };
+    view.aimDirection = 0.75;
+    view.previousGamepadActions = {
+      slash: false, laser: true, smash: false, dash: false,
+    };
 
-    view._sendInput();
+    try {
+      view._sendInput();
+      expect(sent[0]).toEqual(expect.objectContaining({
+        moveX: 1, moveY: 0, aimDirection: 0.75, buttons: 9,
+      }));
 
-    expect(sendInput).not.toHaveBeenCalled();
-    delete globalThis.document;
+      view.boundBlur();
+      expect(view.inputSuspended).toBe(true);
+      expect(document.visibilityState).toBe('visible');
+      expect(sent[1]).toEqual(expect.objectContaining({
+        moveX: 0, moveY: 0, aimDirection: 0.75, buttons: 0,
+      }));
+      const neutralSequence = view.pendingNeutralInputSequence;
+      expect(view.lastMovementInputSequence).toBe(neutralSequence);
+      // The authority is still acknowledging only the pre-blur held sample,
+      // modeling loss of the first unreliable neutral packet.
+      view._onSnapshot({ lastAcknowledgedInput: neutralSequence - 1 });
+      expect(view.pendingNeutralInputSequence).toBe(neutralSequence);
+
+      // Movement remains physically deflected and a new action is queued while
+      // unfocused. Neither may be reconstructed by the ordinary 20 Hz poll.
+      globalThis.NeoGamepad[0].smash = true;
+      queued.add('smash');
+      now += 100;
+      view._sendInput();
+      expect(sent).toHaveLength(2);
+      now += 150;
+      view._sendInput();
+      expect(sent).toHaveLength(3);
+      expect(sent[2]).toEqual(expect.objectContaining({
+        moveX: 0, moveY: 0, aimDirection: 0.75, buttons: 0,
+      }));
+      expect(view.pendingNeutralInputSequence).toBe(neutralSequence);
+      expect(view.lastMovementInputSequence).toBe(neutralSequence);
+      expect(view.lastLocalPredictionInput).toEqual(expect.objectContaining({
+        moveX: 0, moveY: 0, aimDirection: 0.75, buttons: 0,
+      }));
+
+      // Consume the same metadata BrowserMultiplayerSession publishes from the
+      // authority WORLD_SNAPSHOT after the retry, not the dropped first neutral.
+      view._onSnapshot({ lastAcknowledgedInput: sent.length - 1 });
+      expect(view.pendingNeutralInputSequence).toBeNull();
+      now += INPUT_HEARTBEAT_MS;
+      view._sendInput();
+      expect(sent).toHaveLength(3);
+
+      view.boundFocus();
+      expect(view.inputSuspended).toBe(false);
+      expect(queued.size).toBe(0);
+      view._sendInput();
+      expect(sendAbility).not.toHaveBeenCalled();
+      expect(sent[3]).toEqual(expect.objectContaining({ moveX: 1, moveY: 0 }));
+      expect(neo.mouse).toEqual({
+        down: false, right: false, downQueued: false, rightQueued: false,
+      });
+    } finally {
+      globalThis.performance = originalPerformance;
+    }
+  });
+
+  test('bounds unacknowledged neutral retries while hidden', () => {
+    const originalPerformance = globalThis.performance;
+    let now = 1_000;
+    globalThis.performance = { now: () => now };
+    const sent = [];
+    const document = { hidden: false, visibilityState: 'visible', getElementById: () => null };
+    const view = new NetworkGameView({
+      session: {
+        status: 'running',
+        sendInput: input => {
+          sent.push(input);
+          return sent.length - 1;
+        },
+      },
+      neo: {},
+      document,
+    });
+    view.active = true;
+    view.keys.add('KeyD');
+
+    try {
+      view._sendInput();
+      document.hidden = true;
+      document.visibilityState = 'hidden';
+      view.boundVisibilityChange();
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        now += INPUT_HEARTBEAT_MS;
+        view._sendInput();
+      }
+
+      expect(sent).toHaveLength(9);
+      expect(sent.slice(1)).toHaveLength(8);
+      expect(sent.slice(1).every(input => (
+        input.moveX === 0 && input.moveY === 0 && input.buttons === 0
+      ))).toBe(true);
+    } finally {
+      globalThis.performance = originalPerformance;
+    }
   });
 
   describe('touch movement', () => {
@@ -2176,7 +2297,7 @@ describe('network multiplayer game view', () => {
     expect(rendered.beamChannel).toEqual(expect.objectContaining({ moveKey: 'blood_beam', angle: 0.75 }));
   });
 
-  test('sends a Death Ball held sample before its cast action', () => {
+  test('preserves every current held bit in the Death Ball prime packet', () => {
     const sent = [];
     const session = {
       snapshot: () => ({ status: 'running' }),
@@ -2187,11 +2308,12 @@ describe('network multiplayer game view', () => {
     view.active = true;
     view.localPredictedPlayer = { equippedMoves: { smash: 'death_ball' } };
     view.aimDirection = 0.75;
+    view.keyboardLaserHeld = true;
 
     view._useSlot('smash');
 
     expect(sent).toEqual([
-      ['input', expect.objectContaining({ aimDirection: 0.75, buttons: 2 })],
+      ['input', expect.objectContaining({ aimDirection: 0.75, buttons: 3 })],
       ['ability', 'death_ball', 0.75],
     ]);
   });

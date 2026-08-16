@@ -224,10 +224,13 @@ describe('Knave, the hidden playable character', () => {
     expect(read('js/protocol/ProtocolV1.js')).toContain("'sarge', 'knave'");
     expect(read('js/multiplayer/LocalMultiplayerSession.js')).toContain("'sarge', 'knave'");
 
-    // Authority stats must mirror the campaign multipliers against 120 HP / 228
-    // speed: 0.82 hp, 1.18 move, 0.95 damage.
-    const network = read('js/simulation/NetworkCombatSystem.js');
-    expect(network).toContain('knave: Object.freeze({ maxHp: 98, moveSpeed: 269.04, damageMultiplier: 0.95 })');
+    // The canonical shared profile is the authority source: 0.82 HP, 1.18
+    // movement, and 0.95 damage against the campaign's 120 / 228 stat bases.
+    expect(combatContent.getBuiltInHeroCombatProfile('knave')).toEqual(expect.objectContaining({
+      hpMultiplier: 0.82,
+      moveSpeedMultiplier: 1.18,
+      damageMultiplier: 0.95,
+    }));
     expect(Math.round(120 * 0.82)).toBe(98);
     expect(228 * 1.18).toBeCloseTo(269.04, 5);
   });
