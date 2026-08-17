@@ -1886,6 +1886,7 @@
       const base = Neo.angleToMouse();
       const stacks = Math.max(1, Math.floor(Number(itemStats.homingMissileStacks || 1)));
       const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(Neo.player.level || 1)) / 10);
+      const missileLifetime = 5 + stacks;
       for (let index = 0; index < missileCount; index += 1) {
         const angle = base + (index - (missileCount - 1) / 2) * 0.12;
         Neo.spawnProjectile({
@@ -1895,7 +1896,7 @@
           vx: Math.cos(angle) * 780,
           vy: Math.sin(angle) * 780,
           r: 6,
-          life: 2.4,
+          life: missileLifetime,
           enemy: false,
           kind: 'homing_missile',
           damage: 20,

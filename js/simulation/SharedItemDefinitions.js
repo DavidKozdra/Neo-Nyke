@@ -471,7 +471,7 @@ const ITEM_DEFS = {
       key: 'homing_missile',
       name: 'Homing Missile',
       shortName: 'Missiles',
-      description: '15% chance per stack to launch fast homing missiles when using R. Starts with 2 missiles; each extra stack adds 2 missiles, plus 1 more per 10 character levels. Missiles have a 5% chance to ignite.',
+      description: '15% chance per stack to launch fast homing missiles when using R. Fires 2 per stack, plus 1 per 10 character levels. Missiles last 5 seconds plus 1 second per stack and have a 5% chance to ignite.',
       rarity: 'god',
       color: '#ffe06f',
       category: 'god',

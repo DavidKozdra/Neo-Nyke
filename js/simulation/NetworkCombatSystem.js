@@ -5617,6 +5617,7 @@
       && (random?.next?.('encounter') ?? 1) < Number(player.itemStats.homingMissileChance)) {
       const stacks = Math.max(1, Math.floor(Number(player.itemStats?.homingMissileStacks || 1)));
       const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(player.level || 1)) / 10);
+      const missileLifetimeSeconds = 5 + stacks;
       Array.from({ length: missileCount }, (_, index) => (index - (missileCount - 1) / 2) * 0.12).forEach(offset => {
         const missile = createPlayerProjectile(state, player, {
           kind: 'homing_missile',
@@ -5624,7 +5625,7 @@
           damage: 20,
           speed: 780,
           radius: 6,
-          lifeTicks: Math.round(2.4 * 20),
+          lifeTicks: missileLifetimeSeconds * 20,
           knockback: 140,
           homing: true,
           homingTarget: 'enemy',
@@ -7912,10 +7913,11 @@
           if ((stream ? stream.next() : 1) < Number(enemy.mirrorItemStats.homingMissileChance)) {
             const stacks = Math.max(1, Math.floor(Number(enemy.mirrorItemStats.homingMissileStacks || 1)));
             const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(enemy.level || 1)) / 10);
+            const missileLifetimeSeconds = 5 + stacks;
             Array.from({ length: missileCount }, (_, index) => (index - (missileCount - 1) / 2) * 0.12)
               .forEach(offset => createAuthorityMirrorProjectile(state, enemy, angle + offset, {
               type: 'homing_missile', attackKind: 'mirror_homing_missile', speed: 780, radius: 6,
-              life: 2.4, damage: 20, knockback: 120,
+              life: missileLifetimeSeconds, damage: 20, knockback: 120,
               homing: true, homingSpeed: 1290, homingAccel: 3.8, homingTurnRate: 3.5, homingRadius: 960,
               statusEffects: [{ key: 'fire', chance: 0.05, stacks: 1, duration: 2.8 }],
               }));

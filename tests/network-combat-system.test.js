@@ -1878,6 +1878,7 @@ describe('authoritative network combat system', () => {
       && projectile.attackKind === 'homing_missile'
       && projectile.damage === 20
       && projectile.homing
+      && projectile.lifeTicks === 160
       && projectile.homingSpeed === 1260
       && projectile.hitOptions.fireChance === 0.05
     ))).toBe(true);

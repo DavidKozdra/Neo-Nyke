@@ -4540,13 +4540,14 @@
     if (Number(itemStats.homingMissileChance || 0) > 0 && Neo.nextRandom('encounter') < Number(itemStats.homingMissileChance || 0)) {
       const stacks = Math.max(1, Math.floor(Number(itemStats.homingMissileStacks || 1)));
       const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(enemy.level || 1)) / 10);
+      const missileLifetime = 5 + stacks;
       for (let index = 0; index < missileCount; index += 1) {
         const missileAngle = angleToPlayer + (index - (missileCount - 1) / 2) * 0.12;
         fireMirrorProjectiles(enemy, missileAngle, 1, 0, 780, 20, {
           kind: 'homing_missile',
           color: '#ffe06f',
           r: 6,
-          life: 2.4,
+          life: missileLifetime,
           knockback: 120,
           homing: true,
           homingSpeed: 1290,
