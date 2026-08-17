@@ -649,6 +649,7 @@
     // the explicit guard so an incomplete custom embed fails loudly instead of
     // silently running a different damage algorithm.
     if (!resolvedDamage) throw new Error('Shared player-damage policy is unavailable');
+    globalThis.NeoNyke.simulation.resetGenericHealthRegen?.(Neo.player);
     let finalAmount = resolvedDamage.dealt;
     const absorbed = resolvedDamage.absorbed;
     Neo.player.overhealBarrier = resolvedDamage.barrier;
@@ -805,6 +806,13 @@
 
   function updatePlayerStatuses(dt) {
     if (!Neo.player) return;
+    const genericHealthRegen = globalThis.NeoNyke.simulation.advanceGenericHealthRegen?.(Neo.player, dt, {
+      itemStats: Neo.getItemStats(),
+      heal: amount => Neo.applyPlayerHealing(Neo.scalePlayerHealing(amount)),
+    });
+    genericHealthRegen?.pulses?.forEach(gained => {
+      Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#d9ffe5', size: 12 });
+    });
     // Mateo Potion Bath: status resistance window + heal-over-time regen.
     if (Number(Neo.player.statusResistTime || 0) > 0) {
       Neo.player.statusResistTime = Math.max(0, Number(Neo.player.statusResistTime) - dt);

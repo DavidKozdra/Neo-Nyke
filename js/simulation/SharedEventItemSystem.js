@@ -9,6 +9,47 @@
 
   const deterministicRandom = () => 0.5;
   const count = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
+  const GENERIC_HEALTH_REGEN_DELAY_SECONDS = 5;
+  const GENERIC_HEALTH_REGEN_INTERVAL_SECONDS = 1;
+
+  function resetGenericHealthRegen(player) {
+    if (!player) return false;
+    player.genericHealthRegenDelay = GENERIC_HEALTH_REGEN_DELAY_SECONDS;
+    player.genericHealthRegenAccum = 0;
+    return true;
+  }
+
+  function advanceGenericHealthRegen(player, deltaSeconds, options = {}) {
+    if (!player) return { active: false, healed: 0, pulses: [] };
+    const regenRatio = Math.max(0, Number(options.itemStats?.genericHealthItemRegenRatio
+      ?? player.itemStats?.genericHealthItemRegenRatio ?? 0));
+    const maxHp = Math.max(0, Number(player.maxHp || 0));
+    const delta = Math.max(0, Number(deltaSeconds || 0));
+    if (regenRatio <= 0 || maxHp <= 0 || Number(player.hp || 0) <= 0 || player.downed) {
+      player.genericHealthRegenDelay = GENERIC_HEALTH_REGEN_DELAY_SECONDS;
+      player.genericHealthRegenAccum = 0;
+      return { active: false, healed: 0, pulses: [] };
+    }
+
+    const delayBefore = Math.max(0, Number(player.genericHealthRegenDelay ?? GENERIC_HEALTH_REGEN_DELAY_SECONDS));
+    player.genericHealthRegenDelay = Math.max(0, delayBefore - delta);
+    const activeDelta = Math.max(0, delta - delayBefore);
+    player.genericHealthRegenAccum = Math.max(0, Number(player.genericHealthRegenAccum || 0)) + activeDelta;
+    const pulses = [];
+    while (player.genericHealthRegenAccum >= GENERIC_HEALTH_REGEN_INTERVAL_SECONDS) {
+      player.genericHealthRegenAccum -= GENERIC_HEALTH_REGEN_INTERVAL_SECONDS;
+      const requested = maxHp * regenRatio;
+      const before = Number(player.hp || 0);
+      let gained;
+      if (typeof options.heal === 'function') gained = Math.max(0, Number(options.heal(requested) || 0));
+      else {
+        player.hp = Math.min(maxHp, before + requested * Math.max(1, Number(options.itemStats?.healingMultiplier || player.itemStats?.healingMultiplier || 1)));
+        gained = Math.max(0, Number(player.hp || 0) - before);
+      }
+      if (gained > 0) pulses.push(gained);
+    }
+    return { active: player.genericHealthRegenDelay <= 0, healed: pulses.reduce((sum, amount) => sum + amount, 0), pulses };
+  }
 
   function chargeRequirement(player, baseRequirement, itemStats = {}) {
     return Math.max(1, Number(baseRequirement || 1) - count(player, 'charged_adapter')
@@ -313,6 +354,7 @@
 
   return {
     chargeRequirement, critCharmRequirement, applyCampaignKillCharge, applyCampaignRevive,
+    resetGenericHealthRegen, advanceGenericHealthRegen,
     applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation,
     getCampaignHemesScarfPassiveBleedStacks,
     advanceCampaignHemesScarfDrain,

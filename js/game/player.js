@@ -790,6 +790,7 @@ export function getItemStats() {
       weaponFatigueChance: weaponFatigue * 0.05,
       weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
+      genericHealthItemRegenRatio: genericHealthItem * 0.01,
       snakeKnifePoisonChance: snakeKnife * 0.10,
       confuseRayStunChance: confuseRay * 0.15,
       // Flat 5% per hit (not per stack) to make the enemy think the player vanished.
@@ -803,6 +804,7 @@ export function getItemStats() {
       graveZoneDamageTakenMultiplier: 1 + graveZone * 0.08,
       coldDamageTakenMultiplier: graveZone >= 4 ? 1.5 : 1,
       homingMissileChance: homingMissile * 0.15,
+      homingMissileStacks: homingMissile,
       // Procy Pickle: chance to spread an enemy's statuses to nearby foes when you
       // crit or a status-applying item procs (+5% per stack, capped 60%), and the
       // chance for a tool activation to splash self-spreading poison (2% per stack

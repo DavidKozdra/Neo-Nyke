@@ -38,6 +38,22 @@ function combatHarness(characterKey = 'princess') {
 }
 
 describe('authoritative network combat system', () => {
+  test('regenerates Generic Health authoritatively after five seconds without damage', () => {
+    const { state, simulation, events } = combatHarness();
+    const player = state.players.p1;
+    player.items = { generic_health_item: 2 };
+    player.hp = 50;
+    player.invulnerableUntilTick = 10000;
+
+    for (let tick = 0; tick < 140; tick += 1) simulation.updateGame({}, 0.05);
+
+    expect(player.hp).toBeGreaterThan(50);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_HEALED',
+      data: expect.objectContaining({ playerId: 'p1', source: 'generic_health_item' }),
+    }));
+  });
+
   test('gives players campaign damage i-frames so stacked hits cannot instantly delete them', () => {
     const { state, simulation, events } = combatHarness();
     const player = state.players.p1;
@@ -1840,6 +1856,37 @@ describe('authoritative network combat system', () => {
       spawnedProjectiles: expect.arrayContaining([
         expect.objectContaining({ id: rocks[0].id, kind: 'rock', vx: expect.any(Number), vy: expect.any(Number) }),
       ]),
+    }));
+  });
+
+  test('Crimson Smash procs the Homing Missile volley authoritatively', () => {
+    const { state, simulation, events, random } = combatHarness('thorn_knight');
+    applyNetworkHeroProfile(state.players.p1, 'thorn_knight');
+    state.players.p1.items = { homing_missile: 3 };
+    state.players.p1.level = 10;
+    simulation.updateGame({}, 0.05);
+    random.next = () => 0;
+
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'crimson_smash', aimDirection: 0 },
+    ] } }, 0.05);
+
+    const missiles = Object.values(state.projectiles).filter(projectile => projectile.kind === 'homing_missile');
+    expect(missiles).toHaveLength(7);
+    expect(missiles.every(projectile => (
+      projectile.ownerId === 'p1'
+      && projectile.attackKind === 'homing_missile'
+      && projectile.damage === 20
+      && projectile.homing
+      && projectile.homingSpeed === 1260
+      && projectile.hitOptions.fireChance === 0.05
+    ))).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'PLAYER_ABILITY_USED',
+      data: expect.objectContaining({
+        abilityId: 'crimson_smash',
+        projectileIds: expect.arrayContaining(missiles.map(projectile => projectile.id)),
+      }),
     }));
   });
 

@@ -1884,8 +1884,10 @@
     Neo.tutorialController?.signal?.('attack', { action: 'smash' });
     if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
       const base = Neo.angleToMouse();
-      for (let index = 0; index < 2; index += 1) {
-        const angle = base + (index === 0 ? -0.12 : 0.12);
+      const stacks = Math.max(1, Math.floor(Number(itemStats.homingMissileStacks || 1)));
+      const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(Neo.player.level || 1)) / 10);
+      for (let index = 0; index < missileCount; index += 1) {
+        const angle = base + (index - (missileCount - 1) / 2) * 0.12;
         Neo.spawnProjectile({
           x: Neo.player.x,
           y: Neo.player.y,
@@ -1896,7 +1898,7 @@
           life: 2.4,
           enemy: false,
           kind: 'homing_missile',
-          damage: 20, // +10% over the old 18.
+          damage: 20,
           knockback: 140,
           color: '#ffe06f',
           homing: true,

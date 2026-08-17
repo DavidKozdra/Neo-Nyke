@@ -4538,8 +4538,10 @@
     enemy.attackCd = 0.6;
     enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
     if (Number(itemStats.homingMissileChance || 0) > 0 && Neo.nextRandom('encounter') < Number(itemStats.homingMissileChance || 0)) {
-      for (let index = 0; index < 2; index += 1) {
-        const missileAngle = angleToPlayer + (index === 0 ? -0.12 : 0.12);
+      const stacks = Math.max(1, Math.floor(Number(itemStats.homingMissileStacks || 1)));
+      const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(enemy.level || 1)) / 10);
+      for (let index = 0; index < missileCount; index += 1) {
+        const missileAngle = angleToPlayer + (index - (missileCount - 1) / 2) * 0.12;
         fireMirrorProjectiles(enemy, missileAngle, 1, 0, 780, 20, {
           kind: 'homing_missile',
           color: '#ffe06f',

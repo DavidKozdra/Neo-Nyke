@@ -1,4 +1,4 @@
-const { applyCampaignKillCharge, chargeRequirement, applyCampaignRevive, applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation, getCampaignHemesScarfPassiveBleedStacks, advanceCampaignHemesScarfDrain, resolveCampaignKillAreaEffects, resolveCampaignSargesHammerDoubleKill, resolveCampaignMoggysCoatOpening, resolveCampaignRoomEntryItemEffects, applyCampaignRoomEntryReset } = require('../js/simulation/SharedEventItemSystem.js');
+const { applyCampaignKillCharge, chargeRequirement, applyCampaignRevive, applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation, getCampaignHemesScarfPassiveBleedStacks, advanceCampaignHemesScarfDrain, resetGenericHealthRegen, advanceGenericHealthRegen, resolveCampaignKillAreaEffects, resolveCampaignSargesHammerDoubleKill, resolveCampaignMoggysCoatOpening, resolveCampaignRoomEntryItemEffects, applyCampaignRoomEntryReset } = require('../js/simulation/SharedEventItemSystem.js');
 const { getCampaignPotionCarryCap } = require('../js/simulation/SharedPotionSystem.js');
 
 describe('SharedEventItemSystem kill transactions', () => {
@@ -36,6 +36,26 @@ describe('SharedEventItemSystem kill transactions', () => {
       expect.objectContaining({ kind: 'heal', amount: 6 }),
       expect.objectContaining({ kind: 'surge', itemKey: 'crit_charm' }),
     ]));
+  });
+
+  test('regenerates Generic Health after five damage-free seconds and resets when hit', () => {
+    const player = { hp: 50, maxHp: 100, itemStats: { genericHealthItemRegenRatio: 0.02 } };
+    expect(advanceGenericHealthRegen(player, 5).healed).toBe(0);
+    expect(advanceGenericHealthRegen(player, 1)).toEqual(expect.objectContaining({ active: true, healed: 2, pulses: [2] }));
+    expect(player.hp).toBe(52);
+
+    resetGenericHealthRegen(player);
+    expect(advanceGenericHealthRegen(player, 5).healed).toBe(0);
+    expect(advanceGenericHealthRegen(player, 1).healed).toBe(2);
+    expect(player.hp).toBe(54);
+  });
+
+  test('does not bank Generic Health regen pulses while already at full health', () => {
+    const player = { hp: 100, maxHp: 100, itemStats: { genericHealthItemRegenRatio: 0.01 } };
+    advanceGenericHealthRegen(player, 12);
+    player.hp = 90;
+    expect(advanceGenericHealthRegen(player, 0.5).healed).toBe(0);
+    expect(advanceGenericHealthRegen(player, 0.5).healed).toBe(1);
   });
 
   test('charge requirement shares adapter and tag synergy reductions', () => {

@@ -173,6 +173,8 @@
     resolveCampaignOnHitStatusProcs = () => [],
     syncCampaignItemStats = state => state,
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
+    resetGenericHealthRegen = () => false,
+    advanceGenericHealthRegen = () => ({ active: false, healed: 0, pulses: [] }),
     applyCampaignInsuranceOnHit = player => ({ triggered: false, health: player?.hp || 0 }),
     resolveCampaignHemesScarfRetaliation = () => null,
     getCampaignHemesScarfPassiveBleedStacks = () => 0,
@@ -5607,6 +5609,36 @@
       }
     }
 
+    // Campaign rolls Homing Missile on every ordinary smash cast before the
+    // smash body resolves. Keep the authority in parity so Crimson Smash and
+    // the other non-channelled R moves can proc the item in multiplayer too.
+    if (slot === 'smash' && !HOLD_TO_CHARGE_MOVES[moveKey]
+      && Number(player.itemStats?.homingMissileChance || 0) > 0
+      && (random?.next?.('encounter') ?? 1) < Number(player.itemStats.homingMissileChance)) {
+      const stacks = Math.max(1, Math.floor(Number(player.itemStats?.homingMissileStacks || 1)));
+      const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(player.level || 1)) / 10);
+      Array.from({ length: missileCount }, (_, index) => (index - (missileCount - 1) / 2) * 0.12).forEach(offset => {
+        const missile = createPlayerProjectile(state, player, {
+          kind: 'homing_missile',
+          attackKind: 'homing_missile',
+          damage: 20,
+          speed: 780,
+          radius: 6,
+          lifeTicks: Math.round(2.4 * 20),
+          knockback: 140,
+          homing: true,
+          homingTarget: 'enemy',
+          homingRadius: 960,
+          homingSpeed: 1260,
+          homingAccel: 3.8,
+          homingTurnRate: 3.4,
+          hitOptions: { fireChance: 0.05, fireStacks: 1, fireDuration: 2.8 },
+        }, angle + offset);
+        projectileIds.push(missile.id);
+        spawnedProjectiles.push(projectileTrajectory(missile));
+      });
+    }
+
     const scaledCooldownTicks = Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
     if (execution.releaseHeldCharge) {
       // The charge was spent at hold start. Its timer is rescheduled by
@@ -6072,6 +6104,7 @@
       ...resolvedOptions,
     });
     const { absorbed } = resolvedDamage;
+    resetGenericHealthRegen(player);
     player.barrier = resolvedDamage.barrier;
     player.hp = resolvedDamage.health;
     if (resolvedDamage.dealt > 0 && packAttacker?.elite) {
@@ -6933,6 +6966,20 @@
         const healedAmount = player.hp - before;
         if (healedAmount > 0) emitEvent('POTION_BATH_REGEN', { playerId: player.id, healedAmount, health: player.hp });
       }
+    });
+  }
+
+  function updateGenericHealthRegen(state, fixedDelta, emitEvent) {
+    Object.values(state.players || {}).forEach(player => {
+      if (!player || player.downed || player.disconnected) return;
+      const regen = advanceGenericHealthRegen(player, fixedDelta, { itemStats: player.itemStats });
+      regen.pulses.forEach(healedAmount => emitEvent('PLAYER_HEALED', {
+        playerId: player.id,
+        roomId: player.roomId,
+        source: 'generic_health_item',
+        healedAmount,
+        health: player.hp,
+      }));
     });
   }
 
@@ -7863,12 +7910,15 @@
         if (enemy.type !== 'rival' && Number(enemy.mirrorItemStats?.homingMissileChance || 0) > 0) {
           const stream = combatRandomByState.get(state)?.scoped(`${enemy.id}|mirror-homing-missile:${state.tick}`);
           if ((stream ? stream.next() : 1) < Number(enemy.mirrorItemStats.homingMissileChance)) {
-            [-0.12, 0.12].forEach(offset => createAuthorityMirrorProjectile(state, enemy, angle + offset, {
+            const stacks = Math.max(1, Math.floor(Number(enemy.mirrorItemStats.homingMissileStacks || 1)));
+            const missileCount = stacks * 2 + Math.floor(Math.max(1, Number(enemy.level || 1)) / 10);
+            Array.from({ length: missileCount }, (_, index) => (index - (missileCount - 1) / 2) * 0.12)
+              .forEach(offset => createAuthorityMirrorProjectile(state, enemy, angle + offset, {
               type: 'homing_missile', attackKind: 'mirror_homing_missile', speed: 780, radius: 6,
               life: 2.4, damage: 20, knockback: 120,
               homing: true, homingSpeed: 1290, homingAccel: 3.8, homingTurnRate: 3.5, homingRadius: 960,
               statusEffects: [{ key: 'fire', chance: 0.05, stacks: 1, duration: 2.8 }],
-            }));
+              }));
           }
         }
         if (enemy.type !== 'rival' && enemy.mirrorPendingSmash === 'chaos_burst') {
@@ -10239,6 +10289,7 @@
       updateRoomHazards(state, fixedDelta, emitEvent);
       updatePotionBathEffects(state, fixedDelta, emitEvent);
       updateAuthorityStatuses(state, fixedDelta, emitEvent);
+      updateGenericHealthRegen(state, fixedDelta, emitEvent);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random, inputs);
       updateMovingWorldPickups(state, fixedDelta);
