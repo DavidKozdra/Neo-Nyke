@@ -2615,8 +2615,7 @@
         } else {
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
             if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
-              enemy.hp -= (10 * zoneDamageMult * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
-              if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
+              Neo.hitEnemy(enemy, 10 * zoneDamageMult * dt, 0, 0, '#ff7a32');
             }
           });
         }
@@ -2626,11 +2625,11 @@
         }
         forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
           if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
-          enemy.hp -= ((hazard.dps || 16) * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
+          const fireDamage = Math.max(0, Number(hazard.dps || 16) * dt);
+          Neo.hitEnemy(enemy, fireDamage, 0, 0, '#ff8c3b');
           if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
           if (Neo.nextRandom('fx') < 0.06) Neo.spawnParticle({ x: enemy.x + Neo.rand(-6, 6), y: enemy.y + Neo.rand(-6, 6), life: 0.3, c: '#ff8c3b' });
-          if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
         });
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       } else if (hazard.kind === 'el_barto_graffiti') {

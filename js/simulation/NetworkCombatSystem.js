@@ -2491,6 +2491,11 @@
       || state.enemies?.[details.attackerId]
       || state.players?.[playerId];
     const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
+    const attackerPoison = attacker?.statuses?.poison || {};
+    const poisonMultiplier = getCampaignPoisonDamageMultiplier(
+      Number(attackerPoison.stacks || 0),
+      Number(attackerPoison.severity || 1),
+    );
     let incoming = details.preScaled ? Math.max(0, Math.round(Number(damage || 0))) : scaleCampaignDamage({
       damage,
       raw: !!details.rawDamage,
@@ -2498,6 +2503,7 @@
       itemStats: attacker?.itemStats,
       attackPower: attacker?.attackPower,
       attackerDamageMultiplier: Math.max(0.1, Number(attacker?.damageMultiplier || 1)),
+      poisonDamageMultiplier: poisonMultiplier,
       isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
       hasBleed: getCampaignStatusStacks(enemy, 'bleed') > 0,
       applyBleedBonus: details.applyBleedBonus,
@@ -2882,9 +2888,10 @@
         aoeRadiusMultiplier: player.itemStats?.aoeRadiusMultiplier,
         aoeDamageMultiplier: player.itemStats?.aoeDamageMultiplier,
       });
+      const fireCircleDamageMultiplier = Math.max(0, Number(player.itemStats?.aoeDamageMultiplier || 1));
       spawned.push(createAbilityEntity(state, player, {
         kind: 'fire_circle', abilityId: moveKey, radius: circle.radius,
-        damage: circle.damagePerSecond * circle.pulseIntervalSeconds, durationTicks: Math.round(circle.durationSeconds * 20),
+        damage: circle.damagePerSecond / Math.max(1, fireCircleDamageMultiplier) * circle.pulseIntervalSeconds, durationTicks: Math.round(circle.durationSeconds * 20),
         pulseIntervalTicks: Math.round(circle.pulseIntervalSeconds * 20), followOwner: true,
       }));
     } else if (moveKey === 'floor_lava') {
@@ -3101,9 +3108,9 @@
         damageEnemy(state, enemy, entity.damage, owner.id, emitEvent, {
           attackKind: abilityId,
           knockback: Number(entity.knockback || 0),
-          // Campaign Healing Zone is authored as steady environmental damage,
-          // not a weapon strike: no player damage scaling or crit rolls.
-          ...(['healing_zone', 'fire_circle', 'lava'].includes(entity.kind) ? { preScaled: true, canCrit: false } : {}),
+          // Healing Zone and Fire Circle stay deterministic environment pulses,
+          // but still use shared damage scaling and resistances in the hit path.
+          ...(entity.kind === 'lava' ? { preScaled: true, canCrit: false } : { canCrit: false }),
           ...(entity.rawDamage ? { rawDamage: true } : {}),
           ...(entity.kind === 'excalibur_strike' ? { ignoreGodMode: true } : {}),
         });
@@ -6857,10 +6864,10 @@
   function scaleAuthorityStatusDamage(state, enemy, key, rawDamage, status) {
     const owner = state.players?.[status?.ownerId];
     const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
-    let staged = Math.max(0, Number(rawDamage || 0));
+    let damage = Math.max(0, Number(rawDamage || 0));
     if (key === 'bleed' || key === 'fire') {
-      staged = scaleCampaignDamage({
-        damage: staged,
+      damage = scaleCampaignDamage({
+        damage,
         enemy,
         itemStats: owner?.itemStats,
         attackPower: owner?.attackPower,
@@ -6872,6 +6879,14 @@
         loopNumber,
         enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
       });
+    } else {
+      damage = scaleCampaignDamage({
+        damage: Math.max(1, Math.round(damage)),
+        enemy,
+        raw: true,
+        loopNumber,
+        enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+      });
     }
     if (key === 'bleed') {
       const divisor = getCampaignBleedResistance(enemy, {
@@ -6879,17 +6894,11 @@
         maxFloor: MAX_FLOOR,
       });
       const innateResistance = Math.max(0, Math.min(0.8, Number(enemy.bleedResistance || 0)));
-      staged = staged / divisor
+      damage = damage / divisor
         * Math.max(0.2, 1 - innateResistance)
         * Math.max(0, Number(state.matchRules?.enemyBleedDamageMultiplier ?? 1));
     }
-    return scaleCampaignDamage({
-      damage: Math.max(1, Math.round(staged)),
-      enemy,
-      raw: true,
-      loopNumber,
-      enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
-    });
+    return Math.max(1, Math.round(damage));
   }
 
   function updateAuthorityStatuses(state, fixedDelta, emitEvent) {

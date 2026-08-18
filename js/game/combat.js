@@ -117,6 +117,7 @@
     const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
+    const poisonMultiplier = Neo.getPoisonDamageMultiplier?.(Neo.player) ?? 1;
     const bountyWeaknessActive = !!enemy?.bountyWeakness && Neo.getStatusStacks?.(enemy, enemy.bountyWeakness) > 0;
     const bountyWeaknessMultiplier = bountyWeaknessActive ? 1.35 : 1;
     // Pendant of Kronos: flat +1%/god-item damage everywhere, plus +2%/stack
@@ -128,6 +129,7 @@
       itemStats: stats,
       attackPower: Neo.player?.attackPower,
       attackerDamageMultiplier: characterMultiplier,
+      poisonDamageMultiplier: poisonMultiplier,
       isBoss,
       hasBleed: Neo.getStatusStacks(enemy, 'bleed') > 0,
       applyBleedBonus,
@@ -348,8 +350,8 @@
     cult_bolt_volley: { base: 20, hits: 5, mult: 'beamDamageMultiplier' },
     shield_throw:     { base: 34, mult: 'beamDamageMultiplier' },
     // smash moves
-    crimson_smash:    { base: 46, mult: 'aoeDamageMultiplier' },
-    hammer_smash:     { base: 46, mult: 'aoeDamageMultiplier' },
+    crimson_smash:    { base: 46 },
+    hammer_smash:     { base: 46 },
     titan_hammer:     { base: 56, mult: 'aoeDamageMultiplier' },
     chaos_burst:      { base: 18, mult: 'aoeDamageMultiplier' },
     fire_circle:      { base: 18, mult: 'aoeDamageMultiplier', tick: true },
@@ -3118,7 +3120,7 @@
           Neo.angleBetween(chainSource, chainedEnemy),
           120,
           '#9adfff',
-          { rawDamage: true, lightning: true }
+          { lightning: true }
         );
         Neo.spawnParticle({ x: (chainSource.x + chainedEnemy.x) * 0.5, y: (chainSource.y + chainedEnemy.y) * 0.5, life: 0.2, c: '#9adfff' });
         chainSource = chainedEnemy;
@@ -4089,13 +4091,22 @@
 
   function castFireCircle() {
     const itemStats = Neo.getItemStats();
+    const aoeDamageMultiplier = Math.max(0, Number(itemStats.aoeDamageMultiplier || 1));
     const resolveFireCircle = globalThis.NeoNyke?.simulation?.resolveCampaignFireCircle;
     if (typeof resolveFireCircle !== 'function') throw new Error('Shared Fire Circle policy is unavailable');
     const circle = resolveFireCircle({
       aoeRadiusMultiplier: itemStats.aoeRadiusMultiplier,
       aoeDamageMultiplier: itemStats.aoeDamageMultiplier,
     });
-    Neo.hazards.push({ kind: 'fire_circle', x: Neo.player.x, y: Neo.player.y, r: circle.radius, ttl: circle.durationSeconds, dps: circle.damagePerSecond, followPlayer: true });
+    Neo.hazards.push({
+      kind: 'fire_circle',
+      x: Neo.player.x,
+      y: Neo.player.y,
+      r: circle.radius,
+      ttl: circle.durationSeconds,
+      dps: circle.damagePerSecond / Math.max(1, aoeDamageMultiplier),
+      followPlayer: true,
+    });
     Neo.ringBurst(Neo.player.x, Neo.player.y, 34, '#ff7b32', 0.55);
   }
 
@@ -5009,12 +5020,11 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   function dealEnemyStatusTickDamage(enemy, key, state, stats, sharedRawDamage) {
     const shared = globalThis.NeoNyke.simulation;
     const style = Neo.STATUS_STYLES[key];
-    const base = key === 'bleed'
+    let damage = key === 'bleed'
       ? scaleBleedDamageAgainstEnemy(enemy, state.stacks, stats, sharedRawDamage)
       : key === 'fire'
         ? scaleDamageAgainstEnemy(enemy, sharedRawDamage, DEFAULT_DAMAGE_OPTIONS, stats)
-        : sharedRawDamage;
-    let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(base)));
+        : Math.max(1, Math.round(sharedRawDamage));
     if (Neo.isChallengeActive?.('cursed_blood')) damage = Math.max(1, Math.round(damage * 1.35));
     const bleedCrit = key === 'bleed' && Number(stats.bleedCritChance || 0) > 0 && Neo.nextRandom('encounter') < Number(stats.bleedCritChance || 0);
     if (bleedCrit) damage = Math.max(1, Math.round(damage * Number(stats.critMultiplier || 1.6)));
