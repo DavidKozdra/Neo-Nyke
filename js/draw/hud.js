@@ -319,7 +319,58 @@
     ].join(';');
   }
 
+  function renderSurvivalMinimap() {
+    const ctx = Neo.ctx;
+    const canvasRect = Neo.canvas.getBoundingClientRect();
+    const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
+    const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
+    const entry = window.NeoSettings?.getHudElements?.()?.minimap || {};
+    const hudScale = Number.isFinite(Number(entry.scale)) ? Neo.clamp(Number(entry.scale), 0.5, 2) : 1.15;
+    const size = Math.round(154 * hudScale);
+    const x = Math.round(Neo.canvas.width - size - 24 + (Number(entry.x) || 0) / scaleX);
+    const y = Math.round(22 + (Number(entry.y) || 0) / scaleY);
+    const worldW = Math.max(1, Number(Neo.ROOM_W || 1));
+    const worldH = Math.max(1, Number(Neo.ROOM_H || 1));
+    const day = Neo.survivalDayNight || { light: 1, phase: 0 };
+    ctx.save();
+    ctx.fillStyle = day.light < 0.45 ? 'rgba(8, 19, 31, 0.92)' : 'rgba(24, 68, 39, 0.92)';
+    ctx.fillRect(x - 5, y - 21, size + 10, size + 28);
+    ctx.strokeStyle = day.light < 0.45 ? '#7da3d7' : '#9be28f'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, y - 21, size + 10, size + 28);
+    // A local Minecraft-style chunk grid follows the player. Newly traversed
+    // chunks are recorded by the world system, so the map grows by exploration
+    // rather than exposing a pre-authored room graph.
+    const chunkW = 900, chunkH = 700;
+    const playerChunkX = Math.floor(Number(Neo.player?.x || 0) / chunkW);
+    const playerChunkY = Math.floor(Number(Neo.player?.y || 0) / chunkH);
+    const chunkSize = size / 5;
+    const biomeColors = day.light < 0.45
+      ? { forest: '#234a35', water: '#214f78', sand: '#7e7047', stone: '#59646a' }
+      : { forest: '#4d9251', water: '#3f98c1', sand: '#d7b66a', stone: '#7d8886' };
+    for (let gridY = 0; gridY < 5; gridY += 1) {
+      for (let gridX = 0; gridX < 5; gridX += 1) {
+        const worldX = (playerChunkX + gridX - 2) * chunkW + chunkW / 2;
+        const worldY = (playerChunkY + gridY - 2) * chunkH + chunkH / 2;
+        const biome = Neo.getSurvivalBiomeAt?.(worldX, worldY) || 'forest';
+        ctx.fillStyle = biomeColors[biome] || biomeColors.forest;
+        ctx.fillRect(x + gridX * chunkSize, y + gridY * chunkSize, chunkSize, chunkSize);
+      }
+    }
+    ctx.strokeStyle = day.light < 0.45 ? 'rgba(171, 210, 255, 0.35)' : 'rgba(202, 255, 173, 0.32)'; ctx.lineWidth = 1;
+    for (let index = 0; index <= 5; index += 1) { ctx.beginPath(); ctx.moveTo(x + index * chunkSize, y); ctx.lineTo(x + index * chunkSize, y + size); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y + index * chunkSize); ctx.lineTo(x + size, y + index * chunkSize); ctx.stroke(); }
+    const px = x + size / 2;
+    const py = y + size / 2;
+    ctx.fillStyle = '#fff6a3'; ctx.strokeStyle = '#142016'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const isNight = day.light < 0.45;
+    ctx.fillStyle = isNight ? '#c7dcff' : '#ffe78b'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(`${isNight ? 'NIGHT' : 'DAY'} · CHUNK ${playerChunkX},${playerChunkY}`, x, y - 7);
+    ctx.restore();
+    const viewportBounds = { left: canvasRect.left + (x - 5) * scaleX, top: canvasRect.top + (y - 21) * scaleY, right: canvasRect.left + (x + size + 5) * scaleX, bottom: canvasRect.top + (y + size + 7) * scaleY };
+    return { x, y: y - 21, width: size + 10, height: size + 28, scale: 1, hudScale, offsetX: Number(entry.x) || 0, offsetY: Number(entry.y) || 0, viewportBounds };
+  }
+
   function renderMinimapToContext() {
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) return renderSurvivalMinimap();
     const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
     const visibleRooms = Neo.rooms.filter(r => !r.secret);
     // Size the map to the rooms that actually exist, not the full 9x9 generator

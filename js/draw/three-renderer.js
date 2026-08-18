@@ -2420,7 +2420,7 @@ const FLAT_BAKED_PICKUP_TYPES = new Set(['challengeSwitch']);
 // Loose loot should hover as a readable pickup in perspective. Its baked
 // canvas is centered on the simulation point, so it must be lifted by half its
 // world height or the lower half sits below the 3D floor.
-const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion']);
+const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'wood', 'item', 'potion', 'meat']);
 // Trial targets are centered around their simulation point in 2D. In 3D that
 // point cannot sit at floor height or half of the visible rune/bomb is buried.
 // These measured lifts put each target's lowest authored stroke above ground.
@@ -2474,9 +2474,11 @@ const BAKED_PICKUP_WORLD_SIZE = {
   secretLady: 120,
   secret_boss_chest: 90,
   coin: 60,
+  wood: 60,
   potion: 60,
   apple: 60,
   fruit: 60,
+  meat: 60,
   treasureKey: 60,
   crown: 60,
   descend: 70,
@@ -2672,6 +2674,14 @@ function syncDestructibles() {
           ? getImageTexture('barrel_0', 0, image.naturalWidth)
           : getEnvTileTexture('barrel_oak');
         intact = texture ? makeBillboard(texture) : null;
+      } else if (prop.kind === 'tree') {
+        // Harvestable forest trees are plants, not masonry — without their own
+        // branch they fell through to the generic stone/oak box below and read
+        // as a wall. Stand the authored tree PNG up as a billboard, matching
+        // the 2D pass; the decor-tree path already gets this via drawRoomDecor.
+        const image = Neo.ENVIRONMENT_IMAGES?.tree?.image;
+        const texture = image ? getImageTexture('tree', 0, image.naturalWidth) : getDecorTexture('tree', prop.r);
+        intact = texture ? makeBillboard(texture) : null;
       } else {
         // Wooden cover walls are authored as timber barricades in 2D. Give
         // their 3D boxes the matching oak texture rather than generic stone.
@@ -2686,7 +2696,13 @@ function syncDestructibles() {
       }
       if (!intact) return null;
       intact.name = 'intact';
-      if (intact.isSprite) intact.scale.set(52, 52, 1);
+      if (intact.isSprite) {
+        // Pots and barrels are uniform 52px props. Trees vary per instance and
+        // stand well above their footprint, so size them off the prop radius
+        // the same way the 2D pass does instead of the fixed crate size.
+        const size = prop.kind === 'tree' ? Math.max(24, Number(prop.r || 26) * 2.9) : 52;
+        intact.scale.set(size, size, 1);
+      }
       group.add(intact);
 
       // The authored 2D pass contains hit cracks and broken debris. Keep a

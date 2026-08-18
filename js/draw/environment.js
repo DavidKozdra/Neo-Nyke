@@ -307,6 +307,7 @@
 
   function getRoomArtTheme(room = Neo.currentRoom) {
     if (!room) return Neo.ROOM_ART_THEMES.dungeon;
+    if (room.survivalSurface) return Neo.ROOM_ART_THEMES.secret;
     if (room.type === 'shop') return Neo.ROOM_ART_THEMES.shop;
     if (room.type === 'anvil') return Neo.ROOM_ART_THEMES.anvil;
     if (room.type === 'reliquary') return Neo.ROOM_ART_THEMES.anvil;
@@ -834,13 +835,58 @@
     bg.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
     drawFloorTiles(theme, bg);
     drawFloorDecals(theme, bg);
-    drawStoneWalls(theme, bg);
+    // Forest chunks have no room boundary art. Their contents stream as the
+    // player crosses a chunk seam; dungeon rooms still render full walls.
+    if (!Neo.currentRoom?.survivalSurface) drawStoneWalls(theme, bg);
     drawEnvironmentVignette(theme, bg);
     return canvasEl;
   }
 
   function drawFloor() {
     const theme = getRoomArtTheme();
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
+      // Infinite terrain is drawn only around the current viewport instead of
+      // baking one giant room canvas. Coordinates therefore remain valid after
+      // the player walks beyond every previously generated chunk.
+      const span = 1500;
+      const left = Math.floor((Neo.player.x - span) / Neo.ENV_TILE_SIZE) * Neo.ENV_TILE_SIZE;
+      const top = Math.floor((Neo.player.y - span) / Neo.ENV_TILE_SIZE) * Neo.ENV_TILE_SIZE;
+      Neo.ctx.fillStyle = '#16251a';
+      Neo.ctx.fillRect(left, top, span * 2, span * 2);
+      for (let y = top; y < top + span * 2; y += Neo.ENV_TILE_SIZE) {
+        for (let x = left; x < left + span * 2; x += Neo.ENV_TILE_SIZE) {
+          const biome = Neo.getSurvivalBiomeAt?.(x, y) || 'forest';
+          const noise = Math.sin(x * 0.0127 + y * 0.0213) * 0.5 + 0.5;
+          Neo.ctx.fillStyle = biome === 'water'
+            ? (noise > 0.55 ? '#2875a4' : '#23648e')
+            : biome === 'sand'
+              ? (noise > 0.55 ? '#d7ba70' : '#caa55d')
+              : biome === 'stone'
+                ? (noise > 0.55 ? '#707a76' : '#5e6967')
+                : (noise > 0.62 ? '#315d32' : noise < 0.34 ? '#244a2b' : '#2b542e');
+          Neo.ctx.fillRect(x, y, Neo.ENV_TILE_SIZE, Neo.ENV_TILE_SIZE);
+          if (biome === 'water' && noise > 0.6) {
+            Neo.ctx.fillStyle = 'rgba(183, 235, 255, 0.32)';
+            Neo.ctx.fillRect(x + 5, y + 8, 12, 2);
+          }
+        }
+      }
+      if (Neo.player?.survivalBoat && Neo.getSurvivalBiomeAt?.(Neo.player.x, Neo.player.y) === 'water') {
+        Neo.ctx.save();
+        Neo.ctx.translate(Neo.player.x, Neo.player.y + 8);
+        Neo.ctx.fillStyle = '#70411f';
+        Neo.ctx.beginPath(); Neo.ctx.ellipse(0, 0, 24, 10, 0, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#b8773f'; Neo.ctx.fillRect(-15, -3, 30, 6);
+        Neo.ctx.restore();
+      }
+      const phase = ((Number(Neo.gameElapsedTime || 0) % 300) + 300) % 300 / 300;
+      const light = Neo.clamp(0.5 + 0.5 * Math.sin(phase * Math.PI * 2), 0, 1);
+      Neo.survivalDayNight = { phase, light };
+      const night = 1 - light;
+      Neo.ctx.fillStyle = `rgba(8, 18, 42, ${0.08 + night * 0.52})`;
+      Neo.ctx.fillRect(left, top, span * 2, span * 2);
+      return;
+    }
     const cacheKey = getEnvironmentBackgroundCacheKey();
     if (!Neo.environmentBackgroundCache.canvas || Neo.environmentBackgroundCache.key !== cacheKey) {
       Neo.environmentBackgroundCache = {
@@ -849,6 +895,20 @@
       };
     }
     Neo.ctx.drawImage(Neo.environmentBackgroundCache.canvas, 0, 0);
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
+      // A five-minute cycle: bright green daylight gives way to a deep blue
+      // night while keeping the forest readable enough for combat.
+      const phase = ((Number(Neo.gameElapsedTime || 0) % 300) + 300) % 300 / 300;
+      const light = Neo.clamp(0.5 + 0.5 * Math.sin(phase * Math.PI * 2), 0, 1);
+      Neo.survivalDayNight = { phase, light };
+      const night = 1 - light;
+      Neo.ctx.fillStyle = `rgba(8, 18, 42, ${0.08 + night * 0.52})`;
+      Neo.ctx.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
+      if (night > 0.45) {
+        Neo.ctx.fillStyle = `rgba(91, 132, 198, ${night * 0.11})`;
+        Neo.ctx.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
+      }
+    }
   }
 
   function drawChests() {
@@ -1021,6 +1081,48 @@
     Neo.ctx.fillText(affordable ? '[E] buy' : 'not enough', 0, -21);
   }
 
+  // Authored tree PNG, shared by decorative trees (Neo.decorations) and the
+  // harvestable forest trees (Neo.destructibles) so both read as the same
+  // plant. Callers have already translated to the tree's world position.
+  //
+  // The sprite is a side-on tree whose trunk base sits at the bottom edge,
+  // while a decor/destructible point is the tree's *footprint* centre. Drawing
+  // it centred would bury the trunk; instead the canopy is stood up above the
+  // contact point, with only a small overhang below so it still plants on the
+  // ground. Fruit trees reuse the same art tinted warm, since there is no
+  // separate authored fruit variant.
+  function drawAuthoredTree(radius, options = {}) {
+    const image = Neo.ENVIRONMENT_IMAGES?.tree?.image;
+    if (!image) return false;
+    const ctx = Neo.ctx;
+    const sourceW = Math.max(1, Number(image.naturalWidth || image.width || 24));
+    const sourceH = Math.max(1, Number(image.naturalHeight || image.height || 24));
+    // Trees read best noticeably taller than their collision radius; 2.9x the
+    // radius matches the canopy footprint the procedural fallback drew.
+    const drawW = Math.max(24, radius * 2.9);
+    const drawH = drawW * (sourceH / sourceW);
+
+    ctx.fillStyle = 'rgba(16, 38, 13, 0.32)';
+    ctx.beginPath();
+    ctx.ellipse(0, radius * 0.6, radius * 0.95, radius * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.imageSmoothingEnabled = false;
+    if (options.fruit) {
+      // Warm tint for fruit trees: draw the sprite, then multiply a berry hue
+      // through its own alpha so only the plant is colored.
+      ctx.save();
+      ctx.drawImage(image, -drawW / 2, radius * 0.62 - drawH, drawW, drawH);
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = 'rgba(255, 112, 128, 0.22)';
+      ctx.fillRect(-drawW / 2, radius * 0.62 - drawH, drawW, drawH);
+      ctx.restore();
+    } else {
+      ctx.drawImage(image, -drawW / 2, radius * 0.62 - drawH, drawW, drawH);
+    }
+    return true;
+  }
+
   function drawRoomDecor() {
     const theme = getRoomArtTheme();
     const propSprites = window.NeoNykeEnvironmentTileDefs?.propSprites || {};
@@ -1065,7 +1167,24 @@
         Neo.ctx.fillRect(-1, -8, 2, 5);
       } else if (decor.kind === 'torch') {
         drawCandle(decor);
+      } else if (decor.kind === 'survival_camp') {
+        Neo.ctx.fillStyle = 'rgba(32, 47, 24, 0.55)';
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, decor.r * 1.2, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#81502b';
+        Neo.ctx.fillRect(-decor.r, -4, decor.r * 2, 8);
+        Neo.ctx.fillRect(-4, -decor.r, 8, decor.r * 2);
+        Neo.ctx.fillStyle = '#ffb14a';
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(0, -18); Neo.ctx.lineTo(11, 12); Neo.ctx.lineTo(-11, 12); Neo.ctx.closePath(); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#fff1a5';
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 3, 6, 0, Math.PI * 2); Neo.ctx.fill();
+      } else if (decor.kind === 'survival_dungeon_gate') {
+        Neo.ctx.fillStyle = 'rgba(11, 18, 14, 0.86)';
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, decor.r, Math.PI, 0); Neo.ctx.lineTo(decor.r, decor.r * 0.8); Neo.ctx.lineTo(-decor.r, decor.r * 0.8); Neo.ctx.closePath(); Neo.ctx.fill();
+        Neo.ctx.strokeStyle = '#799177'; Neo.ctx.lineWidth = 5;
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, decor.r, Math.PI, 0); Neo.ctx.lineTo(decor.r, decor.r * 0.8); Neo.ctx.lineTo(-decor.r, decor.r * 0.8); Neo.ctx.closePath(); Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#6ad09a'; Neo.ctx.font = 'bold 12px system-ui'; Neo.ctx.textAlign = 'center'; Neo.ctx.fillText('DUNGEON', 0, 12);
       } else if (decor.kind === 'tree') {
+        if (drawAuthoredTree(decor.r)) { Neo.ctx.restore(); return; }
         if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.tree)) { Neo.ctx.restore(); return; }
         // Shadow
         Neo.ctx.fillStyle = 'rgba(20,30,14,0.35)';
@@ -1096,6 +1215,7 @@
         Neo.ctx.fill();
         Neo.ctx.shadowBlur = 0;
       } else if (decor.kind === 'fruit_tree') {
+        if (drawAuthoredTree(decor.r, { fruit: true })) { Neo.ctx.restore(); return; }
         if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.fruit_tree)) { Neo.ctx.restore(); return; }
         Neo.ctx.fillStyle = 'rgba(18,30,12,0.34)';
         Neo.ctx.beginPath();
@@ -1230,6 +1350,19 @@
         Neo.ctx.imageSmoothingEnabled = false;
         Neo.ctx.drawImage(forgeSheet, frame * 24, 0, 24, 24, -w / 2, -h / 2, w, h);
       }
+    } else if (structure.kind === 'survival_spawner') {
+      const pulse = 0.55 + 0.45 * Math.sin(Number(Neo.gameElapsedTime || 0) * 3 + structure.x);
+      Neo.ctx.fillStyle = '#2b2522';
+      Neo.ctx.fillRect(-22, -22, 44, 44);
+      Neo.ctx.strokeStyle = '#8d6650'; Neo.ctx.lineWidth = 3; Neo.ctx.strokeRect(-22, -22, 44, 44);
+      Neo.ctx.fillStyle = `rgba(255, 92, 67, ${0.32 + pulse * 0.42})`;
+      Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, 12 + pulse * 4, 0, Math.PI * 2); Neo.ctx.fill();
+      Neo.ctx.fillStyle = '#ffe08c'; Neo.ctx.font = 'bold 10px system-ui'; Neo.ctx.textAlign = 'center'; Neo.ctx.fillText('NEST', 0, 35);
+    } else if (structure.kind === 'survival_shop') {
+      Neo.ctx.fillStyle = '#563c24'; Neo.ctx.fillRect(-36, -30, 72, 60);
+      Neo.ctx.strokeStyle = '#ffd778'; Neo.ctx.lineWidth = 3; Neo.ctx.strokeRect(-36, -30, 72, 60);
+      Neo.ctx.fillStyle = '#c99348'; Neo.ctx.fillRect(-40, -36, 80, 12);
+      Neo.ctx.fillStyle = '#fff0b0'; Neo.ctx.font = 'bold 11px system-ui'; Neo.ctx.textAlign = 'center'; Neo.ctx.fillText('SHOP', 0, 5);
     } else {
       drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
       Neo.ctx.strokeStyle = theme.wallEdge;
@@ -1848,6 +1981,7 @@
   Neo.drawFloor = drawFloor;
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
+  Neo.drawAuthoredTree = drawAuthoredTree;
   Neo.drawStructuresOverPlayer = drawStructuresOverPlayer;
   Neo.drawCoverWall = drawCoverWall;
   Neo.drawDestructibleBlockDamage = drawDestructibleBlockDamage;

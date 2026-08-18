@@ -2919,6 +2919,189 @@
     Neo.syncCurrentRoomState();
   }
 
+  function tryBuildSurvivalWall() {
+    if (Neo.gameMode !== 'survival' || !Neo.player || !Neo.currentRoom?.survivalSurface) return false;
+    const cost = 8;
+    const wood = Math.max(0, Number(Neo.player.wood || 0));
+    if (wood < cost) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.65, text: `NEED ${cost} WOOD`, c: '#c99158' });
+      return false;
+    }
+    const targetX = Math.round(Number(Neo.mouse.worldX || Neo.player.x) / 32) * 32;
+    const targetY = Math.round(Number(Neo.mouse.worldY || Neo.player.y) / 32) * 32;
+    const distance = Neo.dist(Neo.player.x, Neo.player.y, targetX, targetY);
+    const width = 96, height = 32;
+    const overlaps = (Neo.destructibles || []).some(prop => !prop.broken && !prop.hidden
+      && Neo.destructibleIntersectsCircle?.(prop, targetX, targetY, 42));
+    if (distance > 170 || overlaps) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.65, text: 'BAD BUILD SPOT', c: '#ff9c9c' });
+      return false;
+    }
+    Neo.player.wood = wood - cost;
+    Neo.destructibles.push({ kind: 'cover_wall', x: targetX, y: targetY, w: width, h: height, r: Math.hypot(width, height) / 2, hp: 8, maxHp: 8, reinforced: false, broken: false, survivalBuilt: true });
+    Neo.currentRoom.destructibles = Neo.destructibles;
+    Neo.invalidateBeamReflectGeometry?.();
+    Neo.spawnParticle?.({ x: targetX, y: targetY - 28, life: 0.7, text: `WALL -${cost} WOOD`, c: '#dcb078' });
+    Neo.playSfx?.('break_furniture');
+    Neo.updateHud?.();
+    return true;
+  }
+
+  // Chunk terrain is coordinate-derived, so an explored world stays infinite
+  // without serialising a giant tile map. The starting neighbourhood is always
+  // forest; beyond it, water, beaches and stony highlands break up the woods.
+  function getSurvivalBiomeAt(x, y) {
+    const chunkW = 900, chunkH = 700;
+    const chunkX = Math.floor(Number(x || 0) / chunkW);
+    const chunkY = Math.floor(Number(y || 0) / chunkH);
+    const startX = Math.floor(Number(Neo.START_X || 0) / chunkW);
+    const startY = Math.floor(Number(Neo.START_Y || 0) / chunkH);
+    if (Math.abs(chunkX - startX) <= 1 && Math.abs(chunkY - startY) <= 1) return 'forest';
+    const seed = String(Neo.baseSeedStr || '').length * 19.73;
+    const random = (Math.sin(chunkX * 12.9898 + chunkY * 78.233 + seed) * 43758.5453 % 1 + 1) % 1;
+    if (random < 0.16) return 'water';
+    if (random < 0.33) return 'sand';
+    if (random < 0.50) return 'stone';
+    return 'forest';
+  }
+
+  function tryCraftSurvivalBoat() {
+    if (Neo.gameMode !== 'survival' || !Neo.player || !Neo.currentRoom?.survivalSurface) return false;
+    if (Neo.player.survivalBoat) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.65, text: 'BOAT READY', c: '#8cdcff' });
+      return false;
+    }
+    const cost = 18;
+    const wood = Math.max(0, Number(Neo.player.wood || 0));
+    if (wood < cost) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.65, text: `NEED ${cost} WOOD`, c: '#c99158' });
+      return false;
+    }
+    Neo.player.wood = wood - cost;
+    Neo.player.survivalBoat = true;
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.9, text: `BOAT CRAFTED -${cost} WOOD`, c: '#8cdcff' });
+    Neo.updateHud?.();
+    return true;
+  }
+
+  function updateSurvivalWorld(dt) {
+    if (Neo.gameMode !== 'survival' || !Neo.currentRoom?.survivalSurface) return;
+    const phase = ((Number(Neo.gameElapsedTime || 0) % 300) + 300) % 300 / 300;
+    const light = Neo.clamp(0.5 + 0.5 * Math.sin(phase * Math.PI * 2), 0, 1);
+    const night = light < 0.42;
+    const room = Neo.currentRoom;
+    const findSurvivalSpawn = (x, y, radius = 16) => {
+      if (!Neo.isBlocked(x, y, radius)) return { x, y };
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const angle = Neo.nextRandom('world') * Math.PI * 2;
+        const distance = 30 + attempt * 18;
+        const nx = x + Math.cos(angle) * distance;
+        const ny = y + Math.sin(angle) * distance;
+        if (!Neo.isBlocked(nx, ny, radius)) return { x: nx, y: ny };
+      }
+      return null;
+    };
+    const chunkW = 900, chunkH = 700;
+    const chunkX = Math.floor(Neo.player.x / chunkW);
+    const chunkY = Math.floor(Neo.player.y / chunkH);
+    room.survivalChunks = room.survivalChunks || {};
+    for (let y = chunkY - 1; y <= chunkY + 1; y += 1) {
+      for (let x = chunkX - 1; x <= chunkX + 1; x += 1) {
+        const key = `${x},${y}`;
+        if (room.survivalChunks[key]) continue;
+        const biome = getSurvivalBiomeAt(x * chunkW + chunkW / 2, y * chunkH + chunkH / 2);
+        room.survivalChunks[key] = { x, y, biome, discoveredAt: Number(Neo.gameElapsedTime || 0) };
+        // Deterministic chunk content: a newly reached coordinate always grows
+        // the same small forest, even though the world has no outer boundary.
+        const seed = Math.abs(Math.sin(x * 9283.1 + y * 5721.7 + String(Neo.baseSeedStr || '').length * 17.3));
+        const random = salt => (Math.sin((seed + salt) * 9127.31) * 43758.5453 % 1 + 1) % 1;
+        const treeCount = biome === 'forest' ? 14 : 0;
+        for (let index = 0; index < treeCount; index += 1) {
+          const tx = x * chunkW + 70 + random(index * 2 + 1) * (chunkW - 140);
+          const ty = y * chunkH + 70 + random(index * 2 + 2) * (chunkH - 140);
+          if (Neo.destructibles.some(prop => !prop.broken && Math.hypot(prop.x - tx, prop.y - ty) < 52)) continue;
+          Neo.destructibles.push({ kind: 'tree', x: tx, y: ty, r: 22 + random(index * 5 + 3) * 10, hp: 3, maxHp: 3, fruit: random(index * 7 + 4) < 0.3, woodAmount: 2, appleHeal: 18, broken: false });
+        }
+        const centerX = x * chunkW + chunkW / 2;
+        const centerY = y * chunkH + chunkH / 2;
+        if (biome !== 'water' && random(90) < 0.22) Neo.structures.push({ kind: 'survival_spawner', x: centerX, y: centerY, w: 48, h: 48, spawnAt: 20 + random(91) * 20 });
+        if (biome !== 'water' && random(92) < 0.18) Neo.structures.push({ kind: 'survival_shop', x: centerX + 90, y: centerY - 70, w: 72, h: 60 });
+        if (biome !== 'water' && random(93) < 0.20) Neo.chests.push({ x: centerX - 76, y: centerY + 68, open: false, locked: false, type: 'normal', survivalWorldChest: true, chunkChest: true });
+      }
+    }
+    room.chestSpawnAt = Number(room.chestSpawnAt || (48 + Neo.nextRandom('world') * 36)) - dt;
+    const unopenedWorldChests = (Neo.chests || []).filter(chest => chest?.survivalWorldChest && !chest.open).length;
+    if (room.chestSpawnAt <= 0 && unopenedWorldChests < 7) {
+      room.chestSpawnAt = 70 + Neo.nextRandom('world') * 70;
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        const angle = Neo.nextRandom('world') * Math.PI * 2;
+        const distance = 180 + Neo.nextRandom('world') * 400;
+        const x = Neo.player.x + Math.cos(angle) * distance;
+        const y = Neo.player.y + Math.sin(angle) * distance;
+        if (Neo.isBlocked(x, y, 30)) continue;
+        Neo.chests.push({ x, y, open: false, locked: false, type: Neo.nextRandom('world') < 0.18 ? 'rare' : 'normal', survivalWorldChest: true });
+        room.chests = Neo.chests;
+        Neo.spawnParticle?.({ x, y: y - 30, life: 1.1, text: 'CHEST FOUND', c: '#ffd36a' });
+        Neo.minimapLegendDirty = true;
+        break;
+      }
+    }
+    // Every 5½ minutes the forest spreads. Each standing tree independently
+    // gets one 25% roll to seed a nearby sapling; the cap prevents unchecked
+    // exponential growth on an endless save.
+    room.treeGrowthAt = Number(room.treeGrowthAt || 330) - dt;
+    if (room.treeGrowthAt <= 0) {
+      room.treeGrowthAt = 330;
+      const trees = (Neo.destructibles || []).filter(prop => prop?.kind === 'tree' && !prop.broken);
+      const capacity = Math.max(0, 800 - trees.length);
+      const sprouts = [];
+      for (const tree of trees) {
+        if (sprouts.length >= capacity || Neo.nextRandom('world') >= 0.25) continue;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const angle = Neo.nextRandom('world') * Math.PI * 2;
+          const distance = 58 + Neo.nextRandom('world') * 72;
+          const x = tree.x + Math.cos(angle) * distance;
+          const y = tree.y + Math.sin(angle) * distance;
+          if (Neo.isBlocked(x, y, 22)) continue;
+          sprouts.push({ kind: 'tree', x, y, r: 21 + Neo.nextRandom('world') * 7, hp: 3, maxHp: 3, fruit: Neo.nextRandom('world') < 0.25, woodAmount: 2, appleHeal: 18, broken: false });
+          break;
+        }
+      }
+      if (sprouts.length) {
+        Neo.destructibles.push(...sprouts);
+        room.destructibles = Neo.destructibles;
+        Neo.invalidateBeamReflectGeometry?.();
+        Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 34, life: 1, text: `FOREST GROWS +${sprouts.length}`, c: '#8fe879' });
+      }
+    }
+    if (!room.passiveSpawned && !night) {
+      room.passiveSpawned = true;
+      for (let index = 0; index < 9; index += 1) {
+        const x = Neo.rand(Neo.ROOM_W - 120, 120, 'world');
+        const y = Neo.rand(Neo.ROOM_H - 120, 120, 'world');
+        const mob = Neo.spawnEnemy('cult_follower', x, y, false, { level: 1 });
+        if (mob) { mob.passive = true; mob.dmg = 0; mob.hp = mob.max = 18; mob.survivalPassive = true; }
+      }
+    }
+    room.nightSpawnAt = Number(room.nightSpawnAt || 0) - dt;
+    if (night && room.nightSpawnAt <= 0 && Neo.enemies.filter(enemy => !enemy.passive && !enemy.dead).length < 18) {
+      room.nightSpawnAt = 12;
+      for (let index = 0; index < 2; index += 1) {
+        const angle = Neo.nextRandom('world') * Math.PI * 2;
+        const distance = 330 + Neo.nextRandom('world') * 170;
+        const spawn = findSurvivalSpawn(Neo.player.x + Math.cos(angle) * distance, Neo.player.y + Math.sin(angle) * distance, 16);
+        if (spawn) Neo.spawnEnemy(index ? 'hunter' : 'charger', spawn.x, spawn.y, false);
+      }
+    }
+    (Neo.structures || []).filter(structure => structure?.kind === 'survival_spawner').forEach(spawner => {
+      spawner.spawnAt = Number(spawner.spawnAt || 0) - dt;
+      if (!night || spawner.spawnAt > 0 || Neo.enemies.filter(enemy => !enemy.passive && !enemy.dead).length >= 18) return;
+      spawner.spawnAt = 18 + Neo.nextRandom('world') * 10;
+      const spawn = findSurvivalSpawn(spawner.x + Neo.rand(42, -42, 'world'), spawner.y + Neo.rand(42, -42, 'world'), 16);
+      if (spawn) Neo.spawnEnemy(Neo.nextRandom('world') < 0.5 ? 'cult_follower' : 'laser', spawn.x, spawn.y, false);
+    });
+  }
+
   function isWallLikeDestructible(prop) {
     return prop?.kind === 'wall' || prop?.kind === 'cover_wall' || prop?.kind === 'secret_wall';
   }
@@ -3104,8 +3287,44 @@
     // random green item. These never appear in shops or normal drops.
     result.drops.forEach(drop => {
       if (drop.type === 'coin') Neo.dropCoins(prop.x, prop.y, drop.amount);
-      else Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: drop.key });
+      else if (drop.type === 'wood') {
+        const amount = Math.max(1, Number(drop.amount || 1));
+        for (let index = 0; index < amount; index += 1) {
+          const angle = Neo.nextRandom('world') * Math.PI * 2;
+          const distance = 8 + Neo.nextRandom('world') * 18;
+          Neo.pickups.push({
+            x: prop.x + Math.cos(angle) * distance,
+            y: prop.y + Math.sin(angle) * distance,
+            type: 'wood',
+            amount: 1,
+          });
+        }
+      } else if (drop.type === 'apple') {
+        Neo.pickups.push({ x: prop.x, y: prop.y, type: 'apple', heal: Number(drop.heal || 18) });
+      } else Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: drop.key });
     });
+    // A harvested Survival tree can flush out a small animal. They are passive,
+    // flee from the player, and are their own meat-drop source rather than a
+    // reskinned hostile.
+    if (Neo.gameMode === 'survival' && prop.kind === 'tree' && Neo.nextRandom('world') < 0.55) {
+      const animalType = Neo.nextRandom('world') < 0.5 ? 'rabbit' : 'squirrel';
+      const animal = Neo.spawnEnemy?.('cult_follower', prop.x, prop.y, false, { level: 1 });
+      if (animal) {
+        const angle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
+        animal.passive = true;
+        animal.survivalAnimal = animalType;
+        animal.dropHealingMeat = true;
+        animal.dmg = 0;
+        animal.hp = animal.max = animalType === 'rabbit' ? 14 : 18;
+        animal.r = animalType === 'rabbit' ? 10 : 9;
+        animal.speed = animalType === 'rabbit' ? 178 : 164;
+        animal.spawnT = 0;
+        animal.vx = Math.cos(angle) * animal.speed;
+        animal.vy = Math.sin(angle) * animal.speed;
+        animal.passiveTurn = 0.25;
+        Neo.spawnParticle?.({ x: prop.x, y: prop.y - 20, life: 0.55, text: animalType.toUpperCase(), c: animalType === 'rabbit' ? '#e7efff' : '#d69a62' });
+      }
+    }
     if (result.blast) {
       blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
     }
@@ -3513,7 +3732,7 @@
       pickupPlayer = nearestPlayer || Neo.player;
       playerX = pickupPlayer.x;
       playerY = pickupPlayer.y;
-      if (pickup.type === 'coin') {
+      if (pickup.type === 'coin' || pickup.type === 'wood') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
         pullPickupTowardPlayer(pickup, magnetRadius, 180, 260);
       } else if (pickup.type === 'potion') {
@@ -3524,7 +3743,7 @@
           const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
           pullPickupTowardPlayer(pickup, magnetRadius, 180, 260);
         }
-      } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
+      } else if (pickup.type === 'apple' || pickup.type === 'fruit' || pickup.type === 'meat') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 124;
         pullPickupTowardPlayer(pickup, magnetRadius, 190, 240);
       } else if (pickup.type === 'item') {
@@ -3647,6 +3866,14 @@
         Neo.playSfx?.('coin');
       }
 
+      if (pickup.type === 'wood') {
+        const amount = Math.max(1, Math.round(Number(pickup.amount || 1)));
+        Neo.player.wood = Math.max(0, Number(Neo.player.wood || 0)) + amount;
+        Neo.spawnParticle?.({ x: pickupPlayer.x, y: pickupPlayer.y - 22, life: 0.55, text: `+${amount} WOOD`, c: '#c99158' });
+        Neo.playSfx?.('item_collect');
+        Neo.updateHud?.();
+      }
+
       if (pickup.type === 'potion') {
         const potion = globalThis.NeoNyke?.simulation?.resolveCampaignPotionPickup?.(pickupPlayer, {
           itemStats: Neo.getItemStats?.() || {},
@@ -3682,6 +3909,31 @@
           minimumRespawnSeconds: 12,
           respawnSpreadSeconds: 10,
         });
+        if (Neo.gameMode === 'survival' && pickupPlayer === Neo.player) {
+          const foodMax = Math.max(1, Number(Neo.player.foodMax || 100));
+          Neo.player.foodMax = foodMax;
+          Neo.player.food = Math.min(foodMax, Math.max(0, Number(Neo.player.food ?? foodMax)) + 24);
+          Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 38, life: 0.65, text: '+24 FOOD', c: '#ffcf72' });
+          Neo.updateHud?.();
+        }
+      }
+
+      if (pickup.type === 'meat') {
+        const heal = Neo.scalePlayerHealing(Math.max(12, Number(pickup.heal || 22)), 10);
+        const actual = healPickupPlayer(heal);
+        if (actual > 0) {
+          spawnHealPopup(pickupPlayer.x + Neo.rand(-8, 8), pickupPlayer.y - 22, actual, { color: '#ff9b78', size: 14 });
+        }
+        if (Neo.gameMode === 'survival' && pickupPlayer === Neo.player) {
+          const foodMax = Math.max(1, Number(Neo.player.foodMax || 100));
+          const food = Math.max(0, Number(Neo.player.food ?? foodMax));
+          const foodGain = Math.max(1, Number(pickup.food || 20));
+          Neo.player.foodMax = foodMax;
+          Neo.player.food = Math.min(foodMax, food + foodGain);
+          Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 38, life: 0.65, text: `+${foodGain} FOOD`, c: '#ffcf72' });
+          Neo.updateHud?.();
+        }
+        Neo.playSfx?.('item_collect');
       }
 
       if (pickup.type === 'item') {
@@ -4255,6 +4507,9 @@
       // lesson. Only real encounter locks (ladder/boss/active challenge) close
       // every door, and those are explained when they happen.
       if (door) {
+        if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
+          if (crossSurvivalChunk(door)) return;
+        }
         Neo.transitionLeaderSlotId = leaderSlotId;
         startTransition(door);
       }
@@ -4280,6 +4535,49 @@
     Neo.fading = 1;
     Neo.nextDoor = direction;
     Neo.playSfx?.('room_transition');
+  }
+
+  // Swap the active simulation chunk without a fade, spawn relocation, sound,
+  // or room-entry ceremony. Coordinates retain their edge-relative position,
+  // so walking across a forest boundary behaves like crossing a Minecraft-like
+  // chunk seam rather than using a doorway.
+  function crossSurvivalChunk(direction) {
+    const nextRoom = Neo.getConnectedRoom?.(Neo.currentRoom, direction);
+    if (!nextRoom?.survivalSurface) return false;
+    Neo.syncCurrentRoomState?.();
+    Neo.currentRoom = nextRoom;
+    nextRoom.explored = true;
+    nextRoom.visited = true;
+    Neo.enemies = nextRoom.enemies || [];
+    Neo.deadBodies = nextRoom.deadBodies || [];
+    Neo.projectiles = nextRoom.projectiles || [];
+    Neo.chests = nextRoom.chests || [];
+    Neo.pickups = Neo.sanitizePickupList(nextRoom.pickups);
+    nextRoom.pickups = Neo.pickups;
+    Neo.destructibles = nextRoom.destructibles || [];
+    Neo.hazards = nextRoom.hazards || [];
+    Neo.shopOffers = nextRoom.shopOffers || [];
+    Neo.structures = nextRoom.structures || [];
+    Neo.decorations = nextRoom.decorations || [];
+    Neo.baseRoomWalls = Neo.baseRoomWalls || (Neo.walls || []).slice();
+    Neo.walls = [];
+    const inset = 20;
+    getLocalCoopSlots({ livingOnly: false }).forEach(slot => {
+      const actor = slot.getEntity();
+      if (!actor) return;
+      if (direction === 'n') actor.y += Neo.ROOM_H - inset;
+      if (direction === 's') actor.y -= Neo.ROOM_H - inset;
+      if (direction === 'w') actor.x += Neo.ROOM_W - inset;
+      if (direction === 'e') actor.x -= Neo.ROOM_W - inset;
+      actor.x = Neo.clamp(actor.x, inset, Neo.ROOM_W - inset);
+      actor.y = Neo.clamp(actor.y, inset, Neo.ROOM_H - inset);
+    });
+    Neo.environmentBackgroundCache = { key: '', canvas: null };
+    Neo.minimapLegendDirty = true;
+    Neo.updateObjective?.();
+    Neo.updateHud?.();
+    syncCamerasAfterTransition();
+    return true;
   }
 
   function snapCameraToEntity(cam, entity, vpW, vpH) {
@@ -4455,6 +4753,10 @@
   Neo.getBombHazardDamage = getBombHazardDamage;
   Neo.updateProjectiles = updateProjectiles;
   Neo.updateWorldProps = updateWorldProps;
+  Neo.tryBuildSurvivalWall = tryBuildSurvivalWall;
+  Neo.tryCraftSurvivalBoat = tryCraftSurvivalBoat;
+  Neo.getSurvivalBiomeAt = getSurvivalBiomeAt;
+  Neo.updateSurvivalWorld = updateSurvivalWorld;
   Neo.damageDestructible = damageDestructible;
   Neo.spawnDestructibleHitFx = spawnDestructibleHitFx;
   Neo.spawnDestructibleBreakFx = spawnDestructibleBreakFx;

@@ -22,6 +22,14 @@
     if (Neo.isFirstRunTutorialEngaged()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
     const entries = [];
+    if (Neo.gameMode === 'survival') {
+      const wood = Math.max(0, Number(Neo.player?.wood || 0));
+      entries.push({ text: `Harvest the forest — wood: ${wood}`, state: 'todo' });
+      entries.push({ text: 'Press B near the cursor to build a wall (8 wood)', state: wood >= 8 ? 'warn' : 'todo' });
+      entries.push({ text: Neo.player?.survivalBoat ? 'Boat crafted — sail across blue water' : 'Press V to craft a boat (18 wood)', state: Neo.player?.survivalBoat ? 'done' : wood >= 18 ? 'warn' : 'todo' });
+      entries.push({ text: Neo.currentRoom?.survivalDungeon ? 'Clear the dungeon and use its ladder' : 'Find and enter the dungeon', state: Neo.currentRoom?.survivalDungeon ? 'warn' : 'todo' });
+      return entries;
+    }
     if (Neo.gameMode === 'practice' && Neo.practiceVariant === 'beams') {
       const remaining = Neo.enemies.filter(enemy => enemy?.beamPracticeUser && !enemy.dead && enemy.hp > 0).length;
       entries.push({ text: lineObjective, state: remaining > 0 ? 'warn' : 'done' });
@@ -533,6 +541,11 @@
             </div>
             <span data-player-field="hpText"></span>
           </div>
+          <div class="player-stat-row player-food-row" data-player-field="foodRow">
+            <span>FOOD</span>
+            <div class="bar player-food-bar"><i class="player-stat-fill player-stat-fill--food" data-player-field="foodFill"></i></div>
+            <span data-player-field="foodText"></span>
+          </div>
           <div class="player-stat-row player-shield-row" data-player-field="shieldRow">
             <span>SHLD</span>
             <div class="bar player-shield-bar"><i class="player-stat-fill player-stat-fill--shield" data-player-field="shieldFill"></i></div>
@@ -560,6 +573,9 @@
           label: card.querySelector('[data-player-field="label"]'),
           name: card.querySelector('[data-player-field="name"]'),
           hpText: card.querySelector('[data-player-field="hpText"]'),
+          foodRow: card.querySelector('[data-player-field="foodRow"]'),
+          foodFill: card.querySelector('[data-player-field="foodFill"]'),
+          foodText: card.querySelector('[data-player-field="foodText"]'),
           shieldRow: card.querySelector('[data-player-field="shieldRow"]'),
           shieldText: card.querySelector('[data-player-field="shieldText"]'),
           statusRow: card.querySelector('[data-player-field="statusRow"]'),
@@ -625,6 +641,20 @@
         }
         const hpColor = getHpFillColor(hpPercent, slot.color);
         if (last.hpColor !== hpColor) { last.hpColor = hpColor; refs.hpFill.style.background = hpColor; }
+      }
+      const foodVisible = Neo.gameMode === 'survival' && slot.id === 1 && !dead;
+      if (refs.foodRow && last.foodVisible !== foodVisible) {
+        last.foodVisible = foodVisible;
+        refs.foodRow.style.display = foodVisible ? 'flex' : 'none';
+      }
+      if (foodVisible) {
+        const foodMax = Math.max(1, Number(entity.foodMax || 100));
+        const food = Neo.clamp(Number(entity.food ?? foodMax), 0, foodMax);
+        entity.food = food; entity.foodMax = foodMax;
+        const foodWidth = `${(food / foodMax * 100).toFixed(1)}%`;
+        const foodText = `${Math.ceil(food)}/${foodMax}`;
+        if (last.foodWidth !== foodWidth) { last.foodWidth = foodWidth; refs.foodFill.style.width = foodWidth; }
+        if (last.foodText !== foodText) { last.foodText = foodText; refs.foodText.textContent = foodText; }
       }
       const shieldValue = dead ? 0 : Math.max(0, Number(entity.overhealBarrier || 0));
       const shieldMax = Math.max(shieldValue, Number(entity.overhealBarrierMax) || 0);

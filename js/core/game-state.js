@@ -1511,7 +1511,7 @@ export function resumeGame() {
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'story' || mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'rival_rumble' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
+    if (mode === 'story' || mode === 'endless' || mode === 'practice' || mode === 'survival' || mode === 'boss_rush' || mode === 'rival_rumble' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
     return 'normal';
   }
 
@@ -1521,6 +1521,7 @@ export function resumeGame() {
     if (mode === 'pvp') return 'PVP';
     if (mode === 'endless') return 'Endless';
     if (mode === 'practice') return 'Practice';
+    if (mode === 'survival') return 'Survival';
     if (mode === 'boss_rush') return 'Boss Rush';
     if (mode === 'rival_rumble') return 'Rival Rumble';
     if (mode === 'treasure_hunt') return 'Treasure Hunt';

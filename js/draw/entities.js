@@ -1256,6 +1256,33 @@
     }
   }
 
+  function drawSurvivalAnimal(enemy) {
+    const ctx = Neo.ctx;
+    const squirrel = enemy.survivalAnimal === 'squirrel';
+    const direction = Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 1));
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    ctx.rotate(direction);
+    ctx.fillStyle = 'rgba(16, 44, 24, 0.25)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    if (squirrel) {
+      ctx.fillStyle = '#a9673d';
+      ctx.beginPath(); ctx.arc(-8, -5, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(3, 0, 11, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#dca16c'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(-10, -14, 10, Math.PI * 0.1, Math.PI * 1.2); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#e6e3df';
+      ctx.beginPath(); ctx.ellipse(2, 1, 12, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-8, -4, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f2adad';
+      ctx.fillRect(-12, -18, 3, 10); ctx.fillRect(-6, -18, 3, 10);
+    }
+    ctx.fillStyle = '#1b2024';
+    ctx.beginPath(); ctx.arc(-10, -6, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   function drawEnemies(viewportBounds = null) {
     const _now = Date.now();
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
@@ -1275,6 +1302,7 @@
           || enemy.y > viewportBounds.bottom + margin) return;
       }
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
+      if (enemy.survivalAnimal) { drawSurvivalAnimal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
       // Count active statuses first (no array allocation), then draw a ring per

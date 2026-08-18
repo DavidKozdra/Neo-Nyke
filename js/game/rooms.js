@@ -105,6 +105,15 @@
       Neo.ringBurst?.(Neo.START_X, Neo.START_Y, 40, '#7fe0ff', 0.5);
       Neo.playSfx?.('powerup');
     }
+    // Survival uses a single scrolling overworld rather than the campaign's
+    // fixed 900×700 room. Other modes restore the canonical combat dimensions.
+    Neo.campaignRoomDimensions = Neo.campaignRoomDimensions || { width: Neo.ROOM_W, height: Neo.ROOM_H, startX: Neo.START_X, startY: Neo.START_Y };
+    if (Neo.gameMode === 'survival') {
+      Neo.ROOM_W = 4500; Neo.ROOM_H = 3500; Neo.START_X = Neo.ROOM_W / 2; Neo.START_Y = Neo.ROOM_H / 2;
+    } else {
+      Neo.ROOM_W = Neo.campaignRoomDimensions.width; Neo.ROOM_H = Neo.campaignRoomDimensions.height;
+      Neo.START_X = Neo.campaignRoomDimensions.startX; Neo.START_Y = Neo.campaignRoomDimensions.startY;
+    }
     Neo.syncSeedState();
     Neo.resetRngStreams();
     Neo.rooms = [];
@@ -425,6 +434,10 @@
     room.structures = [];
     room.decorations = [];
     room.gardenFruitNodes = [];
+    if (room.survivalSurface) {
+      decorateSurvivalForest(room);
+      return;
+    }
     if (room.type === 'start') return;
     const specialServiceRoom = !!Neo.SPECIAL_ROOM_TYPES?.has?.(room.type);
 
@@ -512,7 +525,43 @@
       Neo.prepareSpecialRoom?.(room);
     }
 
+    if (room.survivalDungeon) {
+      room.decorations.push({ kind: 'survival_dungeon_gate', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, r: 42 });
+    }
     decorateGardenRoomData(room);
+  }
+
+  function decorateSurvivalForest(room) {
+    room.cleared = true;
+    room.layoutArchetype = 'open';
+    const random = Neo.createRoomRandom(room, 'survival:forest');
+    const areaScale = (Neo.ROOM_W * Neo.ROOM_H) / (900 * 700);
+    const treeCount = Math.round((13 + Math.floor(random() * 8)) * areaScale);
+    const centerClearance = room.type === 'start' ? 136 : 86;
+    for (let index = 0; index < treeCount; index += 1) {
+      let x = Neo.WALL + 62 + random() * (Neo.ROOM_W - (Neo.WALL + 62) * 2);
+      let y = Neo.WALL + 62 + random() * (Neo.ROOM_H - (Neo.WALL + 62) * 2);
+      // Keep travel lanes and the spawn clearing readable across chunks.
+      if (Math.abs(x - Neo.ROOM_W / 2) < Neo.DOOR / 2 + 28) y = y < Neo.ROOM_H / 2 ? Neo.WALL + 70 : Neo.ROOM_H - Neo.WALL - 70;
+      if (Math.abs(y - Neo.ROOM_H / 2) < Neo.DOOR / 2 + 28) x = x < Neo.ROOM_W / 2 ? Neo.WALL + 70 : Neo.ROOM_W - Neo.WALL - 70;
+      if (Math.hypot(x - Neo.ROOM_W / 2, y - Neo.ROOM_H / 2) < centerClearance) continue;
+      const fruit = random() < 0.35;
+      const radius = 24 + random() * 10;
+      room.destructibles.push({ kind: 'tree', x, y, r: radius, hp: 3, maxHp: 3, fruit, woodAmount: fruit ? 3 : 2, appleHeal: 18, broken: false });
+    }
+    for (let index = 0; index < Math.round(16 * areaScale); index += 1) {
+      room.decorations.push({ kind: 'moss_patch', x: 46 + random() * (Neo.ROOM_W - 92), y: 46 + random() * (Neo.ROOM_H - 92), r: 12 + random() * 26 });
+    }
+    if (room.type === 'start') {
+      room.decorations.push({ kind: 'survival_camp', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, r: 34 });
+      room.structures.push({ kind: 'survival_shop', x: Neo.ROOM_W / 2 + 130, y: Neo.ROOM_H / 2 - 40, w: 72, h: 60 });
+      room.chests.push({ x: Neo.ROOM_W / 2 - 120, y: Neo.ROOM_H / 2 + 48, open: false, locked: false, type: 'normal', survivalWorldChest: true, starterChest: true });
+    }
+    for (let index = 0; index < 5; index += 1) {
+      const angle = (index / 5) * Math.PI * 2 + random() * 0.5;
+      const distance = Math.min(Neo.ROOM_W, Neo.ROOM_H) * (0.24 + random() * 0.16);
+      room.structures.push({ kind: 'survival_spawner', x: Neo.ROOM_W / 2 + Math.cos(angle) * distance, y: Neo.ROOM_H / 2 + Math.sin(angle) * distance, w: 48, h: 48, spawnAt: 20 + random() * 20 });
+    }
   }
 
   function decorateRoomStructures(room) {
@@ -1430,6 +1479,20 @@
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
+    // Surface chunks are one continuous world.  They intentionally have no
+    // room-wall collision; dungeon interiors restore the normal wall set.
+    const buildRoomWalls = () => {
+      const hw = (Neo.ROOM_W - Neo.DOOR) / 2;
+      const hh = (Neo.ROOM_H - Neo.DOOR) / 2;
+      return [
+        { x: 0, y: 0, w: hw, h: Neo.WALL }, { x: Neo.ROOM_W - hw, y: 0, w: hw, h: Neo.WALL },
+        { x: 0, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL }, { x: Neo.ROOM_W - hw, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL },
+        { x: 0, y: 0, w: Neo.WALL, h: hh }, { x: 0, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
+        { x: Neo.ROOM_W - Neo.WALL, y: 0, w: Neo.WALL, h: hh }, { x: Neo.ROOM_W - Neo.WALL, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
+      ];
+    };
+    Neo.baseRoomWalls = buildRoomWalls();
+    Neo.walls = room.survivalSurface ? [] : Neo.baseRoomWalls.slice();
     Neo.prepareSpecialRoom?.(room);
     normalizeChallengeLifecycleState(room);
     Neo.minimapLegendDirty = true;

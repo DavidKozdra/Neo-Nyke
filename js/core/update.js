@@ -269,6 +269,29 @@ export function loop(timestamp) {
   Neo.trackCameras = trackCameras;
 
   function updateEnemyByType(enemy, dt) {
+    if (enemy?.passive) {
+      enemy.passiveTurn = Math.max(0, Number(enemy.passiveTurn || 0) - dt);
+      const player = Neo.player;
+      const dx = enemy.x - Number(player?.x || enemy.x);
+      const dy = enemy.y - Number(player?.y || enemy.y);
+      const distance = Math.hypot(dx, dy);
+      if (enemy.survivalAnimal && distance > 0.001 && distance < 210) {
+        const fleeSpeed = Number(enemy.speed || 160) + (1 - distance / 210) * 95;
+        enemy.vx = (dx / distance) * fleeSpeed;
+        enemy.vy = (dy / distance) * fleeSpeed;
+        enemy.passiveTurn = 0.18;
+      } else if (enemy.passiveTurn <= 0) {
+        const angle = Neo.nextRandom('world') * Math.PI * 2;
+        const speed = enemy.survivalAnimal ? Number(enemy.speed || 160) * 0.42 : 34;
+        enemy.vx = Math.cos(angle) * speed; enemy.vy = Math.sin(angle) * speed;
+        enemy.passiveTurn = 1.5 + Neo.nextRandom('world') * 3;
+      }
+      const nextX = enemy.x + enemy.vx * dt;
+      const nextY = enemy.y + enemy.vy * dt;
+      if (!Neo.isBlocked(nextX, enemy.y, enemy.r)) enemy.x = nextX;
+      if (!Neo.isBlocked(enemy.x, nextY, enemy.r)) enemy.y = nextY;
+      return;
+    }
     simulationApi.invokeCampaignEnemyAI(enemy, dt, Neo);
   }
 
@@ -489,7 +512,19 @@ export function loop(timestamp) {
       }
     }
 
+    const beforeMoveX = Neo.player.x;
+    const beforeMoveY = Neo.player.y;
     Neo.moveCircle(Neo.player, dt);
+    // Water is impassable until a boat is crafted. This stays here rather than
+    // in generic collision so enemies and projectiles retain their normal rules.
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface
+      && Neo.getSurvivalBiomeAt?.(Neo.player.x, Neo.player.y) === 'water'
+      && !Neo.player.survivalBoat) {
+      Neo.player.x = beforeMoveX;
+      Neo.player.y = beforeMoveY;
+      Neo.player.vx = 0;
+      Neo.player.vy = 0;
+    }
     Neo.updateFirstRunTutorialProgress(dt);
 
     if (Neo.player.cowardsWayTime > 0) {
@@ -527,6 +562,12 @@ export function loop(timestamp) {
     // One canonical pointer-to-world conversion feeds every local combat
     // consumer and the network command adapter.
     Neo.updatePointerAimWorld();
+    const buildHeld = Neo.gameMode === 'survival' && !!Neo.keys.b;
+    if (buildHeld && !Neo._survivalBuildHeld && !overlayOpen && !playerStunned) Neo.tryBuildSurvivalWall?.();
+    Neo._survivalBuildHeld = buildHeld;
+    const boatHeld = Neo.gameMode === 'survival' && !!Neo.keys.v;
+    if (boatHeld && !Neo._survivalBoatHeld && !overlayOpen && !playerStunned) Neo.tryCraftSurvivalBoat?.();
+    Neo._survivalBoatHeld = boatHeld;
     Neo.updateWeaponSystems(dt);
     Neo.updateRivals(dt);
     Neo.updateMonsterDoorRoaming(dt);
@@ -754,6 +795,7 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);
+    Neo.updateSurvivalWorld?.(dt);
     Neo.perfEnd('update.world', sectionPerfStart);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();

@@ -16,6 +16,7 @@ const ENVIRONMENT_IMAGE_PATHS = {
   pillar_3: 'assets/sprites/env/pillar_3.png',
   table_0: 'assets/sprites/env/table_0.png',
   table_1: 'assets/sprites/env/table_1.png',
+  tree: 'assets/sprites/env/tree.png',
 };
 
 export async function preloadEnvironmentImages() {

@@ -129,6 +129,28 @@
     const exitRoom = findFarthestRoom(startRoom, roomsByKey);
     const maxFloor = Math.max(1, Math.trunc(Number(options.maxFloor) || 10));
     const gameMode = String(options.gameMode || 'normal');
+    // Survival begins outdoors.  The surface is deliberately a small connected
+    // chunk grid instead of a dungeon random walk: it gives players a place to
+    // roam, harvest, and return from the dungeon without exposing the normal
+    // floor's room roles on the map.
+    if (gameMode === 'survival') {
+      // A Survival surface is one large coordinate space. `survivalSurface`
+      // identifies it for the renderer and movement rules; it is not a grid of
+      // rooms pretending to be an overworld.
+      const startRoom = {
+        id: 'survival-forest', gx: 4, gy: 4, type: 'start', survivalSurface: true,
+        layoutArchetype: 'open', layoutChambers: [], doors: { n: false, s: false, e: false, w: false },
+        secretPassages: {}, secret: false, explored: true, visited: true, cleared: true,
+        bossStarted: false, challengeStarted: false, challengeLifecycleState: 'ready',
+        challengeRewardSpawned: false, challengeFailed: false,
+      };
+      return {
+        generationVersion, contentVersion, matchSeed, floorSeed, floorNumber, runLoopIndex,
+        loopMilestone: getLoopMilestone(runLoopIndex), gridSize: 1,
+        startRoomId: startRoom.id, exitRoomId: startRoom.id, rooms: [startRoom], hideExitOnMinimap: true,
+        survivalWorld: true,
+      };
+    }
     if (gameMode === 'treasure_hunt') exitRoom.type = 'boss';
     else if (floorNumber === maxFloor) exitRoom.type = 'god';
     else if (floorNumber > maxFloor) exitRoom.type = floorNumber % 3 === 0 ? 'boss' : 'ladder';

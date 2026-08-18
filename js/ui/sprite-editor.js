@@ -24,6 +24,7 @@
     { src: 'assets/sprites/env/pillar.png' },
     { src: 'assets/sprites/env/table_0.png' },
     { src: 'assets/sprites/env/table_1.png' },
+    { src: 'assets/sprites/env/tree.png' },
   ];
   const UNUSED_ASSET_FILES = [];
 

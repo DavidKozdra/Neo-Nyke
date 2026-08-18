@@ -36,6 +36,13 @@
         ? { type: 'item', key: options.rollItem?.(potRandom) || '', source: 'pot' }
         : { type: 'coin', amount: 6 + Math.max(1, Number(options.floorNumber || 1)), source: 'pot' });
     }
+    if (prop.kind === 'tree') {
+      // Harvesting is deterministic and always useful: wood is a survival
+      // resource while fruit trees additionally drop a small heal pickup.
+      const wood = Math.max(1, Math.round(Number(prop.woodAmount || 2)));
+      drops.push({ type: 'wood', amount: wood, source: 'tree' });
+      if (prop.fruit) drops.push({ type: 'apple', heal: Math.max(1, Number(prop.appleHeal || 18)), source: 'tree' });
+    }
     const revealed = [];
     if (prop.kind === 'wall') {
       (options.destructibles || []).forEach(other => {

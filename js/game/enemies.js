@@ -5260,6 +5260,9 @@
   // room transition only fires once they've actually stepped into the tunnel,
   // rather than the instant they brush the inner wall. Returns clamp bounds.
   function getRoomMoveBounds(entity) {
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
+      return { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity };
+    }
     let minX = Neo.WALL + entity.r;
     let maxX = Neo.ROOM_W - Neo.WALL - entity.r;
     let minY = Neo.WALL + entity.r;

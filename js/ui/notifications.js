@@ -667,6 +667,19 @@ const INVENTORY_UI_ICON_DEFS = {
     ],
     accentPixels: [[3,3],[4,4],[4,3],[3,4]],
   },
+  'mode-survival': { // ward maze with looping return path
+    color: '#7ff4c4',
+    accent: '#dcfff4',
+    pixels: [
+      [0,1],[1,1],[2,1],[5,1],[6,1],[7,1],
+      [1,2],[3,2],[4,2],[6,2],
+      [1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],
+      [1,4],[3,4],[4,4],[6,4],
+      [1,5],[2,5],[5,5],[6,5],
+      [0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6],
+    ],
+    accentPixels: [[3,3],[4,3],[1,5],[6,4]],
+  },
   'mode-boss_rush': { // horned skull with sunken eyes and a jaw
     color: '#ff6f7f',
     accent: '#ffe0e6',

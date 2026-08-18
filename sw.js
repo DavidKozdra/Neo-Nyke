@@ -76,6 +76,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/env/pillar.png",
     "/assets/sprites/env/table_0.png",
     "/assets/sprites/env/table_1.png",
+    "/assets/sprites/env/tree.png",
     "/assets/sprites/environment.js",
     "/assets/sprites/icons.js",
     "/assets/sprites/ui/mobile-menu.png",
@@ -280,14 +281,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 267,
-    "bytes": 52559688,
-    "criticalEntries": 209,
-    "criticalBytes": 12392102,
+    "entries": 268,
+    "bytes": 52608066,
+    "criticalEntries": 210,
+    "criticalBytes": 12440480,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "774662b3c387ce32"
+  "version": "2be58f78b170f914"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

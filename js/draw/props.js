@@ -944,6 +944,27 @@
         } else {
           Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
         }
+      } else if (prop.kind === 'tree') {
+        const radius = Math.max(18, Number(prop.r || 26));
+        if (Neo.drawAuthoredTree?.(radius, { fruit: prop.fruit })) {
+          Neo.ctx.restore();
+          return;
+        }
+        Neo.ctx.fillStyle = 'rgba(16, 38, 13, 0.32)';
+        Neo.ctx.beginPath(); Neo.ctx.ellipse(0, radius * 0.62, radius, radius * 0.33, 0, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#64401f';
+        Neo.ctx.fillRect(-5, -radius * 0.2, 10, radius * 0.86);
+        Neo.ctx.fillStyle = '#2f772e';
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, -radius * 0.42, radius * 0.85, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#57ad3f';
+        Neo.ctx.beginPath(); Neo.ctx.arc(-radius * 0.24, -radius * 0.66, radius * 0.55, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.beginPath(); Neo.ctx.arc(radius * 0.25, -radius * 0.7, radius * 0.5, 0, Math.PI * 2); Neo.ctx.fill();
+        if (prop.fruit) {
+          Neo.ctx.fillStyle = '#ff6f74';
+          [-0.35, 0.05, 0.38].forEach(offset => Neo.ctx.fillRect(offset * radius - 3, -radius * 0.45 + Math.abs(offset) * 11, 6, 6));
+        }
+        Neo.ctx.strokeStyle = 'rgba(34, 76, 28, 0.9)'; Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, -radius * 0.42, radius * 0.85, 0, Math.PI * 2); Neo.ctx.stroke();
       } else if (prop.kind === 'wall') {
         Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
         Neo.drawDestructibleBlockDamage?.(prop, 52, 52);
@@ -1087,6 +1108,16 @@
           Neo.ctx.arc(0, 0, 7, 0, Math.PI * 2);
           Neo.ctx.fill();
         }
+      } else if (pickup.type === 'wood') {
+        Neo.ctx.shadowColor = '#c99158';
+        Neo.ctx.shadowBlur = 10;
+        Neo.ctx.fillStyle = '#80502b';
+        Neo.ctx.fillRect(-10, -5, 20, 10);
+        Neo.ctx.fillStyle = '#c99158';
+        Neo.ctx.fillRect(-7, -2, 14, 4);
+        Neo.ctx.fillStyle = '#4d2d18';
+        Neo.ctx.fillRect(-8, -5, 3, 10);
+        Neo.ctx.fillRect(5, -5, 3, 10);
       } else if (pickup.type === 'potion') {
         const potionDef = window.NeoNykeIconDefs?.pickups?.potion;
         Neo.ctx.shadowColor = '#35ff6f';
@@ -1127,6 +1158,21 @@
         Neo.ctx.fillRect(-1, -12, 2, 5);
         Neo.ctx.fillStyle = '#ffd8d8';
         Neo.ctx.fillRect(2, -11, 2, 2);
+      } else if (pickup.type === 'meat') {
+        Neo.ctx.shadowColor = '#ff8c72';
+        Neo.ctx.shadowBlur = 12;
+        Neo.ctx.fillStyle = '#b94d3d';
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(1, 0, 10, 7, -0.35, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#ffe2c4';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-9, 4, 3.5, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#f37d63';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(4, -2, 2.5, 0, Math.PI * 2);
+        Neo.ctx.fill();
       } else if (pickup.type === 'item') {
         const item = Neo.itemRegistry.get(pickup.key) || pickup.itemPresentation;
         const color = item?.color || '#fff';

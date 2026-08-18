@@ -1038,9 +1038,34 @@
     return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
   }
 
+  function spendSurvivalFood(amount) {
+    if (Neo.gameMode !== 'survival') return true;
+    const player = Neo.player;
+    if (!player) return false;
+    const maximum = Math.max(1, Number(player.foodMax || 100));
+    const cost = Math.max(0, Number(amount || 0));
+    player.foodMax = maximum;
+    player.food = Neo.clamp(Number(player.food ?? maximum), 0, maximum);
+    if (player.food < cost) {
+      Neo.spawnParticle?.({ x: player.x, y: player.y - 24, life: 0.7, text: 'NEED FOOD', c: '#ffcf72' });
+      return false;
+    }
+    player.food -= cost;
+    Neo.updateHud?.();
+    return true;
+  }
+
+  function hasSurvivalFood(amount) {
+    if (Neo.gameMode !== 'survival') return true;
+    const player = Neo.player;
+    const maximum = Math.max(1, Number(player?.foodMax || 100));
+    return Math.max(0, Number(player?.food ?? maximum)) >= Math.max(0, Number(amount || 0));
+  }
+
   function tryLaser() {
     cancelCowardsWayOnAttack();
     if (Neo.laserActive) return;
+    if (!hasSurvivalFood(12)) { spendSurvivalFood(12); return; }
     const attackSpeed = Neo.getAttackSpeedValue();
     const move = getEquippedMove('laser');
     const rechargeTime = Neo.getLaserCooldownDuration(move, attackSpeed);
@@ -1050,6 +1075,7 @@
     if (move === 'love_bomb_laser') {
       if (Neo.loveBombCharging) return; // already winding up
       if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      spendSurvivalFood(12);
       Neo.tutorialController?.signal?.('attack', { action: 'laser' });
       Neo.loveBombCharging = true;
       Neo.loveBombChargeTime = 0;
@@ -1062,6 +1088,7 @@
     if (move === 'ghost_ball') {
       if (Neo.ghostBallCharging) return; // already winding up
       if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      spendSurvivalFood(12);
       Neo.tutorialController?.signal?.('attack', { action: 'laser' });
       Neo.ghostBallCharging = true;
       Neo.ghostBallChargeTime = 0;
@@ -1073,6 +1100,7 @@
     // trigger the sound once at cast time, not every damage tick.
     const spendLaserCharge = (opts) => {
       if (!Neo.spendSkillCharge('laser', rechargeTime, opts)) return false;
+      spendSurvivalFood(12);
       startPlayerSpriteAction('beam');
       Neo.tutorialController?.signal?.('attack', { action: 'laser' });
       // Lightning Columns plays its own electric one-shot at the call site.
@@ -1844,6 +1872,7 @@
 
   function trySmash() {
     cancelCowardsWayOnAttack();
+    if (!hasSurvivalFood(18)) { spendSurvivalFood(18); return; }
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     // Healing Zone is hold-to-charge: attack speed controls how quickly it reaches
@@ -1851,6 +1880,7 @@
     if (getEquippedMove('smash') === 'healing_zone') {
       if (Neo.healingZoneCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      spendSurvivalFood(18);
       startPlayerSpriteAction('smash');
       Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.healingZoneCharging = true;
@@ -1866,6 +1896,7 @@
     if (smashMoveKey === 'death_ball' || smashMoveKey === 'turtle_powerup') {
       if (Neo.deathBallCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      spendSurvivalFood(18);
       startPlayerSpriteAction('smash');
       Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.deathBallCharging = true;
@@ -1875,6 +1906,7 @@
       return;
     }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
+    spendSurvivalFood(18);
     const characterKey = Neo.player?.character || Neo.chosenCharacter;
     // Sarge's authored hammer-smash sequence should hit with a snappier cadence:
     // six frames over 0.3s instead of the standard six over 0.6s. This changes
@@ -2941,6 +2973,21 @@
 
   function getWarpLandingPoint(targetX = Neo.mouse.worldX, targetY = Neo.mouse.worldY) {
     if (!Neo.player) return null;
+    if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
+      // Survival has no room edges: preserve the cursor direction even after
+      // the player has travelled beyond the original campaign dimensions.
+      const radius = Neo.player.r;
+      if (!Neo.isBlocked(targetX, targetY, radius)) return { x: targetX, y: targetY, targetX, targetY, adjustedFromCursor: false };
+      for (let distance = 18; distance <= 210; distance += 18) {
+        for (let step = 0; step < 12; step += 1) {
+          const angle = step / 12 * Math.PI * 2;
+          const x = targetX + Math.cos(angle) * distance;
+          const y = targetY + Math.sin(angle) * distance;
+          if (!Neo.isBlocked(x, y, radius)) return { x, y, targetX, targetY, adjustedFromCursor: true };
+        }
+      }
+      return null;
+    }
     const point = globalThis.NeoNyke?.simulation?.resolveCampaignBlinkDestination?.({
       originX: Neo.player.x,
       originY: Neo.player.y,
@@ -5582,7 +5629,17 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     }
 
     const enemyLootRandom = Neo.createRandomFromSeed(enemy.lootSeed || `${Neo.getFloorSeed()}|enemy:fallback:${enemy.type}:${Math.round(enemy.x)},${Math.round(enemy.y)}|loot`);
-    if (isTutorialDummy) {
+    if (enemy.survivalAnimal) {
+      const squirrel = enemy.survivalAnimal === 'squirrel';
+      Neo.pickups.push({
+        x: enemy.x,
+        y: enemy.y,
+        type: 'meat',
+        heal: squirrel ? 24 : 20,
+        food: squirrel ? 22 : 18,
+      });
+      Neo.spawnParticle?.({ x: enemy.x, y: enemy.y - 22, life: 0.75, text: 'HEALING MEAT', c: '#ff9b78' });
+    } else if (isTutorialDummy) {
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.85, text: 'RELIC DROPPED', c: '#8dd4ff' });
     } else {
       dropCoins(enemy.x, enemy.y, Neo.isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
@@ -5593,7 +5650,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       window.achievementEvents?.emit('charge:kill');
     }
 
-    const lootDescriptor = enemy.type !== 'rival'
+    const lootDescriptor = enemy.type !== 'rival' && !enemy.survivalAnimal
       ? globalThis.NeoNyke?.simulation?.resolveCampaignEnemyDrop?.(enemy, {
         tutorialDummy: isTutorialDummy,
         random: enemyLootRandom,

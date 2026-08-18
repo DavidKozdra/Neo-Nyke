@@ -4270,6 +4270,10 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('endless');
         });
+        view.altModeSurvivalBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('survival');
+        });
         view.altModePracticeBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('practice');

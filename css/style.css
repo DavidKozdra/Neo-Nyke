@@ -1690,6 +1690,11 @@ body.render3d #c {
   color: #d8e6f5;
 }
 
+.player-stat-fill--food {
+  background: linear-gradient(90deg, #d77b2e, #ffe070);
+  box-shadow: 0 0 8px rgba(255, 207, 114, .6);
+}
+
 .player-hp-bar {
   position: relative;
   width: 118px;

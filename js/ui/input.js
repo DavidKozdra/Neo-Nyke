@@ -1116,6 +1116,7 @@ export const ui = {
     altModesPanel: document.getElementById('altModesPanel'),
     altModesClose: document.getElementById('altModesClose'),
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
+    altModeSurvivalBtn: document.getElementById('altModeSurvivalBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
     altModeChallengePracticeBtn: document.getElementById('altModeChallengePracticeBtn'),
     altModeBeamPracticeBtn: document.getElementById('altModeBeamPracticeBtn'),

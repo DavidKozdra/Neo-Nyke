@@ -43,7 +43,14 @@ describe('gameplay polish regressions', () => {
   });
 
   test('3D potions reuse their authored 2D art and loose loot floats above the floor', () => {
-    expect(renderer3d).toContain("const FLOATING_BAKED_PICKUP_TYPES = new Set(['coin', 'item', 'potion'])");
+    // The float list grows as new loose-loot types are added (wood, meat...),
+    // so assert the members this regression is actually about rather than
+    // pinning the whole literal, which broke on every unrelated addition.
+    const floatingTypes = renderer3d.match(/const FLOATING_BAKED_PICKUP_TYPES = new Set\(\[([^\]]*)\]\)/);
+    expect(floatingTypes).not.toBeNull();
+    expect(floatingTypes[1]).toContain("'coin'");
+    expect(floatingTypes[1]).toContain("'item'");
+    expect(floatingTypes[1]).toContain("'potion'");
     expect(renderer3d).not.toContain("bottle.name = 'potion3d'");
     expect(renderer3d).toContain('floating ? worldSize * 0.5 + bob : floorLift');
   });
