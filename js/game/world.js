@@ -4657,7 +4657,7 @@
     const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
     const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
     const difficultiesBefore = Neo.getUnlockedDifficultySet ? new Set(Neo.getUnlockedDifficultySet()) : null;
-    if (Neo.gameMode !== 'practice') {
+    if (!Neo.isMetaProgressBlockedMode?.()) {
       const crystalsThisLoop = 1 + crystalBonus + titheBonus;
       Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalsThisLoop;
       Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + crystalsThisLoop;

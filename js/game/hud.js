@@ -1110,11 +1110,11 @@
     // Reaching the victory screen is itself an accomplishment: award a loop
     // crystal for the win (plus the same challenge/tithe bonuses a completed
     // loop grants) so a clean clear is never worth zero crystals. Practice runs
-    // stay unrewarded, matching loop-completion in world.js.
+    // and Sandbox runs stay unrewarded, matching loop-completion in world.js.
     // Snapshot which difficulties were unlocked before the win's crystals land,
     // so we can banner any that the new total just made available.
     const difficultiesBefore = Neo.getUnlockedDifficultySet ? new Set(Neo.getUnlockedDifficultySet()) : null;
-    if (Neo.gameMode !== 'practice') {
+    if (!Neo.isMetaProgressBlockedMode?.()) {
       const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
       const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
       const victoryCrystals = 1 + crystalBonus + titheBonus;

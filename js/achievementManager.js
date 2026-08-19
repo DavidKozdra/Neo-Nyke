@@ -1,7 +1,10 @@
 const achievementEvents = (() => {
-  const shouldPublish = () => (
-    window.Neo?.gameMode !== 'practice' && !window.Neo?.isMovePreview
-  );
+  // Practice and Sandbox are free-play toy boxes with player-dialled stats and
+  // enemies, so nothing that happens in them may reach the achievement store.
+  const shouldPublish = () => {
+    const mode = window.Neo?.gameMode;
+    return mode !== 'practice' && mode !== 'sandbox' && !window.Neo?.isMovePreview;
+  };
   const eventBusApi = window.KozEngine?.Events?.eventBus;
   if (eventBusApi?.createEventBus) {
     return eventBusApi.createEventBus({

@@ -15,6 +15,10 @@ function extractFunction(source, functionName) {
   return source.slice(start, end + 1);
 }
 
+// Practice and Sandbox are both free-play modes: neither may feed permanent
+// progression, and both funnel through Neo.isMetaProgressBlockedMode().
+const BLOCKED_MODES = ['practice', 'sandbox'];
+
 describe('practice progression', () => {
   const achievementPath = path.join(__dirname, '../js/achievementManager.js');
   const combatPath = path.join(__dirname, '../js/game/combat.js');
@@ -22,10 +26,10 @@ describe('practice progression', () => {
   const worldPath = path.join(__dirname, '../js/game/world.js');
   const gameStatePath = path.join(__dirname, '../js/core/game-state.js');
 
-  test('does not dispatch achievement events in practice mode', () => {
+  test.each(BLOCKED_MODES)('does not dispatch achievement events in %s mode', mode => {
     const source = fs.readFileSync(achievementPath, 'utf8');
     const eventBusSource = source.slice(0, source.indexOf('const achievementManager'));
-    const window = { Neo: { gameMode: 'practice' } };
+    const window = { Neo: { gameMode: mode } };
     const achievementEvents = new Function(
       'window',
       `${eventBusSource}; return achievementEvents;`,
@@ -41,11 +45,24 @@ describe('practice progression', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  test('isMetaProgressBlockedMode covers practice and sandbox only', () => {
+    const source = fs.readFileSync(gameStatePath, 'utf8');
+    const isBlocked = new Function(
+      'Neo',
+      `${extractFunction(source, 'isMetaProgressBlockedMode')}; return isMetaProgressBlockedMode;`,
+    )({});
+
+    BLOCKED_MODES.forEach(mode => expect(isBlocked(mode)).toBe(true));
+    ['normal', 'story', 'endless', 'survival', 'boss_rush', 'coop', 'pvp'].forEach(mode => {
+      expect(isBlocked(mode)).toBe(false);
+    });
+  });
+
   test("blocks Rich Man's Blues crystal rewards in practice", () => {
     const source = fs.readFileSync(combatPath, 'utf8');
 
-    expect(source).toContain("!isTutorialDummy && Neo.gameMode !== 'practice' && Neo.isBossType(enemy.type)");
-    expect(source).toContain("collectCount <= 0 || Neo.gameMode === 'practice'");
+    expect(source).toContain("!isTutorialDummy && !Neo.isMetaProgressBlockedMode?.() && Neo.isBossType(enemy.type)");
+    expect(source).toContain("collectCount <= 0 || Neo.isMetaProgressBlockedMode?.()");
   });
 
   test('blocks loop-completion crystals in practice', () => {
@@ -55,8 +72,8 @@ describe('practice progression', () => {
       source.indexOf('function addCoins(', source.indexOf('function returnToFloorOne()')),
     );
 
-    expect(returnToFloorOne).toContain("if (Neo.gameMode !== 'practice')");
-    expect(returnToFloorOne.indexOf("if (Neo.gameMode !== 'practice')"))
+    expect(returnToFloorOne).toContain('if (!Neo.isMetaProgressBlockedMode?.())');
+    expect(returnToFloorOne.indexOf('if (!Neo.isMetaProgressBlockedMode?.())'))
       .toBeLessThan(returnToFloorOne.indexOf('Neo.metaProgress.loopCrystals ='));
   });
 
@@ -67,11 +84,12 @@ describe('practice progression', () => {
     expect(source).toContain("const reviveText = cost > 0 ? `REVIVED -${cost} LC` : 'REVIVED';");
   });
 
-  test('blocks boss-defeat character counters and unlocks in practice', () => {
+  test.each(BLOCKED_MODES)('blocks boss-defeat character counters and unlocks in %s', mode => {
     const source = fs.readFileSync(combatPath, 'utf8');
     const emit = jest.fn();
     const Neo = {
-      gameMode: 'practice',
+      gameMode: mode,
+      isMetaProgressBlockedMode: () => BLOCKED_MODES.includes(Neo.gameMode),
       metaProgress: {
         unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
         mooggyDefeats: 2,
@@ -110,10 +128,13 @@ describe('practice progression', () => {
     expect(Neo.recordCharacterUnlock.mock.calls.map(([key]) => key)).toEqual(['mooggy', 'gelleh', 'sarge']);
   });
 
-  test('blocks Turtle Boy equipment unlocks in practice', () => {
+  // Sandbox's "unlock everything" hands over every weapon and move mid-run,
+  // which trivially satisfies Turtle Boy's Extending Staff + Turtle Wave combo.
+  test.each(BLOCKED_MODES)('blocks Turtle Boy equipment unlocks in %s', mode => {
     const source = fs.readFileSync(gameStatePath, 'utf8');
     const Neo = {
-      gameMode: 'practice',
+      gameMode: mode,
+      isMetaProgressBlockedMode: () => BLOCKED_MODES.includes(Neo.gameMode),
       player: {
         x: 10,
         y: 20,

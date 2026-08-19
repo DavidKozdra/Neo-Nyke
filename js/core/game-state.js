@@ -244,6 +244,14 @@ export function resumeGame() {
     return Neo.gameMode === 'sandbox';
   }
 
+  // Sandbox and Practice are free-play toy boxes: the player dials in their own
+  // stats, loadout, enemies and difficulty, so nothing earned there may feed
+  // permanent progression. Every character-unlock and achievement path funnels
+  // through this predicate so the two modes stay gated together.
+  function isMetaProgressBlockedMode(mode = Neo.gameMode) {
+    return mode === 'practice' || mode === 'sandbox';
+  }
+
   // Coerces a saved/partial rival-curse blob into the canonical shape, so old
   // saves (without the field) and corrupt values land on safe defaults.
   function normalizeRivalCurses(input) {
@@ -567,7 +575,7 @@ export function resumeGame() {
   // laser equipped at the same time: Extending Staff + Turtle Wave.
   function checkTurtleBoyUnlock() {
     if (!Neo.player) return;
-    if (Neo.gameMode === 'practice') return;
+    if (Neo.isMetaProgressBlockedMode?.()) return;
     if (!Neo.metaProgress || Neo.metaProgress.unlockedCharacters?.includes('turtle_boy')) return;
     if (Neo.player.equippedWeapon !== 'extending_staff') return;
     if (Neo.player.equippedMoves?.laser !== 'turtle_wave') return;
@@ -4652,6 +4660,7 @@ export function resumeGame() {
   Neo.CUSTOM_CHARACTER_STAT_MIN = CUSTOM_CHARACTER_STAT_MIN;
   Neo.CUSTOM_CHARACTER_STAT_MAX = CUSTOM_CHARACTER_STAT_MAX;
   Neo.isSandboxRunActive = isSandboxRunActive;
+  Neo.isMetaProgressBlockedMode = isMetaProgressBlockedMode;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
   Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
   Neo.createDefaultTutorialState = createDefaultTutorialState;

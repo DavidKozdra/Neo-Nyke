@@ -5409,7 +5409,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   }
 
   function recordCharacterUnlockProgress(enemy) {
-    if (!enemy || Neo.gameMode === 'practice' || !Neo.metaProgress) return null;
+    if (!enemy || Neo.isMetaProgressBlockedMode?.() || !Neo.metaProgress) return null;
 
     if (enemy.type === 'mooggy') {
       const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
@@ -5665,7 +5665,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
-    if (!isTutorialDummy && Neo.gameMode !== 'practice' && Neo.isBossType(enemy.type)) {
+    if (!isTutorialDummy && !Neo.isMetaProgressBlockedMode?.() && Neo.isBossType(enemy.type)) {
       const crystalStacks = Math.max(0, Neo.getItemCount('rich_mans_blues'));
       if (crystalStacks > 0) {
         Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalStacks;
@@ -6367,7 +6367,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   }
 
   function grantRichMansBluesPickupCrystals(collectCount) {
-    if (!Neo.player || collectCount <= 0 || Neo.gameMode === 'practice') return;
+    if (!Neo.player || collectCount <= 0 || Neo.isMetaProgressBlockedMode?.()) return;
     const gained = globalThis.NeoNyke?.simulation?.getCampaignRichMansBluesCrystalReward?.(
       Neo.floorsEntered ?? Neo.floor,
       collectCount,
