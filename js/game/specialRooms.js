@@ -489,22 +489,21 @@ function findSecretPassage() {
 }
 
 function oracleChoices(room) {
-  const hiddenRooms = (Neo.rooms || []).filter(candidate => !candidate.secret && !candidate.explored);
-  const mapObscured = !!Neo.floorRivalCurses?.obscureMap;
   const secret = findSecretPassage();
   const transmute = (Neo.rooms || []).find(candidate => candidate.type === 'combat' && !candidate.visited);
-  const activeHunt = Neo.player?.activeBounty;
+  const bossRoom = (Neo.rooms || []).find(candidate => candidate.type === 'boss');
+  const bossIdentified = !!bossRoom?.bossIdentified;
+  // Floor bosses are selected from a deterministic floor-scoped stream, so the
+  // Oracle can identify the encounter before its chamber is entered.
+  const bossType = bossRoom?.bossType || Neo.getFloorBossType?.();
+  const bossName = bossType ? (Neo.getBossDisplayName?.(bossType) || String(bossType).replace(/_/g, ' ')) : 'the Tyrant';
   return [
-    makeChoice('map', activeHunt ? 'Divine the Quarry' : 'Complete Map', activeHunt ? 'Reveal the floor. +25% hunt payout.' : 'Reveal all rooms and services.', 'ONE VISION', () => {
-      Neo.rooms.forEach(candidate => { if (!candidate.secret) candidate.explored = true; });
-      if (Neo.player.activeBounty) {
-        Neo.player.activeBounty.oracleMarked = true;
-        Neo.player.activeBounty.rewardMultiplier = Math.max(1, Number(Neo.player.activeBounty.rewardMultiplier || 1)) + 0.25;
-      }
-      Neo.minimapLegendDirty = true;
-      consumeService(room, 'The floor is revealed');
+    makeChoice('map', `Foretell: ${bossName}`, `Your foe on this floor is ${bossName}.`, 'ONE VISION', () => {
+      if (!bossRoom || bossIdentified) return false;
+      bossRoom.bossIdentified = true;
+      consumeService(room, `Your foe is ${bossName}`);
       return true;
-    }, hiddenRooms.length > 0 || mapObscured, 'The floor is already revealed.'),
+    }, !!bossRoom && !bossIdentified, !bossRoom ? 'No boss on this floor.' : 'The boss has already been identified.'),
     makeChoice('secret', 'Whispered Door', 'Open the hidden passage.', 'ONE VISION', () => {
       const passage = findSecretPassage();
       if (!passage) return false;
@@ -768,13 +767,18 @@ function applySharedSpecialChoice(choiceId) {
   }
   const roomType = Neo.currentRoom.type;
   const randomFunction = Neo.createRoomRandom?.(Neo.currentRoom, `special:${choiceId}`) || Neo.rng;
+  // The shared resolver owns curse mutations. Keep its local floor-state view
+  // and the campaign HUD state in sync: the minimap reads floorRivalCurses.
+  const floorState = { layout: { rooms: Neo.rooms }, curses: Neo.floorRivalCurses || {} };
   const result = globalThis.NeoNyke?.simulation?.applySpecialRoomChoice?.({
     floorNumber: Neo.floor,
     runLoopIndex: Neo.runLoopIndex,
-    floorState: { layout: { rooms: Neo.rooms }, curses: Neo.floorRivalCurses || {} },
+    floorState,
     matchRules: {},
   }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });
   if (!result?.ok) return false;
+  Neo.floorRivalCurses = { ...Neo.floorRivalCurses, ...(floorState.curses || {}) };
+  Neo.minimapLegendDirty = true;
   if (result.xp > 0) Neo.grantXp?.(result.xp, { recipient: Neo.player });
   consumeService(Neo.currentRoom, result.result);
   // Shared special-room rewards mutate inventory directly, so they do not pass

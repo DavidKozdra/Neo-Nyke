@@ -3,7 +3,7 @@ const { applySpecialRoomChoice, CHOICE_IDS } = require('../js/simulation/SharedS
 
 function harness(type, player = {}) {
   const room = { id: type, gx: 1, gy: 1, type, serviceUsed: false };
-  const rooms = [room, { id: 'combat', gx: 2, gy: 1, type: 'combat', visited: false, explored: false }, { id: 'exit', gx: 3, gy: 1, type: 'ladder', visited: false, explored: false }];
+  const rooms = [room, { id: 'combat', gx: 2, gy: 1, type: 'combat', visited: false, explored: false }, { id: 'exit', gx: 3, gy: 1, type: 'ladder', visited: false, explored: false }, { id: 'boss', gx: 4, gy: 1, type: 'boss', visited: false, explored: false }];
   return {
     state: { floorNumber: 4, runLoopIndex: 19, floorState: { runLoopIndex: 19, layout: { rooms } }, matchRules: {} }, room,
     player: { hp: 100, maxHp: 120, coins: 500, xp: 0, xpToNext: 20, attackPower: 10, items: { neo_knife: 2, tough_bandaid: 1 }, ...player },
@@ -34,8 +34,9 @@ describe('shared special-room choices', () => {
     expect(h.player.xp).toBe(19);
   });
 
-  test('oracle map vision dispels the Princess map curse', () => {
+  test('oracle prophecy identifies the boss without revealing its location or dispelling the map curse', () => {
     const h = harness('oracle');
+    const boss = h.state.floorState.layout.rooms.find(room => room.type === 'boss');
     h.state.floorState.curses = { obscureMap: true };
     h.state.matchRules = {
       obscureMap: true,
@@ -43,10 +44,10 @@ describe('shared special-room choices', () => {
     };
 
     expect(applySpecialRoomChoice(h.state, h.room, h.player, 'map', h.random).ok).toBe(true);
-    expect(h.state.floorState.curses.obscureMap).toBe(false);
-    expect(h.state.matchRules.obscureMap).toBe(false);
-    expect(h.state.matchRules.rivalCurses).toMatchObject({ obscureMap: false, reducePotions: true });
-    expect(h.state.floorState.layout.rooms.filter(room => !room.secret).every(room => room.explored)).toBe(true);
+    expect(boss).toMatchObject({ explored: false, bossIdentified: true });
+    expect(h.state.floorState.curses.obscureMap).toBe(true);
+    expect(h.state.matchRules).toMatchObject({ obscureMap: true, rivalCurses: { obscureMap: true, reducePotions: true } });
+    expect(h.state.floorState.layout.rooms.every(room => !room.explored)).toBe(true);
   });
 
   test('portal vault follows an active bounty target before treasure and service rooms', () => {

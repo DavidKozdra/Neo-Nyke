@@ -49,6 +49,23 @@ describe('one shared Forge command', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'FORGE_COMMITTED' }));
   });
 
+  test('slash is never upgradeable, on either the authority or the panel list', () => {
+    const actor = player({ ownedMoves: { blood_beam: true, slash: true } });
+    const content = { WEAPON_BASE_STATS, MOVE_BASE_STATS };
+    const slashOnly = { currency: 'xp', staged: { 'move:slash:damage': 1 } };
+    expect(forge.quoteForgeCommand(actor, slashOnly, content)).toMatchObject({ ok: false, reason: 'INVALID_UPGRADE' });
+    // a slash step must not ride along on an otherwise-valid basket either
+    const mixed = { currency: 'xp', staged: { 'move:blood_beam:damage': 1, 'move:slash:damage': 1 } };
+    expect(forge.quoteForgeCommand(actor, mixed, content)).toMatchObject({ ok: false, reason: 'INVALID_UPGRADE' });
+    expect(forge.applyForgeCommand(actor, slashOnly, content).ok).toBe(false);
+    expect(actor.xp).toBe(100);
+    expect(actor.anvilUpgrades).toBeUndefined();
+
+    const source = fs.readFileSync(path.join(__dirname, '../js/ui/panels.js'), 'utf8');
+    const list = source.slice(source.indexOf('export function renderAnvilItemList'), source.indexOf('function hydrateAnvilItemIcons'));
+    expect(list).toContain('isForgeExcludedMove');
+  });
+
   test('the browser panel no longer implements a second Forge mutation', () => {
     const source = fs.readFileSync(path.join(__dirname, '../js/ui/panels.js'), 'utf8');
     const confirm = source.slice(source.indexOf('export function confirmAnvilUpgrades'), source.indexOf('export function renderInventoryPanel'));

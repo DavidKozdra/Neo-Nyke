@@ -1318,6 +1318,17 @@ export const AB_CHEST_DWELL_SECONDS = 2.2;
 export const AB_CHEST_DWELL_RADIUS = 44;
 export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
+// Moves the forge refuses to sell upgrades for (see SharedForgeSystem). `slash`
+// is the bare-hands melee fallback every character keeps all run, and its damage
+// already rides on the equipped weapon.
+const SHARED_FORGE_EXCLUDED_MOVES = globalThis.NeoNyke?.content?.FORGE_EXCLUDED_MOVES;
+export const FORGE_EXCLUDED_MOVES = Object.freeze(
+  Array.isArray(SHARED_FORGE_EXCLUDED_MOVES) && SHARED_FORGE_EXCLUDED_MOVES.length
+    ? [...SHARED_FORGE_EXCLUDED_MOVES]
+    : ['slash']
+);
+export const isForgeExcludedMove = moveKey => FORGE_EXCLUDED_MOVES.includes(String(moveKey));
+
 // Upgradeable stat schemas for the anvil panel
 const SHARED_WEAPON_UPGRADEABLE_STATS = globalThis.NeoNyke?.content?.WEAPON_UPGRADEABLE_STATS || {};
 const SHARED_MOVE_UPGRADEABLE_STATS = globalThis.NeoNyke?.content?.MOVE_UPGRADEABLE_STATS || {};
@@ -1470,6 +1481,8 @@ export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
   Neo.AB_CHEST_DWELL_SECONDS = AB_CHEST_DWELL_SECONDS;
   Neo.AB_CHEST_DWELL_RADIUS = AB_CHEST_DWELL_RADIUS;
   Neo.REPLAY_TUTORIAL_KEY = REPLAY_TUTORIAL_KEY;
+  Neo.FORGE_EXCLUDED_MOVES = FORGE_EXCLUDED_MOVES;
+  Neo.isForgeExcludedMove = isForgeExcludedMove;
   Neo.WEAPON_UPGRADEABLE_STATS = WEAPON_UPGRADEABLE_STATS;
   Neo.MOVE_UPGRADEABLE_STATS = MOVE_UPGRADEABLE_STATS;
   Neo.WEAPON_BASE_STATS = WEAPON_BASE_STATS;

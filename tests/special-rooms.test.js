@@ -76,9 +76,10 @@ describe('special service rooms', () => {
     expect(specialSource).toContain('if (result.rewardKey) Neo.pushItemNotification?.(result.rewardKey, 1)');
   });
 
-  test('Complete Map remains purchasable while Princess clouds explored rooms', () => {
-    expect(specialSource).toContain('const mapObscured = !!Neo.floorRivalCurses?.obscureMap');
-    expect(specialSource).toContain('hiddenRooms.length > 0 || mapObscured');
+  test('Oracle prophecy identifies the floor boss without revealing its location', () => {
+    expect(specialSource).toContain('`Foretell: ${bossName}`');
+    expect(specialSource).toContain('bossRoom.bossIdentified = true');
+    expect(specialSource).toContain('`Your foe on this floor is ${bossName}.`');
   });
 
   test('bounties create pictured elite contracts that expire by floor depth', () => {

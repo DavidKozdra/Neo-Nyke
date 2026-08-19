@@ -7,6 +7,8 @@
   Object.assign(namespace.content, {
     WEAPON_UPGRADEABLE_STATS: api.WEAPON_UPGRADEABLE_STATS,
     MOVE_UPGRADEABLE_STATS: api.MOVE_UPGRADEABLE_STATS,
+    FORGE_EXCLUDED_MOVES: api.FORGE_EXCLUDED_MOVES,
+    isForgeExcludedMove: api.isForgeExcludedMove,
   });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -29,6 +31,12 @@
     range: Object.freeze({ step: 10, min: 10, max: 9999, xpPerStep: 13, goldPerStep: 39 }),
     critChance: Object.freeze({ step: 0.05, min: 0, max: 1, xpPerStep: 25, goldPerStep: 75 }),
   });
+
+  // `slash` is the bare-hands melee fallback every character owns for the whole
+  // run; its damage already rides on the equipped weapon, so the forge never
+  // sells upgrades for it.
+  const FORGE_EXCLUDED_MOVES = Object.freeze(['slash']);
+  const isForgeExcludedMove = moveKey => FORGE_EXCLUDED_MOVES.includes(String(moveKey));
 
   const integer = value => Math.max(0, Math.floor(Number(value) || 0));
   const schemaFor = itemType => itemType === 'weapon'
@@ -68,7 +76,8 @@
       const definition = schema?.[step.statKey];
       const base = step.itemType === 'weapon' ? weaponStats[step.itemKey] : moveStats[step.itemKey];
       const owned = step.itemType === 'weapon' ? ownedWeapons[step.itemKey] : ownedMoves[step.itemKey];
-      if (!definition || !base || !owned || !(step.statKey in base)) {
+      const excluded = step.itemType === 'move' && isForgeExcludedMove(step.itemKey);
+      if (!definition || !base || !owned || excluded || !(step.statKey in base)) {
         return { ok: false, reason: 'INVALID_UPGRADE', currency, xp: 0, gold: 0, stagedSteps: 0, voucherSteps: 0, steps: [] };
       }
       const currentCount = integer(player?.anvilUpgrades?.[step.itemType]?.[step.itemKey]?.[step.statKey]);
@@ -143,6 +152,8 @@
     FORGE_COST_GROWTH,
     FORGE_VOUCHER_KEY,
     FORGE_VOUCHER_UPGRADE_STEPS,
+    FORGE_EXCLUDED_MOVES,
+    isForgeExcludedMove,
     WEAPON_UPGRADEABLE_STATS,
     MOVE_UPGRADEABLE_STATS,
     normalizeForgeSteps,
