@@ -2683,18 +2683,22 @@ export function resumeGame() {
 
   function resolveKillerSprite(key) {
     if (!key) return '';
+    // Sheet-backed characters (the God, Anthony, the bosses) are deliberately
+    // stored outside SPRITE_DEFS, so treating that table as the only source
+    // blanks their portrait on the run-summary "killed by" card.
+    const hasSprite = spriteKey => !!(Neo.SPRITE_DEFS[spriteKey] || Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]);
     const rawKey = String(key).trim();
     if (rawKey === 'boss_spawner') return 'cult_mage';
     if (rawKey === 'laser') return 'laser';
     if (rawKey.endsWith('_projectile')) return resolveKillerSprite(rawKey.slice(0, -'_projectile'.length));
     if (rawKey.endsWith('_blind_shot')) return resolveKillerSprite(rawKey.slice(0, -'_blind_shot'.length));
-    if (Neo.SPRITE_DEFS[key]) return key;
+    if (hasSprite(key)) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
     const normalized = rawKey.toLowerCase();
-    if (Neo.SPRITE_DEFS[normalized]) return normalized;
+    if (hasSprite(normalized)) return normalized;
     if (killerSpriteMap[normalized]) return killerSpriteMap[normalized];
     const normalizedKey = normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    if (Neo.SPRITE_DEFS[normalizedKey]) return normalizedKey;
+    if (hasSprite(normalizedKey)) return normalizedKey;
     const rivalCharacterKey = normalizedKey.replace(/^rival_+/, '');
     if (Neo.RIVAL_DEFS?.[rivalCharacterKey] && Neo.SPRITE_DEFS[rivalCharacterKey]) return rivalCharacterKey;
     const legacyRival = Object.entries(Neo.RIVAL_DEFS || {}).find(([, def]) => String(def?.name || '').trim().toLowerCase() === normalized);

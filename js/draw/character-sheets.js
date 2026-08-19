@@ -349,6 +349,43 @@ const CHARACTER_SHEET_DEFS = {
     attackFrames: [12, 13, 14, 15, 16, 17],
     portraitFrame: 0,
   },
+  // The God is authored one frame per file rather than as a strip, so both of
+  // its forms composite through `srcFrames`. Phases 1-2 use the early form and
+  // phases 3-5 the ascended one; getEnemySpriteKey picks between them.
+  god: {
+    srcFrames: [
+      'assets/sprites/chars/God (1)1.png',
+      'assets/sprites/chars/God (1)2.png',
+    ],
+    frameWidth: 48,
+    frameHeight: 48,
+    frameCount: 2,
+    // The early form only fills 20x28 of its 48px box (the ascended form fills
+    // 40x46), so it needs the larger scale of the two just to match it in world
+    // size — and still stays the smaller silhouette.
+    renderScale: 1.9,
+    stepRate: 5,
+    idleRate: 1.6,
+    idleFrames: [0, 1],
+    walkFrames: [0, 1],
+    portraitFrame: 0,
+  },
+  god_ascended: {
+    srcFrames: [
+      'assets/sprites/chars/God (1)3.png',
+      'assets/sprites/chars/God (1)4.png',
+      'assets/sprites/chars/God (1)5.png',
+    ],
+    frameWidth: 48,
+    frameHeight: 48,
+    frameCount: 3,
+    renderScale: 1.5,
+    stepRate: 6,
+    idleRate: 2.2,
+    idleFrames: [0, 1, 2],
+    walkFrames: [0, 1, 2],
+    portraitFrame: 0,
+  },
   bulk_golem: {
     src: 'assets/sprites/chars/large-golem.png',
     frameWidth: 128,
@@ -442,16 +479,58 @@ function createCharacterSheetFromImage(key, def, image) {
   };
 }
 
-function loadCharacterSheet(key, def) {
+function loadImage(src) {
   return new Promise(resolve => {
     const image = new Image();
-    image.onload = () => resolve(createCharacterSheetFromImage(key, def, image));
-    image.onerror = () => {
-      console.warn(`[CharacterSprites] Failed to preload "${def.src}".`);
-      resolve(null);
-    };
-    image.src = def.src;
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    // Spaces survive a plain src assignment, but parentheses in a filename
+    // (e.g. "God (1)1.png") are not reliably passed through the fetch/service
+    // worker path, so encode anything that isn't already escaped.
+    image.src = /%[0-9a-fA-F]{2}/.test(src) ? src : encodeURI(src);
   });
+}
+
+// Some characters are authored as one frame per file rather than a single
+// strip. Composite those into one offscreen canvas laid out left-to-right so
+// the rest of the pipeline keeps seeing the row-major grid it expects.
+async function loadCompositeSheetImage(key, def) {
+  const sources = def.srcFrames;
+  const images = await Promise.all(sources.map(loadImage));
+  const missing = sources.filter((src, index) => !images[index]);
+  if (missing.length) {
+    console.warn(`[CharacterSprites] Failed to preload "${missing.join('", "')}" for "${key}".`);
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  // Size from the declared frame box, not from the loaded images: a mis-sized
+  // source then trips the dimension check in createCharacterSheetFromImage
+  // instead of silently shifting every later frame out of alignment.
+  canvas.width = def.frameWidth * sources.length;
+  canvas.height = def.frameHeight;
+  // createCharacterSheetFromImage and buildSpriteAtlas both measure the sheet
+  // through naturalWidth/naturalHeight, which a canvas does not have.
+  canvas.naturalWidth = canvas.width;
+  canvas.naturalHeight = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  images.forEach((image, index) => {
+    ctx.drawImage(image, index * def.frameWidth, 0);
+  });
+  return canvas;
+}
+
+async function loadCharacterSheet(key, def) {
+  if (Array.isArray(def.srcFrames) && def.srcFrames.length) {
+    const composite = await loadCompositeSheetImage(key, def);
+    return composite ? createCharacterSheetFromImage(key, def, composite) : null;
+  }
+  const image = await loadImage(def.src);
+  if (!image) {
+    console.warn(`[CharacterSprites] Failed to preload "${def.src}".`);
+    return null;
+  }
+  return createCharacterSheetFromImage(key, def, image);
 }
 
 export async function preloadCharacterSheets() {

@@ -320,21 +320,6 @@ window.NeoNykeSpriteDefs = {
       '.d....d...',
     ],
   },
-  god: {
-    palette: { a: '#2c2e38', b: '#d8dbe4', c: '#ffffff', d: '#9ea6b6' },
-    pixels: [
-      '.c.c.c....',
-      '..bbbb....',
-      '.bcaccb...',
-      '.bccccb...',
-      '.bbddbb...',
-      'bbbcbbbb..',
-      '.bbccbb...',
-      '.db..bd...',
-      'c.c..c.c..',
-      '....d.....',
-    ],
-  },
   machine_gunner: {
     // Bulky armored trooper: helmet with an orange visor slit, wide pauldrons,
     // an ammo belt across the chest, and a heavy gun barrel at the right.

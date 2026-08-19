@@ -120,6 +120,14 @@
     if (enemy.type === 'healer') return 'healer';
     if (enemy.type === 'laser') return Neo.CHARACTER_SPRITE_SHEETS?.laser ? 'laser' : 'cult_mage';
     if (enemy.type === 'boss_spawner') return 'cult_mage';
+    // The God transforms at the Council of Bosses (phase 3) and keeps the
+    // ascended form through phases 4 and 5. Falling back to the early form if
+    // that sheet is missing keeps a failed load on-character.
+    if (enemy.type === 'god') {
+      return (Number(enemy.phase) || 1) >= 3 && Neo.CHARACTER_SPRITE_SHEETS?.god_ascended
+        ? 'god_ascended'
+        : 'god';
+    }
     return Neo.SPRITE_DEFS[enemy.type] || Neo.CHARACTER_SPRITE_SHEETS?.[enemy.type] ? enemy.type : 'hunter';
   }
 

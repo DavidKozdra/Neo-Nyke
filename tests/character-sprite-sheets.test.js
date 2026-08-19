@@ -568,4 +568,52 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(1000);
     });
   });
+
+  // The God is authored one frame per file instead of as a strip, so it is the
+  // only sheet that goes through the `srcFrames` compositing path. Its frames
+  // are measured individually — countOpaquePixels assumes a single grid image.
+  test.each([
+    ['god', 2, [
+      'assets/sprites/chars/God (1)1.png',
+      'assets/sprites/chars/God (1)2.png',
+    ]],
+    ['god_ascended', 3, [
+      'assets/sprites/chars/God (1)3.png',
+      'assets/sprites/chars/God (1)4.png',
+      'assets/sprites/chars/God (1)5.png',
+    ]],
+  ])('%s composites its authored per-file frames into one cycle', async (key, frameCount, srcFrames) => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs[key];
+    const everyFrame = Array.from({ length: frameCount }, (_, index) => index);
+    expect(def).toEqual(expect.objectContaining({
+      srcFrames,
+      frameWidth: 48,
+      frameHeight: 48,
+      frameCount,
+      // Both forms run one continuous cycle: every frame is both idle and walk.
+      idleFrames: everyFrame,
+      walkFrames: everyFrame,
+      portraitFrame: 0,
+    }));
+    expect(def.src).toBeUndefined();
+    expect(def.srcFrames).toHaveLength(frameCount);
+
+    await Promise.all(def.srcFrames.map(async src => {
+      const image = await loadImage(path.join(__dirname, '..', src));
+      expect(image.naturalWidth).toBe(def.frameWidth);
+      expect(image.naturalHeight).toBe(def.frameHeight);
+      expect(countOpaquePixels(image, 0, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
+    }));
+  });
+
+  test('the God draws only from its sheets, not the removed procedural def', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '../assets/sprites/combatants.js'),
+      'utf8',
+    );
+    // eslint-disable-next-line no-new-func
+    const defs = new Function(`const window = {}; ${source}; return window.NeoNykeSpriteDefs;`)();
+    expect(defs.god).toBeUndefined();
+  });
 });

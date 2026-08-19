@@ -1995,7 +1995,15 @@
       const def = defs[key];
       const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[key] || {};
       lines.push(`  ${key}: {`);
-      lines.push(`    src: '${def.src}',`);
+      // Sheets authored one frame per file carry `srcFrames` and no `src`;
+      // emitting `src: 'undefined'` for those would corrupt the rebuilt file.
+      if (Array.isArray(def.srcFrames) && def.srcFrames.length) {
+        lines.push('    srcFrames: [');
+        def.srcFrames.forEach(src => lines.push(`      '${src}',`));
+        lines.push('    ],');
+      } else {
+        lines.push(`    src: '${def.src}',`);
+      }
       lines.push(`    frameWidth: ${def.frameWidth},`);
       lines.push(`    frameHeight: ${def.frameHeight},`);
       lines.push(`    frameCount: ${def.frameCount},`);
