@@ -3792,7 +3792,8 @@
   }
 
   .multiplayer-mode-options legend,
-  .multiplayer-code-field > span {
+  .multiplayer-code-field > span,
+  .multiplayer-visibility-field > span {
     margin-bottom: 5px;
     font-size: calc(10px * var(--font-scale, 1));
   }
@@ -3825,6 +3826,11 @@
     min-height: 44px;
     padding-block: 10px;
   }
+
+  .multiplayer-visibility-field { margin-bottom: 10px; }
+  .multiplayer-visibility-toggle { min-height: 50px; padding: 7px 10px; }
+  .multiplayer-public-browser { margin-top: 10px; padding-top: 10px; }
+  .multiplayer-public-list { max-height: 126px; }
 }
 
 @media (max-width: 760px) {

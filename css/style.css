@@ -10203,7 +10203,7 @@ button.alt.danger {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 280px;
+  min-height: 430px;
   flex-direction: column;
   padding: 22px;
   border: 1px solid rgba(135, 207, 246, .25);
@@ -10232,12 +10232,70 @@ button.alt.danger {
 }
 
 .multiplayer-mode-options legend,
-.multiplayer-code-field > span {
+.multiplayer-code-field > span,
+.multiplayer-visibility-field > span {
   margin-bottom: 8px;
   color: var(--menu-accent-strong);
   font-size: calc(13px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .12em;
+}
+
+.multiplayer-visibility-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.multiplayer-visibility-toggle {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid #71cffa;
+  border-radius: var(--ui-control-radius);
+  background: rgba(66, 153, 202, .2);
+  color: #eefaff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multiplayer-visibility-toggle[data-visibility="private"] {
+  border-color: rgba(189, 201, 211, .4);
+  background: rgba(116, 128, 138, .13);
+  color: #dce6ec;
+}
+
+.multiplayer-visibility-toggle:hover:not(:disabled),
+.multiplayer-visibility-toggle:focus-visible:not(:disabled) {
+  border-color: #b5e9ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(113, 207, 250, .18);
+}
+
+.multiplayer-visibility-toggle:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.multiplayer-visibility-toggle__icon {
+  grid-row: 1 / span 2;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
+.multiplayer-visibility-toggle__label {
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.multiplayer-visibility-toggle small {
+  color: #9fc4d7;
+  font-size: calc(10px * var(--font-scale, 1));
+  letter-spacing: .02em;
 }
 
 .multiplayer-mode-option {
@@ -10316,6 +10374,94 @@ button.alt.danger {
 .multiplayer-paste-btn:disabled {
   opacity: .4;
   cursor: not-allowed;
+}
+
+.multiplayer-public-browser {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(135, 207, 246, .18);
+}
+
+.multiplayer-public-browser__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.multiplayer-public-browser__head h4 {
+  margin: 0;
+  color: var(--menu-accent-strong);
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: .12em;
+}
+
+.multiplayer-public-refresh {
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: #9fcce5;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 850;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.multiplayer-public-refresh:hover:not(:disabled),
+.multiplayer-public-refresh:focus-visible:not(:disabled) {
+  color: #e7f7ff;
+  text-decoration: underline;
+  outline: none;
+}
+
+.multiplayer-public-refresh:disabled { opacity: .4; cursor: not-allowed; }
+
+.multiplayer-public-status {
+  min-height: 1.3em;
+  margin: 0;
+  color: #89a9bb;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1.3;
+}
+
+.multiplayer-public-list {
+  display: grid;
+  gap: 6px;
+  max-height: 156px;
+  overflow-y: auto;
+}
+
+.multiplayer-public-lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid rgba(135, 207, 246, .24);
+  border-radius: 8px;
+  background: rgba(5, 10, 15, .5);
+  color: #e6f7ff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multiplayer-public-lobby:hover:not(:disabled),
+.multiplayer-public-lobby:focus-visible:not(:disabled) {
+  border-color: #71cffa;
+  background: rgba(66, 153, 202, .18);
+  outline: none;
+}
+
+.multiplayer-public-lobby:disabled { cursor: not-allowed; opacity: .45; }
+.multiplayer-public-lobby__code { font-weight: 900; letter-spacing: .1em; }
+.multiplayer-public-lobby__players { color: #91f0b7; font-weight: 850; }
+.multiplayer-public-lobby__mode {
+  grid-column: 1 / -1;
+  color: #91afc0;
+  font-size: calc(10px * var(--font-scale, 1));
+  letter-spacing: .06em;
 }
 
 .multiplayer-room-state {
@@ -11050,6 +11196,24 @@ button.alt.danger {
   font-weight: 800;
   letter-spacing: .12em;
 }
+
+.coop-lobby__header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.coop-lobby__visibility {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8fdcff;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.coop-lobby__visibility[data-visibility="private"] { color: #c8d2d8; }
 
 .coop-lobby__authority-state > span {
   width: 8px;

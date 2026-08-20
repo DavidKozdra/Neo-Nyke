@@ -69,7 +69,7 @@ describe('CloudflareWebSocketTransport', () => {
     const created = await transport.createSession({ mode: 'rival', maxPlayers: 3 });
     expect(created).toEqual(expect.objectContaining({ roomCode: 'ABC234', sessionId: 'ABC234' }));
     expect(fetch).toHaveBeenCalledWith('https://game.example/api/multiplayer/rooms', expect.objectContaining({ method: 'POST' }));
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'rival', maxPlayers: 3 });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'rival', maxPlayers: 3, visibility: 'private' });
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
@@ -91,6 +91,7 @@ describe('CloudflareWebSocketTransport', () => {
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
       mode: 'coop',
       maxPlayers: 4,
+      visibility: 'private',
       difficultyKey: 'hard',
       difficulty: { key: 'hard', statMultiplier: 1.12 },
     });
@@ -105,7 +106,7 @@ describe('CloudflareWebSocketTransport', () => {
       apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
     });
     await transport.createSession({ mode: 'boss_rush', maxPlayers: 1 });
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'boss_rush', maxPlayers: 1 });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'boss_rush', maxPlayers: 1, visibility: 'private' });
   });
 
   test('passes the host-selected region only when creating a new room', async () => {
@@ -118,7 +119,9 @@ describe('CloudflareWebSocketTransport', () => {
       apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
     });
     await transport.createSession({ region: 'weur' });
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'coop', maxPlayers: 4, region: 'weur' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      mode: 'coop', maxPlayers: 4, visibility: 'private', region: 'weur',
+    });
   });
 
   test('only reports availability after the multiplayer health route responds successfully', async () => {

@@ -1030,6 +1030,14 @@
                   <option value="boss_rush">BOSS RUSH</option>
                 </select>
               </fieldset>
+              <div class="multiplayer-visibility-field">
+                <span>LOBBY ACCESS</span>
+                <button id="multiplayerVisibilityToggle" class="multiplayer-visibility-toggle" type="button" data-visibility="public" aria-pressed="true" aria-label="Lobby visibility: Public. Activate to make private.">
+                  <span id="multiplayerVisibilityIcon" class="multiplayer-visibility-toggle__icon" aria-hidden="true">🌐</span>
+                  <span id="multiplayerVisibilityLabel" class="multiplayer-visibility-toggle__label">PUBLIC</span>
+                  <small>Anyone can find and join</small>
+                </button>
+              </div>
               <button id="multiplayerCreateRoom" class="primary-action-btn multiplayer-choice-card__primary" type="button" disabled>CREATE LOBBY</button>
             </section>
             <section id="multiplayerJoinPanel" class="multiplayer-choice-card multiplayer-join-card" aria-labelledby="multiplayerJoinTitle">
@@ -1042,6 +1050,14 @@
               </label>
 
               <button id="multiplayerJoinRoom" class="primary-action-btn multiplayer-choice-card__primary" type="button" disabled>JOIN LOBBY</button>
+              <div class="multiplayer-public-browser" aria-labelledby="multiplayerPublicLobbyTitle">
+                <div class="multiplayer-public-browser__head">
+                  <h4 id="multiplayerPublicLobbyTitle">PUBLIC LOBBIES</h4>
+                  <button id="multiplayerPublicLobbyRefresh" class="multiplayer-public-refresh" type="button" disabled aria-label="Refresh public lobbies">REFRESH</button>
+                </div>
+                <p id="multiplayerPublicLobbyStatus" class="multiplayer-public-status" role="status">Open Multiplayer to browse public lobbies.</p>
+                <div id="multiplayerPublicLobbyList" class="multiplayer-public-list" role="list" aria-label="Public multiplayer lobbies"></div>
+              </div>
             </section>
           </div>
       <div id="multiplayerRoomState" class="multiplayer-room-state hidden" aria-live="polite">
@@ -1540,7 +1556,13 @@
         <h2 class="screen-title" id="coopLobbyTitle">CO-OP LOBBY</h2>
         <p id="coopLobbyStatus" class="charselect-subtitle coop-lobby__status" aria-live="polite">Waiting for players…</p>
       </div>
-      <div class="coop-lobby__authority-state"><span aria-hidden="true"></span> AUTHORITY CONNECTED</div>
+      <div class="coop-lobby__header-meta">
+        <div id="coopLobbyVisibility" class="coop-lobby__visibility" data-visibility="private">
+          <span id="coopLobbyVisibilityIcon" aria-hidden="true">🔒</span>
+          <span id="coopLobbyVisibilityLabel">PRIVATE</span>
+        </div>
+        <div class="coop-lobby__authority-state"><span aria-hidden="true"></span> AUTHORITY CONNECTED</div>
+      </div>
     </header>
 
     <div class="coop-lobby__workspace">

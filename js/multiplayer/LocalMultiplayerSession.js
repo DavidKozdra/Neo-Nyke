@@ -299,6 +299,7 @@
       this.matchSeed = options.matchSeed ?? 'local-match-seed';
       this.baseMatchId = String(options.matchId || 'local-match');
       this.mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
+      this.visibility = options.visibility === 'public' ? 'public' : 'private';
       this.deferFloorGeneration = options.deferFloorGeneration === true;
       if (typeof resolveCampaignEnemyDifficulty !== 'function') {
         throw new Error('Shared campaign difficulty resolution is unavailable');
@@ -377,6 +378,7 @@
         rematchSerial: this.rematchSerial,
         chatSequence: this.chatSequence,
         mode: this.mode,
+        visibility: this.visibility,
         minPlayers: this.minPlayers,
         maxPlayers: this.maxPlayers,
         peerRecords: Array.from(this.peerRecords.entries()),
@@ -410,6 +412,7 @@
       this.rematchSerial = Math.max(0, Math.trunc(Number(runtime.rematchSerial) || 0));
       this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
       this.mode = ['rival', 'boss_rush'].includes(runtime.mode) ? runtime.mode : 'coop';
+      this.visibility = runtime.visibility === 'public' ? 'public' : 'private';
       this.minPlayers = Math.max(1, Math.min(4, Math.trunc(Number(runtime.minPlayers) || this.minPlayers)));
       this.maxPlayers = Math.max(this.minPlayers, Math.min(4, Math.trunc(Number(runtime.maxPlayers) || this.maxPlayers)));
       this.peerRecords = new Map(Array.isArray(runtime.peerRecords) ? runtime.peerRecords : []);
@@ -1153,6 +1156,7 @@
         minPlayers: this.minPlayers,
         maxPlayers: this.maxPlayers,
         mode: this.mode,
+        visibility: this.visibility,
       });
     }
 

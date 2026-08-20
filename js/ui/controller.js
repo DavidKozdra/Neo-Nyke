@@ -60,6 +60,8 @@ export function createUIController(view) {
     let multiplayerRequestBusy = false;
     let multiplayerServiceState = 'checking';
     let multiplayerAvailabilityCheckId = 0;
+    let multiplayerPublicLobbyRequestId = 0;
+    let multiplayerPublicLobbyLoading = false;
     // The source stays near the other menu destinations for maintainability,
     // but at runtime Multiplayer is a true sibling page like Credits. Moving it
     // out of #start prevents main-menu sizing/visibility rules from leaking into
@@ -118,6 +120,13 @@ export function createUIController(view) {
       if (view.multiplayerJoinClipboard) view.multiplayerJoinClipboard.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerMode) view.multiplayerMode.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerVisibilityToggle) view.multiplayerVisibilityToggle.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerPublicLobbyRefresh) {
+        view.multiplayerPublicLobbyRefresh.disabled = !available || multiplayerRequestBusy || multiplayerPublicLobbyLoading;
+      }
+      view.multiplayerPublicLobbyList?.querySelectorAll('button').forEach(button => {
+        button.disabled = !available || multiplayerRequestBusy;
+      });
       document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
         button.disabled = !available || multiplayerRequestBusy;
       });
@@ -183,6 +192,94 @@ export function createUIController(view) {
         button.classList.toggle('is-active', active);
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
+    }
+
+    function setMultiplayerVisibilityChoice(visibility) {
+      const next = visibility === 'private' ? 'private' : 'public';
+      const isPublic = next === 'public';
+      if (view.multiplayerVisibilityToggle) {
+        view.multiplayerVisibilityToggle.dataset.visibility = next;
+        view.multiplayerVisibilityToggle.setAttribute('aria-pressed', isPublic ? 'true' : 'false');
+        view.multiplayerVisibilityToggle.setAttribute('aria-label', isPublic
+          ? 'Lobby visibility: Public. Activate to make private.'
+          : 'Lobby visibility: Private. Activate to make public.');
+        const hint = view.multiplayerVisibilityToggle.querySelector('small');
+        if (hint) hint.textContent = isPublic ? 'Anyone can find and join' : 'Invite code required';
+      }
+      if (view.multiplayerVisibilityIcon) view.multiplayerVisibilityIcon.textContent = isPublic ? '🌐' : '🔒';
+      if (view.multiplayerVisibilityLabel) view.multiplayerVisibilityLabel.textContent = isPublic ? 'PUBLIC' : 'PRIVATE';
+    }
+
+    function renderPublicLobbyList(rooms = []) {
+      if (!view.multiplayerPublicLobbyList) return;
+      const modeNames = { coop: 'CO-OP EXPEDITION', rival: 'RIVAL EXPEDITION', boss_rush: 'BOSS RUSH' };
+      const items = rooms.map(room => {
+        const item = document.createElement('div');
+        item.setAttribute('role', 'listitem');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'multiplayer-public-lobby';
+        button.dataset.roomCode = room.roomCode;
+        button.setAttribute('aria-label', `Join public lobby ${room.roomCode}, ${room.players} of ${room.maxPlayers} players`);
+
+        const code = document.createElement('span');
+        code.className = 'multiplayer-public-lobby__code';
+        code.textContent = `🌐 ${room.roomCode}`;
+        const players = document.createElement('span');
+        players.className = 'multiplayer-public-lobby__players';
+        players.textContent = `${room.players}/${room.maxPlayers}`;
+        const details = document.createElement('span');
+        details.className = 'multiplayer-public-lobby__mode';
+        const difficulty = String(room.difficultyKey || 'medium').replace(/_/g, ' ').toUpperCase();
+        details.textContent = `${modeNames[room.mode] || 'CO-OP EXPEDITION'} • ${difficulty}`;
+        button.append(code, players, details);
+        button.addEventListener('click', () => {
+          if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = room.roomCode;
+          void runBrowserMultiplayerAction(session => session.joinRoom(room.roomCode));
+        });
+        item.appendChild(button);
+        return item;
+      });
+      view.multiplayerPublicLobbyList.replaceChildren(...items);
+    }
+
+    async function refreshPublicLobbies() {
+      const requestId = ++multiplayerPublicLobbyRequestId;
+      if (multiplayerServiceState !== 'online') {
+        renderPublicLobbyList([]);
+        if (view.multiplayerPublicLobbyStatus) view.multiplayerPublicLobbyStatus.textContent = 'Public lobbies are unavailable while the server is offline.';
+        return [];
+      }
+      const Transport = globalThis.NeoNyke?.multiplayer?.CloudflareWebSocketTransport;
+      if (typeof Transport !== 'function') return [];
+      multiplayerPublicLobbyLoading = true;
+      if (view.multiplayerPublicLobbyStatus) view.multiplayerPublicLobbyStatus.textContent = 'Finding public lobbies…';
+      syncMultiplayerFeatureUI();
+      const transport = new Transport();
+      try {
+        const rooms = await transport.listPublicSessions({ limit: 12 });
+        if (requestId !== multiplayerPublicLobbyRequestId) return [];
+        renderPublicLobbyList(rooms);
+        if (view.multiplayerPublicLobbyStatus) {
+          view.multiplayerPublicLobbyStatus.textContent = rooms.length
+            ? `${rooms.length} public ${rooms.length === 1 ? 'lobby' : 'lobbies'} ready to join.`
+            : 'No public lobbies are waiting. Create one or use an invite code.';
+        }
+        return rooms;
+      } catch (error) {
+        if (requestId !== multiplayerPublicLobbyRequestId) return [];
+        renderPublicLobbyList([]);
+        if (view.multiplayerPublicLobbyStatus) {
+          view.multiplayerPublicLobbyStatus.textContent = error?.message || 'Could not load public lobbies.';
+        }
+        return [];
+      } finally {
+        transport.dispose?.();
+        if (requestId === multiplayerPublicLobbyRequestId) {
+          multiplayerPublicLobbyLoading = false;
+          syncMultiplayerFeatureUI();
+        }
+      }
     }
     window.addEventListener('neo-feature-flags-changed', syncMultiplayerFeatureUI);
     syncMultiplayerFeatureUI();
@@ -261,6 +358,10 @@ export function createUIController(view) {
       if (view.coopLobbyPartyCount) {
         view.coopLobbyPartyCount.textContent = `${members.length} / ${Number(snapshot.lobbyState?.maxPlayers) || MULTIPLAYER_MAX_SLOTS}`;
       }
+      const visibility = snapshot.lobbyState?.visibility === 'public' ? 'public' : 'private';
+      if (view.coopLobbyVisibility) view.coopLobbyVisibility.dataset.visibility = visibility;
+      if (view.coopLobbyVisibilityIcon) view.coopLobbyVisibilityIcon.textContent = visibility === 'public' ? '🌐' : '🔒';
+      if (view.coopLobbyVisibilityLabel) view.coopLobbyVisibilityLabel.textContent = visibility.toUpperCase();
 
       const readyCount = members.filter(member => member.ready).length;
       const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
@@ -1025,6 +1126,7 @@ export function createUIController(view) {
       return {
         mode,
         maxPlayers: 4,
+        visibility: view.multiplayerVisibilityToggle?.dataset.visibility === 'private' ? 'private' : 'public',
         difficultyKey,
         ...(difficulty ? { difficulty } : {}),
         ...extra,
@@ -2930,7 +3032,9 @@ export function createUIController(view) {
         setAltModesPanelOpen(false);
         setCompetitivePanelOpen(false);
         renderMultiplayerResumeCard();
-        void refreshMultiplayerAvailability();
+        void refreshMultiplayerAvailability().then(available => {
+          if (available && !view.multiplayerPanel?.classList.contains('hidden')) void refreshPublicLobbies();
+        });
         view.multiplayerPanel?.classList.remove('is-open');
         requestAnimationFrame(() => {
           view.multiplayerPanel?.classList.add('is-open');
@@ -4110,12 +4214,19 @@ export function createUIController(view) {
           const mode = ['rival', 'boss_rush'].includes(view.multiplayerMode?.value) ? view.multiplayerMode.value : 'coop';
           void runBrowserMultiplayerAction(session => session.createRoom(getBrowserMultiplayerCreateOptions(mode)));
         });
+        view.multiplayerVisibilityToggle?.addEventListener('click', () => {
+          setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle.dataset.visibility === 'public' ? 'private' : 'public');
+        });
+        setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle?.dataset.visibility || 'public');
         view.multiplayerJoinRoom?.addEventListener('click', () => {
           const code = view.multiplayerRoomCode?.value || '';
           void runBrowserMultiplayerAction(session => session.joinRoom(code));
         });
         view.multiplayerJoinClipboard?.addEventListener('click', () => {
           void joinBrowserMultiplayerFromClipboard();
+        });
+        view.multiplayerPublicLobbyRefresh?.addEventListener('click', () => {
+          void refreshPublicLobbies();
         });
         document.querySelectorAll('[data-multiplayer-mode-option]').forEach(button => {
           button.addEventListener('click', () => {

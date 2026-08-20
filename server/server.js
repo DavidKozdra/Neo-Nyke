@@ -44,6 +44,10 @@ const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
 const MULTIPLAYER_ROOM_LIMIT = 4;
 const MULTIPLAYER_MIN_PLAYERS = 1;
+const PUBLIC_ROOM_INDEX_PREFIX = 'multiplayer:public-room:';
+const PUBLIC_ROOM_INDEX_TTL_SECONDS = 10 * 60;
+const PUBLIC_ROOM_LIST_LIMIT = 20;
+const PUBLIC_ROOM_CANDIDATE_LIMIT = 40;
 const MAX_ROOM_CREATE_BYTES = 2 * 1024;
 const ROOM_TICK_INTERVAL_MS = 50;
 const MAX_TICK_CATCH_UP_STEPS = 3;
@@ -90,6 +94,23 @@ function createRoomCode(randomValues = crypto.getRandomValues(new Uint8Array(ROO
 function normalizeRegionHint(value) {
   const region = String(value || '').trim().toLowerCase();
   return DURABLE_OBJECT_REGION_HINTS.has(region) ? region : null;
+}
+
+function normalizeLobbyVisibility(value) {
+  return value === 'public' ? 'public' : 'private';
+}
+
+function publicRoomIndexKey(roomCode) {
+  return `${PUBLIC_ROOM_INDEX_PREFIX}${roomCode}`;
+}
+
+async function registerPublicRoom(env, room) {
+  if (room?.visibility !== 'public' || typeof env?.STORE?.put !== 'function') return false;
+  await env.STORE.put(publicRoomIndexKey(room.roomCode), JSON.stringify({
+    roomCode: room.roomCode,
+    createdAt: room.createdAt,
+  }), { expirationTtl: PUBLIC_ROOM_INDEX_TTL_SECONDS });
+  return true;
 }
 
 // A location hint matters only on the first get() that creates an object.
@@ -308,6 +329,7 @@ export class MultiplayerRoom {
       minPlayers: mode === 'rival' ? 2 : MULTIPLAYER_MIN_PLAYERS,
       maxPlayers,
       mode,
+      visibility: normalizeLobbyVisibility(room.visibility),
       deferFloorGeneration: true,
       difficultyKey: room.difficultyKey,
       difficulty: room.difficulty,
@@ -504,6 +526,7 @@ export class MultiplayerRoom {
       createdAt: Date.now(),
       maxPlayers,
       mode,
+      visibility: normalizeLobbyVisibility(options.visibility),
       difficultyKey: difficulty.key,
       difficulty,
       region: normalizeRegionHint(options.region),
@@ -1084,6 +1107,48 @@ async function handleRequest(request, env) {
     return json({ ok: available, multiplayer: available }, available ? 200 : 503);
   }
 
+  if (path === '/multiplayer/rooms' && request.method === 'GET') {
+    if (!env?.MULTIPLAYER_ROOMS || typeof env?.STORE?.list !== 'function') {
+      return json({ error: 'Public lobby directory unavailable' }, 503);
+    }
+    if (!rateLimit(`room-list:${ip}`, 60, 60_000)) {
+      return json({ error: 'Too many public lobby requests' }, 429);
+    }
+    const requestedLimit = Math.trunc(Number(url.searchParams.get('limit')) || 12);
+    const limit = Math.max(1, Math.min(PUBLIC_ROOM_LIST_LIMIT, requestedLimit));
+    const indexed = await env.STORE.list({
+      prefix: PUBLIC_ROOM_INDEX_PREFIX,
+      limit: PUBLIC_ROOM_CANDIDATE_LIMIT,
+    });
+    const candidates = (Array.isArray(indexed?.keys) ? indexed.keys : [])
+      .map(entry => String(entry?.name || '').slice(PUBLIC_ROOM_INDEX_PREFIX.length))
+      .map(normalizeRoomCode)
+      .filter(Boolean);
+    const roomResponses = await Promise.all(candidates.map(async roomCode => {
+      try {
+        const response = await getRoomStub(env, roomCode).fetch(new Request('https://room.internal/info'));
+        if (!response.ok) return null;
+        const room = await response.json();
+        if (room.visibility !== 'public' || room.joinable !== true) return null;
+        return {
+          roomCode: room.roomCode,
+          mode: room.mode,
+          players: room.players,
+          maxPlayers: room.maxPlayers,
+          difficultyKey: room.difficultyKey,
+          createdAt: room.createdAt,
+          visibility: 'public',
+        };
+      } catch {
+        return null;
+      }
+    }));
+    const rooms = roomResponses.filter(Boolean)
+      .sort((first, second) => Number(second.createdAt || 0) - Number(first.createdAt || 0))
+      .slice(0, limit);
+    return json({ rooms, fetchedAt: Date.now() });
+  }
+
   if (path === '/multiplayer/rooms' && request.method === 'POST') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
     const loadTestBypass = hasLoadTestBypass(request, env);
@@ -1098,6 +1163,7 @@ async function handleRequest(request, env) {
       return json({ error: error?.message || 'Invalid room creation request' }, Number(error?.status) || 400);
     }
     const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
+    const visibility = normalizeLobbyVisibility(options.visibility);
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const difficulty = normalizeRoomDifficulty(options);
     const region = options.region == null || options.region === '' ? null : normalizeRegionHint(options.region);
@@ -1117,19 +1183,23 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region, difficultyKey: difficulty.key, difficulty }),
+        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region, visibility, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) return json({ error: 'That code is already in use', code: 'ROOM_CODE_TAKEN' }, 409);
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
-      return json({
+      const created = {
         roomCode: requested,
         status: 'waiting',
         maxPlayers,
         mode,
+        visibility,
         difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${requested}/socket`,
-      }, 201);
+        createdAt: Date.now(),
+      };
+      await registerPublicRoom(env, created);
+      return json(created, 201);
     }
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -1138,19 +1208,23 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode, mode, maxPlayers, region, difficultyKey: difficulty.key, difficulty }),
+        body: JSON.stringify({ roomCode, mode, maxPlayers, region, visibility, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) continue;
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
-      return json({
+      const created = {
         roomCode,
         status: 'waiting',
         maxPlayers,
         mode,
+        visibility,
         difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,
-      }, 201);
+        createdAt: Date.now(),
+      };
+      await registerPublicRoom(env, created);
+      return json(created, 201);
     }
     return json({ error: 'Could not allocate a unique room code' }, 503);
   }

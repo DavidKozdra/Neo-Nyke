@@ -116,7 +116,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `SERVER_HELLO` | reliable/control | Negotiated versions, authority identity, limits, heartbeat/reconnect policy. |
 | `JOIN_ACCEPTED` | reliable/control | Match/player IDs, reconnect token handled as sensitive session data, lobby state. |
 | `JOIN_REJECTED` | reliable/control | Stable reason code and safe human-readable message. |
-| `LOBBY_STATE` | reliable/control | Members, ready flags, host marker, mode, capacity, joinability. |
+| `LOBBY_STATE` | reliable/control | Members, ready flags, host marker, mode, public/private visibility, capacity, joinability. |
 | `MATCH_STARTING` | reliable/gameplay | Start tick/time, match/floor seeds, generation/content versions. |
 | `INITIAL_STATE` | reliable/snapshot | Full serializable `GameState`, authority tick, per-player input acknowledgements. |
 | `WORLD_SNAPSHOT` | unreliable, replaceable/snapshot | Snapshot and acknowledged-baseline sequence, server tick/time, changed entity state, scoped additions/removals, optional full-correction marker. |

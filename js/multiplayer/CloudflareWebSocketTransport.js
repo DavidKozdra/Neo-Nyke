@@ -28,15 +28,25 @@
     return code;
   }
 
-  function defaultApiBase() {
+  function defaultApiBases() {
     const configured = String(root.NEO_MULTIPLAYER_API_BASE || '').trim();
-    if (configured) return configured.replace(/\/$/, '');
+    if (configured) return [configured.replace(/\/$/, '')];
     const location = root.location;
     const localHost = ['localhost', '127.0.0.1', '::1'].includes(String(location?.hostname || '').toLowerCase());
-    const origin = localHost && location?.port && location.port !== '8787'
-      ? `${location.protocol}//${location.hostname}:8787`
-      : (location?.origin || 'http://127.0.0.1:8787');
-    return `${origin}/api/multiplayer`;
+    const currentOrigin = location?.origin || 'http://127.0.0.1:8787';
+    const resolved = String(CloudflareWebSocketTransport.resolvedApiBase || '').trim();
+    const bases = [resolved, `${currentOrigin}/api/multiplayer`].filter(Boolean);
+    // `wrangler dev` may select 8788/8789 when its default port is occupied;
+    // assets and APIs still share that selected origin. A separately served
+    // static client (for example port 5173) retains 8787 as a fallback.
+    if (localHost && location?.port && location.port !== '8787') {
+      bases.push(`${location.protocol}//${location.hostname}:8787/api/multiplayer`);
+    }
+    return [...new Set(bases.map(base => base.replace(/\/$/, '')))];
+  }
+
+  function defaultApiBase() {
+    return defaultApiBases()[0];
   }
 
   function websocketUrl(httpUrl) {
@@ -48,7 +58,10 @@
   class CloudflareWebSocketTransport extends NetworkTransport {
     constructor(options = {}) {
       super({ ...options, identity: options.identity || createGuestIdentity() });
-      this.apiBase = String(options.apiBase || defaultApiBase()).replace(/\/$/, '');
+      this.apiBaseCandidates = options.apiBase
+        ? [String(options.apiBase).replace(/\/$/, '')]
+        : defaultApiBases();
+      this.apiBase = this.apiBaseCandidates[0];
       this.fetchImpl = options.fetch || root.fetch?.bind(root);
       this.WebSocketCtor = options.WebSocket || root.WebSocket;
       this.socket = null;
@@ -66,20 +79,27 @@
     async checkAvailability(options = {}) {
       if (typeof this.fetchImpl !== 'function') return false;
       const timeoutMs = Math.max(250, Number(options.timeoutMs) || 4000);
-      const signal = options.signal
-        || (typeof root.AbortSignal?.timeout === 'function' ? root.AbortSignal.timeout(timeoutMs) : undefined);
-      try {
-        const response = await this.fetchImpl(`${this.apiBase}/health`, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-          cache: 'no-store',
-          ...(signal ? { signal } : {}),
-        });
-        const payload = await response.json().catch(() => ({}));
-        return response.ok && payload.ok === true && payload.multiplayer === true;
-      } catch {
-        return false;
+      for (const apiBase of this.apiBaseCandidates) {
+        const signal = options.signal
+          || (typeof root.AbortSignal?.timeout === 'function' ? root.AbortSignal.timeout(timeoutMs) : undefined);
+        try {
+          const response = await this.fetchImpl(`${apiBase}/health`, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            ...(signal ? { signal } : {}),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.ok === true && payload.multiplayer === true) {
+            this.apiBase = apiBase;
+            CloudflareWebSocketTransport.resolvedApiBase = apiBase;
+            return true;
+          }
+        } catch {
+          // Try the next local candidate. The caller owns the offline state.
+        }
       }
+      return false;
     }
 
     async createSession(options = {}) {
@@ -90,6 +110,7 @@
         body: JSON.stringify({
           maxPlayers: options.maxPlayers || 4,
           mode: ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop',
+          visibility: options.visibility === 'public' ? 'public' : 'private',
           ...(options.difficultyKey ? { difficultyKey: String(options.difficultyKey) } : {}),
           ...(options.difficulty && typeof options.difficulty === 'object'
             ? { difficulty: options.difficulty }
@@ -112,6 +133,21 @@
       const sessionId = normalizeRoomCode(payload.roomCode || payload.code);
       this.roomInfo = { ...payload, roomCode: sessionId };
       return { sessionId, roomCode: sessionId, authorityPeerId: this.authorityPeerId, ...payload };
+    }
+
+    async listPublicSessions(options = {}) {
+      if (!this.initialized) await this.initialize();
+      const requestedLimit = Math.trunc(Number(options.limit) || 12);
+      const limit = Math.max(1, Math.min(20, requestedLimit));
+      const response = await this.fetchImpl(`${this.apiBase}/rooms?limit=${limit}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Public lobby lookup failed (${response.status})`);
+      const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
+      return rooms.filter(room => room?.visibility === 'public' && ROOM_CODE_PATTERN.test(String(room.roomCode || '')));
     }
 
     async getSession(sessionId) {
@@ -200,12 +236,16 @@
     }
   }
 
+  CloudflareWebSocketTransport.resolvedApiBase = '';
+
   return {
     ROOM_CODE_PATTERN,
     AUTHORITY_PEER_ID,
     SOCKET_HEARTBEAT_REQUEST,
     SOCKET_HEARTBEAT_RESPONSE,
     normalizeRoomCode,
+    defaultApiBase,
+    defaultApiBases,
     websocketUrl,
     CloudflareWebSocketTransport,
   };

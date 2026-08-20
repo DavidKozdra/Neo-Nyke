@@ -46,6 +46,8 @@ NeoNyke.features.setDevelopmentFlag('multiplayer', true);
 
 Create Room and Join Room are active only when that flag is enabled. Create calls the Worker room route and then connects; Join validates a short code and connects to the same Durable Object. The existing same-device `coop` and `pvp` modes remain labeled Local Play and are not network multiplayer.
 
+Room creation explicitly chooses `public` or `private` visibility. Private is the transport/server default for older callers; the current menu presents a public-by-default earth/lock toggle. Public waiting rooms are placed in a short-lived KV discovery index and `GET /api/multiplayer/rooms` rechecks each bounded candidate against its room Durable Object before returning joinable results. Private rooms never enter that index and remain accessible only by invite code or invite link.
+
 ## Foundation modules
 
 - `js/simulation/GameState.js`: versioned JSON-safe authority state, ID-keyed entity maps, and stable monotonic entity ID allocation.
