@@ -228,6 +228,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/credits-images/ihave13digits.webp",
     "/assets/credits-images/pixelDavid.png",
     "/assets/credits-images/PrincessCredits.jpg",
+    "/assets/credits-images/smudge.jpg",
     "/assets/sounds/Coin.wav",
     "/assets/sounds/Heal_player.wav",
     "/assets/sounds/Item Collect.wav",
@@ -289,14 +290,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 276,
-    "bytes": 53610889,
+    "entries": 277,
+    "bytes": 56236546,
     "criticalEntries": 217,
-    "criticalBytes": 13270748,
-    "optionalEntries": 59,
-    "optionalBytes": 40340141
+    "criticalBytes": 13270561,
+    "optionalEntries": 60,
+    "optionalBytes": 42965985
   },
-  "version": "1bde3b6ab56df15b"
+  "version": "2d97d594154dcfdb"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
