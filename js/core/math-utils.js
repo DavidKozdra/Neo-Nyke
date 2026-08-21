@@ -317,6 +317,12 @@ let beamReflectDestructibles = null;
 let beamReflectWallsLength = -1;
 let beamReflectStructuresLength = -1;
 let beamReflectDestructiblesLength = -1;
+// A single frozen empty array so rooms without hazards keep a stable identity
+// and never bust the geometry cache on the array-identity check below.
+const BEAM_REFLECT_NO_HAZARDS = Object.freeze([]);
+let beamReflectHazards = null;
+let beamReflectHazardsLength = -1;
+let beamReflectHazardSignature = '';
 let beamReflectDoorState = -1;
 let beamReflectRevision = 0;
 const BEAM_REFLECT_CELL_SIZE = 128;
@@ -367,12 +373,44 @@ function buildBeamReflectSpatialIndex(rects) {
 export function invalidateBeamReflectGeometry() {
   beamReflectRevision += 1;
   beamReflectRectsCache = null;
+  beamReflectHazardSignature = '';
+}
+
+// Blood spikes are solid enough to bounce a beam: erupted spikes stand proud of
+// the floor, so lasers ricochet off them the same way they do off cover walls.
+// Only armed (risen) spikes reflect — the telegraph cracks are still flat floor.
+function hazardReflectsBeams(hazard) {
+  return !!hazard
+    && hazard.kind === 'red_spikes'
+    && Number(hazard.armTime || 0) <= 0
+    && Number(hazard.r || 0) > 0;
+}
+
+function getBeamReflectHazardRect(hazard) {
+  // Use the circle's inscribed square so the bounce surface stays inside the
+  // drawn spike cluster rather than clipping beams that only graze it.
+  const half = Number(hazard.r) * 0.7071;
+  return { x: hazard.x - half, y: hazard.y - half, w: half * 2, h: half * 2 };
+}
+
+// Cheap identity of the reflecting hazard set: spikes slide and arm over time,
+// so position must take part in the cache key, not just array length.
+function getBeamReflectHazardSignature(hazards) {
+  let signature = '';
+  for (let index = 0; index < hazards.length; index += 1) {
+    const hazard = hazards[index];
+    if (!hazardReflectsBeams(hazard)) continue;
+    signature += `${Math.round(hazard.x)},${Math.round(hazard.y)},${Math.round(hazard.r)};`;
+  }
+  return signature;
 }
 
 export function getBeamReflectRects() {
   const walls = Array.isArray(Neo.walls) ? Neo.walls : [];
   const structures = Array.isArray(Neo.structures) ? Neo.structures : [];
   const destructibles = Array.isArray(Neo.destructibles) ? Neo.destructibles : [];
+  const hazards = Array.isArray(Neo.hazards) ? Neo.hazards : BEAM_REFLECT_NO_HAZARDS;
+  const hazardSignature = getBeamReflectHazardSignature(hazards);
   const doorState = getBeamDoorState();
   const geometryUnchanged = beamReflectRectsCache
     && beamReflectRoom === Neo.currentRoom
@@ -382,7 +420,10 @@ export function getBeamReflectRects() {
     && beamReflectWallsLength === walls.length
     && beamReflectStructuresLength === structures.length
     && beamReflectDestructiblesLength === destructibles.length
-    && beamReflectDoorState === doorState;
+    && beamReflectDoorState === doorState
+    && beamReflectHazards === hazards
+    && beamReflectHazardsLength === hazards.length
+    && beamReflectHazardSignature === hazardSignature;
   if (geometryUnchanged) return beamReflectRectsCache;
 
   const rects = walls.slice();
@@ -399,6 +440,10 @@ export function getBeamReflectRects() {
     const rect = getDestructibleRect(prop);
     if (rect.w > 0 && rect.h > 0) rects.push(rect);
   });
+  hazards.forEach(hazard => {
+    if (!hazardReflectsBeams(hazard)) return;
+    rects.push(getBeamReflectHazardRect(hazard));
+  });
   Object.defineProperty(rects, 'beamSpatialIndex', {
     configurable: true,
     value: buildBeamReflectSpatialIndex(rects),
@@ -411,6 +456,9 @@ export function getBeamReflectRects() {
   beamReflectStructuresLength = structures.length;
   beamReflectDestructiblesLength = destructibles.length;
   beamReflectDoorState = doorState;
+  beamReflectHazards = hazards;
+  beamReflectHazardsLength = hazards.length;
+  beamReflectHazardSignature = hazardSignature;
   beamReflectRectsCache = rects;
   beamReflectRevision += 1;
   return rects;

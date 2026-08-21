@@ -1024,6 +1024,9 @@ export const ui = {
     multiplayerVisibilityToggle: document.getElementById('multiplayerVisibilityToggle'),
     multiplayerVisibilityIcon: document.getElementById('multiplayerVisibilityIcon'),
     multiplayerVisibilityLabel: document.getElementById('multiplayerVisibilityLabel'),
+    multiplayerPauseModeToggle: document.getElementById('multiplayerPauseModeToggle'),
+    multiplayerPauseModeIcon: document.getElementById('multiplayerPauseModeIcon'),
+    multiplayerPauseModeLabel: document.getElementById('multiplayerPauseModeLabel'),
     multiplayerJoinPanel: document.getElementById('multiplayerJoinPanel'),
     multiplayerJoinRoom: document.getElementById('multiplayerJoinRoom'),
     multiplayerJoinClipboard: document.getElementById('multiplayerJoinClipboard'),
@@ -1061,9 +1064,16 @@ export const ui = {
     coopLobbyVisibility: document.getElementById('coopLobbyVisibility'),
     coopLobbyVisibilityIcon: document.getElementById('coopLobbyVisibilityIcon'),
     coopLobbyVisibilityLabel: document.getElementById('coopLobbyVisibilityLabel'),
+    coopLobbyPauseMode: document.getElementById('coopLobbyPauseMode'),
+    coopLobbyPauseModeLabel: document.getElementById('coopLobbyPauseModeLabel'),
     coopLobbyPartyCount: document.getElementById('coopLobbyPartyCount'),
     coopLobbySlots: document.getElementById('coopLobbySlots'),
     coopLobbyActivity: document.getElementById('coopLobbyActivity'),
+    coopLobbyChatLog: document.getElementById('coopLobbyChatLog'),
+    coopLobbyChatForm: document.getElementById('coopLobbyChatForm'),
+    coopLobbyChatInput: document.getElementById('coopLobbyChatInput'),
+    coopLobbyChatSend: document.getElementById('coopLobbyChatSend'),
+    coopLobbyChatStatus: document.getElementById('coopLobbyChatStatus'),
     coopLobbyPicker: document.getElementById('coopLobbyPicker'),
     coopLobbyHeroDetail: document.getElementById('coopLobbyHeroDetail'),
     coopLobbyReady: document.getElementById('coopLobbyReady'),
@@ -1310,7 +1320,9 @@ export const SANDBOX_DEFAULT_SETTINGS = {
   // Auto-pause when the window loses focus (gameplay setting, defaults on).
   window.addEventListener('blur', () => {
     if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;
-    if (Neo.gameState === 'play') Neo.pauseGame();
+    if (Neo.gameState === 'play' && Neo.multiplayerGameView?.active) {
+      Neo.multiplayerGameView.togglePause?.(true);
+    } else if (Neo.gameState === 'play') Neo.pauseGame();
     // If we died but haven't reached the death screen yet, the death animation is
     // still playing ('dying'). Freeze it here so we don't blow past the death moment
     // while the window is unfocused — it resumes on focus.

@@ -100,6 +100,10 @@ function normalizeLobbyVisibility(value) {
   return value === 'public' ? 'public' : 'private';
 }
 
+function normalizePauseMode(value) {
+  return value === 'vote' ? 'vote' : 'shared';
+}
+
 function publicRoomIndexKey(roomCode) {
   return `${PUBLIC_ROOM_INDEX_PREFIX}${roomCode}`;
 }
@@ -330,6 +334,7 @@ export class MultiplayerRoom {
       maxPlayers,
       mode,
       visibility: normalizeLobbyVisibility(room.visibility),
+      pauseMode: normalizePauseMode(room.pauseMode),
       deferFloorGeneration: true,
       difficultyKey: room.difficultyKey,
       difficulty: room.difficulty,
@@ -344,6 +349,7 @@ export class MultiplayerRoom {
       reviveEnabled: mode === 'coop',
       floorAdvance: mode === 'rival' ? 'first' : 'all-living',
       sharedDiscovery: mode === 'coop',
+      pauseMode: authority.pauseMode,
     };
     return authority;
   }
@@ -517,6 +523,7 @@ export class MultiplayerRoom {
     const mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const difficulty = normalizeRoomDifficulty(options);
+    const pauseMode = normalizePauseMode(options.pauseMode);
     const requestedRoomCode = normalizeRoomCode(options.roomCode);
     if (!requestedRoomCode) return json({ error: 'Room code is required' }, 400);
     this.roomCode = requestedRoomCode;
@@ -527,6 +534,7 @@ export class MultiplayerRoom {
       maxPlayers,
       mode,
       visibility: normalizeLobbyVisibility(options.visibility),
+      pauseMode,
       difficultyKey: difficulty.key,
       difficulty,
       region: normalizeRegionHint(options.region),
@@ -542,9 +550,11 @@ export class MultiplayerRoom {
     if (!room) return json({ error: 'Room not found' }, 404);
     let status;
     let players;
+    let pauseMode = normalizePauseMode(room.pauseMode);
     if (this.authority) {
       status = this.authority.simulation.state.status;
       players = this.authority.playerIdByPeer.size;
+      pauseMode = normalizePauseMode(this.authority.pauseMode);
     } else {
       // The compact fields live in the same checkpoint row as the game save.
       // Reading them avoids constructing a generated floor merely to answer a
@@ -558,11 +568,13 @@ export class MultiplayerRoom {
       if (!Number.isFinite(players) && Array.isArray(checkpoint?.runtime?.playerIdByPeer)) {
         players = checkpoint.runtime.playerIdByPeer.length;
       }
+      pauseMode = normalizePauseMode(checkpoint?.runtime?.pauseMode || pauseMode);
     }
     status = ['waiting', 'starting', 'running', 'ended'].includes(status) ? status : room.status;
     players = Math.max(0, Math.trunc(Number(players) || 0));
     return json({
       ...room,
+      pauseMode,
       status,
       players,
       joinable: status === 'waiting' && players < room.maxPlayers,
@@ -603,10 +615,12 @@ export class MultiplayerRoom {
   ensureTicking() {
     if (this.tickTimer !== null || !this.authority
       || this.authority.simulation.state.status !== 'running'
+      || this.authority.authorityPaused
       || this.authority.playerIdByPeer.size === 0) return;
     this.nextTickAt = Date.now() + ROOM_TICK_INTERVAL_MS;
     this.tickTimer = setInterval(() => {
-      if (this.authority.playerIdByPeer.size === 0 || this.authority.simulation.state.status !== 'running') {
+      if (this.authority.playerIdByPeer.size === 0 || this.authority.simulation.state.status !== 'running'
+        || this.authority.authorityPaused) {
         this.stopTicking();
         return;
       }
@@ -729,7 +743,8 @@ export class MultiplayerRoom {
   }
 
   syncTicking() {
-    if (this.authority?.simulation.state.status === 'running' && this.authority.playerIdByPeer.size > 0) this.ensureTicking();
+    if (this.authority?.simulation.state.status === 'running' && !this.authority.authorityPaused
+      && this.authority.playerIdByPeer.size > 0) this.ensureTicking();
     else this.stopTicking();
   }
 
@@ -1136,6 +1151,7 @@ async function handleRequest(request, env) {
           players: room.players,
           maxPlayers: room.maxPlayers,
           difficultyKey: room.difficultyKey,
+          pauseMode: normalizePauseMode(room.pauseMode),
           createdAt: room.createdAt,
           visibility: 'public',
         };
@@ -1166,6 +1182,7 @@ async function handleRequest(request, env) {
     const visibility = normalizeLobbyVisibility(options.visibility);
     const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     const difficulty = normalizeRoomDifficulty(options);
+    const pauseMode = normalizePauseMode(options.pauseMode);
     const region = options.region == null || options.region === '' ? null : normalizeRegionHint(options.region);
     if (options.region != null && options.region !== '' && !region) {
       return json({ error: 'Unsupported multiplayer region', code: 'INVALID_REGION' }, 400);
@@ -1183,7 +1200,7 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region, visibility, difficultyKey: difficulty.key, difficulty }),
+        body: JSON.stringify({ roomCode: requested, mode, maxPlayers, region, visibility, pauseMode, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) return json({ error: 'That code is already in use', code: 'ROOM_CODE_TAKEN' }, 409);
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -1193,6 +1210,7 @@ async function handleRequest(request, env) {
         maxPlayers,
         mode,
         visibility,
+        pauseMode,
         difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${requested}/socket`,
@@ -1208,7 +1226,7 @@ async function handleRequest(request, env) {
       const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode, mode, maxPlayers, region, visibility, difficultyKey: difficulty.key, difficulty }),
+        body: JSON.stringify({ roomCode, mode, maxPlayers, region, visibility, pauseMode, difficultyKey: difficulty.key, difficulty }),
       }));
       if (initialized.status === 409) continue;
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
@@ -1218,6 +1236,7 @@ async function handleRequest(request, env) {
         maxPlayers,
         mode,
         visibility,
+        pauseMode,
         difficultyKey: difficulty.key,
         region,
         socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,

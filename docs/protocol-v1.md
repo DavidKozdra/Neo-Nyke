@@ -67,6 +67,8 @@ The protocol's co-op match is entered from the separate `MULTIPLAYER` flow. Lega
 | `INTERACT_REQUEST` | reliable/gameplay | Target entity ID and input sequence. Authority checks existence, distance, ownership/state, and one-winner races. |
 | `UPGRADE_SELECTION` | reliable/gameplay | Authority-issued selection event ID plus option ID. Authority checks eligibility and whether already resolved. |
 | `CHAT_SEND` | reliable/chat | Sender-owned party text, trimmed and bounded to 180 characters. Authority sanitizes and rate-limits before broadcast. |
+| `LOBBY_PAUSE_MODE` | reliable/control | Switch the waiting lobby between shared pause and majority-vote pause. The authority broadcasts the rule and clears ready confirmations; the rule locks when the match starts. |
+| `PAUSE_REQUEST` | reliable/control | Sender requests authority pause or resume. The room applies it immediately in shared mode or records it toward the connected-player majority in vote mode. |
 | `REMATCH_REQUEST` | reliable/control | Boolean post-run rematch readiness. A new run starts only after every connected member is ready. |
 | `LEAVE_MATCH` | reliable/control | Graceful leave reason code. Authority owns cleanup. |
 | `PING` | unreliable/control | Opaque bounded nonce and client send timestamp used only for diagnostics. |
@@ -116,7 +118,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `SERVER_HELLO` | reliable/control | Negotiated versions, authority identity, limits, heartbeat/reconnect policy. |
 | `JOIN_ACCEPTED` | reliable/control | Match/player IDs, reconnect token handled as sensitive session data, lobby state. |
 | `JOIN_REJECTED` | reliable/control | Stable reason code and safe human-readable message. |
-| `LOBBY_STATE` | reliable/control | Members, ready flags, host marker, mode, public/private visibility, capacity, joinability. |
+| `LOBBY_STATE` | reliable/control | Members, ready flags, mode, public/private visibility, shared/vote pause rule, capacity, joinability. |
 | `MATCH_STARTING` | reliable/gameplay | Start tick/time, match/floor seeds, generation/content versions. |
 | `INITIAL_STATE` | reliable/snapshot | Full serializable `GameState`, authority tick, per-player input acknowledgements. |
 | `WORLD_SNAPSHOT` | unreliable, replaceable/snapshot | Snapshot and acknowledged-baseline sequence, server tick/time, changed entity state, scoped additions/removals, optional full-correction marker. |
@@ -126,6 +128,7 @@ Clients must not play combat presentation directly from button input. The sender
 | `FLOOR_TRANSITION` | reliable/gameplay | New floor number/seed, transition tick, spawn points, generation/content versions. |
 | `RUN_ENDED` | reliable/gameplay | Result, authority reason, synchronized summary, leaderboard eligibility. |
 | `CHAT_MESSAGE` | reliable/chat | Authority-attributed player ID/name, sanitized text, message ID, and authority tick. |
+| `PAUSE_STATE` | reliable/control | Authority pause state, shared/vote rule, current vote target, voter IDs, and majority threshold. |
 | `PLAYER_DISCONNECTED` | reliable/control | Player ID, reason, reconnect deadline if reserved. |
 | `ERROR` | reliable/control | Stable safe code, message, whether connection closes. Never includes secrets/internal stack. |
 | `PONG` | unreliable/control | Echoed nonce plus authority tick/time for RTT and jitter diagnostics. |

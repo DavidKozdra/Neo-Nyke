@@ -76,6 +76,7 @@ describe('public and private multiplayer lobbies', () => {
     expect(html).toMatch(/id="multiplayerVisibilityIcon"[^>]*>🌐</);
     expect(html).toMatch(/id="multiplayerPublicLobbyList"[^>]*role="list"/);
     expect(html).toMatch(/id="coopLobbyVisibility"[^>]*data-visibility="private"/);
+    expect(html).toMatch(/id="multiplayerPauseModeToggle"[^>]*data-pause-mode="shared"/);
     expect(controller).toContain('function setMultiplayerVisibilityChoice(visibility)');
     expect(controller).toContain('async function refreshPublicLobbies()');
     expect(controller).toContain("session.joinRoom(room.roomCode)");
@@ -95,7 +96,7 @@ describe('public and private multiplayer lobbies', () => {
       }
       return new Response(JSON.stringify({
         rooms: [
-          { roomCode: 'NYKE42', visibility: 'public', players: 1, maxPlayers: 4 },
+          { roomCode: 'NYKE42', visibility: 'public', players: 1, maxPlayers: 4, pauseMode: 'vote' },
           { roomCode: 'HIDE42', visibility: 'private', players: 1, maxPlayers: 4 },
         ],
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -106,14 +107,15 @@ describe('public and private multiplayer lobbies', () => {
       WebSocket: function FakeWebSocket() {},
     });
 
-    await transport.createSession({ mode: 'coop', visibility: 'public' });
+    await transport.createSession({ mode: 'coop', visibility: 'public', pauseMode: 'vote' });
     const createBody = JSON.parse(requests[0].options.body);
     expect(createBody.visibility).toBe('public');
+    expect(createBody.pauseMode).toBe('vote');
 
     const rooms = await transport.listPublicSessions({ limit: 7 });
     expect(requests[1].url).toBe('https://game.example/api/multiplayer/rooms?limit=7');
     expect(rooms).toEqual([
-      { roomCode: 'NYKE42', visibility: 'public', players: 1, maxPlayers: 4 },
+      { roomCode: 'NYKE42', visibility: 'public', players: 1, maxPlayers: 4, pauseMode: 'vote' },
     ]);
   });
 
@@ -132,6 +134,7 @@ describe('public and private multiplayer lobbies', () => {
     });
     await transport.createSession();
     expect(createBody.visibility).toBe('private');
+    expect(createBody.pauseMode).toBe('shared');
 
     expect(() => createEnvelope('LOBBY_STATE', 1, 0, {
       status: 'waiting',
@@ -140,6 +143,7 @@ describe('public and private multiplayer lobbies', () => {
       maxPlayers: 4,
       mode: 'coop',
       visibility: 'public',
+      pauseMode: 'vote',
     })).not.toThrow();
     expect(() => createEnvelope('LOBBY_STATE', 1, 0, {
       status: 'waiting',
@@ -158,6 +162,7 @@ describe('public and private multiplayer lobbies', () => {
     expect(server).toContain("room?.visibility !== 'public'");
     expect(server).toContain("path === '/multiplayer/rooms' && request.method === 'GET'");
     expect(server).toContain("room.visibility !== 'public' || room.joinable !== true");
+    expect(server).toContain('pauseMode: normalizePauseMode(room.pauseMode)');
     expect(server).toContain('PUBLIC_ROOM_CANDIDATE_LIMIT');
     expect(server).toContain('{ expirationTtl: PUBLIC_ROOM_INDEX_TTL_SECONDS }');
   });

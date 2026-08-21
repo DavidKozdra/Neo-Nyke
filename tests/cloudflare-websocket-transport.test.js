@@ -69,7 +69,9 @@ describe('CloudflareWebSocketTransport', () => {
     const created = await transport.createSession({ mode: 'rival', maxPlayers: 3 });
     expect(created).toEqual(expect.objectContaining({ roomCode: 'ABC234', sessionId: 'ABC234' }));
     expect(fetch).toHaveBeenCalledWith('https://game.example/api/multiplayer/rooms', expect.objectContaining({ method: 'POST' }));
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'rival', maxPlayers: 3, visibility: 'private' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      mode: 'rival', maxPlayers: 3, visibility: 'private', pauseMode: 'shared',
+    });
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
@@ -92,6 +94,7 @@ describe('CloudflareWebSocketTransport', () => {
       mode: 'coop',
       maxPlayers: 4,
       visibility: 'private',
+      pauseMode: 'shared',
       difficultyKey: 'hard',
       difficulty: { key: 'hard', statMultiplier: 1.12 },
     });
@@ -106,7 +109,9 @@ describe('CloudflareWebSocketTransport', () => {
       apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
     });
     await transport.createSession({ mode: 'boss_rush', maxPlayers: 1 });
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'boss_rush', maxPlayers: 1, visibility: 'private' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      mode: 'boss_rush', maxPlayers: 1, visibility: 'private', pauseMode: 'shared',
+    });
   });
 
   test('passes the host-selected region only when creating a new room', async () => {
@@ -120,7 +125,22 @@ describe('CloudflareWebSocketTransport', () => {
     });
     await transport.createSession({ region: 'weur' });
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
-      mode: 'coop', maxPlayers: 4, visibility: 'private', region: 'weur',
+      mode: 'coop', maxPlayers: 4, visibility: 'private', pauseMode: 'shared', region: 'weur',
+    });
+  });
+
+  test('sends the host-selected multiplayer pause rule', async () => {
+    const fetch = jest.fn(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ roomCode: 'PAUS24', status: 'waiting', maxPlayers: 4, pauseMode: 'vote' }),
+    }));
+    const transport = new CloudflareWebSocketTransport({
+      apiBase: 'https://game.example/api/multiplayer', fetch, WebSocket: FakeWebSocket,
+    });
+    await transport.createSession({ pauseMode: 'vote' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      mode: 'coop', maxPlayers: 4, visibility: 'private', pauseMode: 'vote',
     });
   });
 

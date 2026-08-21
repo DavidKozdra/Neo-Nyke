@@ -27,7 +27,7 @@ function transport(network, id, displayName) {
   });
 }
 
-async function createRunningHarness(networkOptions = {}) {
+async function createRunningHarness(networkOptions = {}, authorityOptions = {}) {
   const clock = new VirtualNetworkClock();
   const network = new LocalLoopbackNetwork({
     latencyMs: 100,
@@ -41,7 +41,9 @@ async function createRunningHarness(networkOptions = {}) {
   const hostTransport = transport(network, 'authority', 'Authority');
   const clientATransport = transport(network, 'client-a', 'Client A');
   const clientBTransport = transport(network, 'client-b', 'Client B');
-  const authority = new LocalMultiplayerAuthority({ transport: hostTransport, sessionId: 'GOFAST', matchSeed: 1234 });
+  const authority = new LocalMultiplayerAuthority({
+    transport: hostTransport, sessionId: 'GOFAST', matchSeed: 1234, ...authorityOptions,
+  });
   const clientA = new LocalMultiplayerClient({ transport: clientATransport });
   const clientB = new LocalMultiplayerClient({ transport: clientBTransport });
   await authority.start();
@@ -905,14 +907,16 @@ describe('protocol-driven local multiplayer session', () => {
   });
 
   test('exports and restores authority peer runtime required after hibernation', async () => {
-    const { authority, clientA, clientB } = await createRunningHarness({
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
       unreliablePacketLoss: 0,
       duplicateMessageRate: 0,
     });
+    clientA.requestPause(true);
+    clock.runAll();
     const runtime = authority.exportRuntimeCheckpoint();
-    const clock = new VirtualNetworkClock();
-    const network = new LocalLoopbackNetwork({ clock });
-    const restored = new LocalMultiplayerAuthority({ transport: transport(network, 'restored-authority', 'Authority') });
+    const restoreClock = new VirtualNetworkClock();
+    const restoreNetwork = new LocalLoopbackNetwork({ clock: restoreClock });
+    const restored = new LocalMultiplayerAuthority({ transport: transport(restoreNetwork, 'restored-authority', 'Authority') });
     restored.simulation.state = GameState.deserialize(authority.simulation.serialize());
     Object.values(restored.simulation.state.players).forEach(player => {
       player.radius = 18;
@@ -926,6 +930,9 @@ describe('protocol-driven local multiplayer session', () => {
     expect(Object.values(restored.simulation.state.players).every(player => player.radius === 14)).toBe(true);
     expect(restored.simulation.state.contentVersion).toBe(restored.contentVersion);
     expect(restored.simulation.state.floorState.layout.contentVersion).toBe(restored.contentVersion);
+    expect(restored.pauseMode).toBe('shared');
+    expect(restored.authorityPaused).toBe(true);
+    expect(restored.simulation.state.matchRules.pauseMode).toBe('shared');
   });
 
   test('rejects stale input sequences even when the envelope itself is new', async () => {
@@ -1224,6 +1231,136 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientB.chatMessages).toEqual(clientA.chatMessages);
   });
 
+  test('shares authority pause and resume across the whole running party', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    }, { pauseMode: 'shared' });
+    const tickBeforePause = authority.simulation.state.tick;
+
+    clientA.requestPause(true);
+    clock.runAll();
+
+    expect(authority.authorityPaused).toBe(true);
+    expect(clientA.pauseState).toEqual(expect.objectContaining({ pauseMode: 'shared', paused: true }));
+    expect(clientB.pauseState).toEqual(expect.objectContaining({ pauseMode: 'shared', paused: true }));
+    clientA.sendAction('ATTACK', 0);
+    clientA.sendInput({ moveX: 1, moveY: 0, aimDirection: 0, buttons: 1 });
+    clock.runAll();
+    expect(authority.pendingActions[clientA.playerId]).toEqual([]);
+    expect(authority.pendingInputs[clientA.playerId]).toEqual(expect.objectContaining({ moveX: 0, buttons: 0 }));
+    authority.step(10);
+    expect(authority.simulation.state.tick).toBe(tickBeforePause);
+
+    clientB.requestPause(false);
+    clock.runAll();
+    expect(authority.authorityPaused).toBe(false);
+    expect(clientA.pauseState.paused).toBe(false);
+    authority.step(1);
+    expect(authority.simulation.state.tick).toBe(tickBeforePause + 1);
+  });
+
+  test('requires a connected-player majority to vote for pause and resume', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    }, { pauseMode: 'vote' });
+
+    clientA.requestPause(true);
+    clock.runAll();
+    expect(authority.authorityPaused).toBe(false);
+    expect(clientB.pauseState).toEqual(expect.objectContaining({
+      pauseMode: 'vote', paused: false, target: 'pause', requiredVotes: 2,
+    }));
+    expect(clientB.pauseState.votes).toEqual([clientA.playerId]);
+
+    // A redundant request for the current running state must not cancel the
+    // other player's pending pause vote.
+    clientB.requestPause(false);
+    clock.runAll();
+    expect(clientA.pauseState).toEqual(expect.objectContaining({ target: 'pause' }));
+    expect(clientA.pauseState.votes).toEqual([clientA.playerId]);
+
+    clientB.requestPause(true);
+    clock.runAll();
+    expect(authority.authorityPaused).toBe(true);
+    expect(clientA.pauseState).toEqual(expect.objectContaining({ paused: true, votes: [] }));
+
+    clientA.requestPause(false);
+    clock.runAll();
+    expect(authority.authorityPaused).toBe(true);
+    expect(clientB.pauseState).toEqual(expect.objectContaining({ target: 'resume', requiredVotes: 2 }));
+
+    // Likewise, repeating the already-paused state cannot erase a resume vote.
+    clientB.requestPause(true);
+    clock.runAll();
+    expect(clientA.pauseState).toEqual(expect.objectContaining({ target: 'resume' }));
+    expect(clientA.pauseState.votes).toEqual([clientA.playerId]);
+
+    clientB.requestPause(false);
+    clock.runAll();
+    expect(authority.authorityPaused).toBe(false);
+    expect(clientA.pauseState).toEqual(expect.objectContaining({ paused: false, votes: [] }));
+  });
+
+  test('broadcasts chat while players are still in the pre-game lobby', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({
+      clock, latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+      sessionId: 'CHAT42',
+      minPlayers: 2,
+    });
+    const clientA = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    const clientB = new LocalMultiplayerClient({ transport: transport(network, 'client-b', 'Client B') });
+    await authority.start();
+    await clientA.connect('CHAT42');
+    await clientB.connect('CHAT42');
+    clock.runAll();
+
+    expect(authority.simulation.state.status).toBe('waiting');
+    expect(clientA.sendChat('Ready when you are')).toBe(true);
+    clock.runAll();
+
+    expect(clientA.chatMessages).toEqual([expect.objectContaining({
+      displayName: 'Client A',
+      text: 'Ready when you are',
+      sentAtTick: 0,
+    })]);
+    expect(clientB.chatMessages).toEqual(clientA.chatMessages);
+  });
+
+  test('lets waiting lobby members change the pause rule and resets readiness', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({
+      clock, latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    const authority = new LocalMultiplayerAuthority({
+      transport: transport(network, 'authority', 'Authority'),
+      sessionId: 'RULE42',
+      minPlayers: 2,
+      pauseMode: 'shared',
+    });
+    const clientA = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    const clientB = new LocalMultiplayerClient({ transport: transport(network, 'client-b', 'Client B') });
+    await authority.start();
+    await clientA.connect('RULE42');
+    await clientB.connect('RULE42');
+    clock.runAll();
+
+    clientA.sendReady(true);
+    clock.runAll();
+    expect(clientA.lobbyState.members.find(member => member.playerId === clientA.playerId).ready).toBe(true);
+
+    clientB.setPauseMode('vote');
+    clock.runAll();
+    expect(authority.pauseMode).toBe('vote');
+    expect(authority.simulation.state.matchRules.pauseMode).toBe('vote');
+    expect(clientA.lobbyState.pauseMode).toBe('vote');
+    expect(clientB.lobbyState.pauseMode).toBe('vote');
+    expect(clientA.lobbyState.members.every(member => member.ready === false)).toBe(true);
+  });
+
   test('restarts the same room only after every connected player requests a rematch', async () => {
     const { clock, authority, clientA, clientB } = await createRunningHarness({
       unreliablePacketLoss: 0,
@@ -1253,7 +1390,7 @@ describe('protocol-driven local multiplayer session', () => {
   });
 
   test('rejects a client from the snapshot schema before the required beam-struggle field', async () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v37');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v39');
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
     const authority = new LocalMultiplayerAuthority({ transport: transport(network, 'authority', 'Authority') });

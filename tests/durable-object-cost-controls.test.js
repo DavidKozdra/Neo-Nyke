@@ -18,6 +18,7 @@ describe('Durable Object daily usage controls', () => {
   test('runs the 20 Hz timer only for an active match with authenticated players', () => {
     expect(server).toContain("this.authority.simulation.state.status !== 'running'");
     expect(server).toContain('this.authority.playerIdByPeer.size === 0');
+    expect(server).toContain('this.authority.authorityPaused');
     expect(server).toContain('const ACTIVE_PLAYER_IDLE_TIMEOUT_MS = 5 * 60 * 1000');
     expect(server).toContain("this.transport.disconnectPeer(peerId, 'idle-timeout')");
     expect(server).toContain('const MAX_ACTIVE_MATCH_SECONDS = 4 * 60 * 60');
@@ -109,7 +110,7 @@ describe('Durable Object daily usage controls', () => {
     expect(server).toContain('const requestedRoomCode = normalizeRoomCode(options.roomCode)');
     expect(server).toContain('this.roomCode = normalizeRoomCode(room.roomCode) || this.roomCode');
     expect(server).toContain('this.transport.roomCode = this.roomCode');
-    expect(server).toContain('body: JSON.stringify({ roomCode, mode, maxPlayers, region, visibility, difficultyKey: difficulty.key, difficulty })');
+    expect(server).toContain('body: JSON.stringify({ roomCode, mode, maxPlayers, region, visibility, pauseMode, difficultyKey: difficulty.key, difficulty })');
   });
 
   test('rejects invalid socket upgrades before invoking the Durable Object', () => {

@@ -3829,6 +3829,7 @@
         ttl: 1.1,
         armTime: 0.48,
         damage: Math.round(enemy.dmg * 1.1),
+        knockback: 260,
         statusKey: 'bleed',
         statusStacks: getBossStatusStacks(enemy, 2),
         statusDuration: 3.4,

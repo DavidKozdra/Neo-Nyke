@@ -127,6 +127,27 @@ describe('gameplay protocol v1 runtime validation', () => {
       .toContain('payload.text is too long');
   });
 
+  test('validates authority-routed party pause requests and vote state', () => {
+    expect(validateEnvelope(createEnvelope('LOBBY_PAUSE_MODE', 8, 0, { pauseMode: 'vote' }), {
+      direction: CLIENT_TO_AUTHORITY,
+    })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope(createEnvelope('PAUSE_REQUEST', 9, 24, { paused: true }), {
+      direction: CLIENT_TO_AUTHORITY,
+    })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope(createEnvelope('PAUSE_STATE', 10, 24, {
+      pauseMode: 'vote', paused: false, target: 'pause', votes: ['p1'], requiredVotes: 2,
+    }), { direction: AUTHORITY_TO_CLIENT })).toEqual({ ok: true, errors: [] });
+    expect(getDeliveryIntent('PAUSE_REQUEST')).toEqual({
+      reliability: 'reliable', channel: 'control', replaceable: false,
+    });
+    expect(getDeliveryIntent('LOBBY_PAUSE_MODE')).toEqual({
+      reliability: 'reliable', channel: 'control', replaceable: false,
+    });
+    expect(() => createEnvelope('PAUSE_STATE', 11, 24, {
+      pauseMode: 'host-only', paused: false, votes: [], requiredVotes: 2,
+    })).toThrow(/pauseMode/);
+  });
+
   test('validates enriched player departure notices', () => {
     expect(validateEnvelope(createEnvelope('PLAYER_DISCONNECTED', 8, 20, {
       playerId: 'player-2',

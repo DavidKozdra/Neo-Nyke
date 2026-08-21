@@ -1168,7 +1168,10 @@ export function setInventoryPanelOpen(open, options = {}) {
       Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
     }
     if (open) {
-      const shouldPause = window.NeoSettings?.shouldPauseInventory?.() !== false;
+      // Inventory is a live panel in network play. It must never invoke the
+      // single-player pause functions behind the authority's back.
+      const shouldPause = window.NeoSettings?.shouldPauseInventory?.() !== false
+        && !Neo.multiplayerGameView?.active;
       if (shouldPause && Neo.gameState === 'play') {
         Neo.inventoryPauseActive = true;
         Neo.pauseGame();

@@ -49,7 +49,6 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/HandsomeDevil.png",
     "/assets/sprites/chars/healer.png",
     "/assets/sprites/chars/hunter.png",
-    "/assets/sprites/chars/image-1787263476185.jpg",
     "/assets/sprites/chars/knave.png",
     "/assets/sprites/chars/large-golem.png",
     "/assets/sprites/chars/machine_gunner.png",
@@ -57,6 +56,8 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/mini-golem.png",
     "/assets/sprites/chars/Mooggy.png",
     "/assets/sprites/chars/princess.png",
+    "/assets/sprites/chars/PrincessCredits.jpg",
+    "/assets/sprites/chars/PXL_20260820_142621256.MP.jpg",
     "/assets/sprites/chars/queen_1.png",
     "/assets/sprites/chars/Sarge.png",
     "/assets/sprites/chars/shield_unit.png",
@@ -226,6 +227,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/credits-images/forrest.gif",
     "/assets/credits-images/ihave13digits.webp",
     "/assets/credits-images/pixelDavid.png",
+    "/assets/credits-images/PrincessCredits.jpg",
     "/assets/sounds/Coin.wav",
     "/assets/sounds/Heal_player.wav",
     "/assets/sounds/Item Collect.wav",
@@ -287,14 +289,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 274,
-    "bytes": 52807315,
-    "criticalEntries": 216,
-    "criticalBytes": 12639729,
-    "optionalEntries": 58,
-    "optionalBytes": 40167586
+    "entries": 276,
+    "bytes": 53610889,
+    "criticalEntries": 217,
+    "criticalBytes": 13270748,
+    "optionalEntries": 59,
+    "optionalBytes": 40340141
   },
-  "version": "36ce04c3761e996b"
+  "version": "1bde3b6ab56df15b"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

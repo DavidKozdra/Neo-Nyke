@@ -209,6 +209,18 @@
       return this.client.sendChat(text);
     }
 
+    setPauseMode(pauseMode) {
+      const result = this.client.setPauseMode(pauseMode);
+      this._notify();
+      return result;
+    }
+
+    requestPause(paused = true) {
+      const result = this.client.requestPause(paused);
+      this._notify();
+      return result;
+    }
+
     get status() {
       return this.client.status;
     }
@@ -291,6 +303,7 @@
         stateEpoch: this.client.stateEpoch,
         snapshotSequence: this.client.latestSnapshotSequence,
         lobbyState: this.client.lobbyState,
+        pauseState: this.client.pauseState,
         gameState: this.client.getStateSnapshot(),
         gameplayEvents: this.client.gameplayEvents.slice(),
         chatMessages: this.client.chatMessages.slice(),

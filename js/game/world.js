@@ -2521,6 +2521,13 @@
         }
       }
       if (hazard.kind === 'red_spikes') {
+        // Spikes are loose objects: integrate any laser shove before contact so
+        // a pushed cluster damages from where it actually ended up this frame.
+        const physics = globalThis.NeoNyke?.simulation?.advanceCampaignHazardPhysics?.(hazard, {
+          delta: dt, width: Neo.ROOM_W, height: Neo.ROOM_H,
+        });
+        // A moved spike changes the beam bounce geometry, so drop the cached path.
+        if (physics?.moved) Neo.invalidateBeamReflectGeometry?.();
         hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
         if (hazard.armTime <= 0 && !hazard.hit) {
           hazard.hit = true;
@@ -2530,7 +2537,7 @@
               const actor = slot.getEntity();
               if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) <= hazard.r + actor.r) {
               const angle = Neo.angleBetween(hazard, actor);
-              damagePlayerSlot(slot, hazard.damage || 18, angle, 130, hazard.source || 'red_spikes', {
+              damagePlayerSlot(slot, hazard.damage || 18, angle, Number(hazard.knockback || 170), hazard.source || 'red_spikes', {
                 attacker: getAttackArtifactOwner(hazard),
               });
               const statusKey = String(hazard.statusKey || 'bleed');
@@ -2544,7 +2551,7 @@
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
               const angle = Neo.angleBetween(hazard, enemy);
-              Neo.hitEnemy(enemy, hazard.damage || 18, angle, 130, '#ff3348');
+              Neo.hitEnemy(enemy, hazard.damage || 18, angle, Number(hazard.knockback || 170), '#ff3348');
             });
           }
         }

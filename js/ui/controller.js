@@ -121,6 +121,7 @@ export function createUIController(view) {
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerMode) view.multiplayerMode.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerVisibilityToggle) view.multiplayerVisibilityToggle.disabled = !available || multiplayerRequestBusy;
+      if (view.multiplayerPauseModeToggle) view.multiplayerPauseModeToggle.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerPublicLobbyRefresh) {
         view.multiplayerPublicLobbyRefresh.disabled = !available || multiplayerRequestBusy || multiplayerPublicLobbyLoading;
       }
@@ -210,6 +211,22 @@ export function createUIController(view) {
       if (view.multiplayerVisibilityLabel) view.multiplayerVisibilityLabel.textContent = isPublic ? 'PUBLIC' : 'PRIVATE';
     }
 
+    function setMultiplayerPauseModeChoice(pauseMode) {
+      const next = pauseMode === 'vote' ? 'vote' : 'shared';
+      const isVote = next === 'vote';
+      if (view.multiplayerPauseModeToggle) {
+        view.multiplayerPauseModeToggle.dataset.pauseMode = next;
+        view.multiplayerPauseModeToggle.setAttribute('aria-pressed', isVote ? 'true' : 'false');
+        view.multiplayerPauseModeToggle.setAttribute('aria-label', isVote
+          ? 'Pause rule: Vote. Activate to allow shared pausing.'
+          : 'Pause rule: Shared. Activate to require a vote.');
+        const hint = view.multiplayerPauseModeToggle.querySelector('small');
+        if (hint) hint.textContent = isVote ? 'Majority vote to pause or resume' : 'Anyone can pause the party';
+      }
+      if (view.multiplayerPauseModeIcon) view.multiplayerPauseModeIcon.textContent = isVote ? '✓' : '⏸';
+      if (view.multiplayerPauseModeLabel) view.multiplayerPauseModeLabel.textContent = isVote ? 'VOTE' : 'SHARED';
+    }
+
     function renderPublicLobbyList(rooms = []) {
       if (!view.multiplayerPublicLobbyList) return;
       const modeNames = { coop: 'CO-OP EXPEDITION', rival: 'RIVAL EXPEDITION', boss_rush: 'BOSS RUSH' };
@@ -231,7 +248,8 @@ export function createUIController(view) {
         const details = document.createElement('span');
         details.className = 'multiplayer-public-lobby__mode';
         const difficulty = String(room.difficultyKey || 'medium').replace(/_/g, ' ').toUpperCase();
-        details.textContent = `${modeNames[room.mode] || 'CO-OP EXPEDITION'} • ${difficulty}`;
+        const pauseRule = room.pauseMode === 'vote' ? 'VOTE PAUSE' : 'SHARED PAUSE';
+        details.textContent = `${modeNames[room.mode] || 'CO-OP EXPEDITION'} • ${difficulty} • ${pauseRule}`;
         button.append(code, players, details);
         button.addEventListener('click', () => {
           if (view.multiplayerRoomCode) view.multiplayerRoomCode.value = room.roomCode;
@@ -314,6 +332,7 @@ export function createUIController(view) {
     // Neo.gameMode / setGameState / #charSelect — those drive single-player and
     // split-screen local co-op, which are entirely separate from the network path.
     let coopLobbyOpen = false;
+    let coopLobbyChatSignature = null;
 
     // Paint a hero sprite exactly the way the champion-select cards do, so the
     // lobby's copied cards render pixel-identically.
@@ -332,6 +351,12 @@ export function createUIController(view) {
       coopLobbyOpen = !!open;
       view.coopLobby?.classList.toggle('hidden', !coopLobbyOpen);
       view.coopLobby?.setAttribute('aria-hidden', coopLobbyOpen ? 'false' : 'true');
+      if (!coopLobbyOpen) {
+        coopLobbyChatSignature = null;
+        view.coopLobbyChatInput?.blur?.();
+        if (view.coopLobbyChatInput) view.coopLobbyChatInput.value = '';
+        if (view.coopLobbyChatStatus) view.coopLobbyChatStatus.textContent = '';
+      }
       if (!coopLobbyOpen && coopHeroDetailSignature) {
         // Stop the dossier's move-preview loop and force a fresh render the
         // next time the lobby opens.
@@ -352,6 +377,7 @@ export function createUIController(view) {
       const connectionNotices = Array.isArray(snapshot.connectionNotices) ? snapshot.connectionNotices : [];
       renderCoopSlots(members, snapshot.playerId);
       renderCoopActivity(connectionNotices);
+      renderCoopLobbyChat(snapshot.chatMessages, members, snapshot.playerId);
       renderCoopPicker(localMember, snapshot.status);
       renderCoopHeroDetail(localMember, snapshot.status);
 
@@ -362,6 +388,16 @@ export function createUIController(view) {
       if (view.coopLobbyVisibility) view.coopLobbyVisibility.dataset.visibility = visibility;
       if (view.coopLobbyVisibilityIcon) view.coopLobbyVisibilityIcon.textContent = visibility === 'public' ? '🌐' : '🔒';
       if (view.coopLobbyVisibilityLabel) view.coopLobbyVisibilityLabel.textContent = visibility.toUpperCase();
+      const pauseMode = snapshot.lobbyState?.pauseMode === 'vote' ? 'vote' : 'shared';
+      if (view.coopLobbyPauseMode) view.coopLobbyPauseMode.dataset.pauseMode = pauseMode;
+      if (view.coopLobbyPauseModeLabel) view.coopLobbyPauseModeLabel.textContent = pauseMode === 'vote' ? 'VOTE PAUSE' : 'SHARED PAUSE';
+      if (view.coopLobbyPauseMode) {
+        view.coopLobbyPauseMode.disabled = snapshot.status !== 'waiting' || !localMember;
+        view.coopLobbyPauseMode.setAttribute('aria-pressed', pauseMode === 'vote' ? 'true' : 'false');
+        view.coopLobbyPauseMode.setAttribute('aria-label', pauseMode === 'vote'
+          ? 'Party pause rule: Vote. Activate to use shared pausing.'
+          : 'Party pause rule: Shared. Activate to require a vote.');
+      }
 
       const readyCount = members.filter(member => member.ready).length;
       const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
@@ -378,6 +414,9 @@ export function createUIController(view) {
         view.coopLobbyReady.classList.toggle('coop-lobby__ready--armed', isReady);
         view.coopLobbyReady.disabled = snapshot.status !== 'waiting' || !localMember;
       }
+      const canChat = !!localMember && ['waiting', 'starting'].includes(snapshot.status);
+      if (view.coopLobbyChatInput) view.coopLobbyChatInput.disabled = !canChat;
+      if (view.coopLobbyChatSend) view.coopLobbyChatSend.disabled = !canChat;
     }
 
     function renderCoopSlots(members, localPlayerId) {
@@ -457,6 +496,57 @@ export function createUIController(view) {
         return row;
       });
       view.coopLobbyActivity.replaceChildren(label, ...rows);
+    }
+
+    function renderCoopLobbyChat(messages = [], members = [], localPlayerId = '') {
+      if (!view.coopLobbyChatLog) return;
+      const visible = (Array.isArray(messages) ? messages : []).slice(-12);
+      const signature = visible.map(message => `${message.messageId}:${message.text}`).join('|');
+      if (signature === coopLobbyChatSignature) return;
+      coopLobbyChatSignature = signature;
+      if (!visible.length) {
+        const empty = document.createElement('div');
+        empty.className = 'coop-lobby__chat-empty';
+        empty.textContent = 'Say hello to your party.';
+        view.coopLobbyChatLog.replaceChildren(empty);
+        return;
+      }
+      const membersByPlayer = new Map(members.map(member => [member.playerId, member]));
+      const rows = visible.map(message => {
+        const member = membersByPlayer.get(message.playerId);
+        const slotIndex = Math.max(0, Math.min(MULTIPLAYER_SLOT_COLORS.length - 1,
+          Math.trunc(Number(member?.slotIndex) || 0)));
+        const row = document.createElement('div');
+        row.className = 'coop-lobby__chat-message';
+        row.classList.toggle('coop-lobby__chat-message--local', message.playerId === localPlayerId);
+        row.style.setProperty('--chat-color', MULTIPLAYER_SLOT_COLORS[slotIndex]);
+        const name = document.createElement('span');
+        name.className = 'coop-lobby__chat-name';
+        name.textContent = `${message.displayName || member?.displayName || 'Player'}: `;
+        const text = document.createElement('span');
+        text.textContent = String(message.text || '');
+        row.append(name, text);
+        return row;
+      });
+      view.coopLobbyChatLog.replaceChildren(...rows);
+      view.coopLobbyChatLog.scrollTop = view.coopLobbyChatLog.scrollHeight;
+    }
+
+    function submitCoopLobbyChat(event) {
+      event?.preventDefault?.();
+      const input = view.coopLobbyChatInput;
+      const text = String(input?.value || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+      if (!text || !browserMultiplayerSession) return;
+      try {
+        const sent = browserMultiplayerSession.sendChat(text);
+        if (sent && input) input.value = '';
+        if (view.coopLobbyChatStatus) view.coopLobbyChatStatus.textContent = '';
+        input?.focus?.({ preventScroll: true });
+      } catch (error) {
+        if (view.coopLobbyChatStatus) {
+          view.coopLobbyChatStatus.textContent = error?.message || 'Could not send that message.';
+        }
+      }
     }
 
     // ── Shared hero dossier ─────────────────────────────────────────────
@@ -943,10 +1033,9 @@ export function createUIController(view) {
       });
       Neo.multiplayerGameView = browserMultiplayerGameView;
       browserMultiplayerGameView.start();
-      // Touch, keyboard and gamepad input all gate on gameState === 'play'. The
-      // renderer keys off multiplayerGameView.active instead, so without this the
-      // network run draws correctly but accepts no input at all.
-      setNetworkGameState('play');
+      // NetworkGameView starts in play and immediately reapplies the latest
+      // authoritative pause snapshot. Do not overwrite that state here: this
+      // path is also used when returning to an already-paused match.
     }
 
     function stopBrowserMultiplayerGameView() {
@@ -1127,6 +1216,7 @@ export function createUIController(view) {
         mode,
         maxPlayers: 4,
         visibility: view.multiplayerVisibilityToggle?.dataset.visibility === 'private' ? 'private' : 'public',
+        pauseMode: view.multiplayerPauseModeToggle?.dataset.pauseMode === 'vote' ? 'vote' : 'shared',
         difficultyKey,
         ...(difficulty ? { difficulty } : {}),
         ...extra,
@@ -4198,6 +4288,13 @@ export function createUIController(view) {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
+        view.coopLobbyChatForm?.addEventListener('submit', submitCoopLobbyChat);
+        window.addEventListener('keydown', event => {
+          if (!coopLobbyOpen || event.code !== 'KeyT' || event.ctrlKey || event.metaKey || event.altKey) return;
+          if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+          event.preventDefault();
+          view.coopLobbyChatInput?.focus?.({ preventScroll: true });
+        });
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
@@ -4218,6 +4315,17 @@ export function createUIController(view) {
           setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle.dataset.visibility === 'public' ? 'private' : 'public');
         });
         setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle?.dataset.visibility || 'public');
+        view.multiplayerPauseModeToggle?.addEventListener('click', () => {
+          setMultiplayerPauseModeChoice(view.multiplayerPauseModeToggle.dataset.pauseMode === 'shared' ? 'vote' : 'shared');
+        });
+        setMultiplayerPauseModeChoice(view.multiplayerPauseModeToggle?.dataset.pauseMode || 'shared');
+        view.coopLobbyPauseMode?.addEventListener('click', () => {
+          if (!browserMultiplayerSession || browserMultiplayerSession.status !== 'waiting') return;
+          const current = browserMultiplayerSession.snapshot()?.lobbyState?.pauseMode;
+          try {
+            browserMultiplayerSession.setPauseMode(current === 'vote' ? 'shared' : 'vote');
+          } catch { /* authority snapshot will keep the rendered setting accurate */ }
+        });
         view.multiplayerJoinRoom?.addEventListener('click', () => {
           const code = view.multiplayerRoomCode?.value || '';
           void runBrowserMultiplayerAction(session => session.joinRoom(code));

@@ -10267,6 +10267,16 @@ button.alt.danger {
   color: #dce6ec;
 }
 
+.multiplayer-pause-mode-toggle[data-pause-mode="vote"] {
+  border-color: #f4cc6a;
+  background: rgba(174, 123, 31, .18);
+  color: #fff1bd;
+}
+
+.multiplayer-pause-mode-toggle[data-pause-mode="vote"] small {
+  color: #dbc58f;
+}
+
 .multiplayer-visibility-toggle:hover:not(:disabled),
 .multiplayer-visibility-toggle:focus-visible:not(:disabled) {
   border-color: #b5e9ff;
@@ -11215,6 +11225,26 @@ button.alt.danger {
 
 .coop-lobby__visibility[data-visibility="private"] { color: #c8d2d8; }
 
+.coop-lobby__pause-mode {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid rgba(157, 233, 255, .22);
+  border-radius: 4px;
+  background: rgba(7, 16, 28, .68);
+  color: #a8e7ff;
+  cursor: pointer;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.coop-lobby__pause-mode[data-pause-mode="vote"] { color: #f4d782; }
+.coop-lobby__pause-mode:hover:not(:disabled),
+.coop-lobby__pause-mode:focus-visible { border-color: currentColor; }
+.coop-lobby__pause-mode:disabled { cursor: default; opacity: .7; }
+
 .coop-lobby__authority-state > span {
   width: 8px;
   height: 8px;
@@ -11364,6 +11394,122 @@ button.alt.danger {
 .coop-lobby__activity-item[data-kind="left"]::before { background: #8fa5b1; }
 .coop-lobby__activity-item[data-kind="reconnected"]::before { background: #69e49d; }
 
+.coop-lobby__chat {
+  display: grid;
+  grid-template-rows: auto minmax(112px, 1fr) auto auto;
+  flex: 1 1 220px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 220px;
+  padding: 10px;
+  border: 1px solid rgba(157, 233, 255, .16);
+  border-top-color: rgba(157, 233, 255, .38);
+  border-radius: var(--ui-control-radius);
+  background: rgba(3, 8, 14, .38);
+}
+
+.coop-lobby__chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8bc6e5;
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.coop-lobby__chat-shortcut {
+  color: #718895;
+  font-size: calc(8px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+.coop-lobby__chat-shortcut kbd {
+  padding: 1px 4px;
+  border: 1px solid rgba(157, 233, 255, .28);
+  border-radius: 3px;
+  background: rgba(5, 11, 22, .72);
+  color: #9de9ff;
+  font: inherit;
+}
+
+.coop-lobby__chat-log {
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  min-height: 112px;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.coop-lobby__chat-empty {
+  align-self: center;
+  color: #718895;
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.35;
+  text-align: center;
+}
+
+.coop-lobby__chat-message {
+  padding: 5px 7px;
+  border-left: 2px solid var(--chat-color, #9de9ff);
+  background: rgba(0, 0, 0, .26);
+  color: #c7d7e0;
+  overflow-wrap: anywhere;
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.35;
+}
+
+.coop-lobby__chat-message--local { background: rgba(52, 122, 155, .14); }
+
+.coop-lobby__chat-name {
+  color: var(--chat-color, #9de9ff);
+  font-weight: 900;
+}
+
+.coop-lobby__chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.coop-lobby__chat-form input {
+  min-width: 0;
+  height: 36px;
+  padding: 7px 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  background: #07101c;
+  color: #eef8ff;
+  font: inherit;
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+.coop-lobby__chat-form input:focus-visible {
+  border-color: #9de9ff;
+  outline: 2px solid rgba(157, 233, 255, .14);
+}
+
+.coop-lobby__chat-form .nav-btn {
+  box-sizing: border-box;
+  width: 64px;
+  min-width: 64px;
+  min-height: 36px;
+  padding: 7px 8px;
+  font-size: calc(9px * var(--font-scale, 1));
+}
+
+.coop-lobby__chat-status {
+  min-height: 1em;
+  margin: -3px 0 0;
+  color: #ffadad;
+  font-size: calc(9px * var(--font-scale, 1));
+  line-height: 1.2;
+}
+
 .coop-lobby__share {
   gap: 7px;
   margin-top: auto;
@@ -11481,6 +11627,14 @@ button.alt.danger {
   .coop-slot { min-height: 68px; }
   .coop-slot__art { width: 42px; height: 42px; }
   .coop-lobby__share { margin-top: 0; }
+  .coop-lobby__chat {
+    flex: none;
+    min-height: 230px;
+  }
+  .coop-lobby__chat-log {
+    min-height: 128px;
+    max-height: 200px;
+  }
   .coop-lobby__hero-hint { display: none; }
 }
 
@@ -11555,11 +11709,65 @@ body.network-multiplayer-active #c {
 }
 
 .multiplayer-chat.hidden,
+.multiplayer-pause-vote.hidden,
 .multiplayer-spectator.hidden,
 .multiplayer-end-screen.hidden,
 .multiplayer-chat__composer.hidden {
   display: none;
 }
+
+.multiplayer-pause-vote {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 48;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 240px;
+  padding: 10px 15px;
+  border: 1px solid rgba(244, 204, 106, .72);
+  border-radius: 6px;
+  background: rgba(20, 14, 4, .92);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .45), 0 0 18px rgba(244, 204, 106, .12);
+  transform: translateX(-50%);
+  color: #fff2c4;
+  font-family: var(--ui-font, monospace);
+  pointer-events: none;
+}
+
+#multiplayerPauseVoteLabel {
+  color: #f4d782;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 950;
+  letter-spacing: .14em;
+}
+
+#multiplayerPauseVoteCount {
+  justify-self: end;
+  color: #fff;
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+#multiplayerPauseVoteHint {
+  grid-column: 1 / -1;
+  color: #cbbd96;
+  font-size: calc(10px * var(--font-scale, 1));
+  letter-spacing: .05em;
+}
+
+.multiplayer-pause-status {
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0 0 14px;
+  color: #f4d782;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-align: center;
+}
+
+.multiplayer-pause-status.hidden { display: none; }
 
 .multiplayer-chat__head {
   display: flex;

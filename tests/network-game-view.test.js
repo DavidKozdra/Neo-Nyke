@@ -22,7 +22,7 @@ describe('network multiplayer game view', () => {
   });
 
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v37');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v39');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v30');
   });
 
@@ -760,6 +760,43 @@ describe('network multiplayer game view', () => {
     view.togglePause();
     expect(view.paused).toBe(true);
     expect(pauseGame).toHaveBeenCalledTimes(1);
+  });
+
+  test('routes blur and controller pause through the authority and keeps inventory live', () => {
+    const inputSource = fs.readFileSync(path.join(__dirname, '..', 'js/ui/input.js'), 'utf8');
+    const updateSource = fs.readFileSync(path.join(__dirname, '..', 'js/core/update.js'), 'utf8');
+    const panelSource = fs.readFileSync(path.join(__dirname, '..', 'js/ui/panels.js'), 'utf8');
+
+    expect(inputSource).toContain('Neo.multiplayerGameView.togglePause?.(true)');
+    expect(updateSource).toContain('Neo.multiplayerGameView.togglePause?.()');
+    expect(panelSource).toContain("&& !Neo.multiplayerGameView?.active");
+  });
+
+  test('waits for authoritative shared pause state before pausing the local view', () => {
+    const requestPause = jest.fn();
+    const pauseGame = jest.fn();
+    const resumeGame = jest.fn();
+    const view = new NetworkGameView({
+      session: { playerId: 'p1', status: 'running', requestPause },
+      neo: { gameState: 'play', pauseGame, resumeGame },
+    });
+    view.active = true;
+
+    expect(view.togglePause(true)).toBe(true);
+    expect(requestPause).toHaveBeenCalledWith(true);
+    expect(view.paused).toBe(false);
+
+    view._syncPauseState({ pauseMode: 'shared', paused: true, votes: [], requiredVotes: 2 });
+    expect(view.paused).toBe(true);
+    expect(pauseGame).toHaveBeenCalledTimes(1);
+
+    expect(view.togglePause(false)).toBe(true);
+    expect(requestPause).toHaveBeenLastCalledWith(false);
+    expect(view.paused).toBe(true);
+
+    view._syncPauseState({ pauseMode: 'shared', paused: false, votes: [], requiredVotes: 2 });
+    expect(view.paused).toBe(false);
+    expect(resumeGame).toHaveBeenCalledTimes(1);
   });
 
   // The shop/anvil/special-room panels are toggled by the campaign's global

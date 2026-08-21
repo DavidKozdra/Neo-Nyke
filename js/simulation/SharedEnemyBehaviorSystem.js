@@ -318,6 +318,7 @@
           y: player.y + Number(player.vy || 0) * 0.32,
           r: levelTwenty ? 46 : 38, ttl: 2.2, armTime: 0.62,
           damage: Math.round(Number(enemy.dmg || 10) * 1.15),
+          knockback: levelTwenty ? 300 : 240,
           statusKey: 'bleed', statusStacks: levelTwenty ? 3 : 2, statusDuration: 4.5,
         });
       } else if (moveKey === 'sniper_round') {
@@ -2035,6 +2036,7 @@
           ttl: 1.1,
           armTime: 0.48,
           damage: Math.round(enemy.dmg * 1.1),
+          knockback: 260,
           statusKey: 'bleed',
           statusStacks: 6,
           statusDuration: 3.4,

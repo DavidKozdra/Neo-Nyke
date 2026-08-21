@@ -54,4 +54,37 @@ describe('multiplayer social and death UI', () => {
     expect(controller).toContain('renderCoopActivity(connectionNotices)');
     expect(controller).toContain('membersBySlot');
   });
+
+  test('embeds authoritative party chat in the pre-game co-op lobby', () => {
+    const html = read('index.html');
+    const controller = read('js/ui/controller.js');
+    const styles = read('css/style.css');
+
+    expect(html).toMatch(/id="coopLobbyChatLog"[^>]*role="log"/);
+    expect(html).toMatch(/id="coopLobbyChatForm"[\s\S]*id="coopLobbyChatInput"[^>]*maxlength="180"[\s\S]*id="coopLobbyChatSend"/);
+    expect(controller).toContain('function renderCoopLobbyChat(messages = [], members = [], localPlayerId = \'\')');
+    expect(controller).toContain('browserMultiplayerSession.sendChat(text)');
+    expect(controller).toContain("event.code !== 'KeyT'");
+    expect(styles).toContain('.coop-lobby__chat-message');
+  });
+
+  test('offers shared or vote pause rules and renders authority vote feedback', () => {
+    const html = read('index.html');
+    const controller = read('js/ui/controller.js');
+    const view = read('js/rendering/NetworkGameView.js');
+    const styles = read('css/style.css');
+
+    expect(html).toMatch(/id="multiplayerPauseModeToggle"[^>]*data-pause-mode="shared"/);
+    expect(html).toMatch(/<button id="coopLobbyPauseMode"[^>]*data-pause-mode="shared"/);
+    expect(html).toMatch(/id="multiplayerPauseVote"[^>]*role="status"/);
+    expect(html).toMatch(/id="multiplayerPauseStatus"[^>]*role="status"/);
+    expect(controller).toContain('function setMultiplayerPauseModeChoice(pauseMode)');
+    expect(controller).toContain("pauseMode: view.multiplayerPauseModeToggle?.dataset.pauseMode === 'vote' ? 'vote' : 'shared'");
+    expect(controller).toContain("browserMultiplayerSession.setPauseMode(current === 'vote' ? 'shared' : 'vote')");
+    expect(view).toContain('this.session.requestPause(wantsPaused)');
+    expect(view).toContain('_syncPauseState(snapshot.pauseState, snapshot.lobbyState)');
+    expect(styles).toContain('.multiplayer-pause-vote');
+    expect(styles).toContain('grid-template-rows: auto minmax(112px, 1fr) auto auto');
+    expect(styles).toContain('width: 64px');
+  });
 });

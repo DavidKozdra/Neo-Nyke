@@ -41,7 +41,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v37';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v39';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
@@ -300,6 +300,10 @@
       this.baseMatchId = String(options.matchId || 'local-match');
       this.mode = ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop';
       this.visibility = options.visibility === 'public' ? 'public' : 'private';
+      this.pauseMode = options.pauseMode === 'vote' ? 'vote' : 'shared';
+      this.authorityPaused = false;
+      this.pauseVoteTarget = null;
+      this.pauseVotes = new Set();
       this.deferFloorGeneration = options.deferFloorGeneration === true;
       if (typeof resolveCampaignEnemyDifficulty !== 'function') {
         throw new Error('Shared campaign difficulty resolution is unavailable');
@@ -379,6 +383,10 @@
         chatSequence: this.chatSequence,
         mode: this.mode,
         visibility: this.visibility,
+        pauseMode: this.pauseMode,
+        authorityPaused: this.authorityPaused,
+        pauseVoteTarget: this.pauseVoteTarget,
+        pauseVotes: Array.from(this.pauseVotes),
         minPlayers: this.minPlayers,
         maxPlayers: this.maxPlayers,
         peerRecords: Array.from(this.peerRecords.entries()),
@@ -413,10 +421,16 @@
       this.chatSequence = Math.max(0, Math.trunc(Number(runtime.chatSequence) || 0));
       this.mode = ['rival', 'boss_rush'].includes(runtime.mode) ? runtime.mode : 'coop';
       this.visibility = runtime.visibility === 'public' ? 'public' : 'private';
+      this.pauseMode = runtime.pauseMode === 'vote' ? 'vote' : this.pauseMode;
+      this.authorityPaused = runtime.authorityPaused === true;
+      this.pauseVoteTarget = ['pause', 'resume'].includes(runtime.pauseVoteTarget) ? runtime.pauseVoteTarget : null;
+      this.pauseVotes = new Set(Array.isArray(runtime.pauseVotes) ? runtime.pauseVotes.map(String) : []);
       this.minPlayers = Math.max(1, Math.min(4, Math.trunc(Number(runtime.minPlayers) || this.minPlayers)));
       this.maxPlayers = Math.max(this.minPlayers, Math.min(4, Math.trunc(Number(runtime.maxPlayers) || this.maxPlayers)));
       this.peerRecords = new Map(Array.isArray(runtime.peerRecords) ? runtime.peerRecords : []);
       this.playerIdByPeer = new Map(Array.isArray(runtime.playerIdByPeer) ? runtime.playerIdByPeer : []);
+      const connectedPlayerIds = new Set(this.playerIdByPeer.values());
+      this.pauseVotes = new Set(Array.from(this.pauseVotes).filter(playerId => connectedPlayerIds.has(playerId)));
       this.pendingInputs = cloneSerializable(runtime.pendingInputs || {});
       this.pendingActions = cloneSerializable(runtime.pendingActions || {});
       this.lastProcessedInput = cloneSerializable(runtime.lastProcessedInput || {});
@@ -432,6 +446,10 @@
       this.lastReplaceableSequence = new Map(Array.isArray(runtime.lastReplaceableSequence) ? runtime.lastReplaceableSequence : []);
       this.invalidMessageCount = new Map(Array.isArray(runtime.invalidMessageCount) ? runtime.invalidMessageCount : []);
       this.simulation.state.contentVersion = this.contentVersion;
+      this.simulation.state.matchRules = {
+        ...(this.simulation.state.matchRules || {}),
+        pauseMode: this.pauseMode,
+      };
       if (this.simulation.state.floorState?.layout) {
         this.simulation.state.floorState.layout.contentVersion = this.contentVersion;
       }
@@ -505,6 +523,7 @@
           gameMode: this.mode,
           difficultyKey: this.difficulty.key || 'medium',
           difficulty: this.difficulty,
+          pauseMode: this.pauseMode,
         },
         floorState,
       });
@@ -618,6 +637,8 @@
         case 'SHOP_PURCHASE': this._handleShopPurchase(peerId, message.payload); break;
         case 'GAME_COMMAND': this._handleGameCommand(peerId, message.payload); break;
         case 'CHAT_SEND': this._handleChat(peerId, message.payload); break;
+        case 'LOBBY_PAUSE_MODE': this._handleLobbyPauseMode(peerId, message.payload); break;
+        case 'PAUSE_REQUEST': this._handlePauseRequest(peerId, message.payload); break;
         case 'REMATCH_REQUEST': this._handleRematchRequest(peerId, message.payload); break;
         case 'SNAPSHOT_ACK': this._handleSnapshotAck(peerId, message.payload); break;
         case 'SNAPSHOT_RESYNC_REQUEST': this._handleSnapshotResyncRequest(peerId, message.payload); break;
@@ -716,6 +737,7 @@
             state: this.simulation.state.snapshot(),
             lastProcessedInput: { ...this.lastProcessedInput },
           });
+          this._sendPauseState(peerId);
         }
         this._broadcastLobbyState();
         return;
@@ -750,6 +772,7 @@
           state: this.simulation.state.snapshot(),
           lastProcessedInput: { ...this.lastProcessedInput },
         });
+        this._sendPauseState(peerId);
         this._broadcastLobbyState();
         this._broadcast('GAMEPLAY_EVENT', {
           eventId: this.simulation.state.allocateEntityId('event'),
@@ -830,7 +853,7 @@
 
     _handleInput(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       if (payload.inputSequence <= this.lastProcessedInput[playerId]) {
         this.metrics.duplicateInputs += 1;
         return;
@@ -856,7 +879,7 @@
 
     _handleAction(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       if (payload.inputSequence <= this.lastProcessedAction[playerId]) {
         this.metrics.duplicateActions += 1;
         return;
@@ -886,7 +909,7 @@
 
     _handleInteract(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
       if (queue.length < 8) queue.push({
         action: 'INTERACT',
@@ -897,7 +920,7 @@
 
     _handleUpgrade(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
       if (queue.length < 8) queue.push({
         action: 'UPGRADE',
@@ -908,7 +931,7 @@
 
     _handleShopPurchase(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
       if (queue.length < 8) queue.push({
         action: 'SHOP_PURCHASE',
@@ -920,7 +943,7 @@
 
     _handleGameCommand(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
-      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (!playerId || this.simulation.state.status !== 'running' || this.authorityPaused) return;
       const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
       if (queue.length < 8) queue.push({ action: payload.command, ...(cloneSerializable(payload.arguments) || {}) });
     }
@@ -947,6 +970,94 @@
         text,
         sentAtTick: this.simulation.state.tick,
       });
+    }
+
+    _handleLobbyPauseMode(peerId, payload) {
+      if (!this.playerIdByPeer.has(peerId) || this.simulation.state.status !== 'waiting') return;
+      const next = payload.pauseMode === 'vote' ? 'vote' : 'shared';
+      if (next === this.pauseMode) {
+        this._broadcastLobbyState();
+        return;
+      }
+      this.pauseMode = next;
+      this.simulation.state.matchRules = {
+        ...(this.simulation.state.matchRules || {}),
+        pauseMode: next,
+      };
+      // Everyone confirms readiness against the final lobby rule. Changing it
+      // therefore disarms existing ready states before the match can start.
+      this.peerRecords.forEach(record => {
+        if (record?.playerId) record.ready = false;
+      });
+      this._markPersistenceDirty();
+      this._broadcastLobbyState();
+    }
+
+    _pauseRequiredVotes() {
+      return Math.max(1, Math.floor(this.playerIdByPeer.size / 2) + 1);
+    }
+
+    _pauseStatePayload() {
+      return {
+        pauseMode: this.pauseMode,
+        paused: this.authorityPaused,
+        ...(this.pauseVoteTarget ? { target: this.pauseVoteTarget } : {}),
+        votes: Array.from(this.pauseVotes),
+        requiredVotes: this._pauseRequiredVotes(),
+      };
+    }
+
+    _sendPauseState(peerId) {
+      return this._send(peerId, 'PAUSE_STATE', this._pauseStatePayload());
+    }
+
+    _broadcastPauseState() {
+      return this._broadcast('PAUSE_STATE', this._pauseStatePayload());
+    }
+
+    _setAuthorityPaused(paused) {
+      const next = paused === true;
+      const changed = this.authorityPaused !== next;
+      this.authorityPaused = next;
+      this.pauseVoteTarget = null;
+      this.pauseVotes.clear();
+      if (next) {
+        Object.keys(this.pendingInputs).forEach(playerId => {
+          const previous = this.pendingInputs[playerId] || {};
+          this.pendingInputs[playerId] = {
+            moveX: 0, moveY: 0, aimDirection: Number(previous.aimDirection) || 0, buttons: 0,
+          };
+          this.pendingActions[playerId] = [];
+        });
+      }
+      if (changed) this._markPersistenceDirty();
+      this._broadcastPauseState();
+      return changed;
+    }
+
+    _handlePauseRequest(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      const wantsPaused = payload.paused === true;
+      if (wantsPaused === this.authorityPaused) {
+        // A repeated request for the state we already have is idempotent. In
+        // vote mode it must not erase another player's pending opposite vote.
+        this._broadcastPauseState();
+        return;
+      }
+      if (this.pauseMode === 'shared') {
+        this._setAuthorityPaused(wantsPaused);
+        return;
+      }
+      const target = wantsPaused ? 'pause' : 'resume';
+      if (this.pauseVoteTarget !== target) {
+        this.pauseVoteTarget = target;
+        this.pauseVotes.clear();
+      }
+      this.pauseVotes.add(playerId);
+      this._markPersistenceDirty();
+      if (this.pauseVotes.size >= this._pauseRequiredVotes()) this._setAuthorityPaused(wantsPaused);
+      else this._broadcastPauseState();
     }
 
     _handleRematchRequest(peerId, payload) {
@@ -1039,6 +1150,9 @@
       this.pendingFloorTransition = null;
       this.pendingRunEnd = null;
       this.runEndedBroadcast = false;
+      this.authorityPaused = false;
+      this.pauseVoteTarget = null;
+      this.pauseVotes.clear();
       this.reconnectReservations.clear();
       joined.forEach(([joinedPeerId, record], slotIndex) => {
         const previous = previousPlayers[record.playerId] || {};
@@ -1123,10 +1237,15 @@
       this._rememberStateForValidation();
       this._flushGameplayEvents();
       this._broadcastLobbyState();
+      this._broadcastPauseState();
     }
 
     endMatch(reason = 'authority-ended') {
       if (this.simulation.state.status !== 'running') return false;
+      this.authorityPaused = false;
+      this.pauseVoteTarget = null;
+      this.pauseVotes.clear();
+      this._broadcastPauseState();
       this.simulation.state.status = 'ended';
       this.pendingRunEnd = {
         result: 'defeat',
@@ -1157,6 +1276,7 @@
         maxPlayers: this.maxPlayers,
         mode: this.mode,
         visibility: this.visibility,
+        pauseMode: this.pauseMode,
       });
     }
 
@@ -1209,6 +1329,7 @@
         return;
       }
       this.playerIdByPeer.delete(peerId);
+      this.pauseVotes.delete(playerId);
       delete this.pendingInputs[playerId];
       delete this.pendingActions[playerId];
       delete this.lastProcessedInput[playerId];
@@ -1242,6 +1363,11 @@
           ...(canReconnect ? { reconnectDeadline: this.simulation.state.elapsedSeconds + RECONNECT_RESERVATION_TICKS / SIMULATION_TICK_RATE } : {}),
         });
         this._broadcastLobbyState();
+        if (this.pauseMode === 'vote' && this.pauseVoteTarget) {
+          const targetPaused = this.pauseVoteTarget === 'pause';
+          if (this.pauseVotes.size >= this._pauseRequiredVotes()) this._setAuthorityPaused(targetPaused);
+          else this._broadcastPauseState();
+        }
         this._maybeStartRematch();
       }
     }
@@ -1249,7 +1375,7 @@
     step(tickCount = 1) {
       const count = Math.max(0, Math.trunc(Number(tickCount) || 0));
       for (let index = 0; index < count; index += 1) {
-        if (this.simulation.state.status !== 'running') break;
+        if (this.simulation.state.status !== 'running' || this.authorityPaused) break;
         const tickInputs = Object.fromEntries(Object.entries(this.pendingInputs).map(([playerId, input]) => [
           playerId,
           {
@@ -1525,6 +1651,7 @@
       this.status = 'disconnected';
       this.state = null;
       this.lobbyState = null;
+      this.pauseState = null;
       this.latestSnapshotSequence = -1;
       this.stateEpoch = 0;
       this.pendingSnapshotResync = false;
@@ -1689,6 +1816,18 @@
       return true;
     }
 
+    setPauseMode(pauseMode) {
+      if (!this.playerId || this.status !== 'waiting') throw new Error('Lobby settings are locked');
+      this._send('LOBBY_PAUSE_MODE', { pauseMode: pauseMode === 'vote' ? 'vote' : 'shared' });
+      return true;
+    }
+
+    requestPause(paused = true) {
+      if (!this.playerId || this.status !== 'running') throw new Error('Client match is not running');
+      this._send('PAUSE_REQUEST', { paused: paused === true });
+      return true;
+    }
+
     requestRematch(ready = true) {
       if (!this.playerId || this.status !== 'ended') throw new Error('The run has not ended');
       this._send('REMATCH_REQUEST', { ready: !!ready });
@@ -1737,17 +1876,23 @@
       }
       this.receivedTypes.push(message.type);
       switch (message.type) {
-        case 'SERVER_HELLO': this.status = 'handshaking'; break;
+        case 'SERVER_HELLO':
+          if (!['running', 'ended'].includes(this.status)) this.status = 'handshaking';
+          break;
         case 'JOIN_ACCEPTED':
           this.playerId = message.payload.playerId;
           this.reconnectToken = message.payload.reconnectToken || this.reconnectToken;
-          this.status = 'waiting';
+          if (this.status !== 'running') this.status = 'waiting';
           break;
         case 'JOIN_REJECTED':
           this.status = 'rejected';
           this.errors.push(message.payload);
           break;
-        case 'LOBBY_STATE': this.lobbyState = cloneSerializable(message.payload); break;
+        case 'LOBBY_STATE':
+          this.lobbyState = cloneSerializable(message.payload);
+          if (message.payload.status === 'running' && this.state && this.playerId) this.status = 'running';
+          break;
+        case 'PAUSE_STATE': this.pauseState = cloneSerializable(message.payload); break;
         case 'MATCH_STARTING':
           this.runEnd = null;
           this.latestSnapshotSequence = -1;

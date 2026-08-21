@@ -586,6 +586,8 @@
       this.latestAuthorityTick = 0;
       this.sessionPlayerId = null;
       this.latestLobbyState = null;
+      this.pauseState = { pauseMode: 'shared', paused: false, votes: [], requiredVotes: 1 };
+      this.authorityPaused = false;
       this.lastWorldTransform = null;
       this.paused = false;
       this.lastTransmittedInput = null;
@@ -652,7 +654,7 @@
       this.boundPauseResume = event => {
         event?.preventDefault?.();
         event?.stopImmediatePropagation?.();
-        this._togglePause(false);
+        this.togglePause(false);
       };
       this.boundPauseSettings = event => {
         event?.preventDefault?.();
@@ -662,7 +664,7 @@
       this.pointerWasLocked = false;
       this.boundPointerLockChange = () => {
         const locked = this.document?.pointerLockElement === this.canvas;
-        if (this.active && this.pointerWasLocked && !locked && !this.paused) this._togglePause(true);
+        if (this.active && this.pointerWasLocked && !locked && !this.paused) this.togglePause(true);
         this.pointerWasLocked = locked;
       };
       this.boundRenderFrame = () => {
@@ -878,6 +880,7 @@
       this._closeChat();
       this.document?.getElementById('multiplayerChat')?.classList.add('hidden');
       this.document?.getElementById('multiplayerSpectator')?.classList.add('hidden');
+      this.document?.getElementById('multiplayerPauseVote')?.classList.add('hidden');
       this._clearHeldInputSources();
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
@@ -889,6 +892,9 @@
       this.presentationPlayerActors.clear();
       this._clearPresentationEntityCaches();
       this._togglePause(false);
+      this.pauseState = { pauseMode: 'shared', paused: false, votes: [], requiredVotes: 1 };
+      this.authorityPaused = false;
+      this._renderPauseState();
       this._setCampaignHudVisible(false);
       this.document?.getElementById('start')?.classList.remove('hidden');
       root.document?.body?.classList.remove('network-multiplayer-active');
@@ -1186,6 +1192,7 @@
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
       this.sessionPlayerId = snapshot.playerId || this.sessionPlayerId;
       this.latestLobbyState = snapshot.lobbyState || this.latestLobbyState;
+      this._syncPauseState(snapshot.pauseState, snapshot.lobbyState);
       const acknowledgedInput = Number(snapshot.lastAcknowledgedInput);
       if (Number.isInteger(acknowledgedInput) && acknowledgedInput >= -1) {
         this.lastAcknowledgedInput = Math.max(Number(this.lastAcknowledgedInput ?? -1), acknowledgedInput);
@@ -2663,15 +2670,88 @@
       if (this.paused && !wasPaused) this._flushNeutralInput();
       else this.keys.clear();
       const title = this.document?.getElementById('pauseTitle');
-      if (title) title.textContent = this.paused ? 'MULTIPLAYER' : 'PAUSED';
+      if (title) title.textContent = this.paused ? 'PARTY PAUSED' : 'PAUSED';
       this.document?.getElementById('pauseMain')?.classList.toggle('hidden', this.paused);
       this.document?.getElementById('pauseLeaveServer')?.classList.toggle('hidden', !this.paused);
       if (this.paused) this.neo.pauseGame?.();
       else this.neo.resumeGame?.();
+      this._renderPauseState();
     }
 
     togglePause(visible = !this.paused) {
-      this._togglePause(visible);
+      const wantsPaused = visible === true;
+      if (this.active && typeof this.session.requestPause === 'function' && this._sessionStatus() === 'running') {
+        const votes = Array.isArray(this.pauseState?.votes) ? this.pauseState.votes : [];
+        const target = wantsPaused ? 'pause' : 'resume';
+        if (this.pauseState?.pauseMode === 'vote'
+          && this.pauseState.target === target
+          && votes.includes(this._sessionPlayerId())) return false;
+        if (wantsPaused) this._flushNeutralInput();
+        try {
+          this.session.requestPause(wantsPaused);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      this._togglePause(wantsPaused);
+      return true;
+    }
+
+    _syncPauseState(pauseState, lobbyState = this.latestLobbyState) {
+      const source = pauseState && typeof pauseState === 'object' ? pauseState : null;
+      const pauseMode = source?.pauseMode === 'vote' || lobbyState?.pauseMode === 'vote' ? 'vote' : 'shared';
+      if (!source) {
+        this.pauseState = { ...this.pauseState, pauseMode };
+        this._renderPauseState();
+        return;
+      }
+      this.pauseState = {
+        pauseMode,
+        paused: source.paused === true,
+        target: ['pause', 'resume'].includes(source.target) ? source.target : null,
+        votes: Array.isArray(source.votes) ? source.votes.map(String).slice(0, 4) : [],
+        requiredVotes: Math.max(1, Math.min(4, Math.trunc(Number(source.requiredVotes) || 1))),
+      };
+      this.authorityPaused = this.pauseState.paused;
+      if (this.paused !== this.authorityPaused) this._togglePause(this.authorityPaused);
+      else this._renderPauseState();
+    }
+
+    _renderPauseState() {
+      const state = this.pauseState || {};
+      const votes = Array.isArray(state.votes) ? state.votes : [];
+      const required = Math.max(1, Number(state.requiredVotes) || 1);
+      const voted = votes.includes(this._sessionPlayerId());
+      const pauseVotePending = state.pauseMode === 'vote' && state.target === 'pause' && !state.paused;
+      const votePanel = this.document?.getElementById('multiplayerPauseVote');
+      votePanel?.classList.toggle('hidden', !pauseVotePending);
+      const voteLabel = this.document?.getElementById('multiplayerPauseVoteLabel');
+      const voteCount = this.document?.getElementById('multiplayerPauseVoteCount');
+      const voteHint = this.document?.getElementById('multiplayerPauseVoteHint');
+      if (voteLabel) voteLabel.textContent = 'PAUSE VOTE';
+      if (voteCount) voteCount.textContent = `${votes.length} / ${required}`;
+      if (voteHint) voteHint.textContent = voted ? 'Your vote is counted' : 'Press Esc to vote';
+
+      const status = this.document?.getElementById('multiplayerPauseStatus');
+      status?.classList.toggle('hidden', !this.paused);
+      if (status && this.paused) {
+        status.textContent = state.pauseMode === 'vote'
+          ? state.target === 'resume'
+            ? `RESUME VOTE • ${votes.length} / ${required}${voted ? ' • YOUR VOTE IS COUNTED' : ''}`
+            : 'VOTE PAUSE • A MAJORITY MUST RESUME THE PARTY'
+          : 'SHARED PAUSE • ANY PLAYER CAN RESUME THE PARTY';
+      }
+      const resume = this.document?.getElementById('pauseResume');
+      if (resume && this.active) {
+        resume.textContent = state.pauseMode === 'vote'
+          ? voted && state.target === 'resume' ? 'RESUME VOTE ✓' : 'VOTE TO RESUME'
+          : 'RESUME PARTY';
+        resume.disabled = state.pauseMode === 'vote' && state.target === 'resume' && voted;
+      } else if (resume) {
+        resume.textContent = 'RESUME';
+        resume.disabled = false;
+      }
     }
 
     _isInputBlocked() {

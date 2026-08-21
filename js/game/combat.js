@@ -1661,6 +1661,9 @@
     if (Neo.laserTick <= 0) {
       if (Neo.laserMode === 'god_sweep') Neo.laserAngle += Neo.laserSweepSpeed * 0.05;
       Neo.laserTick = Neo.laserMode === 'god_sweep' ? 0.05 : Neo.laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : Neo.ATTACKS.laser.tick;
+      // This damage block only runs on beam ticks, so hazard shove scales by the
+      // tick interval rather than the frame delta.
+      const beamTickInterval = Neo.laserTick;
       const mooggyBeamActive = move === 'mooggy_blood_beam';
       const wizardBeamActive = wizardLazerActive;
       const thornBeamsActive = Neo.laserMode === 'thorn_blood_beams';
@@ -1768,6 +1771,7 @@
             Neo.damageDestructible(prop, 1);
           }
         });
+        pushHazardsWithBeamPath(path, beamKnockback, beamTickInterval);
       }
       if (loveBeamHits > 0) {
         const heal = Neo.scalePlayerHealing(Math.min(5, loveBeamHits * 0.8));
@@ -1789,6 +1793,28 @@
     }
     if (Neo.laserTime <= 0) {
       endActiveLaser();
+    }
+  }
+
+  // Blood spikes are physical objects, so a beam that lands on one shoves it
+  // across the floor instead of passing through. The push runs down the beam
+  // segment that made contact, which means a ricocheting beam pushes spikes
+  // along the direction it is actually travelling at the point of impact.
+  const HAZARD_BEAM_PUSH_SCALE = 5.5;
+  function pushHazardsWithBeamPath(path, beamKnockback, tickInterval) {
+    const simulation = globalThis.NeoNyke?.simulation;
+    if (!simulation?.applyCampaignHazardBeamPush || !Array.isArray(Neo.hazards)) return;
+    const force = Math.max(0, Number(beamKnockback || 0)) * HAZARD_BEAM_PUSH_SCALE;
+    if (!force) return;
+    for (let index = 0; index < Neo.hazards.length; index += 1) {
+      const hazard = Neo.hazards[index];
+      if (!simulation.hazardHasPhysics?.(hazard)) continue;
+      const segment = Neo.beamPathHitsCircle(path, hazard.x, hazard.y, Number(hazard.r || 0));
+      if (!segment) continue;
+      simulation.applyCampaignHazardBeamPush(hazard, segment.angle, force, { delta: tickInterval });
+      if (Neo.rng() < 0.35) {
+        Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.22, ring: 14, c: '#ff3348' });
+      }
     }
   }
 

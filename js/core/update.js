@@ -411,7 +411,8 @@ export function loop(timestamp) {
         if (_slotKey) Neo.activateEquipmentSlotKey?.(_slotKey);
       }
       if (_gpConsume('pause')) {
-        if (Neo.gameState === 'play') Neo.pauseGame();
+        if (Neo.multiplayerGameView?.active) Neo.multiplayerGameView.togglePause?.();
+        else if (Neo.gameState === 'play') Neo.pauseGame();
         else if (Neo.gameState === 'pause') Neo.resumeGame();
       }
     }

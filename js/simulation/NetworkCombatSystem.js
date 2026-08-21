@@ -170,6 +170,7 @@
     campaignLavaHitsEntity = () => false,
     advanceCampaignExplosiveTrap = () => ({ ignored: true }),
     advanceCampaignLavaContact = () => ({ ignored: true }),
+    advanceCampaignHazardPhysics = () => ({ ignored: true, moved: false }),
     resolveCampaignOnHitStatusProcs = () => [],
     syncCampaignItemStats = state => state,
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
@@ -6428,6 +6429,14 @@
         return;
       }
       if (hazard.kind === 'red_spikes') {
+        // Spikes are loose objects that slide when a laser shoves them; the
+        // authority integrates the same drag/bounce so every client agrees on
+        // where the cluster ended up before contact is resolved.
+        advanceCampaignHazardPhysics(hazard, {
+          delta: fixedDelta,
+          width: Number(state.floorState?.width || 0),
+          height: Number(state.floorState?.height || 0),
+        });
         hazard.armTime = Number(hazard.armTime || 0) - fixedDelta;
         if (hazard.armTime > 0 || hazard.hit) return;
         players.forEach(player => {
@@ -6436,7 +6445,7 @@
           hazard.hit = true;
           damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'red_spikes', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
-            knockback: 170,
+            knockback: Number(hazard.knockback || 170),
           });
           if (hazard.statusKey) {
             applyAuthorityStatus(state, player, hazard.statusKey, Number(hazard.statusStacks || 1), Number(hazard.statusDuration || 3), hazard.ownerId);

@@ -111,6 +111,7 @@
           maxPlayers: options.maxPlayers || 4,
           mode: ['rival', 'boss_rush'].includes(options.mode) ? options.mode : 'coop',
           visibility: options.visibility === 'public' ? 'public' : 'private',
+          pauseMode: options.pauseMode === 'vote' ? 'vote' : 'shared',
           ...(options.difficultyKey ? { difficultyKey: String(options.difficultyKey) } : {}),
           ...(options.difficulty && typeof options.difficulty === 'object'
             ? { difficulty: options.difficulty }

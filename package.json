@@ -27,6 +27,7 @@
     "multiplayer:dev": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml",
     "multiplayer:dev:load": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml --var MULTIPLAYER_LOAD_TEST_TOKEN:playwright-local-100",
     "multiplayer:smoke": "node scripts/smoke-cloudflare-multiplayer.js",
+    "multiplayer:pause:smoke": "node scripts/smoke-multiplayer-pause.js",
     "mobile:pwa-smoke": "node scripts/mobile-pwa-smoke.mjs",
     "koz-bundle": "node scripts/generate-koz-browser-bundle.js",
     "koz-bundle:check": "node scripts/generate-koz-browser-bundle.js --check",

@@ -17,12 +17,12 @@
   const CLIENT_MESSAGE_TYPES = Object.freeze([
     'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
     'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND',
-    'CHAT_SEND', 'REMATCH_REQUEST', 'SNAPSHOT_ACK', 'SNAPSHOT_RESYNC_REQUEST', 'DIAGNOSTIC_MARKER', 'LEAVE_MATCH', 'PING',
+    'CHAT_SEND', 'LOBBY_PAUSE_MODE', 'PAUSE_REQUEST', 'REMATCH_REQUEST', 'SNAPSHOT_ACK', 'SNAPSHOT_RESYNC_REQUEST', 'DIAGNOSTIC_MARKER', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
     'SERVER_HELLO', 'JOIN_ACCEPTED', 'JOIN_REJECTED', 'LOBBY_STATE', 'MATCH_STARTING',
     'INITIAL_STATE', 'WORLD_SNAPSHOT', 'ENTITY_SPAWNED', 'ENTITY_REMOVED',
-    'GAMEPLAY_EVENT', 'CHAT_MESSAGE', 'FLOOR_TRANSITION', 'RUN_ENDED', 'PLAYER_DISCONNECTED', 'ERROR', 'PONG',
+    'GAMEPLAY_EVENT', 'CHAT_MESSAGE', 'PAUSE_STATE', 'FLOOR_TRANSITION', 'RUN_ENDED', 'PLAYER_DISCONNECTED', 'ERROR', 'PONG',
   ]);
 
   const field = (type, options = {}) => ({ type, ...options });
@@ -152,6 +152,20 @@
         text: field('string', { required: true, minLength: 1, maxLength: 180 }),
       },
     },
+    LOBBY_PAUSE_MODE: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        pauseMode: field('string', { required: true, enum: ['shared', 'vote'] }),
+      },
+    },
+    PAUSE_REQUEST: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        paused: field('boolean', { required: true }),
+      },
+    },
     REMATCH_REQUEST: {
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
@@ -240,6 +254,7 @@
         maxPlayers: field('integer', { required: true, min: 1, max: 4 }),
         mode: field('string', { required: true, enum: ['coop', 'rival', 'boss_rush'] }),
         visibility: field('string', { enum: ['public', 'private'] }),
+        pauseMode: field('string', { enum: ['shared', 'vote'] }),
       },
     },
     MATCH_STARTING: {
@@ -319,6 +334,17 @@
         displayName: field('string', { required: true, minLength: 1, maxLength: 64 }),
         text: field('string', { required: true, minLength: 1, maxLength: 180 }),
         sentAtTick: field('integer', { required: true, min: 0 }),
+      },
+    },
+    PAUSE_STATE: {
+      direction: AUTHORITY_TO_CLIENT,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        pauseMode: field('string', { required: true, enum: ['shared', 'vote'] }),
+        paused: field('boolean', { required: true }),
+        target: field('string', { enum: ['pause', 'resume'] }),
+        votes: field('array', { required: true, maxLength: 4 }),
+        requiredVotes: field('integer', { required: true, min: 1, max: 4 }),
       },
     },
     FLOOR_TRANSITION: {
