@@ -49,6 +49,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/HandsomeDevil.png",
     "/assets/sprites/chars/healer.png",
     "/assets/sprites/chars/hunter.png",
+    "/assets/sprites/chars/image-1787263476185.jpg",
     "/assets/sprites/chars/knave.png",
     "/assets/sprites/chars/large-golem.png",
     "/assets/sprites/chars/machine_gunner.png",
@@ -286,14 +287,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 273,
-    "bytes": 52634760,
-    "criticalEntries": 215,
-    "criticalBytes": 12467174,
+    "entries": 274,
+    "bytes": 52807315,
+    "criticalEntries": 216,
+    "criticalBytes": 12639729,
     "optionalEntries": 58,
     "optionalBytes": 40167586
   },
-  "version": "dbc0541e6af9535b"
+  "version": "36ce04c3761e996b"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
