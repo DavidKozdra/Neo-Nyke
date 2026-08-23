@@ -181,7 +181,7 @@
         const endY = enemy.y + Math.sin(enemy.beamAngle) * range;
         (ctx.getPlayers?.(enemy) || []).forEach(player => {
           const hit = segmentHitsCircle(enemy.x, enemy.y, endX, endY, player.x, player.y, player.r + 5);
-          if (hit) ctx.damagePlayer(enemy, player, damage, hit.angle, knockback, enemy.type);
+          if (hit) ctx.damagePlayer(enemy, player, ctx.scaleEnemyLaserDamage?.(damage) ?? damage, hit.angle, knockback, enemy.type);
         });
       }
       if (enemy.beamTime <= 0) {
@@ -2303,7 +2303,8 @@
               player.x, player.y, player.r + 7,
             );
             if (hit) {
-              const damage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
+              const rawDamage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
+              const damage = ctx.scaleEnemyLaserDamage?.(rawDamage) ?? rawDamage;
               ctx.damagePlayer(enemy, player, damage, hit.angle, phaseLevel >= 4 ? 230 : 190, 'god');
               break;
             }

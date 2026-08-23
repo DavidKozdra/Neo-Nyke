@@ -103,6 +103,7 @@
   const npcSignatureController = globalThis.NeoNyke?.simulation?.createCampaignEnemyBehaviors?.({
     getPlayer: () => Neo.player,
     getTuning: () => Neo.getEnemyDifficultyTuning(),
+    scaleEnemyLaserDamage: damage => Neo.scaleEnemyLaserDamage(damage),
     random: scope => Neo.nextRandom(scope || 'encounter'),
     spawnProjectile(enemy, descriptor) {
       Neo.spawnProjectile({
@@ -3110,7 +3111,8 @@
         if (hitSegment) break;
       }
       if (hitSegment) {
-        const damage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
+        const rawDamage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
+        const damage = Neo.scaleEnemyLaserDamage(rawDamage);
         Neo.damagePlayer(damage, hitSegment.angle, phaseLevel >= 4 ? 230 : 190, 'God Beam', { sourceKey: 'god', attacker: enemy });
       }
     }

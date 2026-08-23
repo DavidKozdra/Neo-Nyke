@@ -447,6 +447,12 @@
     return { label: `${enemyLabel} Beam`, key: String(enemy?.type || 'enemy_beam') };
   }
 
+  function scaleEnemyLaserDamage(damage) {
+    const scale = globalThis.NeoNyke?.simulation?.scaleCampaignEnemyLaserDamage;
+    if (typeof scale !== 'function') throw new Error('Shared enemy laser damage scaling is unavailable');
+    return scale(damage, Neo.getDifficultyDef?.() || { key: Neo.selectedDifficulty || 'medium' });
+  }
+
   // Weapon cooldown/charge data lives on the canonical Neo.WEAPON_DEFS registry
   // (defined in ui/input.js alongside name/color/rarity), so a weapon is one row
   // there. baseCooldown is seconds, or the sentinel 'melee' to track the melee base
@@ -1564,7 +1570,7 @@
       const damage = trainingSafe
         ? Math.max(18, Math.round(Number(enemy?.dmg || 14) * 1.35))
         : Math.max(1, Math.round(attackerBeamPower + playerBeamPower));
-      Neo.damagePlayer(damage, Number(enemy?.beamAngle || 0), trainingSafe ? 330 : 560, source.label, {
+      Neo.damagePlayer(scaleEnemyLaserDamage(damage), Number(enemy?.beamAngle || 0), trainingSafe ? 330 : 560, source.label, {
         sourceKey: source.key,
         attacker: enemy,
         ignoreInv: !trainingSafe,
@@ -5282,7 +5288,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       }, null);
       if (hitSegment) {
         const source = getEnemyBeamDamageSource(enemy, damageSource);
-        Neo.damagePlayer(damage, hitSegment.angle, knockback, source.label, { sourceKey: source.key, attacker: enemy });
+        Neo.damagePlayer(scaleEnemyLaserDamage(damage), hitSegment.angle, knockback, source.label, { sourceKey: source.key, attacker: enemy });
         if (typeof onHit === 'function') onHit(enemy);
       }
     }
@@ -6781,6 +6787,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   Neo.rollEnemyBeamBias = rollEnemyBeamBias;
   Neo.aimEnemyBeam = aimEnemyBeam;
   Neo.tickEnemyBeam = tickEnemyBeam;
+  Neo.scaleEnemyLaserDamage = scaleEnemyLaserDamage;
   Neo.spawnEnemyCorpse = spawnEnemyCorpse;
   Neo.dropFinalRivalRelic = dropFinalRivalRelic;
   Neo.onEnemyDie = onEnemyDie;

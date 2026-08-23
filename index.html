@@ -470,8 +470,19 @@
     <div class="anvil-footer">
       <div class="anvil-pay-toggle" role="group" aria-label="Pay with">
         <span class="anvil-pay-label">Pay with</span>
-        <button id="anvilPayXp" class="anvil-pay-btn is-active" data-pay="xp">XP</button>
-        <button id="anvilPayGold" class="anvil-pay-btn" data-pay="gold">GOLD</button>
+        <div class="anvil-pay-switch" data-pay-currency="gold">
+          <span class="anvil-pay-switch__thumb" aria-hidden="true"></span>
+          <button id="anvilPayGold" class="anvil-pay-btn anvil-pay-btn--gold is-active" data-pay="gold" aria-pressed="true">
+            <canvas class="gold-coin-icon anvil-pay-btn__icon" data-gold-coin width="32" height="32" aria-hidden="true"></canvas>
+            <span class="anvil-pay-btn__name">GOLD</span>
+            <span class="anvil-pay-btn__wallet" id="anvilPayGoldWallet">0</span>
+          </button>
+          <button id="anvilPayXp" class="anvil-pay-btn anvil-pay-btn--xp" data-pay="xp" aria-pressed="false">
+            <span class="anvil-pay-btn__icon anvil-pay-btn__icon--xp" aria-hidden="true">XP</span>
+            <span class="anvil-pay-btn__name">XP</span>
+            <span class="anvil-pay-btn__wallet" id="anvilPayXpWallet">0</span>
+          </button>
+        </div>
       </div>
       <div class="anvil-cost-summary" id="anvilCostSummary"></div>
       <div class="anvil-footer-actions">

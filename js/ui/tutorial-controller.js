@@ -636,9 +636,9 @@ function createSteps() {
       id: 'forge_pay_currency',
       chapter: 'FORGE',
       title: 'Choose XP or gold',
-      text: () => 'Toggle Pay With to switch between XP and gold.',
-      command: () => 'CHOOSE GOLD',
-      target: targetDom('#anvilPayGold', 10),
+      text: () => 'The Forge charges gold by default. Toggle Pay With over to XP to see the other price.',
+      command: () => 'CHOOSE XP',
+      target: targetDom('#anvilPayXp', 10),
       roomKey: 'forgeRoomKey',
       complete: state => !!state.completed?.forge_pay_currency,
     },
@@ -1059,7 +1059,9 @@ export function createTutorialController() {
     if (type === 'shop-purchase' && payload.tutorialOffer) setCompleted('shop_buy');
     if (type === 'panel-open' && payload.panel === 'forge' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_open');
     if (type === 'forge-item-select' && ['move', 'weapon'].includes(payload.itemType) && currentRoomKey === state.forgeRoomKey) setCompleted('forge_item_select');
-    if (type === 'forge-pay-currency' && payload.currency === 'gold' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_pay_currency');
+    // Gold is the Forge default, so asking the player to pick gold would be a
+    // no-op click that never fires this signal. The step asks for XP instead.
+    if (type === 'forge-pay-currency' && payload.currency === 'xp' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_pay_currency');
     if (type === 'forge-stage' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_stage');
     if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');
     if (type === 'challenge-started' && payload.challengeType === 'bomb') setCompleted('challenge_start');

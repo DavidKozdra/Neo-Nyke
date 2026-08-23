@@ -55,6 +55,7 @@
       statMultiplier: 1,
       bossStatMultiplier: 0.8,
       enemyDamageMultiplier: 0.85,
+      enemyLaserDamageMultiplier: 0.6,
       bossHpGrowthMultiplier: 0.65,
       hpFloorScaleBonus: -0.045,
       eliteHpMultiplier: 0.6,
@@ -78,6 +79,7 @@
       statMultiplier: 1.06,
       bossStatMultiplier: 0.95,
       enemyDamageMultiplier: 0.95,
+      enemyLaserDamageMultiplier: 0.65,
       bossHpGrowthMultiplier: 0.9,
       itemDropChanceMultiplier: 1.1,
       hpFloorScaleBonus: -0.02,
@@ -100,6 +102,7 @@
       statMultiplier: 1.12,
       bossStatMultiplier: 1.16,
       enemyDamageMultiplier: 1,
+      enemyLaserDamageMultiplier: 0.8,
       bossHpGrowthMultiplier: 1.15,
       hpFloorScaleBonus: 0.02,
       speedMultiplier: 1.06,
@@ -124,6 +127,7 @@
       statMultiplier: 1.22,
       bossStatMultiplier: 1.28,
       enemyDamageMultiplier: 1,
+      enemyLaserDamageMultiplier: 0.8,
       bossHpGrowthMultiplier: 1.35,
       hpFloorScaleBonus: 0.05,
       speedMultiplier: 1.1,
@@ -149,6 +153,7 @@
       statMultiplier: 1.5,
       bossStatMultiplier: 1.6,
       enemyDamageMultiplier: 1,
+      enemyLaserDamageMultiplier: 0.8,
       bossHpGrowthMultiplier: 1.65,
       hpFloorScaleBonus: 0.08,
       speedMultiplier: 1.14,
@@ -177,6 +182,7 @@
       statMultiplier: 1,
       bossStatMultiplier: 1,
       enemyDamageMultiplier: 1,
+      enemyLaserDamageMultiplier: 0.8,
       bossHpGrowthMultiplier: 1,
       hpFloorScaleBonus: 0,
       speedMultiplier: 1,
@@ -195,6 +201,7 @@
     statMultiplier: [0.1, 10],
     bossStatMultiplier: [0.1, 10],
     enemyDamageMultiplier: [0, 10],
+    enemyLaserDamageMultiplier: [0, 1],
     bossHpGrowthMultiplier: [0.1, 10],
     hpFloorScaleBonus: [-0.14, 2],
     speedMultiplier: [0.1, 5],
@@ -251,6 +258,19 @@
     return key === 'custom'
       ? sanitizeCampaignEnemyDifficulty(input, preset)
       : { ...preset };
+  }
+
+  function getCampaignEnemyLaserDamageMultiplier(source) {
+    const difficulty = typeof source === 'string'
+      ? CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[source] || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY
+      : resolveCampaignEnemyDifficulty(source);
+    return clamp(Number(difficulty.enemyLaserDamageMultiplier ?? 0.8), 0, 1);
+  }
+
+  function scaleCampaignEnemyLaserDamage(damage, difficulty) {
+    const amount = Math.max(0, Number(damage || 0));
+    if (amount <= 0) return 0;
+    return Math.max(1, Math.round(amount * getCampaignEnemyLaserDamageMultiplier(difficulty)));
   }
 
   function softCapEnemyScale(value, cap, curve = 0.35) {
@@ -412,6 +432,8 @@
     CAMPAIGN_ENEMY_DIFFICULTY_PRESETS,
     sanitizeCampaignEnemyDifficulty,
     resolveCampaignEnemyDifficulty,
+    getCampaignEnemyLaserDamageMultiplier,
+    scaleCampaignEnemyLaserDamage,
     softCapEnemyScale,
     getEnemyLevelStatMultipliers,
     getBossLevelHpMultiplier,

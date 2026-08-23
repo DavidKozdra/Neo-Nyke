@@ -1600,9 +1600,19 @@ export function renderAnvilStatPanel() {
     const stagedSteps = cost.stagedSteps || 0;
     const voucherSteps = cost.voucherSteps || 0;
 
-    // Reflect the active currency in the toggle buttons.
+    // Reflect the active currency in the toggle: the switch's data attribute
+    // slides the thumb (and recolors it per currency), and aria-pressed carries
+    // the same state for screen readers.
+    if (Neo.ui.anvilPaySwitch) Neo.ui.anvilPaySwitch.dataset.payCurrency = payGold ? 'gold' : 'xp';
     Neo.ui.anvilPayXp?.classList.toggle('is-active', !payGold);
     Neo.ui.anvilPayGold?.classList.toggle('is-active', payGold);
+    Neo.ui.anvilPayXp?.setAttribute('aria-pressed', String(!payGold));
+    Neo.ui.anvilPayGold?.setAttribute('aria-pressed', String(payGold));
+    // Wallet balances live in the toggle so the choice can be made on what the
+    // player can actually afford, without reading the cost line first.
+    if (Neo.ui.anvilPayXpWallet) Neo.ui.anvilPayXpWallet.textContent = String(Math.floor(xp));
+    if (Neo.ui.anvilPayGoldWallet) Neo.ui.anvilPayGoldWallet.textContent = String(Math.floor(coins));
+    if (Neo.ui.anvilPayGold) drawGoldCoinIcons(Neo.ui.anvilPayGold);
 
     if (Neo.ui.anvilCostSummary) {
       if (stagedSteps === 0) {

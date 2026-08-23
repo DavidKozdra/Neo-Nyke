@@ -167,7 +167,9 @@ window.Neo = {
   anvilSelectedItem: null,
   anvilStagedUpgrades: {},
   // Which currency the Forge charges for staged upgrades: 'xp' or 'gold'.
-  anvilPayCurrency: 'xp',
+  // Gold is the default: XP is also the level-up currency, so spending it here
+  // silently costs progression, and players kept doing that without noticing.
+  anvilPayCurrency: 'gold',
   draggingMoveKey: '',
   weaponBurstQueue: [],
   clawSwipeQueue: [],

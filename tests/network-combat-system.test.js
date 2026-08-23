@@ -1443,7 +1443,7 @@ describe('authoritative network combat system', () => {
     player.hp = 100;
     player.items.drink_master = 1;
     for (let tick = 0; tick < 41; tick += 1) simulation.updateGame({}, 0.05);
-    expect(player.hp).toBeCloseTo(110.8);
+    expect(player.hp).toBeCloseTo(112.8); // 10.8 Fleece + 2 passive regen over 2.05s
     const pulse = events.find(event => event.eventType === 'PLAYER_HEALED' && event.data?.source === 'golden_fleece');
     expect(pulse.data.healedAmount).toBeCloseTo(10.8);
   });
@@ -1623,7 +1623,7 @@ describe('authoritative network combat system', () => {
     for (let tick = 0; tick < 25; tick += 1) simulation.updateGame({ p1: { buttons: 2, aimDirection: 0 } }, 0.05);
     simulation.updateGame({ p1: { buttons: 0, aimDirection: 0 } }, 0.05);
 
-    expect(player.hp).toBe(80);
+    expect(player.hp).toBe(81); // one passive regen pulse during the charged setup
     expect(player.barrier).toBe(27);
     expect(player.turtlePowerUpPower).toBeCloseTo(0.6);
     expect(player.turtlePowerUpUntilTick).toBeGreaterThan(state.tick + 100);
@@ -1678,7 +1678,7 @@ describe('authoritative network combat system', () => {
     }));
 
     for (let tick = 0; tick < 100; tick += 1) simulation.updateGame({}, 0.05);
-    expect(player.hp).toBe(72);
+    expect(player.hp).toBe(77); // ten Potion Bath ticks plus five seconds of passive regen
     expect(events.filter(event => event.eventType === 'POTION_BATH_REGEN')).toHaveLength(10);
   });
 
@@ -2396,7 +2396,7 @@ describe('authoritative network combat system', () => {
     player.x += 300;
     for (let tick = 0; tick < 10; tick += 1) simulation.updateGame({}, 0.05);
     expect(state.players.p2.hp).toBeGreaterThan(20);
-    expect(player.hp).toBeCloseTo(28.096);
+    expect(player.hp).toBeCloseTo(29.096); // includes one passive regen pulse
   });
 
   test('server enforces authored invulnerability and Hammer Smash stun', () => {

@@ -256,6 +256,7 @@
 
   function updatePlayer2(dt) {
     if (!Neo.player2) return;
+    globalThis.NeoNyke.simulation.advanceUniversalHealthRegen?.(Neo.player2, dt);
     const _gp1 = window.NeoGamepad?.[1];
     const _gp1Active = !!_gp1?.active;
     let p2MoveX = (Neo.keys['l'] ? 1 : 0) - (Neo.keys['j'] ? 1 : 0);
@@ -386,6 +387,7 @@
 
   function updatePlayerN(dt, pn, n) {
     if (!pn) return;
+    globalThis.NeoNyke.simulation.advanceUniversalHealthRegen?.(pn, dt);
     const _gpN = window.NeoGamepad?.[n - 1];
     let mX = 0, mY = 0;
     if (_gpN && Math.hypot(_gpN.moveX || 0, _gpN.moveY || 0) > 0.18) { mX = _gpN.moveX; mY = _gpN.moveY; }
@@ -806,6 +808,9 @@
 
   function updatePlayerStatuses(dt) {
     if (!Neo.player) return;
+    globalThis.NeoNyke.simulation.advanceUniversalHealthRegen?.(Neo.player, dt, {
+      heal: amount => Neo.applyPlayerHealing(amount),
+    });
     const genericHealthRegen = globalThis.NeoNyke.simulation.advanceGenericHealthRegen?.(Neo.player, dt, {
       itemStats: Neo.getItemStats(),
       heal: amount => Neo.applyPlayerHealing(Neo.scalePlayerHealing(amount)),

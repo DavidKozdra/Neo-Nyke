@@ -2490,6 +2490,12 @@
     justify-content: center;
   }
 
+  /* Let the switch take the full row on narrow screens so both halves stay
+     wide enough to tap and to fit the wallet balance. */
+  .anvil-pay-switch {
+    flex: 1;
+  }
+
   .anvil-footer-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;

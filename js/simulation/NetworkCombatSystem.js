@@ -23,6 +23,7 @@
   const MAX_FLOOR = 10;
   const {
     scaleCampaignEnemyStats,
+    scaleCampaignEnemyLaserDamage = damage => Math.max(0, Number(damage || 0)),
     sanitizeCampaignEnemyDifficulty,
     DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY = {},
   } = enemyScalingApi || {};
@@ -176,6 +177,7 @@
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
     resetGenericHealthRegen = () => false,
     advanceGenericHealthRegen = () => ({ active: false, healed: 0, pulses: [] }),
+    advanceUniversalHealthRegen = () => ({ healed: 0, pulses: [] }),
     applyCampaignInsuranceOnHit = player => ({ triggered: false, health: player?.hp || 0 }),
     resolveCampaignHemesScarfRetaliation = () => null,
     getCampaignHemesScarfPassiveBleedStacks = () => 0,
@@ -4236,7 +4238,7 @@
       const damage = Math.max(1, Math.round(
         Number(enemy?.dmg || enemy?.contactDamage || 0) + playerBaseBeamDamage(player),
       ));
-      damagePlayer(state, player, damage, enemy?.id, emitEvent, 'beam_struggle', {
+      damagePlayer(state, player, scaleCampaignEnemyLaserDamage(damage, state.matchRules?.difficulty), enemy?.id, emitEvent, 'beam_struggle', {
         angle: Number(enemy?.beamAngle || 0), knockback: 560, ignoreInv: true, ignoreDamageCaps: true,
       });
     }
@@ -6991,6 +6993,14 @@
   function updateGenericHealthRegen(state, fixedDelta, emitEvent) {
     Object.values(state.players || {}).forEach(player => {
       if (!player || player.downed || player.disconnected) return;
+      const universalRegen = advanceUniversalHealthRegen(player, fixedDelta);
+      universalRegen.pulses.forEach(healedAmount => emitEvent('PLAYER_HEALED', {
+        playerId: player.id,
+        roomId: player.roomId,
+        source: 'universal_regen',
+        healedAmount,
+        health: player.hp,
+      }));
       const regen = advanceGenericHealthRegen(player, fixedDelta, { itemStats: player.itemStats });
       regen.pulses.forEach(healedAmount => emitEvent('PLAYER_HEALED', {
         playerId: player.id,
@@ -7299,6 +7309,9 @@
       if (!player) return;
       if (enemy.networkBeamStrugglePlayerId === player.id && state.beamStruggles?.[player.id]) return;
       damagePlayer(state, player, damage, enemy.id, behaviorRuntime.emitEvent, source || enemy.type, { angle, knockback });
+    },
+    scaleEnemyLaserDamage(damage) {
+      return scaleCampaignEnemyLaserDamage(damage, behaviorRuntime.state.matchRules?.difficulty);
     },
     applyPlayerStatus(enemy, playerRef, key, stacks, duration) {
       const state = behaviorRuntime.state;

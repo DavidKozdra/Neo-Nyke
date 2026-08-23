@@ -154,16 +154,17 @@ describe('multiplayer per-hit damage cap and one-shot guard', () => {
     }
 
     test('costs the campaign\'s enemy-power + base-laser damage', () => {
-      // Campaign: enemy.dmg (12) + MOVE_BASE_STATS.blood_beam.damage (14) = 26.
+      // Campaign raw damage is enemy.dmg (12) + the base beam (14) = 26;
+      // Medium's 35% enemy-laser reduction rounds that backlash to 17.
       expect(MOVE_BASE_STATS.blood_beam.damage).toBe(14);
-      expect(struggleLoss(14)).toBe(26);
+      expect(struggleLoss(14)).toBe(17);
     });
 
     test('an upgraded laser cannot one-shot its own owner', () => {
       // Before the fix this fed 12 + 90 = 102 through a capless hit and deleted
       // a full-health player outright.
-      expect(struggleLoss(90)).toBe(26);
-      expect(struggleLoss(400)).toBe(26);
+      expect(struggleLoss(90)).toBe(17);
+      expect(struggleLoss(400)).toBe(17);
     });
   });
 });
