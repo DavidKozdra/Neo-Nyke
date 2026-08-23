@@ -10,6 +10,10 @@ const {
 } = require('../js/simulation/SharedItemEffectSystem');
 const { applyCampaignLevelUp } = require('../js/simulation/SharedProgressionSystem');
 const { findCampaignProjectileEntitySweepHit } = require('../js/simulation/SharedProjectileSystem');
+const {
+  SEA_SNAKE_SEGMENT_SPACING,
+  advanceCampaignSeaSnakeBody,
+} = require('../js/simulation/SharedEnemyBehaviorSystem');
 
 describe('black relics', () => {
   test.each([
@@ -79,6 +83,47 @@ describe('black relics', () => {
     );
     expect(hit?.entity).toBe(snake);
     expect(hit?.x).toBeLessThan(100);
+  });
+
+  test('the sea snake continuously extrudes collidable tail sections from its portal', () => {
+    const snake = {
+      x: 200,
+      y: 50,
+      seaSnakeHole: { x: 0, y: 50, radius: 58 },
+      seaSnakeSegments: [
+        { x: 0, y: 50, r: 20 },
+        { x: 0, y: 50, r: 20 },
+        { x: 0, y: 50, r: 20 },
+      ],
+    };
+
+    const first = advanceCampaignSeaSnakeBody(snake, 1);
+    const firstLength = first.segments.length;
+    expect(first.addedSegments).toBeGreaterThan(0);
+    expect(snake.collisionCircles).toBe(snake.seaSnakeSegments);
+    expect(snake.seaSnakeSegments.at(-1)).toEqual(expect.objectContaining({ x: 0, y: 50 }));
+
+    snake.x = 400;
+    const second = advanceCampaignSeaSnakeBody(snake, 1);
+    expect(second.segments.length).toBeGreaterThan(firstLength);
+    expect(second.segments.at(-1)).toEqual(expect.objectContaining({ x: 0, y: 50 }));
+
+    for (let index = 1; index < second.segments.length; index += 1) {
+      const previous = second.segments[index - 1];
+      const segment = second.segments[index];
+      expect(Math.hypot(segment.x - previous.x, segment.y - previous.y))
+        .toBeLessThanOrEqual(SEA_SNAKE_SEGMENT_SPACING + 1e-8);
+      expect(Number(previous.r) + Number(segment.r)).toBeGreaterThan(SEA_SNAKE_SEGMENT_SPACING);
+    }
+
+    second.segments.forEach(segment => {
+      const hit = findCampaignProjectileEntitySweepHit(
+        { x: segment.x + 30, y: segment.y, r: 2 },
+        { x: segment.x - 30, y: segment.y },
+        [snake],
+      );
+      expect(hit?.entity).toBe(snake);
+    });
   });
 
   test('black relics re-summon their boss on every floor entered', () => {

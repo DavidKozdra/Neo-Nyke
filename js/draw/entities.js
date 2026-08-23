@@ -1425,10 +1425,24 @@
         // not prevent the draw calls themselves. Skip enemies well outside this
         // camera so split-screen does not render the full enemy list 2-4 times.
         const margin = Math.max(72, Number(enemy.r || 0) + 48);
-        if (enemy.x < viewportBounds.left - margin
+        const headOutside = enemy.x < viewportBounds.left - margin
           || enemy.x > viewportBounds.right + margin
           || enemy.y < viewportBounds.top - margin
-          || enemy.y > viewportBounds.bottom + margin) return;
+          || enemy.y > viewportBounds.bottom + margin;
+        const snakeBodyVisible = enemy.type === 'sea_snake' && (
+          (enemy.seaSnakeHole
+            && enemy.seaSnakeHole.x >= viewportBounds.left - margin
+            && enemy.seaSnakeHole.x <= viewportBounds.right + margin
+            && enemy.seaSnakeHole.y >= viewportBounds.top - margin
+            && enemy.seaSnakeHole.y <= viewportBounds.bottom + margin)
+          || (enemy.seaSnakeSegments || []).some(segment => (
+            segment.x >= viewportBounds.left - margin
+            && segment.x <= viewportBounds.right + margin
+            && segment.y >= viewportBounds.top - margin
+            && segment.y <= viewportBounds.bottom + margin
+          ))
+        );
+        if (headOutside && !snakeBodyVisible) return;
       }
       if (enemy.type === 'sea_snake') drawSeaSnakeHole(enemy);
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }

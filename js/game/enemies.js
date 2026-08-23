@@ -1213,32 +1213,31 @@
   }
 
   function updateSeaSnakeSegments(enemy, dt) {
-    const segments = enemy.seaSnakeSegments || (enemy.seaSnakeSegments = []);
+    const advanceBody = globalThis.NeoNyke?.simulation?.advanceCampaignSeaSnakeBody;
+    if (typeof advanceBody !== 'function') throw new Error('Shared sea-snake body rules are unavailable');
+    const { segments } = advanceBody(enemy, dt);
     if (!segments.length) return;
-    let leaderX = enemy.x;
-    let leaderY = enemy.y;
-    const spacing = 27;
-    for (const segment of segments) {
-      const dx = leaderX - segment.x;
-      const dy = leaderY - segment.y;
-      const distance = Math.hypot(dx, dy) || 1;
-      if (distance > spacing) {
-        const follow = Math.min(distance - spacing, Math.max(8, distance * dt * 9));
-        segment.x += (dx / distance) * follow;
-        segment.y += (dy / distance) * follow;
+    const contacts = enemy.seaSnakeContactCooldowns || (enemy.seaSnakeContactCooldowns = {});
+    Object.keys(contacts).forEach(id => { contacts[id] = Math.max(0, Number(contacts[id] || 0) - dt); });
+    const slots = Neo.getLocalCoopSlots?.({ livingOnly: true }) || [{ id: 1, getEntity: () => Neo.player }];
+    slots.forEach(slot => {
+      if (Number(contacts[slot.id] || 0) > 0) return;
+      const actor = slot.getEntity?.();
+      if (!actor) return;
+      const actorRadius = Number(actor.r || 14);
+      const touched = segments.find(segment => (
+        Neo.dist(segment.x, segment.y, actor.x, actor.y) <= Number(segment.r || 20) + actorRadius
+      ));
+      if (!touched) return;
+      const angle = Math.atan2(actor.y - touched.y, actor.x - touched.x);
+      const damageOptions = { attacker: enemy, sourceLabel: 'Snake of the Sea — Body' };
+      if (typeof Neo.damagePlayerSlot === 'function') {
+        Neo.damagePlayerSlot(slot, Math.round(enemy.dmg * 0.7), angle, 180, 'sea_snake_body', damageOptions);
+      } else {
+        Neo.damagePlayer(Math.round(enemy.dmg * 0.7), angle, 180, 'sea_snake_body', damageOptions);
       }
-      leaderX = segment.x;
-      leaderY = segment.y;
-    }
-    enemy.seaSnakeContactCd = Math.max(0, Number(enemy.seaSnakeContactCd || 0) - dt);
-    if (enemy.seaSnakeContactCd > 0) return;
-    const playerRadius = Number(Neo.player.r || 14);
-    const touched = segments.some(segment => Neo.dist(segment.x, segment.y, Neo.player.x, Neo.player.y) <= 20 + playerRadius);
-    if (touched) {
-      const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-      Neo.damagePlayer(Math.round(enemy.dmg * 0.7), angle, 180, 'sea_snake_body', { attacker: enemy, sourceLabel: 'Snake of the Sea — Body' });
-      enemy.seaSnakeContactCd = 0.48;
-    }
+      contacts[slot.id] = 0.48;
+    });
   }
 
   function updateSeaSnakeBoss(enemy, dt) {

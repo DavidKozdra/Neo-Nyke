@@ -10,6 +10,91 @@
   'use strict';
 
   const deterministicRandom = () => 0.5;
+  const SEA_SNAKE_SEGMENT_SPACING = 27;
+  const SEA_SNAKE_SEGMENT_RADIUS = 20;
+
+  // Advances the serpent as a continuously extruded chain. The final segment
+  // is pinned inside the entrance portal; whenever the body pulls far enough
+  // away, new overlapping collision circles are inserted before that anchor.
+  // Keeping the visual body and collisionCircles as the same array prevents a
+  // rendered tail section from ever becoming non-solid (including after save
+  // restoration, where JSON can break the original shared-array reference).
+  function advanceCampaignSeaSnakeBody(enemy, deltaSeconds, options = {}) {
+    if (!enemy || typeof enemy !== 'object') return { segments: [], addedSegments: 0 };
+    const dt = Math.max(0, Number(deltaSeconds) || 0);
+    const spacing = Math.max(1, Number(options.spacing || SEA_SNAKE_SEGMENT_SPACING));
+    const radius = Math.max(spacing * 0.5, Number(options.radius || SEA_SNAKE_SEGMENT_RADIUS));
+    const followRate = Math.max(0, Number(options.followRate || 9));
+    const minimumFollow = Math.max(0, Number(options.minimumFollow || 8));
+    const hole = enemy.seaSnakeHole;
+    const holeX = Number(hole?.x);
+    const holeY = Number(hole?.y);
+    const hasPortal = Number.isFinite(holeX) && Number.isFinite(holeY);
+    const segments = Array.isArray(enemy.seaSnakeSegments)
+      ? enemy.seaSnakeSegments
+      : (enemy.seaSnakeSegments = []);
+
+    if (segments.length === 0 && hasPortal) {
+      segments.push({ x: holeX, y: holeY, r: radius, radius });
+    }
+
+    // The portal anchor is excluded from following. Every other section moves
+    // behind its leader, leaving no gap wider than two collision radii.
+    const movingCount = hasPortal ? Math.max(0, segments.length - 1) : segments.length;
+    let leaderX = Number(enemy.x);
+    let leaderY = Number(enemy.y);
+    for (let index = 0; index < movingCount; index += 1) {
+      const segment = segments[index];
+      const segmentX = Number(segment.x);
+      const segmentY = Number(segment.y);
+      const dx = leaderX - segmentX;
+      const dy = leaderY - segmentY;
+      const distance = Math.hypot(dx, dy) || 1;
+      if (distance > spacing) {
+        const follow = Math.min(distance - spacing, Math.max(minimumFollow, distance * dt * followRate));
+        segment.x = segmentX + dx / distance * follow;
+        segment.y = segmentY + dy / distance * follow;
+      }
+      segment.r = radius;
+      segment.radius = radius;
+      leaderX = Number(segment.x);
+      leaderY = Number(segment.y);
+    }
+
+    let addedSegments = 0;
+    if (hasPortal && segments.length > 0) {
+      const anchor = segments[segments.length - 1];
+      anchor.x = holeX;
+      anchor.y = holeY;
+      anchor.r = radius;
+      anchor.radius = radius;
+
+      const tailLeader = segments.length > 1 ? segments[segments.length - 2] : enemy;
+      leaderX = Number(tailLeader.x);
+      leaderY = Number(tailLeader.y);
+      let gapX = holeX - leaderX;
+      let gapY = holeY - leaderY;
+      let gap = Math.hypot(gapX, gapY);
+      while (gap > spacing) {
+        const next = {
+          x: leaderX + gapX / gap * spacing,
+          y: leaderY + gapY / gap * spacing,
+          r: radius,
+          radius,
+        };
+        segments.splice(segments.length - 1, 0, next);
+        addedSegments += 1;
+        leaderX = next.x;
+        leaderY = next.y;
+        gapX = holeX - leaderX;
+        gapY = holeY - leaderY;
+        gap = Math.hypot(gapX, gapY);
+      }
+    }
+
+    enemy.collisionCircles = segments;
+    return { segments, addedSegments };
+  }
 
   // The authored campaign enemy behaviors from js/game/enemies.js, ported onto
   // a context interface so an authority (or any headless runtime) executes the
@@ -3003,6 +3088,9 @@
     SHARED_BEHAVIOR_TYPES,
     BULK_GOLEM_KNOCKBACK_MULTIPLIER,
     HANDSOME_DEVIL_SPIKE_DAMAGE_MULTIPLIER,
+    SEA_SNAKE_SEGMENT_SPACING,
+    SEA_SNAKE_SEGMENT_RADIUS,
+    advanceCampaignSeaSnakeBody,
     createCampaignEnemyBehaviors,
     createCampaignBulkGolemSplitPlan,
     getHandsomeDevilSpikeDamage,

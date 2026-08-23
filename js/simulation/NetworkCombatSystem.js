@@ -70,6 +70,7 @@
     getCampaignRivalLoadout = () => [],
     resolveCampaignRivalDisposition = options => ({ brain: options.brain, transition: '', reason: '' }),
     createCampaignBulkGolemSplitPlan = () => [],
+    advanceCampaignSeaSnakeBody = enemy => ({ segments: enemy?.seaSnakeSegments || [], addedSegments: 0 }),
     resolveCampaignBossIntro = () => null,
     BEAM_CHANNEL_PROFILES = {},
     BEAM_RECOIL_ACCEL = 45,
@@ -8819,34 +8820,24 @@
     enemy.y = Math.max(inset, Math.min(Number(floor.height || 700) - inset, Number(enemy.y) + enemy.vy * fixedDelta));
     enemy.state = 'constricting';
 
-    let leaderX = Number(enemy.x);
-    let leaderY = Number(enemy.y);
-    (enemy.seaSnakeSegments || []).forEach(segment => {
-      const segmentDx = leaderX - Number(segment.x);
-      const segmentDy = leaderY - Number(segment.y);
-      const segmentDistance = Math.hypot(segmentDx, segmentDy) || 1;
-      if (segmentDistance > 27) {
-        const follow = Math.min(segmentDistance - 27, Math.max(8, segmentDistance * fixedDelta * 9));
-        segment.x = Number(segment.x) + segmentDx / segmentDistance * follow;
-        segment.y = Number(segment.y) + segmentDy / segmentDistance * follow;
-      }
-      leaderX = Number(segment.x);
-      leaderY = Number(segment.y);
-    });
+    const { segments } = advanceCampaignSeaSnakeBody(enemy, fixedDelta);
 
     const contacts = enemy.seaSnakeContactCooldowns || (enemy.seaSnakeContactCooldowns = {});
     livingRoomPlayers(state, enemy.roomId).forEach(player => {
       if (state.tick < Number(contacts[player.id] || 0)) return;
       const playerRadius = Number(player.radius || CAMPAIGN_PLAYER_RADIUS);
       const headTouch = Math.hypot(player.x - enemy.x, player.y - enemy.y) <= Number(enemy.radius || 38) + playerRadius + 4;
-      const bodyTouch = (enemy.seaSnakeSegments || []).some(segment => (
+      const bodySegment = segments.find(segment => (
         Math.hypot(player.x - Number(segment.x), player.y - Number(segment.y)) <= Number(segment.radius || segment.r || 20) + playerRadius
       ));
-      if (!headTouch && !bodyTouch) return;
+      if (!headTouch && !bodySegment) return;
       contacts[player.id] = state.tick + 10;
       damagePlayer(state, player, headTouch ? enemy.contactDamage : Math.round(Number(enemy.contactDamage || 34) * 0.7), enemy.id, emitEvent,
         headTouch ? 'sea_snake' : 'sea_snake_body', {
-          angle: Math.atan2(Number(player.y) - Number(enemy.y), Number(player.x) - Number(enemy.x)),
+          angle: Math.atan2(
+            Number(player.y) - Number(headTouch ? enemy.y : bodySegment.y),
+            Number(player.x) - Number(headTouch ? enemy.x : bodySegment.x),
+          ),
           knockback: headTouch ? 260 : 180,
         });
     });
