@@ -3828,7 +3828,7 @@
         r: 34,
         ttl: 1.1,
         armTime: 0.48,
-        damage: Math.round(enemy.dmg * 1.1),
+        damage: globalThis.NeoNyke.simulation.getHandsomeDevilSpikeDamage(enemy.dmg),
         knockback: 260,
         statusKey: 'bleed',
         statusStacks: getBossStatusStacks(enemy, 2),

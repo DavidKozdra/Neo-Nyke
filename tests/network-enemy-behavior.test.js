@@ -7,6 +7,7 @@ const { scaleCampaignEnemyStats } = require('../js/simulation/SharedEnemyScaling
 const {
   BULK_GOLEM_KNOCKBACK_MULTIPLIER,
   createCampaignEnemyBehaviors,
+  getHandsomeDevilSpikeDamage,
 } = require('../js/simulation/SharedEnemyBehaviorSystem');
 const {
   applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, advanceToNextFloor,
@@ -1489,14 +1490,22 @@ describe('authored boss behaviors on the authority', () => {
   test('the Handsome Devil lays red spikes and a lava grid in phase one', () => {
     const { state, simulation } = behaviorHarness();
     const player = state.players.p1;
-    injectEnemy(state, 'handsome_devil', player.x + 300, player.y, {
+    const devil = injectEnemy(state, 'handsome_devil', player.x + 300, player.y, {
       phase: 1, spikeCd: 0.01, lavaGridCd: 0.01, devilLaserCd: 9, clawCd: 9, giantLaserCd: 99, attackCd: 9, beamRange: 560,
     });
 
     tick(simulation, 2);
     const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
-    expect((room.hazards || []).filter(hazard => hazard.kind === 'red_spikes').length).toBe(5);
+    const spikes = (room.hazards || []).filter(hazard => hazard.kind === 'red_spikes');
+    expect(spikes).toHaveLength(5);
+    expect(spikes.every(hazard => hazard.damage === getHandsomeDevilSpikeDamage(devil.dmg))).toBe(true);
     expect((room.hazards || []).filter(hazard => hazard.kind === 'lava' && hazard.enemy).length).toBe(5);
+  });
+
+  test('nerfs Handsome Devil spike damage by 25% without changing his base damage', () => {
+    const previousSpikeDamage = Math.round(40 * 1.1);
+    expect(previousSpikeDamage).toBe(44);
+    expect(getHandsomeDevilSpikeDamage(40)).toBe(33);
   });
 
   test('the Bulk Golem leaps at distant players and slams down with an impact blast', () => {

@@ -34,6 +34,9 @@
   const QUEEN_FINISHER_KNOCKBACK = 820;
   const QUEEN_FINISHER_RESISTANCE = 400;
   const BULK_GOLEM_KNOCKBACK_MULTIPLIER = 3;
+  // Red spikes previously dealt 110% of the Devil's damage stat. The 25% nerf
+  // makes their final multiplier 82.5% while leaving his other attacks intact.
+  const HANDSOME_DEVIL_SPIKE_DAMAGE_MULTIPLIER = 1.1 * 0.75;
   const MOOGGY_CLAW_SWING = 0.22;
   const MOOGGY_CLAW_REACH_PAD = 34;
   const MOOGGY_CLAW_ARC = 1.0;
@@ -51,6 +54,10 @@
       type: 'golem', x: Number(enemy.x || 0) + xOffset, y: Number(enemy.y || 0),
       elite, spawnedFromBulk: true, healthMultiplier: 1.6, damageMultiplier: 1.35,
     }));
+  }
+
+  function getHandsomeDevilSpikeDamage(enemyDamage) {
+    return Math.round(Math.max(0, Number(enemyDamage || 0)) * HANDSOME_DEVIL_SPIKE_DAMAGE_MULTIPLIER);
   }
 
   function createCampaignEnemyBehaviors(ctx) {
@@ -2035,7 +2042,7 @@
           r: 34,
           ttl: 1.1,
           armTime: 0.48,
-          damage: Math.round(enemy.dmg * 1.1),
+          damage: getHandsomeDevilSpikeDamage(enemy.dmg),
           knockback: 260,
           statusKey: 'bleed',
           statusStacks: 6,
@@ -2994,8 +3001,10 @@
   return {
     SHARED_BEHAVIOR_TYPES,
     BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+    HANDSOME_DEVIL_SPIKE_DAMAGE_MULTIPLIER,
     createCampaignEnemyBehaviors,
     createCampaignBulkGolemSplitPlan,
+    getHandsomeDevilSpikeDamage,
     lineIntersectsRect,
     segmentHitsCircle,
     turnAngleToward,
