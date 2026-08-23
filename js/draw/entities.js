@@ -126,7 +126,7 @@
     if (enemy.type === 'healer') return 'healer';
     if (enemy.type === 'laser') return Neo.CHARACTER_SPRITE_SHEETS?.laser ? 'laser' : 'cult_mage';
     if (enemy.type === 'boss_spawner') return 'cult_mage';
-    if (enemy.type === 'ent_of_pestilence') return 'charger';
+    if (enemy.type === 'ent_of_pestilence') return 'ent_boss';
     if (enemy.type === 't_rex') return 'bulk_golem';
     // The God transforms at the Council of Bosses (phase 3) and keeps the
     // ascended form through phases 4 and 5. Falling back to the early form if

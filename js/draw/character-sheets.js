@@ -139,6 +139,23 @@ const CHARACTER_SHEET_DEFS = {
     dashFrames: [7, 8, 9, 10, 11],
     portraitFrame: 0,
   },
+  ent_boss: {
+    src: 'assets/sprites/chars/ent_boss.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    // The source canvas reserves eight cells, with the two authored poses in
+    // cells 0-1. Restricting the atlas to those cells prevents transparent
+    // placeholders from entering the animation cycle.
+    frameCount: 2,
+    renderScale: 1,
+    stepRate: 4,
+    idleRate: 2,
+    actionRate: 8,
+    idleFrames: [0, 1],
+    walkFrames: [0, 1],
+    attackFrames: [1],
+    portraitFrame: 0,
+  },
   cult_follower: {
     src: 'assets/sprites/chars/follower.png',
     frameWidth: 24,

@@ -39,6 +39,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/bowman.png",
     "/assets/sprites/chars/charger.png",
     "/assets/sprites/chars/cultMage.png",
+    "/assets/sprites/chars/ent_boss.png",
     "/assets/sprites/chars/follower.png",
     "/assets/sprites/chars/Gelleh.png",
     "/assets/sprites/chars/God (1)1.png",
@@ -294,14 +295,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 281,
-    "bytes": 56389514,
-    "criticalEntries": 221,
-    "criticalBytes": 13423529,
+    "entries": 282,
+    "bytes": 56390838,
+    "criticalEntries": 222,
+    "criticalBytes": 13424853,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "e53bd259336d2f5b"
+  "version": "f55f732d66a4aa3c"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

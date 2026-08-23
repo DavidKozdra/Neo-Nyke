@@ -164,6 +164,28 @@ describe('character sprite sheet assets', () => {
       expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(20);
     });
   });
+
+  test('Ent of Pestilence uses the authored ent_boss poses without transparent cells', async () => {
+    const defs = extractCharacterSheetDefs();
+    const def = defs.ent_boss;
+    expect(def).toEqual(expect.objectContaining({
+      src: 'assets/sprites/chars/ent_boss.png',
+      frameWidth: 64,
+      frameHeight: 64,
+      frameCount: 2,
+      idleFrames: [0, 1],
+      walkFrames: [0, 1],
+      attackFrames: [1],
+      portraitFrame: 0,
+    }));
+
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(Math.floor(image.naturalWidth / def.frameWidth)).toBe(8);
+    [0, 1].forEach(frameIndex => {
+      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
+    });
+    expect(countOpaquePixels(image, 2, def.frameWidth, def.frameHeight)).toBe(0);
+  });
   test('shield unit uses the authored walk and shield-action strip', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.shield_unit;

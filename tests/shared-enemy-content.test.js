@@ -37,6 +37,10 @@ describe('shared Neo Nyke enemy content', () => {
     expect(getEnemyDefinition('boss_spawner').spriteKey).toBe('cult_mage');
   });
 
+  test('Ent of Pestilence uses its dedicated boss sprite', () => {
+    expect(getEnemyDefinition('ent_of_pestilence').spriteKey).toBe('ent_boss');
+  });
+
 
   test('Boss Rush bosses start at level two and rise one level per stage', () => {
     expect(BOSS_RUSH_START_LEVEL).toBe(2);
