@@ -12,42 +12,155 @@ const UNLOCK_TYPE_META = {
   difficulty: { kicker: 'DIFFICULTY UNLOCKED',     color: '#ff9ccf' },
 };
 
-// ── Confetti ─────────────────────────────────────────────────────────────────
-// A single full-screen, pointer-transparent canvas reused for every burst. It
-// self-stops its rAF loop when no particles remain so it costs nothing idle.
+// ── Overlay particle system ──────────────────────────────────────────────────
+// Celebration FX (confetti today) run on the SHARED particle model rather than
+// a bespoke loop: the same spawn/tick/draw shapes the world particles use, on a
+// dedicated screen-space canvas.
+//
+// Why a separate canvas rather than Neo.particles on the game canvas:
+//   * the game loop is stopped on the menu / win / death screens, exactly when
+//     these fire, so world particles would spawn and never move;
+//   * world particles are drawn inside the camera transform, so screen-space
+//     coordinates (window.innerWidth * 0.25) would land in arbitrary world
+//     positions and scroll with the camera;
+//   * #c sits below the win/death overlays, which is what we are decorating.
+// This canvas owns its own rAF so it animates whenever it has work, whatever
+// the game loop is doing. It self-stops when empty, so it costs nothing idle.
 
-let confettiCanvas = null;
-let confettiCtx = null;
-let confettiParticles = [];
-let confettiRaf = 0;
-let confettiLastTs = 0;
+let overlayCanvas = null;
+let overlayCtx = null;
+let overlayParticles = [];
+let overlayRaf = 0;
+let overlayLastTs = 0;
 
-function ensureConfettiCanvas() {
-  if (confettiCanvas) return confettiCanvas;
-  confettiCanvas = document.createElement('canvas');
-  confettiCanvas.id = 'confettiCanvas';
-  confettiCanvas.setAttribute('aria-hidden', 'true');
-  (document.getElementById('wrap') || document.body).appendChild(confettiCanvas);
-  confettiCtx = confettiCanvas.getContext('2d');
-  return confettiCanvas;
+// Matches the world cap's intent (world.js MAX_PARTICLES) so a stuck emitter
+// can never grow this unbounded.
+const OVERLAY_MAX_PARTICLES = 400;
+
+function accessSettings() {
+  return window.NeoSettings?.getAccess?.() || {};
 }
 
-function resizeConfettiCanvas() {
-  if (!confettiCanvas) return;
+function ensureOverlayCanvas() {
+  if (overlayCanvas) return overlayCanvas;
+  overlayCanvas = document.createElement('canvas');
+  // Kept as #confettiCanvas: style.css targets this id, and the princess theme
+  // excludes it by id (`canvas:not(#confettiCanvas)`).
+  overlayCanvas.id = 'confettiCanvas';
+  overlayCanvas.setAttribute('aria-hidden', 'true');
+  (document.getElementById('wrap') || document.body).appendChild(overlayCanvas);
+  overlayCtx = overlayCanvas.getContext('2d');
+  resizeOverlayCanvas();
+  return overlayCanvas;
+}
+
+// Assigning canvas.width/height CLEARS the canvas and resets the transform, so
+// this must only run when the size actually changed — calling it per spawn is
+// what used to wipe an in-flight burst when a second one started (the win
+// screen fires two).
+function resizeOverlayCanvas() {
+  if (!overlayCanvas) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  confettiCanvas.width = Math.floor(window.innerWidth * dpr);
-  confettiCanvas.height = Math.floor(window.innerHeight * dpr);
-  confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = Math.floor(window.innerWidth * dpr);
+  const h = Math.floor(window.innerHeight * dpr);
+  if (overlayCanvas.width === w && overlayCanvas.height === h) return;
+  overlayCanvas.width = w;
+  overlayCanvas.height = h;
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// Same field-list shape as world.js spawnParticle: an explicit set of props so
+// a particle is always a fixed hidden class, never a partial object.
+function spawnOverlayParticle(props) {
+  if (overlayParticles.length >= OVERLAY_MAX_PARTICLES) return;
+  overlayParticles.push({
+    x: props.x, y: props.y,
+    vx: props.vx ?? 0, vy: props.vy ?? 0,
+    life: props.life, ttl: props.ttl ?? props.life,
+    c: props.c ?? '#fff',
+    size: props.size ?? 4,
+    rotation: props.rotation ?? 0,
+    spin: props.spin ?? 0,
+    gravity: props.gravity ?? 0,
+    drag: props.drag ?? 0,
+    sway: props.sway ?? 0,
+    swayRate: props.swayRate ?? 0,
+    swayAmount: props.swayAmount ?? 0,
+    confetti: props.confetti ?? false,
+  });
+  startOverlayLoop();
+}
+
+function updateOverlayParticles(dt) {
+  const h = window.innerHeight;
+  let writeIndex = 0;
+  for (let index = 0; index < overlayParticles.length; index += 1) {
+    const particle = overlayParticles[index];
+    particle.life -= dt;
+    if (particle.gravity) particle.vy += particle.gravity * dt;
+    if (particle.drag) particle.vx *= particle.drag;
+    if (particle.swayRate) particle.sway += dt * particle.swayRate;
+    particle.x += (particle.vx + Math.sin(particle.sway) * particle.swayAmount) * dt;
+    particle.y += particle.vy * dt;
+    if (particle.spin) particle.rotation += particle.spin * dt;
+    // Drop anything expired or fallen well past the viewport.
+    if (particle.life > 0 && particle.y <= h + 40) {
+      overlayParticles[writeIndex] = particle;
+      writeIndex += 1;
+    }
+  }
+  overlayParticles.length = writeIndex;
+}
+
+function drawOverlayParticles() {
+  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  for (let index = 0; index < overlayParticles.length; index += 1) {
+    const particle = overlayParticles[index];
+    // Fade over the final 0.5s of life.
+    const fade = particle.life < 0.5 ? Math.max(0, particle.life / 0.5) : 1;
+    overlayCtx.save();
+    overlayCtx.globalAlpha = fade;
+    overlayCtx.translate(particle.x, particle.y);
+    overlayCtx.rotate(particle.rotation);
+    overlayCtx.fillStyle = particle.c;
+    // Flakes are wider than they are tall, so the spin reads as a tumble.
+    overlayCtx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size * 0.6);
+    overlayCtx.restore();
+  }
+}
+
+function stepOverlay(ts) {
+  const dt = Math.min(0.05, (ts - overlayLastTs) / 1000);
+  overlayLastTs = ts;
+  updateOverlayParticles(dt);
+  drawOverlayParticles();
+  if (overlayParticles.length) {
+    overlayRaf = requestAnimationFrame(stepOverlay);
+  } else {
+    overlayRaf = 0;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  }
+}
+
+function startOverlayLoop() {
+  if (overlayRaf) return;
+  overlayLastTs = performance.now();
+  overlayRaf = requestAnimationFrame(stepOverlay);
 }
 
 const CONFETTI_COLORS = ['#ffd27d', '#83f3ff', '#ff9ccf', '#7bffa3', '#c08cff', '#ffe26b', '#ff7a9a'];
 
 function spawnConfetti(options = {}) {
-  ensureConfettiCanvas();
-  resizeConfettiCanvas();
+  const access = accessSettings();
+  // Honour the same accessibility switches the world particles respect: no
+  // burst at all under reduceMotion, a much smaller one under reduceParticles.
+  if (access.reduceMotion) return;
+  ensureOverlayCanvas();
+  resizeOverlayCanvas();
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const count = Math.max(1, Math.round(options.count ?? 140));
+  let count = Math.max(1, Math.round(options.count ?? 140));
+  if (access.reduceParticles) count = Math.max(1, Math.round(count * 0.25));
   const colors = options.colors && options.colors.length ? options.colors : CONFETTI_COLORS;
   // Burst originates from a point (default: top-center) and fans down/out.
   const originX = options.x ?? w / 2;
@@ -57,56 +170,24 @@ function spawnConfetti(options = {}) {
   for (let i = 0; i < count; i++) {
     const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
     const speed = 320 + Math.random() * 460;
-    confettiParticles.push({
+    const ttl = 1.8 + Math.random() * 1.2;
+    spawnOverlayParticle({
       x: originX + (Math.random() - 0.5) * 120,
       y: originY,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       size: 5 + Math.random() * 7,
-      rot: Math.random() * Math.PI * 2,
-      vr: (Math.random() - 0.5) * 12,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      life: 0,
-      ttl: 1.8 + Math.random() * 1.2,
+      rotation: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 12,
+      c: colors[Math.floor(Math.random() * colors.length)],
+      life: ttl, ttl,
+      gravity: 900,
+      drag: 0.99,
       sway: Math.random() * Math.PI * 2,
+      swayRate: 6,
+      swayAmount: 40,
+      confetti: true,
     });
-  }
-  if (!confettiRaf) {
-    confettiLastTs = performance.now();
-    confettiRaf = requestAnimationFrame(stepConfetti);
-  }
-}
-
-function stepConfetti(ts) {
-  const dt = Math.min(0.05, (ts - confettiLastTs) / 1000);
-  confettiLastTs = ts;
-  const h = window.innerHeight;
-  confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-  const gravity = 900;
-  for (let i = confettiParticles.length - 1; i >= 0; i--) {
-    const p = confettiParticles[i];
-    p.life += dt;
-    if (p.life >= p.ttl || p.y > h + 40) { confettiParticles.splice(i, 1); continue; }
-    p.vy += gravity * dt;
-    p.vx *= 0.99;
-    p.sway += dt * 6;
-    p.x += (p.vx + Math.sin(p.sway) * 40) * dt;
-    p.y += p.vy * dt;
-    p.rot += p.vr * dt;
-    const fade = p.life > p.ttl - 0.5 ? Math.max(0, (p.ttl - p.life) / 0.5) : 1;
-    confettiCtx.save();
-    confettiCtx.globalAlpha = fade;
-    confettiCtx.translate(p.x, p.y);
-    confettiCtx.rotate(p.rot);
-    confettiCtx.fillStyle = p.color;
-    confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
-    confettiCtx.restore();
-  }
-  if (confettiParticles.length) {
-    confettiRaf = requestAnimationFrame(stepConfetti);
-  } else {
-    confettiRaf = 0;
-    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
   }
 }
 
@@ -274,7 +355,7 @@ function recordDifficultyUnlock(difficultyKey, options = {}) {
   }, options);
 }
 
-window.addEventListener('resize', resizeConfettiCanvas);
+window.addEventListener('resize', resizeOverlayCanvas);
 
 Neo.spawnConfetti = spawnConfetti;
 Neo.showUnlockBanner = showUnlockBanner;

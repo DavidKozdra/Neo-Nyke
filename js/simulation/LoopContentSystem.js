@@ -55,6 +55,17 @@
 
   const normalizeLoopIndex = value => Math.max(0, Math.trunc(Number(value) || 0));
 
+  // BLACK relics are a late-loop reward: enormous power bought with a permanent
+  // boss debt. They stay out of every drop table until the run is deep enough in
+  // the saga to have earned them, so early loops keep their own difficulty curve.
+  // Practice and Sandbox are exempt at the call sites, because those toy boxes
+  // exist precisely to try content a normal run hasn't unlocked yet.
+  const BLACK_ITEM_UNLOCK_LOOP_INDEX = 5;
+
+  function areBlackItemsUnlocked(runLoopIndex = 0) {
+    return normalizeLoopIndex(runLoopIndex) >= BLACK_ITEM_UNLOCK_LOOP_INDEX;
+  }
+
   function getLoopMilestone(runLoopIndex = 0) {
     const loopIndex = normalizeLoopIndex(runLoopIndex);
     if (loopIndex < LOOP_MILESTONES.length) return LOOP_MILESTONES[loopIndex];
@@ -134,6 +145,8 @@
     BASE_SERVICE_TYPES,
     SERVICE_UNLOCKS,
     SECRET_UNLOCKS,
+    BLACK_ITEM_UNLOCK_LOOP_INDEX,
+    areBlackItemsUnlocked,
     getLoopMilestone,
     getUnlockedLoopRoomTypes,
     getUnlockedSecretKinds,

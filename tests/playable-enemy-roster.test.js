@@ -104,19 +104,18 @@ describe('credits-studio playable enemy roster', () => {
 
   test('wires summons, firearms, charge collision, and guard into real campaign dispatch', () => {
     const combat = read('js/game/combat.js');
-    const world = read('js/game/world.js');
-    const renderer2d = read('js/draw/props.js');
-    const renderer3d = read('js/draw/three-renderer.js');
+    const allies = read('js/game/allies.js');
+    const renderer2d = read('js/draw/entities.js');
 
     expect(combat).toContain('function castEnemySignatureLaser(move)');
     expect(combat).toContain('function castEnemySignatureSmash(move)');
     expect(combat).toContain('function castChargerRush(moveX, moveY)');
     expect(combat).toContain('function castShieldGuard()');
-    expect(combat).toContain("kind: 'cult_follower_ally'");
-    expect(world).toContain("hazard.kind === 'cult_follower_ally'");
-    expect(world).toContain('Neo.hitEnemy(target, Number(hazard.damage || 22)');
-    expect(renderer2d).toContain("hazard.kind === 'cult_follower_ally'");
-    expect(renderer3d).toContain("'cult_follower_ally'");
+    expect(combat).toContain("sourceKind: 'move', sourceKey: 'summon_cult_followers'");
+    expect(combat).toContain('createSourcedAlly?.');
+    expect(allies).toContain('advanceAllies?.(state, dt, state.players)');
+    expect(allies).toContain('simulation?.damageAlly?.(state, ally.id');
+    expect(renderer2d).toContain('function drawAllies(viewportBounds = null)');
     expect(combatContent.DEFAULT_WEAPON_ATTACKS.shield_bash).toEqual(expect.objectContaining({
       mode: 'sweep',
     }));

@@ -1115,51 +1115,35 @@
       if (actor === Neo.player) actor.blackBugAllyCount = allyCount;
       else actor.blackBugTeamAllyCount = allyCount;
     });
-    if (!awakened) { Neo.blackBugAllies = []; return []; }
-    Neo.blackBugAllies = Array.isArray(Neo.blackBugAllies) ? Neo.blackBugAllies : [];
-    while (Neo.blackBugAllies.length < 3) {
-      const index = Neo.blackBugAllies.length;
-      const angle = (index / 3) * Math.PI * 2;
-      Neo.blackBugAllies.push({
-        id: `black_bug_${index}`, x: Neo.player.x + Math.cos(angle) * 44,
-        y: Neo.player.y + Math.sin(angle) * 44, vx: 0, vy: 0, r: 10,
-        attackCd: index * 0.18, animSeed: index * 1.7,
-        fireBug: Neo.nextRandom?.('encounter') < 0.05,
-      });
+    Neo.allies = Neo.allies && typeof Neo.allies === 'object' && !Array.isArray(Neo.allies) ? Neo.allies : {};
+    const current = Object.values(Neo.allies).filter(ally => ally?.source?.kind === 'item'
+      && ally.source.key === 'bug_card' && ally.ownerId === String(Neo.player?.id || 'local-player-1'));
+    if (!awakened) {
+      current.forEach(ally => { delete Neo.allies[ally.id]; });
+      Neo.blackBugAllies = [];
+      return [];
     }
-    return Neo.blackBugAllies;
+    const createSourcedAlly = globalThis.NeoNyke?.simulation?.createSourcedAlly;
+    for (let index = current.length; index < 3; index += 1) {
+      const angle = (index / 3) * Math.PI * 2;
+      const id = `black_bug_${String(Neo.player?.id || 'local-player-1')}_${index}`;
+      const ally = createSourcedAlly?.({ allies: Neo.allies, nextEntityId: Neo.allyIdSeq || 1 }, Neo.player, {
+        id, seed: 7100 + index, name: `Pestilent Bug ${index + 1}`,
+        sourceKind: 'item', sourceKey: 'bug_card', archetypeKey: 'brawler',
+        spriteKey: 'cult_follower', allyIndex: index,
+        x: Neo.player.x + Math.cos(angle) * 44, y: Neo.player.y + Math.sin(angle) * 44,
+        radius: 10, attackCooldown: index * 0.18,
+        fireBug: Neo.nextRandom?.('encounter') < 0.05,
+        tags: ['species:bug', 'source:item'],
+      });
+      if (ally) current.push(ally);
+    }
+    Neo.blackBugAllies = [];
+    return current;
   }
 
   function updateBlackBugAllies(dt) {
-    const allies = ensureBlackBugAllies();
-    allies.forEach((ally, index) => {
-      ally.attackCd = Math.max(0, Number(ally.attackCd || 0) - dt);
-      let target = null;
-      let targetDistance = Infinity;
-      for (const enemy of Neo.enemies || []) {
-        if (!enemy || enemy.dead) continue;
-        const distance = Neo.dist(ally.x, ally.y, enemy.x, enemy.y);
-        if (distance < targetDistance) { target = enemy; targetDistance = distance; }
-      }
-      const orbitAngle = Number(Neo.gameElapsedTime || 0) * 1.8 + (index / 3) * Math.PI * 2;
-      const destination = target
-        ? { x: target.x, y: target.y }
-        : { x: Neo.player.x + Math.cos(orbitAngle) * 48, y: Neo.player.y + Math.sin(orbitAngle) * 34 };
-      const dx = destination.x - ally.x;
-      const dy = destination.y - ally.y;
-      const distance = Math.hypot(dx, dy) || 1;
-      const speed = target ? 235 : 175;
-      ally.vx += ((dx / distance) * speed - ally.vx) * Math.min(1, dt * 8);
-      ally.vy += ((dy / distance) * speed - ally.vy) * Math.min(1, dt * 8);
-      ally.x += ally.vx * dt;
-      ally.y += ally.vy * dt;
-      if (target && targetDistance <= Number(target.r || 15) + ally.r + 8 && ally.attackCd <= 0) {
-        const angle = Math.atan2(target.y - ally.y, target.x - ally.x);
-        Neo.hitEnemy?.(target, Math.max(6, Math.round((Neo.getPlayerBaseDamage?.() || 20) * 0.34)), angle, 75, ally.fireBug ? '#ff8a3d' : '#a7ff4f', { source: 'bug_card_ally' });
-        if (ally.fireBug && !target.dead) Neo.applyStatus?.(target, 'fire', 1, 3.5);
-        ally.attackCd = 0.72;
-      }
-    });
+    ensureBlackBugAllies();
   }
 
   function updateEntOfPestilence(enemy, dt) {
@@ -4615,6 +4599,7 @@
     Neo.damagePlayer(rolled.amount, angle, Number(knockback || 0) * knockbackMultiplier, source, {
       ...options,
       sourceKey: enemy?.type || 'mirror_knight',
+      attacker: options.attacker || enemy,
       // The mirror knight rolls its own (player-mirrored) crit above, so it opts
       // out of the global time-based enemy crit aggression to avoid double-critting.
       noEnemyAggression: true,

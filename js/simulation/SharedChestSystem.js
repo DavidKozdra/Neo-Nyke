@@ -32,7 +32,10 @@
       const hasAuthoredChoices = Array.isArray(chest.rewardChoices) && chest.rewardChoices.length >= 2;
       const choices = hasAuthoredChoices
         ? chest.rewardChoices.slice(0, 2)
-        : items.createCampaignItemChoices(2, random, { excludeKeys: chest.rewardKey ? [chest.rewardKey] : [] });
+        : items.createCampaignItemChoices(2, random, {
+          excludeKeys: chest.rewardKey ? [chest.rewardKey] : [],
+          allowBlackItems: options.allowBlackItems,
+        });
       // rewardKey is a seed for generated legacy A/B chests. Never overwrite an
       // authored or authority-replicated option list with that stale seed.
       if (!hasAuthoredChoices && chest.rewardKey && !choices.includes(chest.rewardKey)) choices[0] = chest.rewardKey;
@@ -42,7 +45,7 @@
       result.selection = { selectionEventId: chest.choiceGroupId, optionIds: chest.rewardChoices.slice(), picksRemaining: 1 };
       return result;
     }
-    const rewardKey = chest.rewardKey || items.rollCampaignItem(random);
+    const rewardKey = chest.rewardKey || items.rollCampaignItem(random, { allowBlackItems: options.allowBlackItems });
     if (rewardKey) result.pickups.push({ type: 'item', key: rewardKey, x: chest.x, y: Number(chest.y) - 20 });
     chest.opened = true;
     return result;

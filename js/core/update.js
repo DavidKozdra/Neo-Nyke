@@ -26,7 +26,7 @@ Neo.fixedSimulationRunner = legacyFixedTickRunner;
 // authoritative one immediately after. The simulation therefore never observes
 // a blended coordinate -- only the frame does -- so gameplay stays exactly as
 // it was and any draw code (2D, 3D, minimap) benefits without knowing about it.
-const INTERPOLATED_LISTS = ['enemies', 'projectiles', 'particles', 'deadBodies'];
+const INTERPOLATED_LISTS = ['enemies', 'projectiles', 'particles', 'deadBodies', 'allies'];
 // A jump this large is a teleport/respawn/room change, not motion. Blending
 // across it would drag the entity through the room over several frames.
 const INTERPOLATION_TELEPORT_DISTANCE = 260;
@@ -46,6 +46,7 @@ function eachInterpolatedEntity(visit) {
   INTERPOLATED_LISTS.forEach(key => {
     const list = Neo[key];
     if (Array.isArray(list)) list.forEach(entity => { if (entity) visit(entity); });
+    else if (list && typeof list === 'object') Object.values(list).forEach(entity => { if (entity) visit(entity); });
   });
 }
 
@@ -766,6 +767,7 @@ export function loop(timestamp) {
       Neo.moveCircle(enemy, dt);
     }
     Neo.updateBlackBugAllies?.(dt);
+    Neo.updateAllies?.(dt);
 
     const scarfDrain = Neo.simulation?.advanceCampaignHemesScarfDrain?.(Neo.player, totalBleed, dt, { itemStats })
       || { started: false, heal: 0 };

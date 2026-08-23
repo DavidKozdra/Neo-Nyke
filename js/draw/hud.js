@@ -231,10 +231,15 @@
           });
         }
       } else if (particle.ring) {
+        // Belt-and-braces with the clamp in spawnParticle: a ring reaching the
+        // draw path with a negative radius (e.g. seeded by a network event that
+        // bypasses spawnParticle) would throw IndexSizeError from ctx.arc and
+        // kill the whole frame's particle pass.
+        const ringRadius = Math.max(0, Number(particle.ring) || 0);
         Neo.ctx.strokeStyle = particle.c;
         Neo.ctx.lineWidth = 3;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, particle.ring, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
         Neo.ctx.stroke();
       } else if (particle.blood) {
         const size = particle.size || 3;

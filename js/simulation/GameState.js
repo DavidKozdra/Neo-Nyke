@@ -109,6 +109,7 @@
       enemies: cloneSerializable(plainObject(source.enemies)),
       projectiles: cloneSerializable(plainObject(source.projectiles)),
       abilityEntities: cloneSerializable(plainObject(source.abilityEntities)),
+      allies: cloneSerializable(plainObject(source.allies)),
       pickups: cloneSerializable(plainObject(source.pickups)),
       interactables: cloneSerializable(plainObject(source.interactables)),
       beamStruggles: cloneBeamStruggles(source.beamStruggles),

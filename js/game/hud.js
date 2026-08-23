@@ -1263,6 +1263,8 @@
       p4DeadInCoop: Neo.p4DeadInCoop,
       pvpState: Neo.gameMode === 'pvp' && Neo.pvpState ? { ...Neo.pvpState, respawnTimer: null } : null,
       enemies: Neo.enemies,
+      allies: Neo.allies || {},
+      allyIdSeq: Math.max(1, Number(Neo.allyIdSeq || 1)),
       deadBodies: Neo.deadBodies,
       projectiles: Neo.projectiles,
       chests: Neo.chests,

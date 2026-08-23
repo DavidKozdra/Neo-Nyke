@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedAllySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const enemyScalingApi = typeof require === 'function'
     ? require('./SharedEnemyScalingSystem.js')
@@ -116,6 +116,7 @@
     ITEM_DROP_ENTRIES = [],
     ITEM_DEFS = {},
     rollCampaignItem = () => '',
+    BLACK_ITEM_UNLOCK_LOOP_INDEX = 5,
     rollCampaignScroll = () => '',
     WHITE_WEAPON_POOL = [],
     PURPLE_WEAPON_POOL = [],
@@ -135,6 +136,12 @@
     updateEquipmentEffects = () => [],
     stockCampaignShop = () => null,
     purchaseCampaignShop = () => ({ ok: false, reason: 'SHOP_UNAVAILABLE' }),
+    advanceAllies = () => [],
+    damageAlly: damageSharedAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
+    transferMoveToAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
+    recallAllyMove = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
+    dismissAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
+    createSourcedAlly = () => null,
     createEndlessIntermissionChests = () => [],
     purchaseEndlessChest = () => ({ ok: false, reason: 'ENDLESS_UNAVAILABLE' }),
     applySpecialRoomChoice = () => ({ ok: false, reason: 'SPECIAL_ROOM_UNAVAILABLE' }),
@@ -543,6 +550,22 @@
     );
   }
 
+  // BLACK relics are locked behind the loop campaign (loop 6 onward). Every
+  // authority-side item roll routes through these wrappers so the multiplayer
+  // pool matches the campaign pool exactly.
+  function authorityAllowsBlackItems(state) {
+    const loopIndex = Math.max(0, Math.trunc(Number(state?.runLoopIndex ?? state?.floorState?.runLoopIndex) || 0));
+    return loopIndex >= Number(BLACK_ITEM_UNLOCK_LOOP_INDEX ?? 5);
+  }
+
+  function rollRunItem(state, random, options = {}) {
+    return rollCampaignItem(random, { allowBlackItems: authorityAllowsBlackItems(state), ...options });
+  }
+
+  function createRunItemChoices(state, count, random, options = {}) {
+    return createCampaignItemChoices(count, random, { allowBlackItems: authorityAllowsBlackItems(state), ...options });
+  }
+
   function scaleAuthorityEnemyStats(state, baseStats, options = {}) {
     if (typeof scaleCampaignEnemyStats !== 'function') {
       throw new Error('Shared campaign enemy scaling is unavailable');
@@ -711,7 +734,7 @@
       state.pickups[pickupId] = { id: pickupId, ...descriptor, roomId: room.id, radius: 13, amount: descriptor.value, spawnTick: state.tick };
       emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: 'coin', roomId: room.id, source: 'boss_rush_stage' });
     });
-    const itemKey = rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite: true });
+    const itemKey = rollRunItem(state, () => stream?.next?.() ?? 0.5, { elite: true });
     if (itemKey) {
       const itemId = state.allocateEntityId('pickup');
       state.pickups[itemId] = { id: itemId, type: 'item', key: itemKey, source: 'boss_rush_stage', roomId: room.id, x: centerX - 60, y: centerY, radius: 13, amount: 1, spawnTick: state.tick };
@@ -849,7 +872,7 @@
       if (rumble.grantedPlayerIds[player.id]) return;
       const stream = random?.scoped?.(`rival-rumble:starting-items:${player.id}`);
       for (let index = 0; index < 3; index += 1) {
-        const key = rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite: index === 2 });
+        const key = rollRunItem(state, () => stream?.next?.() ?? 0.5, { elite: index === 2 });
         if (key && collectSharedCampaignItem(player, key)?.ok) emitEvent('RIVAL_RUMBLE_STARTER_ITEM_GRANTED', { playerId: player.id, itemKey: key, elite: index === 2 });
       }
       player.coins = Math.max(0, Number(player.coins || 0)) + 120;
@@ -913,7 +936,7 @@
         const id = state.allocateEntityId('pickup');
         state.pickups[id] = { id, ...descriptor, roomId: room.id, radius: 13, amount: descriptor.value, spawnTick: state.tick };
       });
-      const key = rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite: true });
+      const key = rollRunItem(state, () => stream?.next?.() ?? 0.5, { elite: true });
       if (key) { const id = state.allocateEntityId('pickup'); state.pickups[id] = { id, type: 'item', key, source: 'rival_rumble_stage', roomId: room.id, x: x - 60, y, radius: 13, amount: 1, spawnTick: state.tick }; }
       const potionId = state.allocateEntityId('pickup');
       state.pickups[potionId] = { id: potionId, type: 'potion', source: 'rival_rumble_stage', roomId: room.id, x: x + 60, y, radius: 13, amount: 1, spawnTick: state.tick };
@@ -1763,7 +1786,7 @@
         { roomId: enemy.roomId, source: 'bounty_reward' },
       );
     } else if (bounty.kind === 'elite_sniper') {
-      rewardKey = rollCampaignItem(stream ? () => stream.next() : authorityFallbackRandom, { elite: true }) || '';
+      rewardKey = rollRunItem(state, stream ? () => stream.next() : authorityFallbackRandom, { elite: true }) || '';
       if (rewardKey) collectSharedCampaignItem(owner, rewardKey);
       if (Number(bounty.escapes || 0) > 0) {
         owner.coins = Math.max(0, Number(owner.coins || 0)) + Math.round(60 * rewardMultiplier);
@@ -1792,6 +1815,7 @@
       floorNumber: state.floorNumber,
       geometry: state.floorState,
       itemChance: 0.9,
+      allowBlackItems: authorityAllowsBlackItems(state),
     });
     chestPlan.forEach(plannedChest => {
       const interactableId = state.allocateEntityId('interactable');
@@ -1842,8 +1866,8 @@
       random: () => stream.next(),
       xpCost: 30,
       xpValue: 40 + Number(state.floorNumber || 1) * 5,
-      rollItem: nextRandom => rollCampaignItem(nextRandom),
-      rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
+      rollItem: nextRandom => rollRunItem(state, nextRandom),
+      rollEliteItem: nextRandom => rollRunItem(state, nextRandom, { elite: true }),
       previousRewardKey: entrant?.lastSecretVendorRewardKey,
     });
     if (!plan.ok) return;
@@ -2109,6 +2133,26 @@
     }
     emitEvent(action.action === 'ACTIVATE_EQUIPMENT' ? 'EQUIPMENT_ACTIVATED' : 'INVENTORY_CHANGED', {
       playerId: player.id, roomId: player.roomId, ...result,
+    });
+    return true;
+  }
+
+  function resolveAllyCommand(state, player, action, emitEvent) {
+    let result;
+    if (action.action === 'ALLY_TRANSFER_MOVE') {
+      result = transferMoveToAlly(state, player, action.allyId, action.moveKey, { MOVE_SLOT_BY_KEY, getMoveBaseCharges });
+    } else if (action.action === 'ALLY_RECALL_MOVE') {
+      result = recallAllyMove(state, player, action.allyId);
+    } else if (action.action === 'ALLY_DISMISS') {
+      result = dismissAlly(state, player, action.allyId);
+    } else return false;
+    if (!result?.ok) {
+      emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result?.reason || 'ALLY_COMMAND_FAILED' });
+      return false;
+    }
+    emitEvent(action.action === 'ALLY_TRANSFER_MOVE' ? 'ALLY_MOVE_TRANSFERRED'
+      : action.action === 'ALLY_RECALL_MOVE' ? 'ALLY_MOVE_RETURNED' : 'ALLY_DISMISSED', {
+      playerId: player.id, allyId: action.allyId, moveKey: result.moveKey || action.moveKey || '',
     });
     return true;
   }
@@ -3247,7 +3291,7 @@
       itemChance: Math.min(0.5, 0.12 + Number(context.itemDropChanceBonus || 0)),
       greenRandom: green ? () => green.next() : () => 1,
       potRandom: loot ? () => loot.next() : () => 1,
-      rollItem: stream => rollCampaignItem(stream),
+      rollItem: stream => rollRunItem(state, stream),
     });
     if (!result.ok) return false;
     emitEvent(result.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
@@ -5827,7 +5871,7 @@
       const stream = random?.scoped?.(intermissionKey);
       const purchase = purchaseEndlessChest(player, target, {
         random: stream,
-        rollItem: ({ elite }) => rollCampaignItem(() => stream?.next?.() ?? 0.5, { elite }),
+        rollItem: ({ elite }) => rollRunItem(state, () => stream?.next?.() ?? 0.5, { elite }),
       });
       if (!purchase.ok) {
         emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: 'ENDLESS_CHEST_PURCHASE', reason: purchase.reason });
@@ -5844,6 +5888,7 @@
     const opened = openCampaignChest(target, {
       floorNumber: state.floorNumber,
       random: chestRandom,
+      allowBlackItems: authorityAllowsBlackItems(state),
       groupId: target.id,
     });
     if (!opened.ok) return false;
@@ -5914,7 +5959,7 @@
         duplicateChance: player.itemStats?.itemDuplicateChance,
         canDuplicate: action.optionId !== 'artificer_charger',
         random: loot ? () => loot.next() : authorityFallbackRandom,
-        rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+        rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
       }, emitEvent);
       if (!acquisition.ok) return false;
       pending.optionIds = pending.optionIds.filter(optionId => optionId !== action.optionId);
@@ -5946,7 +5991,7 @@
       duplicateChance: player.itemStats?.itemDuplicateChance,
       canDuplicate: claim.itemKey !== 'artificer_charger',
       random: loot ? () => loot.next() : authorityFallbackRandom,
-      rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+      rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
     }, emitEvent);
     if (!acquisition.ok) return false;
     if (acquisition.jester?.ok) {
@@ -6067,6 +6112,8 @@
         .forEach(action => resolveForgeCommand(state, player, action, emitEvent));
       actions.filter(action => ['EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT'].includes(action?.action))
         .forEach(action => resolveInventoryCommand(state, player, action, emitEvent, random));
+      actions.filter(action => ['ALLY_TRANSFER_MOVE', 'ALLY_RECALL_MOVE', 'ALLY_DISMISS'].includes(action?.action))
+        .forEach(action => resolveAllyCommand(state, player, action, emitEvent));
       actions.filter(action => action?.action === 'SPECIAL_ROOM_CHOICE')
         .forEach(action => resolveSpecialRoomCommand(state, player, action, emitEvent, random));
       actions.filter(action => ['WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY'].includes(action?.action))
@@ -8284,6 +8331,7 @@
             baseDamage: Math.max(1, Math.round(Number(enemy.contactDamage || 20) * Number(turretWeapon?.damageMult || 1))),
             aoeRadiusMultiplier: Number(enemy.mirrorItemStats?.aoeRadiusMultiplier || 1),
             aoeDamageMultiplier: Number(enemy.mirrorItemStats?.aoeDamageMultiplier || 1),
+            rival: true,
           });
           const room = currentRoom(state, enemy.roomId);
           if (room) {
@@ -8967,7 +9015,7 @@
         spawnTick: state.tick,
       };
       if (pickup.type === 'item') {
-        pickup.key = rollCampaignItem(nextRandom, { elite: !!pickup.elite });
+        pickup.key = rollRunItem(state, nextRandom, { elite: !!pickup.elite });
       }
       if (pickup.type !== 'item' || pickup.key) {
         state.pickups[pickupId] = pickup;
@@ -9056,7 +9104,7 @@
           random: rewardRandom ? () => rewardRandom.next() : authorityFallbackRandom,
           scrollRandom: scrollRandom ? () => scrollRandom.next() : authorityFallbackRandom,
           weaponRandom: weaponRandom ? () => weaponRandom.next() : authorityFallbackRandom,
-          rollEliteItem: nextRandom => rollCampaignItem(nextRandom, { elite: true }),
+          rollEliteItem: nextRandom => rollRunItem(state, nextRandom, { elite: true }),
           rollScroll: nextRandom => rollCampaignScroll(nextRandom),
           scrollChanceMultiplier: state.matchRules?.legacy?.scroll_scholar ? 1.5 : 1,
           weaponPool,
@@ -9090,7 +9138,7 @@
         difficultyKey: state.matchRules?.difficultyKey || state.matchRules?.difficulty?.key,
         centerX: Number(state.floorState?.width || 900) / 2,
         centerY: Number(state.floorState?.height || 700) / 2 + 68,
-        createChoices: count => createCampaignItemChoices(count, stream ? () => stream.next() : authorityFallbackRandom, { elite: true }),
+        createChoices: count => createRunItemChoices(state, count, stream ? () => stream.next() : authorityFallbackRandom, { elite: true }),
       });
       if (rewardPlan.ok) {
         rewardPlan.pickups.forEach(descriptor => {
@@ -9576,28 +9624,31 @@
 
   function ensureAuthorityBlackBugAllies(state, player, emitEvent) {
     if (!player?.blackBugAlliesAwakened || Number(player.items?.bug_card || 0) <= 0) return [];
-    const existing = Object.values(state.abilityEntities || {})
-      .filter(entity => entity?.kind === 'cult_follower_ally' && entity.ownerId === player.id);
+    const existing = Object.values(state.allies || {})
+      .filter(entity => entity?.source?.kind === 'item' && entity.source.key === 'bug_card' && entity.ownerId === player.id);
     for (let index = existing.length; index < 3; index += 1) {
       const angle = index * Math.PI * 2 / 3;
-      const ally = createAbilityEntity(state, player, {
-        kind: 'cult_follower_ally', abilityId: 'bug_card',
+      const stream = combatRandomByState.get(state)?.scoped?.(`bug-card-ally:${player.id}:${index}`);
+      const ally = createSourcedAlly(state, player, {
+        id: `black-bug-${player.id}-${index}`,
+        seed: 7100 + index,
+        name: `Pestilent Bug ${index + 1}`,
+        sourceKind: 'item', sourceKey: 'bug_card', archetypeKey: 'brawler',
+        spriteKey: 'cult_follower', allyIndex: index,
         x: Number(player.x) + Math.cos(angle) * 44,
         y: Number(player.y) + Math.sin(angle) * 44,
-        radius: 10, range: 900, burstRadius: 13, damage: 8,
-        pulseIntervalTicks: 14, durationTicks: 2_000_000_000,
+        radius: 10, attackRange: 48, attackInterval: 0.7,
+        fireBug: Number(stream?.next?.() ?? 1) < 0.05,
+        tags: ['species:bug', 'source:item'],
       });
-      ally.allyIndex = index;
-      ally.bugCardAlly = true;
-      const stream = combatRandomByState.get(state)?.scoped?.(`bug-card-ally:${player.id}:${index}`);
-      ally.fireBug = Number(stream?.next?.() ?? 1) < 0.05;
+      if (!ally) continue;
       emitEvent('ABILITY_ENTITY_SPAWNED', {
         entityId: ally.id, playerId: player.id, roomId: player.roomId,
-        abilityId: 'bug_card', kind: ally.kind, allyIndex: index,
+        abilityId: 'bug_card', kind: 'ally', allyIndex: index,
       });
     }
-    return Object.values(state.abilityEntities || {})
-      .filter(entity => entity?.kind === 'cult_follower_ally' && entity.ownerId === player.id);
+    return Object.values(state.allies || {})
+      .filter(entity => entity?.source?.kind === 'item' && entity.source.key === 'bug_card' && entity.ownerId === player.id);
   }
 
   function tryAwakenAuthorityBlackBugAllies(state, player, enemy, dealtDamage, emitEvent) {
@@ -9896,7 +9947,7 @@
           collectAuthorityCampaignPickup(state, player, purchase.rewardKey, {
             duplicateChance: player.itemStats?.itemDuplicateChance,
             random: () => loot.next(),
-            rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+            rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
           }, emitEvent);
         } else if (purchase.offerKind === 'vitality') {
           player.hp = Math.min(player.maxHp, Number(player.hp || 0) + purchase.heal * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
@@ -9917,7 +9968,7 @@
         const acquisition = collectAuthorityCampaignPickup(state, player, rewardKey, {
           duplicateChance: player.itemStats?.itemDuplicateChance,
           random: () => loot.next(),
-          rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+          rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
         }, emitEvent);
         if (!acquisition.ok) return;
         delete state.pickups[pickupId];
@@ -9927,12 +9978,12 @@
       if (pickup.type === 'secret_boss_chest') {
         const room = currentRoom(state, pickup.roomId);
         const loot = random.scoped(`secret-boss:loot:${state.floorNumber}:${pickup.roomId}:${pickupId}`);
-        const rewardKey = String(pickup.rewardKey || rollCampaignItem(() => loot.next(), { elite: true }));
+        const rewardKey = String(pickup.rewardKey || rollRunItem(state, () => loot.next(), { elite: true }));
         const result = lootCampaignSecretBossChest({ floorNumber: state.floorNumber }, room, player, pickup, { rewardKey });
         if (!result.ok) return;
         const acquisition = collectAuthorityCampaignPickup(state, player, result.rewardKey, {
           duplicateChance: player.itemStats?.itemDuplicateChance,
-          random: () => loot.next(), rollItem: nextRandom => rollCampaignItem(nextRandom),
+          random: () => loot.next(), rollItem: nextRandom => rollRunItem(state, nextRandom),
         }, emitEvent);
         if (!acquisition.ok) return;
         player.coins = Number(player.coins || 0) + Number(result.coins || 0);
@@ -9948,7 +9999,7 @@
           duplicateChance: player.itemStats?.itemDuplicateChance,
           canDuplicate: pickup.key !== 'artificer_charger',
           random: () => loot.next(),
-          rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+          rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
         }, emitEvent);
         if (!acquisition.ok) return;
         const remainingBeforePick = Math.max(1, Math.floor(Number(pickup.picksRemaining || 1)));
@@ -9991,7 +10042,7 @@
           duplicateChance: player.itemStats?.itemDuplicateChance,
           canDuplicate: pickup.key !== 'artificer_charger',
           random: () => loot.next(),
-          rollItem: (nextRandom, excludeKeys) => rollCampaignItem(nextRandom, { excludeKeys }),
+          rollItem: (nextRandom, excludeKeys) => rollRunItem(state, nextRandom, { excludeKeys }),
         }, emitEvent);
         if (!acquisition.ok) return;
         amount = acquisition.amount;
@@ -10539,6 +10590,76 @@
     };
   }
 
+  function updateAuthorityAllies(state, fixedDelta, emitEvent) {
+    const events = advanceAllies(state, fixedDelta, state.players || {});
+    events.forEach(event => emitEvent(event.type, event));
+    Object.values(state.allies || {}).forEach(ally => {
+      if (!ally || ally.status !== 'active') return;
+      const owner = state.players?.[ally.ownerId];
+      if (!owner || owner.disconnected || owner.downed) return;
+      ally.roomId = owner.roomId;
+      const target = livingEncounterEnemies(state, ally.roomId)
+        .map(enemy => ({ enemy, distance: Math.hypot(Number(enemy.x) - Number(ally.x), Number(enemy.y) - Number(ally.y)) }))
+        .sort((left, right) => left.distance - right.distance || String(left.enemy.id).localeCompare(String(right.enemy.id)))[0];
+      const index = Math.max(0, (owner.recruitedAllyIds || []).indexOf(ally.id));
+      const orbit = state.tick * 0.035 + index * 2.399;
+      const ranged = ally.tags?.includes('attack:ranged');
+      const stopDistance = target ? (ranged ? Math.min(250, Number(ally.attackRange || 300) * 0.62) : 34) : 14;
+      const goalX = target?.enemy?.x ?? Number(owner.x) + Math.cos(orbit) * (52 + index * 5);
+      const goalY = target?.enemy?.y ?? Number(owner.y) + Math.sin(orbit) * (38 + index * 4);
+      const dx = Number(goalX) - Number(ally.x);
+      const dy = Number(goalY) - Number(ally.y);
+      const distance = Math.hypot(dx, dy) || 1;
+      let direction = distance > stopDistance + 10 ? 1 : ranged && target && distance < stopDistance * 0.62 ? -1 : 0;
+      const speed = Math.max(1, Number(ally.speed || 170));
+      ally.vx = direction * dx / distance * speed;
+      ally.vy = direction * dy / distance * speed;
+      const wall = Number(state.floorState?.wallThickness || 28) + Number(ally.radius || 13);
+      ally.x = Math.max(wall, Math.min(Number(state.floorState?.width || 900) - wall, Number(ally.x) + ally.vx * fixedDelta));
+      ally.y = Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, Number(ally.y) + ally.vy * fixedDelta));
+      if (Math.hypot(Number(ally.x) - Number(owner.x), Number(ally.y) - Number(owner.y)) > 680) {
+        ally.x = Number(owner.x) + Math.cos(orbit) * 38;
+        ally.y = Number(owner.y) + Math.sin(orbit) * 30;
+      }
+      if (!target) return;
+      const moveKeys = [ally.transferredMove?.key, ally.nativeMoveKey].filter(Boolean);
+      const moveKey = moveKeys.find(key => Number(ally.moveCooldowns?.[key] || 0) <= 0);
+      if (moveKey) {
+        const moveStats = MOVE_BASE_STATS[moveKey] || {};
+        const moveRange = Math.max(90, Number(moveStats.range || ally.attackRange || 360));
+        if (target.distance <= moveRange + Number(target.enemy.radius || 18)) {
+          const gifted = moveKey === ally.transferredMove?.key;
+          const damage = Math.max(2, Number(moveStats.damage || ally.basicDamage || 8) * (gifted ? 0.70 : 0.55));
+          damageEnemy(state, target.enemy, damage, ally.ownerId, emitEvent, {
+            attackKind: moveKey, canCrit: true, angle: Math.atan2(Number(target.enemy.y) - Number(ally.y), Number(target.enemy.x) - Number(ally.x)), knockback: 80,
+          });
+          if (!target.enemy.dead && ally.fireBug) applyAuthorityStatus(state, target.enemy, 'fire', 1, 3.5, ally.ownerId);
+          ally.moveCooldowns[moveKey] = Math.max(10, Math.ceil(Number(moveStats.cooldown || 3) * (gifted ? 20 : 23))) / 20;
+          emitEvent('ALLY_MOVE_USED', { allyId: ally.id, playerId: ally.ownerId, roomId: ally.roomId, moveKey, targetId: target.enemy.id });
+          return;
+        }
+      }
+      if (Number(ally.attackCooldown || 0) <= 0 && target.distance <= Number(ally.attackRange || 70) + Number(target.enemy.radius || 18)) {
+        damageEnemy(state, target.enemy, Number(ally.basicDamage || 6), ally.ownerId, emitEvent, {
+          attackKind: `ally_${ally.archetypeKey}_basic`, canCrit: true,
+          angle: Math.atan2(Number(target.enemy.y) - Number(ally.y), Number(target.enemy.x) - Number(ally.x)), knockback: 55,
+        });
+        if (!target.enemy.dead && ally.fireBug) applyAuthorityStatus(state, target.enemy, 'fire', 1, 3.5, ally.ownerId);
+        ally.attackCooldown = Math.max(0.1, Number(ally.attackInterval || 0.7));
+        emitEvent('ALLY_ATTACKED', { allyId: ally.id, playerId: ally.ownerId, roomId: ally.roomId, targetId: target.enemy.id });
+      }
+      const contacts = target.enemy.allyContactCooldownUntilTick || (target.enemy.allyContactCooldownUntilTick = {});
+      if (target.distance <= Number(ally.radius || 13) + Number(target.enemy.radius || 18) + 5
+        && state.tick >= Number(contacts[ally.id] || 0)) {
+        const result = damageSharedAlly(state, ally.id, Math.max(1, Number(target.enemy.contactDamage || 8)), {
+          playersById: state.players,
+        });
+        contacts[ally.id] = state.tick + 16;
+        if (result?.died) emitEvent('ALLY_DIED', { allyId: ally.id, playerId: ally.ownerId, roomId: ally.roomId, respawning: !!result.respawning });
+      }
+    });
+  }
+
   function createNetworkCombatSystem(options = {}) {
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
@@ -10598,6 +10719,7 @@
       updatePotionBathEffects(state, fixedDelta, emitEvent);
       updateAuthorityStatuses(state, fixedDelta, emitEvent);
       updateGenericHealthRegen(state, fixedDelta, emitEvent);
+      updateAuthorityAllies(state, fixedDelta, emitEvent);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random, inputs);
       updateMovingWorldPickups(state, fixedDelta);

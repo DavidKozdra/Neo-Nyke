@@ -1027,8 +1027,11 @@ function syncPool(pool, list, makeFn, updateFn) {
   });
 }
 
-// Mirrors getEnemySpriteKey in entities.js (module-internal there).
+// All renderers share the 2D actor resolver, so alternate renderer mode cannot
+// silently show a different character than portraits/death attribution.
 function enemySpriteKey(enemy) {
+  const canonicalKey = Neo.getEnemySpriteKey?.(enemy);
+  if (canonicalKey) return canonicalKey;
   if (enemy.type === 'rival') {
     const key = Neo.getCharacterSpriteKey?.(enemy.rivalKey) || enemy.rivalKey;
     return Neo.SPRITE_DEFS?.[key] || Neo.CHARACTER_SPRITE_SHEETS?.[key] ? key : 'thorn_knight';

@@ -132,7 +132,7 @@
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
       fields: {
-        kind: field('string', { required: true, enum: ['item', 'move', 'weapon', 'trade', 'heal'] }),
+        kind: field('string', { required: true, enum: ['item', 'move', 'weapon', 'ally', 'trade', 'heal'] }),
         offerIndex: field('integer', { min: 0, max: 32 }),
         healKind: field('string', { enum: ['small', 'major'] }),
       },
@@ -141,7 +141,7 @@
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
       fields: {
-        command: field('string', { required: true, enum: ['FORGE_COMMIT', 'EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT', 'SPECIAL_ROOM_CHOICE', 'WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY'] }),
+        command: field('string', { required: true, enum: ['FORGE_COMMIT', 'EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT', 'SPECIAL_ROOM_CHOICE', 'WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY', 'ALLY_TRANSFER_MOVE', 'ALLY_RECALL_MOVE', 'ALLY_DISMISS'] }),
         arguments: field('object', { required: true }),
       },
     },

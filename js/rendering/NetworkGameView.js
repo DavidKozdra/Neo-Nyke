@@ -3551,6 +3551,8 @@
           shopOffers: Array.isArray(source.shopOffers) ? source.shopOffers : [],
           shopMoveOffers: Array.isArray(source.shopMoveOffers) ? source.shopMoveOffers : [],
           shopWeaponOffers: Array.isArray(source.shopWeaponOffers) ? source.shopWeaponOffers : [],
+          shopAllyOffers: Array.isArray(source.shopAllyOffers) ? source.shopAllyOffers : [],
+          shopHasAllies: !!source.shopHasAllies,
           shopTradeOffer: source.shopTradeOffer || null,
           shopStocked: !!source.shopStocked,
           endlessIntermission: !!source.endlessIntermission,
@@ -3637,6 +3639,14 @@
           return adapted;
         },
       );
+      this.neo.allies = Object.fromEntries(Object.values(state?.allies || {})
+        .filter(ally => ally && ally.roomId === floorState.currentRoomId && ally.status !== 'dead')
+        .map(ally => [ally.id, {
+          ...ally,
+          r: Number(ally.radius || ally.r || 13),
+          hp: Number(ally.health ?? ally.hp ?? 0),
+          max: Math.max(1, Number(ally.maxHealth ?? ally.max ?? 1)),
+        }]));
       // A dead authority enemy is a *source* for one campaign corpse, not a
       // static render proxy. Reapplying its frozen death position and age on
       // every snapshot used to cancel updateDeadBodies() before it could launch

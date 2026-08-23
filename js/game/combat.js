@@ -2209,20 +2209,18 @@
       const duration = Number(Neo.MOVE_BASE_STATS?.summon_cult_followers?.duration || 14);
       for (let index = 0; index < count; index += 1) {
         const summonAngle = angle + index * (Math.PI * 2 / count);
-        Neo.hazards.push({
-          kind: 'cult_follower_ally',
+        Neo.allies = Neo.allies && typeof Neo.allies === 'object' && !Array.isArray(Neo.allies) ? Neo.allies : {};
+        globalThis.NeoNyke?.simulation?.createSourcedAlly?.({ allies: Neo.allies, nextEntityId: Neo.allyIdSeq || 1 }, Neo.player, {
+          id: `cult-summon-${Neo.simulationTick || 0}-${index}`,
+          seed: Math.max(1, Number(Neo.simulationTick || 1) * 13 + index),
+          name: `Cult Follower ${index + 1}`,
+          sourceKind: 'move', sourceKey: 'summon_cult_followers',
+          archetypeKey: 'brawler', spriteKey: 'cult_follower', allyIndex: index,
           x: Neo.clamp(Neo.player.x + Math.cos(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_W - Neo.WALL - 24),
           y: Neo.clamp(Neo.player.y + Math.sin(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_H - Neo.WALL - 24),
-          r: 15,
-          ttl: duration,
-          damage,
-          speed: 170,
-          range: 520,
-          attackRange: 48,
-          interval: 0.55,
-          tick: index * 0.08,
-          aimAngle: summonAngle,
-          allyIndex: index,
+          radius: 15, duration, expiresRemaining: duration,
+          attackRange: 48, attackInterval: 0.55, attackCooldown: index * 0.08,
+          tags: ['species:cult', 'source:move'],
         });
       }
       Neo.ringBurst(Neo.player.x, Neo.player.y, 76, '#a86cff', 0.65);
@@ -6005,6 +6003,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     room.shopOffers = [];
     room.shopMoveOffers = [];
     room.shopWeaponOffers = [];
+    room.shopAllyOffers = [];
+    room.shopHasAllies = false;
     room.shopTradeOffer = null;
     const stockCampaignShop = globalThis.NeoNyke?.simulation?.stockCampaignShop;
     if (typeof stockCampaignShop === 'function') {
@@ -6018,6 +6018,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       stockCampaignShop({
         floorNumber: depth,
         elapsedSeconds: Neo.gameElapsedTime || 0,
+        allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
         matchRules: {
           shopItemOffers: Neo.getDifficultyDef?.()?.shopItemOffers ?? 3,
           shopPriceMultiplier: Number(Neo.getDifficultyDef?.()?.shopPriceMultiplier || 1),
@@ -6029,6 +6030,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       room.shopOffers = stocked.shopOffers || [];
       room.shopMoveOffers = stocked.shopMoveOffers || [];
       room.shopWeaponOffers = stocked.shopWeaponOffers || [];
+      room.shopAllyOffers = stocked.shopAllyOffers || [];
+      room.shopHasAllies = !!stocked.shopHasAllies;
       room.shopTradeOffer = stocked.shopTradeOffer || null;
       room.shopStocked = true;
       Neo.shopOffers = room.shopOffers;
@@ -6075,6 +6078,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     room.shopOffers = [];
     room.shopMoveOffers = [];
     room.shopWeaponOffers = [];
+    room.shopAllyOffers = [];
+    room.shopHasAllies = false;
     room.shopTradeOffer = null;
     const stage = Math.max(1, Number(Neo.bossRushStage || 1));
     const stockCampaignShop = globalThis.NeoNyke?.simulation?.stockCampaignShop;
@@ -6084,6 +6089,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       stockCampaignShop({
         floorNumber: depth,
         elapsedSeconds: Neo.gameElapsedTime || 0,
+        allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
         matchRules: {
           shopItemOffers: Neo.getDifficultyDef?.()?.shopItemOffers ?? 3,
           shopPriceMultiplier: Number(Neo.getDifficultyDef?.()?.shopPriceMultiplier || 1),
@@ -6095,6 +6101,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       room.shopOffers = stocked.shopOffers || [];
       room.shopMoveOffers = stocked.shopMoveOffers || [];
       room.shopWeaponOffers = stocked.shopWeaponOffers || [];
+      room.shopAllyOffers = stocked.shopAllyOffers || [];
+      room.shopHasAllies = !!stocked.shopHasAllies;
       room.shopTradeOffer = stocked.shopTradeOffer || null;
       room.shopStocked = true;
       Neo.shopOffers = room.shopOffers;
@@ -6141,6 +6149,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       Neo.currentRoom.shopOffers = [];
       Neo.currentRoom.shopMoveOffers = [];
       Neo.currentRoom.shopWeaponOffers = [];
+      Neo.currentRoom.shopAllyOffers = [];
+      Neo.currentRoom.shopHasAllies = false;
       Neo.currentRoom.shopTradeOffer = null;
     }
     Neo.shopOffers = [];
@@ -6167,6 +6177,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       Neo.currentRoom.shopOffers = [];
       Neo.currentRoom.shopMoveOffers = [];
       Neo.currentRoom.shopWeaponOffers = [];
+      Neo.currentRoom.shopAllyOffers = [];
+      Neo.currentRoom.shopHasAllies = false;
       Neo.currentRoom.shopTradeOffer = null;
     }
     Neo.shopOffers = [];
@@ -6284,10 +6296,12 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       ? Neo.ELITE_ITEM_RARITY_DROP_WEIGHTS
       : Neo.ITEM_RARITY_DROP_WEIGHTS;
     const sandbox = Neo.getActiveSandboxSettings();
+    const allowBlack = Neo.areBlackItemsUnlocked?.() !== false;
     const entries = adjustEntriesForScrollControl(Neo.ITEM_DROP_WEIGHTS.filter(([key, weight]) => {
       if (Math.max(0, Number(weight) || 0) <= 0 || excludedKeys.has(key)) return false;
       if (sandbox && !sandbox.allowedItems.includes(key)) return false;
       const rarity = normalizeRarity(Neo.ITEM_DEFS?.[key]?.rarity);
+      if (!allowBlack && rarity === 'black') return false;
       return !allowedRarities || allowedRarities.has(rarity);
     }));
     if (!entries.length) return '';

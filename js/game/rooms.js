@@ -436,6 +436,8 @@
     room.shopOffers = [];
     room.shopMoveOffers = [];
     room.shopWeaponOffers = [];
+    room.shopAllyOffers = [];
+    room.shopHasAllies = false;
     room.structures = [];
     room.decorations = [];
     room.gardenFruitNodes = [];
@@ -513,6 +515,8 @@
       ensureShopHasMinimumItemOffers(room);
       room.shopMoveOffers = Array.isArray(room.shopMoveOffers) ? room.shopMoveOffers : [];
       room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
+      room.shopAllyOffers = Array.isArray(room.shopAllyOffers) ? room.shopAllyOffers : [];
+      room.shopHasAllies = !!room.shopHasAllies;
       room.cleared = true;
     } else if (room.type === 'challenge') {
       room.cleared = false;
@@ -1651,6 +1655,8 @@
       || (Neo.gameMode === 'boss_rush' && Neo.bossRushIntermission)) && room.shopStocked) {
       room.shopMoveOffers = Array.isArray(room.shopMoveOffers) ? room.shopMoveOffers : [];
       room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
+      room.shopAllyOffers = Array.isArray(room.shopAllyOffers) ? room.shopAllyOffers : [];
+      room.shopHasAllies = !!room.shopHasAllies;
       Neo.shopOffers = room.shopOffers || [];
     }
     if (room.type === 'shop') {
@@ -1712,6 +1718,7 @@
         floorNumber: Neo.floor,
         tutorial: isTutorialTreasure,
         itemChance: Neo.getRandomItemDropChance(0.9, 0.98),
+        allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
       }).forEach(chest => {
         Neo.chests.push({
           ...chest,
@@ -1872,6 +1879,7 @@
     return stockCampaignShop({
       floorNumber: Neo.getShopProgressionDepth?.() ?? Neo.floor,
       elapsedSeconds: Neo.gameElapsedTime || 0,
+      allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
       matchRules: {
         shopItemOffers: minItemOffers == null ? Neo.getDifficultyDef()?.shopItemOffers ?? 3 : minItemOffers,
         shopPriceMultiplier: Number(Neo.getDifficultyDef()?.shopPriceMultiplier || 1),
@@ -1898,7 +1906,10 @@
   function createSeededItemChoices(count, random, options = {}) {
     const createChoices = globalThis.NeoNyke?.content?.createCampaignItemChoices;
     if (typeof createChoices !== 'function') throw new Error('Canonical campaign item choice operation is unavailable');
-    return createChoices(count, { next: random }, options);
+    return createChoices(count, { next: random }, {
+      allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
+      ...options,
+    });
   }
 
   function getBossRewardPickCount(floorValue = Neo.floor, room = Neo.currentRoom) {
@@ -2019,6 +2030,28 @@
       liveEnemy.statuses = Neo.createStatusMap();
       Neo.spawnParticle({ x: liveEnemy.x, y: liveEnemy.y - 30, life: 2.0, text: `${rival.name.toUpperCase()} IS YOUR FRIEND!`, c: '#8dffbd' });
       Neo.sayAtPosition(liveEnemy.x, liveEnemy.y, 'You... helped me? Then we fight no more.', { speaker: rival.name, tone: 'boss', holdTime: 2.0, offsetY: liveEnemy.r + 36 });
+    }
+    Neo.allies = Neo.allies && typeof Neo.allies === 'object' && !Array.isArray(Neo.allies) ? Neo.allies : {};
+    const archetypeByCharacter = {
+      princess: 'ranger', thorn_knight: 'brawler', metao: 'mystic',
+      gelleh: 'guardian', mooggy: 'scout', turtle_boy: 'guardian',
+    };
+    const nativeMoveKey = (rival.weapons || []).find(weapon => weapon?.slot !== 'melee')?.key
+      || (rival.weapons || [])[0]?.key || '';
+    const ally = globalThis.NeoNyke?.simulation?.createSourcedAlly?.({ allies: Neo.allies, nextEntityId: Neo.allyIdSeq || 1 }, Neo.player, {
+      id: `rival-ally-${rival.rivalId || rival.characterKey}`,
+      seed: String(rival.rivalId || rival.characterKey).split('').reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 17),
+      name: rival.name,
+      sourceKind: 'rival', sourceKey: rival.rivalId || rival.characterKey,
+      archetypeKey: archetypeByCharacter[rival.characterKey] || 'brawler',
+      nativeMoveKey, spriteKey: rival.characterKey,
+      x: liveEnemy?.x ?? Neo.player.x, y: liveEnemy?.y ?? Neo.player.y,
+      radius: rival.r, tags: ['source:rival', `hero:${rival.characterKey}`],
+    });
+    if (ally) rival.combatAllyId = ally.id;
+    if (liveEnemy) {
+      const index = Neo.enemies.indexOf(liveEnemy);
+      if (index >= 0) Neo.enemies.splice(index, 1);
     }
     Neo.scheduleRunSave();
     return true;
@@ -2284,6 +2317,7 @@
       lives: Neo.clamp(Math.round(Number(source.lives ?? RIVAL_STARTING_LIVES)), 0, RIVAL_STARTING_LIVES),
       relationship: Number(source.relationship || 0),
       friend: !!source.friend,
+      combatAllyId: String(source.combatAllyId || ''),
       vendetta: !!source.vendetta,
       godGearGranted: !!source.godGearGranted,
       startingGearGranted: !!source.startingGearGranted,
@@ -2889,6 +2923,7 @@
 
   function injectRivalToCurrentRoom(rival) {
     if (!Neo.currentRoom) return;
+    if (rival?.friend && rival.combatAllyId && Neo.allies?.[rival.combatAllyId]) return;
     if (Neo.enemies.some(e => e.type === 'rival' && e.rivalData === rival)) return;
     const sp = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, rival.r) || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 };
     Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
@@ -2946,6 +2981,11 @@
     for (let i = Neo.rivals.length - 1; i >= 0; i--) {
       const rival = Neo.rivals[i];
       if (rival.dead) { Neo.rivals.splice(i, 1); continue; }
+      if (rival.friend && rival.combatAllyId && Neo.allies?.[rival.combatAllyId]) {
+        rival.roomGx = Neo.currentRoom.gx;
+        rival.roomGy = Neo.currentRoom.gy;
+        continue;
+      }
       if (!rival.memory) rival.memory = createDefaultRivalMemory();
       if (!rival.brain) rival.brain = createDefaultRivalBrain(rival.characterKey);
 
@@ -3895,14 +3935,15 @@
     } else if (key === 'holy_turrets') {
       const turrets = globalThis.NeoNyke?.simulation?.planCampaignHolyTurrets?.({
         originX: enemy.x, originY: enemy.y, angle, wall: Neo.WALL, roomWidth: Neo.ROOM_W, roomHeight: Neo.ROOM_H,
-        baseDamage: damage,
+        baseDamage: damage, rival: true,
       }) || Array.from({ length: 3 }, (_, index) => {
         const turretAngle = angle + (index - 1) * 0.7;
         return {
           aimAngle: turretAngle,
           x: Neo.clamp(enemy.x + Math.cos(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_W - Neo.WALL - 16),
           y: Neo.clamp(enemy.y + Math.sin(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_H - Neo.WALL - 16),
-          radius: 26, durationSeconds: 6, intervalSeconds: 0.6, range: 360, burstRadius: 56, damage,
+          radius: 26, durationSeconds: 4.5, intervalSeconds: 0.9, range: 300,
+          burstRadius: 48, damage: Math.max(1, Math.round(damage * 0.6)),
         };
       });
       turrets.forEach(turret => {

@@ -688,8 +688,35 @@ export function bindPanelInput() {
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
+    Neo.ui.shopAllies?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopTrades?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
+    Neo.ui.invAlliesList?.addEventListener('click', event => {
+      const target = event.target instanceof Element ? event.target : null;
+      const transfer = target?.closest('[data-ally-transfer]');
+      const recall = target?.closest('[data-ally-recall]');
+      const dismiss = target?.closest('[data-ally-dismiss]');
+      if (transfer) {
+        const allyId = transfer.dataset.allyTransfer || '';
+        const card = transfer.closest('[data-ally-card]');
+        const moveKey = card?.querySelector('[data-ally-move-select]')?.value || '';
+        if (!moveKey) return;
+        if (Neo.multiplayerGameView?.active) Neo.gameSession?.sendGameCommand?.('ALLY_TRANSFER_MOVE', { allyId, moveKey });
+        else Neo.transferMoveToAlly?.(allyId, moveKey);
+      } else if (recall) {
+        const allyId = recall.dataset.allyRecall || '';
+        if (Neo.multiplayerGameView?.active) Neo.gameSession?.sendGameCommand?.('ALLY_RECALL_MOVE', { allyId });
+        else Neo.recallAllyMove?.(allyId);
+      } else if (dismiss) {
+        const allyId = dismiss.dataset.allyDismiss || '';
+        const ally = Neo.allies?.[allyId];
+        if (!window.confirm(`Dismiss ${ally?.name || 'this ally'}? This cannot be undone.`)) return;
+        if (Neo.multiplayerGameView?.active) Neo.gameSession?.sendGameCommand?.('ALLY_DISMISS', { allyId });
+        else Neo.dismissAlly?.(allyId);
+      } else return;
+      markInventoryPanelDirty();
+      renderInventoryPanel();
+    });
     Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
     Neo.ui.invMovesList?.addEventListener('keydown', event => {
@@ -2302,6 +2329,7 @@ export function getShopWeaponOffers() {
     if (tabKey === 'items') return Neo.ui.shopItems;
     if (tabKey === 'weapons') return Neo.ui.shopWeapons;
     if (tabKey === 'moves') return Neo.ui.shopMoves;
+    if (tabKey === 'allies') return Neo.ui.shopAllies;
     if (tabKey === 'trades') return Neo.ui.shopTrades;
     return Neo.ui.shopHeals;
   }
@@ -2325,6 +2353,11 @@ export function getShopWeaponOffers() {
       const offers = Neo.currentRoom?.shopMoveOffers || [];
       return `moves|${coins}|${Neo.player?.character || ''}|${getTruthyKeys(Neo.player?.ownedMoves)}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
     }
+    if (tabKey === 'allies') {
+      const offers = Neo.currentRoom?.shopAllyOffers || [];
+      const rosterCount = globalThis.NeoNyke?.simulation?.countActiveRecruits?.({ allies: Neo.allies || {} }, Neo.player) || 0;
+      return `allies|${coins}|roster:${rosterCount}|${offers.map(o => `${o.id}:${o.name}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+    }
     const potionCap = Number(Neo.getPotionCarryCap?.() || 0);
     const storedPotions = Number(Neo.player?.storedPotions || 0);
     const hp = Math.round(Number(Neo.player?.hp || 0));
@@ -2343,6 +2376,8 @@ export function getShopWeaponOffers() {
             ? 'invTabWeapons'
             : tabKey === 'rivals'
               ? 'invTabRivals'
+              : tabKey === 'allies'
+                ? 'invTabAllies'
               : 'invTabEquipped';
     return document.getElementById(id);
   }
@@ -2389,6 +2424,10 @@ export function getShopWeaponOffers() {
       const keys = `${Neo.getItemCount?.('paul_cunts_house_keys') || 0}:${Neo.canUseHouseKeysStrike?.() ? 1 : 0}`;
       return `rivals|${live}|ret:${pending}|slain:${(Neo.slainRivalKeys || []).join(',')}|keys:${keys}`;
     }
+    if (tabKey === 'allies') {
+      const allies = Object.values(Neo.allies || {}).filter(ally => ally?.ownerId === String(playerRef.id || 'local-player-1'));
+      return `allies|${allies.map(ally => `${ally.id}:${ally.status}:${Math.round(ally.health)}:${Math.round(ally.maxHealth)}:${ally.nativeMoveKey}:${ally.transferredMove?.key || ''}:${Number(ally.respawnRemaining || 0).toFixed(1)}`).join(',')}|moves:${getTruthyKeys(playerRef.ownedMoves)}`;
+    }
     const ownedMoves = getTruthyKeys(playerRef.ownedMoves);
     const equipped = (Neo.MOVE_SLOTS || []).map(slot => `${slot}:${playerRef.equippedMoves?.[slot] || ''}`).join(',');
     return `equipped|w:${equippedWeapon}|owned:${ownedMoves}|eq:${equipped}|slot:${Neo.activeInventorySlot || ''}|bat:${Math.max(0, Math.floor(Number(extraBatteryPendingCount || 0)))}`;
@@ -2403,13 +2442,17 @@ export function renderShopPanel() {
     if (!usesAuthorityProjectedShopStock()) Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     const noItemsChallenge = Neo.isChallengeActive('no_items');
+    const hasAllyShop = !!Neo.currentRoom?.shopHasAllies && Array.isArray(Neo.currentRoom?.shopAllyOffers);
+    if (Neo.activeShopTab === 'allies' && !hasAllyShop) Neo.activeShopTab = 'items';
     Neo.ui.shopTabs.forEach(tab => {
+      if (tab.dataset.tab === 'allies') tab.classList.toggle('hidden', !hasAllyShop);
       const isActive = tab.dataset.tab === Neo.activeShopTab;
       tab.classList.toggle('active', isActive);
     });
     Neo.ui.shopItems.classList.toggle('hidden', Neo.activeShopTab !== 'items');
     Neo.ui.shopWeapons?.classList.toggle('hidden', Neo.activeShopTab !== 'weapons');
     Neo.ui.shopMoves.classList.toggle('hidden', Neo.activeShopTab !== 'moves');
+    Neo.ui.shopAllies?.classList.toggle('hidden', Neo.activeShopTab !== 'allies');
     Neo.ui.shopTrades?.classList.toggle('hidden', Neo.activeShopTab !== 'trades');
     Neo.ui.shopHeals.classList.toggle('hidden', Neo.activeShopTab !== 'heals');
     const panelRenderCache = ensurePanelRenderCache();
@@ -2582,6 +2625,38 @@ export function renderShopPanel() {
       Neo.ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
       drawShopIcons(Neo.ui.shopMoves, 'data-move-icon', Neo.drawMoveToastIcon, key => Neo.MOVE_DEFS[key]);
       panelRenderCache.shop.tabSigs.moves = activeShopSig;
+    } else if (Neo.activeShopTab === 'allies') {
+      const offers = Array.isArray(Neo.currentRoom?.shopAllyOffers) ? Neo.currentRoom.shopAllyOffers : [];
+      const rosterCount = globalThis.NeoNyke?.simulation?.countActiveRecruits?.({ allies: Neo.allies || {} }, Neo.player) || 0;
+      const rosterFull = rosterCount >= Number(globalThis.NeoNyke?.content?.ALLY_RECRUIT_CAP || 3);
+      Neo.ui.shopAllies.innerHTML = offers.map((offer, index) => {
+        const archetype = globalThis.NeoNyke?.content?.ALLY_ARCHETYPES?.[offer.archetypeKey] || {};
+        const move = Neo.MOVE_DEFS?.[offer.nativeMoveKey];
+        const state = getShopPurchaseState(offer, { blocked: rosterFull });
+        return renderShopCard({
+          rarityLabel: archetype.label || 'Ally',
+          iconAttr: 'data-ally-offer-index',
+          iconKey: String(index),
+          title: offer.name || 'Unknown Ally',
+          accentColor: (globalThis.NeoNyke?.simulation?.ALLY_PALETTES?.[offer.appearance?.palette] || [])[0] || '#80e8ff',
+          cost: offer.cost,
+          description: `${archetype.label || 'Adventurer'} with ${move?.name || offer.nativeMoveKey || 'a signature move'}. Recruits fight until defeated permanently.`,
+          chips: [
+            { label: archetype.label || 'Ally', tone: 'move' },
+            { label: move?.name || offer.nativeMoveKey || 'Native Move', tone: 'item' },
+            ...(offer.tags || []).slice(0, 2).map(tag => ({ label: tag.split(':')[1] || tag, tone: 'tool' })),
+          ],
+          stats: [
+            { label: 'HP', value: `${Math.round(Number(archetype.hpRatio || 1) * 100)}%` },
+            { label: 'Power', value: `${Math.round(Number(archetype.basicDamageRatio || 0.4) * 100)}%` },
+          ],
+          kind: 'ally', index, state,
+          buttonText: state.bought ? 'Recruited' : rosterFull ? 'Roster Full' : !state.canAfford ? 'Too Expensive' : 'Recruit',
+          soldStateText: 'RECRUITED',
+        });
+      }).join('') || '<div class="shop-card shop-empty"><p>No allies are waiting in this shop.</p></div>';
+      Neo.drawAllyPortraits?.(Neo.ui.shopAllies);
+      panelRenderCache.shop.tabSigs.allies = activeShopSig;
     } else if (Neo.activeShopTab === 'heals') {
       const heals = [
         { id: 'small', name: 'Minor Heal', heal: Neo.scalePotionHealing(45, 24), cost: Neo.getShopHealCost('small') },
@@ -2652,7 +2727,7 @@ export function renderInventoryPanel() {
     Neo.ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === Neo.activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped', rivals: 'invTabRivals' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped', allies: 'invTabAllies', rivals: 'invTabRivals' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
@@ -2831,6 +2906,41 @@ export function renderInventoryPanel() {
         Neo.ui.invWeaponsList.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
           Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
         });
+      }
+    } else if (Neo.activeInvTab === 'allies') {
+      const container = Neo.ui.invAlliesList || document.getElementById('invAlliesList');
+      if (container) {
+        const ownerId = String(_invP.id || (_invP === Neo.player ? 'local-player-1' : ''));
+        const allies = Object.values(Neo.allies || {}).filter(ally => ally && ally.ownerId === ownerId && ally.status !== 'dead');
+        const equipped = new Set(Object.values(_invP.equippedMoves || {}).filter(Boolean));
+        const spareMoves = Object.keys(_invP.ownedMoves || {}).filter(key => _invP.ownedMoves[key] && Neo.MOVE_DEFS?.[key] && !equipped.has(key));
+        container.innerHTML = allies.map(ally => {
+          const archetype = globalThis.NeoNyke?.content?.ALLY_ARCHETYPES?.[ally.archetypeKey] || {};
+          const nativeName = Neo.MOVE_DEFS?.[ally.nativeMoveKey]?.name || ally.nativeMoveKey || 'Basic only';
+          const giftedName = Neo.MOVE_DEFS?.[ally.transferredMove?.key]?.name || ally.transferredMove?.key || '';
+          const respawn = ally.status === 'respawning'
+            ? `<span class="inv-rival__status inv-rival__status--return">RETURNS ${Math.ceil(Number(ally.respawnRemaining || 0))}s</span>`
+            : '<span class="inv-rival__status inv-rival__status--friend">ACTIVE</span>';
+          const moveOptions = spareMoves.map(key => `<option value="${Neo.escapeHtml(key)}">${Neo.escapeHtml(Neo.MOVE_DEFS[key].name)}</option>`).join('');
+          return `<div class="inv-card inv-rival inv-rival--has-portrait" data-ally-card="${Neo.escapeHtml(ally.id)}">
+            <span class="inv-rival__portrait"><canvas data-ally-id="${Neo.escapeHtml(ally.id)}" width="64" height="64" aria-hidden="true"></canvas></span>
+            <div class="inv-rival__body">
+              <div class="inv-card__title-row"><span class="inv-card__eyebrow" style="color:#80e8ff">${Neo.escapeHtml(ally.name)}</span>${respawn}</div>
+              <div class="inv-rival__rows">
+                <span>${Neo.escapeHtml(archetype.label || ally.archetypeKey)} · ${Math.ceil(Number(ally.health || 0))}/${Math.ceil(Number(ally.maxHealth || 1))} HP</span>
+                <span>Native: ${Neo.escapeHtml(nativeName)}</span>
+                <span>Transferred: ${Neo.escapeHtml(giftedName || 'None')}</span>
+                <span>${(ally.tags || []).slice(0, 4).map(tag => Neo.escapeHtml(tag.split(':')[1] || tag)).join(' · ')}</span>
+              </div>
+              ${ally.source?.kind === 'shop' ? `<div class="inv-ally-actions">
+                ${moveOptions ? `<select data-ally-move-select aria-label="Move to transfer"><option value="">Choose spare move…</option>${moveOptions}</select><button type="button" data-ally-transfer="${Neo.escapeHtml(ally.id)}">Transfer</button>` : '<span>No unequipped moves available.</span>'}
+                ${giftedName ? `<button type="button" data-ally-recall="${Neo.escapeHtml(ally.id)}">Recall Move</button>` : ''}
+                <button type="button" data-ally-dismiss="${Neo.escapeHtml(ally.id)}">Dismiss</button>
+              </div>` : ''}
+            </div>
+          </div>`;
+        }).join('') || '<div class="inv-card"><span class="inv-card__eyebrow">No Allies</span><h4>Your squad is empty</h4><p>Some shops reveal an Allies tab with recruitable fighters.</p></div>';
+        Neo.drawAllyPortraits?.(container);
       }
     } else if (Neo.activeInvTab === 'rivals') {
       const container = document.getElementById('invRivalsList');
@@ -3165,14 +3275,20 @@ export function spendCoins(cost) {
     const shopRoom = Neo.currentRoom.type === 'shop'
       ? Neo.currentRoom
       : { ...Neo.currentRoom, type: 'shop' };
-    return purchase({
+    const allyState = {
       floorNumber: Neo.getShopProgressionDepth?.() ?? Neo.floor,
       elapsedSeconds: Neo.runTime || 0,
+      allies: Neo.allies || (Neo.allies = {}),
+      nextEntityId: Math.max(1, Number(Neo.allyIdSeq || 1)),
       matchRules: {
         shopPriceMultiplier: Neo.getShopDifficultyMultiplier?.() || 1,
         cursedShops: Neo.isChallengeActive?.('cursed_shops') || false,
       },
-    }, shopRoom, Neo.player, command, options);
+    };
+    const result = purchase(allyState, shopRoom, Neo.player, command, options);
+    Neo.allies = allyState.allies || Neo.allies || {};
+    Neo.allyIdSeq = Math.max(Number(Neo.allyIdSeq || 1), Number(allyState.nextEntityId || 1));
+    return result;
   }
 
 export function handleShopBuyClick(event) {
@@ -3180,11 +3296,11 @@ export function handleShopBuyClick(event) {
     const button = target?.closest('.shop-buy');
     if (!button || !Neo.player) return;
     const kind = button.dataset.kind;
-    if (Neo.multiplayerGameView?.active && ['item', 'move', 'weapon', 'trade', 'heal'].includes(kind)) {
+    if (Neo.multiplayerGameView?.active && ['item', 'move', 'weapon', 'ally', 'trade', 'heal'].includes(kind)) {
       const offerIndex = Number(button.dataset.index || 0);
       const heal = Number(button.dataset.heal || 0);
       const healKind = heal >= 80 ? 'major' : 'small';
-      Neo.gameSession?.sendShopPurchase?.(kind, ['item', 'move', 'weapon'].includes(kind) ? { offerIndex } : { healKind });
+      Neo.gameSession?.sendShopPurchase?.(kind, ['item', 'move', 'weapon', 'ally'].includes(kind) ? { offerIndex } : { healKind });
       return;
     }
     if (kind === 'voucher-redeem') {
@@ -3258,6 +3374,16 @@ export function handleShopBuyClick(event) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${Neo.WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
       Neo.pushWeaponNotification(offer.key);
       markInventoryPanelDirty();
+      window.achievementEvents?.emit('shop:bought');
+    } else if (kind === 'ally') {
+      const offerIndex = Number(button.dataset.index || -1);
+      const offer = Neo.currentRoom?.shopAllyOffers?.[offerIndex];
+      if (!offer) return;
+      const purchase = resolveLocalCampaignShopPurchase({ kind: 'ally', offerIndex });
+      if (!purchase.ok) return;
+      playShopPurchaseFeedback(button, offer.cost);
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 28, life: 1, text: `${offer.name.toUpperCase()} JOINS`, c: '#8dffbd' });
+      Neo.scheduleRunSave?.();
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);

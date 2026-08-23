@@ -301,6 +301,14 @@ describe('shared campaign move effects', () => {
     expect(turrets).toHaveLength(3);
     expect(turrets.every(turret => turret.x >= 44 && turret.y >= 44)).toBe(true);
     expect(turrets[1]).toEqual(expect.objectContaining({ radius: 26, durationSeconds: 6, intervalSeconds: 0.6, range: 360, burstRadius: 70, damage: 60 }));
+    const rivalTurrets = planCampaignHolyTurrets({
+      originX: 320, originY: 240, angle: 0, roomWidth: 900, roomHeight: 700,
+      baseDamage: 40, rival: true,
+    });
+    expect(rivalTurrets).toHaveLength(3);
+    expect(rivalTurrets[1]).toEqual(expect.objectContaining({
+      durationSeconds: 4.5, intervalSeconds: 0.9, range: 300, burstRadius: 48, damage: 24,
+    }));
   });
 
   test('plans Lightning Columns at the aimed target rather than caster range', () => {

@@ -28,6 +28,9 @@ describe('rival death screen attribution', () => {
   const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
   const roomsSource = fs.readFileSync(path.join(__dirname, '../js/game/rooms.js'), 'utf8');
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
+  const statusSource = fs.readFileSync(path.join(__dirname, '../js/core/status.js'), 'utf8');
+  const entitiesSource = fs.readFileSync(path.join(__dirname, '../js/draw/entities.js'), 'utf8');
+  const threeRendererSource = fs.readFileSync(path.join(__dirname, '../js/draw/three-renderer.js'), 'utf8');
   const controllerSource = fs.readFileSync(path.join(__dirname, '../js/ui/controller.js'), 'utf8');
 
   test('resolves rival character keys and legacy rival labels to the correct portrait', () => {
@@ -114,10 +117,10 @@ describe('rival death screen attribution', () => {
   test('records the actual attacker sprite independently from the attack label', () => {
     const Neo = {
       getDamageSourceLabel: key => key,
-      resolveKillerPresentation: (key, label, attacker) => ({
-        sourceKey: key,
-        label,
-        spriteKey: attacker.type,
+      resolveKillerPresentation: entry => ({
+        sourceKey: entry.sourceKey,
+        label: entry.sourceLabel,
+        spriteKey: entry.attacker.type,
         hazardIcon: '',
       }),
     };
@@ -137,6 +140,38 @@ describe('rival death screen attribution', () => {
     expect(Neo.lastDamageSourceHazardIcon).toBe('');
     expect(gameStateSource).toContain('killerSpriteKey: result === \'win\' ? \'\' : killer.spriteKey');
     expect(gameStateSource).toContain('killerHazardIcon: result === \'win\' ? \'\' : killer.hazardIcon');
+  });
+
+  test('uses the gameplay actor resolver for transformed bosses, rivals, and mirrors', () => {
+    const Neo = {
+      SPRITE_DEFS: { thorn_knight: {}, metao: {} },
+      CHARACTER_SPRITE_SHEETS: { god: {}, god_ascended: {}, gelleh: {} },
+      getCharacterSpriteKey: key => key,
+      getCharacterDef: () => ({ key: 'thorn_knight' }),
+    };
+    const getActorRenderSpriteKey = new Function(
+      'Neo',
+      `${extractFunction(entitiesSource, 'getEnemySpriteKey')}
+       ${extractFunction(entitiesSource, 'getCharacterGameplaySpriteKey')}
+       ${extractFunction(entitiesSource, 'getPlayerSpriteKey')}
+       ${extractFunction(entitiesSource, 'getActorRenderSpriteKey')}
+       return getActorRenderSpriteKey;`,
+    )(Neo);
+
+    expect(getActorRenderSpriteKey({ type: 'god', phase: 4 })).toBe('god_ascended');
+    expect(getActorRenderSpriteKey({ type: 'rival', rivalData: { characterKey: 'gelleh' } })).toBe('gelleh');
+    expect(getActorRenderSpriteKey({ type: 'mirror_knight', spriteKey: 'metao' })).toBe('metao');
+    expect(threeRendererSource).toContain('const canonicalKey = Neo.getEnemySpriteKey?.(enemy)');
+  });
+
+  test('draws the canonical portrait frame and carries it through damage-over-time kills', () => {
+    const drawBlock = extractFunction(gameStateSource, 'drawKillerPresentation');
+    const recordBlock = extractFunction(worldSource, 'recordLastDamageSource');
+
+    expect(drawBlock).toContain('Neo.getPortraitSpriteKey?.(killer.spriteKey)');
+    expect(recordBlock).toContain('spriteKey: options.killerSpriteKey || options.spriteKey ||');
+    expect(statusSource).toContain('state.sourceSpriteKey = Neo.getActorRenderSpriteKey?.(sourceActor)');
+    expect(worldSource).toContain("killerSpriteKey: state.sourceSpriteKey || ''");
   });
 
   test('records rival character keys separately from display names', () => {

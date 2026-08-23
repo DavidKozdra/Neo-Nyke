@@ -43,6 +43,9 @@
   ].map(entry => Object.freeze(entry)));
   const ITEM_DROP_WEIGHTS = Object.freeze(ITEM_DROP_ENTRIES.map(([key, weight]) => Object.freeze([key, weight])));
   const ITEM_RARITY_BY_KEY = Object.freeze(Object.fromEntries(ITEM_DROP_ENTRIES.map(([key, , rarity]) => [key, rarity])));
+  // Mirrors LoopContentSystem.BLACK_ITEM_UNLOCK_LOOP_INDEX; this module is a leaf
+  // of the content layer and does not import the loop system.
+  const BLACK_ITEM_UNLOCK_LOOP_INDEX = 5;
   const ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 79, wizard: 15, god: 5, black: 1 });
   const ELITE_ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 64, wizard: 25, god: 10, black: 1 });
   // Boss Rush opens with a seeded relic draft. The first half preserves the
@@ -73,9 +76,22 @@
     return usable[usable.length - 1]?.[0] || '';
   }
 
+  // BLACK relics are gated behind the loop campaign (see areBlackItemsUnlocked in
+  // LoopContentSystem). Callers that know the run's loop pass `runLoopIndex`;
+  // callers that already know the answer (or must bypass it, like Practice and
+  // Sandbox) pass `allowBlackItems` directly. With neither supplied the tier
+  // stays available, so pools that are not run drops keep their old behaviour.
+  function blackItemsAllowed(options = {}) {
+    if (typeof options.allowBlackItems === 'boolean') return options.allowBlackItems;
+    if (options.runLoopIndex === undefined || options.runLoopIndex === null) return true;
+    return Math.max(0, Math.trunc(Number(options.runLoopIndex) || 0)) >= BLACK_ITEM_UNLOCK_LOOP_INDEX;
+  }
+
   function rollCampaignItem(random, options = {}) {
     const excluded = new Set(options.excludeKeys || []);
-    const entries = ITEM_DROP_ENTRIES.filter(([key, weight]) => weight > 0 && !excluded.has(key));
+    const allowBlack = blackItemsAllowed(options);
+    const entries = ITEM_DROP_ENTRIES.filter(([key, weight, rarity]) => weight > 0 && !excluded.has(key)
+      && (allowBlack || rarity !== 'black'));
     const byRarity = new Map();
     entries.forEach(([key, weight, rarity]) => {
       if (!byRarity.has(rarity)) byRarity.set(rarity, []);
@@ -122,6 +138,7 @@
     const tutorial = !!options.tutorial;
     const floorNumber = Math.max(1, Number(options.floorNumber || 1));
     const itemChance = Math.max(0, Math.min(1, Number(options.itemChance ?? 0.9)));
+    const rollOptions = { allowBlackItems: blackItemsAllowed(options) };
     const chestCount = tutorial ? 1 : 1 + Math.floor(nextRandom(random) * 2);
     const insetX = wall + 88;
     const insetY = wall + 76;
@@ -148,8 +165,8 @@
         y,
         choiceType,
         rewardType: rewardsItem ? 'item' : 'potion',
-        rewardKey: rewardsItem && choiceType !== 'ab' ? rollCampaignItem(random) : '',
-        rewardChoices: choiceType === 'ab' ? createCampaignItemChoices(2, random) : [],
+        rewardKey: rewardsItem && choiceType !== 'ab' ? rollCampaignItem(random, rollOptions) : '',
+        rewardChoices: choiceType === 'ab' ? createCampaignItemChoices(2, random, rollOptions) : [],
         tutorialTreasureChest: tutorial,
       });
     }
@@ -162,6 +179,7 @@
     ITEM_RARITY_BY_KEY,
     ITEM_RARITY_DROP_WEIGHTS,
     ELITE_ITEM_RARITY_DROP_WEIGHTS,
+    BLACK_ITEM_UNLOCK_LOOP_INDEX,
     BOSS_RUSH_STARTER_OFFER_COUNT,
     BOSS_RUSH_STARTER_PICK_COUNT,
     BOSS_RUSH_STARTER_ITEM_ELITE_FLAGS,

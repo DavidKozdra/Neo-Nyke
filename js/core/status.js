@@ -73,6 +73,7 @@ export function clearStatus(entity, key) {
   const state = getStatusState(entity, key);
   state.sourceKey = '';
   state.sourceLabel = '';
+  state.sourceSpriteKey = '';
   state.owner = null;
 }
 
@@ -133,6 +134,12 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
     if (rawKey) {
       state.sourceKey = rawKey;
       state.sourceLabel = String(source.sourceLabel ?? Neo.getDamageSourceLabel?.(rawKey) ?? rawKey);
+      const sourceActor = typeof source === 'object'
+        ? (source.attacker || source.owner || source)
+        : Neo.findKillerEnemyEntity?.(rawKey, state.sourceLabel);
+      state.sourceSpriteKey = Neo.getActorRenderSpriteKey?.(sourceActor)
+        || Neo.resolveKillerSprite?.(rawKey)
+        || '';
     }
     // Dark Drain siphons HP back to the enemy that inflicted it (mirrors the
     // player's drain). Remember the owning enemy so the per-tick DoT can heal it.

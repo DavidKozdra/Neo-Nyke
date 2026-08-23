@@ -125,6 +125,7 @@ const KOZ_PWA_CONFIG = {
     "/js/draw/three-loader.js",
     "/js/draw/three-renderer.js",
     "/js/draw/viewport.js",
+    "/js/game/allies.js",
     "/js/game/combat.js",
     "/js/game/enemies.js",
     "/js/game/hud.js",
@@ -157,6 +158,7 @@ const KOZ_PWA_CONFIG = {
     "/js/simulation/NetworkCombatSystem.js",
     "/js/simulation/RandomService.js",
     "/js/simulation/SharedAcquisitionSystem.js",
+    "/js/simulation/SharedAllySystem.js",
     "/js/simulation/SharedBeamPathSystem.js",
     "/js/simulation/SharedBossIntroSystem.js",
     "/js/simulation/SharedChaosSystem.js",
@@ -292,14 +294,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 279,
-    "bytes": 56317182,
-    "criticalEntries": 219,
-    "criticalBytes": 13351197,
+    "entries": 281,
+    "bytes": 56389085,
+    "criticalEntries": 221,
+    "criticalBytes": 13423100,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "8e6b1919beebf629"
+  "version": "e6985844757eb7df"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

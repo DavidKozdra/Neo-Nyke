@@ -773,6 +773,7 @@ function applySharedSpecialChoice(choiceId) {
   const result = globalThis.NeoNyke?.simulation?.applySpecialRoomChoice?.({
     floorNumber: Neo.floor,
     runLoopIndex: Neo.runLoopIndex,
+    allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
     floorState,
     matchRules: {},
   }, Neo.currentRoom, Neo.player, choiceId, { next: () => randomFunction() });

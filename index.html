@@ -502,6 +502,7 @@
         <button class="shop-tab panel-tab active" data-tab="items" role="tab"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
         <button class="shop-tab panel-tab" data-tab="weapons" role="tab"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
         <button class="shop-tab panel-tab" data-tab="moves" role="tab"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+        <button class="shop-tab panel-tab hidden" data-tab="allies" role="tab"><span class="tab-icon" aria-hidden="true">A</span><span>Allies</span></button>
         <button class="shop-tab panel-tab" data-tab="trades" role="tab"><span class="tab-icon" aria-hidden="true">⇄</span><span>Trades</span></button>
         <button class="shop-tab panel-tab" data-tab="heals" role="tab"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
       </div>
@@ -521,6 +522,7 @@
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
     <div id="shopMoves" class="shop-list hidden"></div>
+    <div id="shopAllies" class="shop-list hidden"></div>
     <div id="shopTrades" class="shop-list hidden"></div>
     <div id="shopHeals" class="shop-list hidden"></div>
   </div>
@@ -551,6 +553,7 @@
         <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
         <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
         <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+        <button class="inv-tab panel-tab" data-inv-tab="allies" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Allies</button>
         <button class="inv-tab panel-tab" data-inv-tab="rivals" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Rivals</button>
       </div>
       <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
@@ -576,6 +579,9 @@
     </div>
     <div class="inv-tab-panel hidden" id="invTabRivals">
       <div id="invRivalsList" class="inv-rivals"></div>
+    </div>
+    <div class="inv-tab-panel hidden" id="invTabAllies">
+      <div id="invAlliesList" class="inv-rivals"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabEquipped">
       <div class="inv-slots">

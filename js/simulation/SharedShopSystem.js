@@ -5,12 +5,13 @@
   const moveApi = typeof require === 'function' ? require('./SharedMoveContent.js') : (root.NeoNyke?.content || {});
   const combatApi = typeof require === 'function' ? require('./SharedCombatContent.js') : (root.NeoNyke?.content || {});
   const inventoryApi = typeof require === 'function' ? require('./SharedInventorySystem.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(itemApi, moveApi, combatApi, inventoryApi);
+  const allyApi = typeof require === 'function' ? require('./SharedAllySystem.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(itemApi, moveApi, combatApi, inventoryApi, allyApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedShopSystemApi(itemApi, moveApi, combatApi, inventoryApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedShopSystemApi(itemApi, moveApi, combatApi, inventoryApi, allyApi) {
   'use strict';
 
   const SHOP_MOVE_POOL = Object.freeze([
@@ -111,7 +112,11 @@
     const extraItems = Math.min(3, Math.max(0, Math.floor(Number(
       player?.itemStats?.shopExtraItemOffers ?? player?.items?.rich_mans_luck ?? 0,
     ))));
-    const itemKeys = itemApi.createCampaignItemChoices(baseItems + extraItems, random);
+    // BLACK relics stay out of shop stock until the run's loop unlocks them.
+    const allowBlackItems = typeof state.allowBlackItems === 'boolean'
+      ? state.allowBlackItems
+      : Math.max(0, Math.trunc(Number(state.runLoopIndex) || 0)) >= Number(itemApi.BLACK_ITEM_UNLOCK_LOOP_INDEX ?? 5);
+    const itemKeys = itemApi.createCampaignItemChoices(baseItems + extraItems, random, { allowBlackItems });
     room.shopOffers = itemKeys.map((key, index) => ({
       id: `shop:${room.id}:item:${index}`, type: 'item', key,
       cost: itemCost(state, player, index, key), bought: false,
@@ -158,6 +163,21 @@
       const targetPool = normalPool.filter(key => rarityRank(key) === targetRank);
       room.shopTradeOffer = { type: 'trade', key: shuffle(targetPool.length ? targetPool : normalPool, random)[0] || '', costKeys, unavailable: false, bought: false };
     } else room.shopTradeOffer = { type: 'trade', unavailable: true, bought: false };
+    room.shopHasAllies = random.next() < Number(allyApi.ALLY_SHOP_CHANCE ?? 0.70);
+    room.shopAllyOffers = [];
+    if (room.shopHasAllies) {
+      const existingNames = Object.values(state?.allies || {}).map(ally => ally?.name).filter(Boolean);
+      for (let index = 0; index < 3; index += 1) {
+        const baseCost = 80 + Number(state.floorNumber || 1) * 10 + index * 8;
+        const offer = allyApi.generateAllyOffer?.({
+          id: `shop:${room.id}:ally:${index}`,
+          random,
+          existingNames: [...existingNames, ...room.shopAllyOffers.map(entry => entry.name)],
+          cost: shopPrice(baseCost, state, player),
+        });
+        if (offer) room.shopAllyOffers.push(offer);
+      }
+    }
     room.shopStocked = true;
     return room;
   }
@@ -169,6 +189,7 @@
     if (kind === 'item') offers = room.shopOffers?.filter(offer => offer.type === 'item');
     else if (kind === 'move') offers = room.shopMoveOffers;
     else if (kind === 'weapon') offers = room.shopWeaponOffers;
+    else if (kind === 'ally') offers = room.shopAllyOffers;
     if (offers) {
       const offer = offers[Math.max(0, Math.trunc(Number(command.offerIndex) || 0))];
       if (!offer || offer.bought) return { ok: false, reason: 'INVALID_OFFER' };
@@ -179,9 +200,14 @@
       if (Number(player.coins || 0) < cost) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
       if (kind === 'move' && player.ownedMoves?.[offer.key]) return { ok: false, reason: 'ALREADY_OWNED' };
       if (kind === 'weapon' && player.ownedWeapons?.[offer.key]) return { ok: false, reason: 'ALREADY_OWNED' };
+      if (kind === 'ally' && allyApi.countActiveRecruits?.(state, player) >= Number(allyApi.ALLY_RECRUIT_CAP || 3)) {
+        return { ok: false, reason: 'ALLY_ROSTER_FULL' };
+      }
       player.coins -= cost;
       offer.cost = cost;
-      offer.bought = true;
+      // Recruitment validates that an offer has not already been consumed, so
+      // only mark ally stock bought after the ally record is created.
+      if (kind !== 'ally') offer.bought = true;
       if (kind === 'item') {
         const collection = typeof options.collectItem === 'function'
           ? options.collectItem(offer.key, 1)
@@ -193,7 +219,17 @@
         }
       }
       else if (kind === 'move') (player.ownedMoves || (player.ownedMoves = {}))[offer.key] = true;
-      else (player.ownedWeapons || (player.ownedWeapons = {}))[offer.key] = true;
+      else if (kind === 'weapon') (player.ownedWeapons || (player.ownedWeapons = {}))[offer.key] = true;
+      else if (kind === 'ally') {
+        const recruited = allyApi.recruitAlly?.(state, player, offer, { x: player.x, y: player.y });
+        if (!recruited?.ok) {
+          player.coins += cost;
+          offer.bought = false;
+          return recruited || { ok: false, reason: 'ALLY_RECRUIT_FAILED' };
+        }
+        offer.bought = true;
+        return { ok: true, kind, allyId: recruited.ally.id, ally: recruited.ally, cost };
+      }
       return { ok: true, kind, key: offer.key, cost };
     }
     if (kind === 'trade') {

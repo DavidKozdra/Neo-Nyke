@@ -552,7 +552,13 @@
     const sourceLabel = options.sourceLabel
       ? String(options.sourceLabel).trim()
       : Neo.getDamageSourceLabel(source || sourceKey);
-    const killer = Neo.resolveKillerPresentation(sourceKey, sourceLabel, options.attacker);
+    const killer = Neo.resolveKillerPresentation({
+      sourceKey,
+      sourceLabel,
+      attacker: options.attacker,
+      spriteKey: options.killerSpriteKey || options.spriteKey || '',
+      hazardIcon: options.killerHazardIcon || options.hazardIcon || '',
+    });
     Neo.lastDamageSource = killer.label;
     Neo.lastDamageSourceKey = killer.sourceKey;
     Neo.lastDamageSourceSpriteKey = killer.spriteKey;
@@ -789,6 +795,7 @@
             // death screen with the status that finished the player off.
             sourceKey: inflictorKey,
             sourceLabel: `${inflictorLabel} (${statusKey})`,
+            killerSpriteKey: state.sourceSpriteKey || '',
           });
         } else {
           damagePlayer(damage, 0, 0, statusKey, { ignoreInv: true, noInvFrames: true });
@@ -2280,6 +2287,22 @@
       } else {
         const findProjectileTarget = globalThis.NeoNyke?.simulation?.findCampaignProjectileEntitySweepHit;
         if (typeof findProjectileTarget !== 'function') throw new Error('Shared projectile target sweep is unavailable');
+        const hitAlly = findProjectileTarget(
+          projectile,
+          { x: prevX, y: prevY },
+          Object.values(Neo.allies || {}).filter(ally => ally?.status === 'active'),
+          { getId: ally => ally?.id },
+        )?.entity;
+        if (hitAlly) {
+          const result = Neo.damageAlly?.(hitAlly.id, projectile.damage || 10, { attacker: projectile.owner });
+          if (result?.died) {
+            Neo.spawnParticle?.({ x: hitAlly.x, y: hitAlly.y - 20, life: 0.9, text: result.respawning ? 'RESPAWNING' : 'ALLY DOWN', c: '#ff708d' });
+          }
+          detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
+          spawnProjectileImpact(projectile, projectile.x, projectile.y);
+          removeProjectileAt(index);
+          continue;
+        }
         const hitSlot = findProjectileTarget(
           projectile,
           { x: prevX, y: prevY },
@@ -3474,6 +3497,7 @@
       const result = globalThis.NeoNyke.simulation.openCampaignChest(chest, {
         floorNumber: Neo.floor,
         random: chestRandom,
+        allowBlackItems: Neo.areBlackItemsUnlocked?.() !== false,
         groupId: `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`,
       });
       if (!result.ok) return;
@@ -4407,7 +4431,13 @@
     p.square = props.square ?? null;
     p.explosionCore = props.explosionCore ?? null;
     p.blood = props.blood ?? null;
-    p.ring = props.ring ?? null;
+    // Several call sites derive a ring radius by subtracting from an ability's
+    // radius (e.g. `aoeRadius - 24`), which goes negative when that ability is
+    // small — and ctx.arc() throws IndexSizeError on a negative radius. Clamp
+    // once here so no call site can seed an unrenderable ring. A tick then
+    // grows it (+200/s), so an unclamped negative would keep throwing every
+    // frame until it climbed back above zero.
+    p.ring = props.ring == null ? null : Math.max(0, Number(props.ring) || 0);
     p.style = props.style ?? null;
     p.maxLife = props.maxLife ?? null;
     p.radius = props.radius ?? null;

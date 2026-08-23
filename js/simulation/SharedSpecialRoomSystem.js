@@ -40,8 +40,10 @@
     .filter(([key, value]) => Number(value) > 0 && !key.startsWith('voucher_') && !key.startsWith('scroll_') && key !== 'forge_voucher')
     .map(([key, value]) => ({ key, count: Math.floor(Number(value)) }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
-  const grantItem = (player, random, elite = false, excludeKeys = []) => {
-    const key = itemApi.rollCampaignItem(random, { elite, excludeKeys });
+  // `allowBlackItems` gates the loop-locked BLACK tier out of every special-room
+  // reward; applySpecialRoomChoice binds it from the run's loop index.
+  const grantItem = (player, random, elite = false, excludeKeys = [], allowBlackItems = true) => {
+    const key = itemApi.rollCampaignItem(random, { elite, excludeKeys, allowBlackItems });
     if (key) inventoryApi.collectCampaignItem(player, key);
     return key;
   };
@@ -61,6 +63,13 @@
       return { ok: false, reason: 'LOOP_CONTENT_LOCKED' };
     }
     const floor = Math.max(1, Number(state.floorNumber || 1));
+    // Practice/Sandbox hand the answer in directly; a real run derives it from
+    // how deep into the loop campaign it is.
+    const allowBlackItems = typeof state.allowBlackItems === 'boolean'
+      ? state.allowBlackItems
+      : loopIndex >= Number(itemApi.BLACK_ITEM_UNLOCK_LOOP_INDEX ?? 5);
+    const grantRolledItem = (target, rng, elite = false, excludeKeys = []) =>
+      grantItem(target, rng, elite, excludeKeys, allowBlackItems);
     const relics = mutableRelics(player);
     let result = '';
     let rewardKey = '';
@@ -80,11 +89,11 @@
       } else if (choiceId === 'relic') {
         const relic = relics[relics.length - 1];
         if (!relic || !removeItem(player, relic.key)) return { ok: false, reason: 'NO_RELIC' };
-        rewardKey = grantItem(player, random, true, [relic.key]); result = 'Relic ascended';
+        rewardKey = grantRolledItem(player, random, true, [relic.key]); result = 'Relic ascended';
       } else {
         state.floorState.curses = { ...(state.floorState.curses || {}), obscureMap: true };
         if (player.activeBounty) player.activeBounty.rewardMultiplier = Math.max(1, Number(player.activeBounty.rewardMultiplier || 1)) * 2;
-        rewardKey = grantItem(player, random, true);
+        rewardKey = grantRolledItem(player, random, true);
         inventoryApi.collectCampaignItem(player, 'forge_voucher'); result = 'Covenant sealed';
       }
     } else if (room.type === 'bounty') {
@@ -100,7 +109,7 @@
       if (choiceId === 'fuse') {
         const relic = relics.find(entry => entry.count >= 2);
         if (!relic || !removeItem(player, relic.key, 2)) return { ok: false, reason: 'NO_DUPLICATE' };
-        rewardKey = grantItem(player, random, true, [relic.key]); result = 'Relic ascended';
+        rewardKey = grantRolledItem(player, random, true, [relic.key]); result = 'Relic ascended';
       } else if (choiceId === 'distill') {
         const relic = relics[relics.length - 1];
         if (!relic || !removeItem(player, relic.key)) return { ok: false, reason: 'NO_RELIC' };
@@ -168,18 +177,18 @@
         if (roll === 0) player.hp = player.maxHp;
         else if (roll === 1) grantXp(45 + floor * 4);
         else if (roll === 2) player.coins += 60;
-        else rewardKey = grantItem(player, random, false);
+        else rewardKey = grantRolledItem(player, random, false);
         result = 'The well answers';
       } else if (choiceId === 'deep') {
         if (!spend(player, deepCost)) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
         const roll = Math.floor(random.next() * 4);
-        if (roll === 0) rewardKey = grantItem(player, random, true);
+        if (roll === 0) rewardKey = grantRolledItem(player, random, true);
         else if (roll === 1) { player.maxHp += 20; player.hp += 20; }
         else if (roll === 2) inventoryApi.collectCampaignItem(player, 'forge_voucher', { amount: 2 });
         result = roll === 3 ? 'The well is dry' : 'The well answers';
       } else {
         if (player.maxHp - hpCost < 30) return { ok: false, reason: 'LOW_MAX_HP' };
-        player.maxHp -= hpCost; player.hp = Math.min(player.hp, player.maxHp); rewardKey = grantItem(player, random, true); result = 'Blood wish answered';
+        player.maxHp -= hpCost; player.hp = Math.min(player.hp, player.maxHp); rewardKey = grantRolledItem(player, random, true); result = 'Blood wish answered';
       }
     } else if (room.type === 'chronicle') {
       if (choiceId === 'recall') {
@@ -219,7 +228,7 @@
       } else if (choiceId === 'regeneration') {
         player.maxHp = Number(player.maxHp || 0) + 25; player.hp = player.maxHp; result = 'Regeneration spliced';
       } else {
-        rewardKey = grantItem(player, random, true); result = 'Adaptation spliced';
+        rewardKey = grantRolledItem(player, random, true); result = 'Adaptation spliced';
       }
     } else if (room.type === 'observatory') {
       if (choiceId === 'chart') {
@@ -229,7 +238,7 @@
         });
         result = 'The unseen is charted';
       } else if (choiceId === 'star') {
-        rewardKey = grantItem(player, random, true); result = 'A dead star is caught';
+        rewardKey = grantRolledItem(player, random, true); result = 'A dead star is caught';
       } else {
         player.moveSpeed = Number(player.moveSpeed || 228) + 12;
         grantXp(40);
@@ -239,7 +248,7 @@
       if (choiceId === 'purchase') {
         const cost = 120 + floor * 10;
         if (!spend(player, cost)) return { ok: false, reason: 'INSUFFICIENT_FUNDS' };
-        rewardKey = grantItem(player, random, true); result = 'The impossible changes hands';
+        rewardKey = grantRolledItem(player, random, true); result = 'The impossible changes hands';
       } else if (choiceId === 'sell_life') {
         if (Number(player.maxHp || 0) < 46) return { ok: false, reason: 'LOW_MAX_HP' };
         player.maxHp -= 15; player.hp = player.maxHp; player.coins = Number(player.coins || 0) + 200;

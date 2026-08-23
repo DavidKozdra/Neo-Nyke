@@ -253,6 +253,15 @@ export function resumeGame() {
     return mode === 'practice' || mode === 'sandbox';
   }
 
+  // BLACK relics only enter the drop tables after loop 5 (so a normal run first
+  // meets them on loop 6). Practice and Sandbox are exempt for the same reason
+  // they earn no progression: they are toy boxes for trying locked content, and
+  // their pools are hand-picked by the player anyway.
+  function areBlackItemsUnlocked() {
+    if (isMetaProgressBlockedMode()) return true;
+    return !!globalThis.NeoNyke?.simulation?.areBlackItemsUnlocked?.(Neo.runLoopIndex);
+  }
+
   // Coerces a saved/partial rival-curse blob into the canonical shape, so old
   // saves (without the field) and corrupt values land on safe defaults.
   function normalizeRivalCurses(input) {
@@ -1040,6 +1049,7 @@ export function resumeGame() {
     Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
     const maxHp = Math.round((Neo.PLAYER_BASE_MAX_HP || 120) * (character.hpMultiplier || 1));
     return {
+      id: 'local-player-1',
       character: character.key,
       x: Neo.START_X,
       y: Neo.START_Y,
@@ -1109,6 +1119,7 @@ export function resumeGame() {
       weaponBeamTick: 0,
       equippedMoves,
       ownedMoves,
+      recruitedAllyIds: [],
       moveStackOverrides: {},
       weaponChargeOverrides: {},
       lavaWalkTime: 0,
@@ -2704,6 +2715,13 @@ export function resumeGame() {
     if (killerSpriteMap[normalized]) return killerSpriteMap[normalized];
     const normalizedKey = normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     if (hasSprite(normalizedKey)) return normalizedKey;
+    const enemyDef = globalThis.NeoNyke?.content?.ENEMY_CATALOG?.[normalizedKey];
+    if (enemyDef) {
+      const renderedKey = Neo.getEnemySpriteKey?.({ type: normalizedKey, spriteKey: enemyDef.spriteKey })
+        || enemyDef.spriteKey;
+      if (renderedKey && renderedKey !== normalizedKey) return resolveKillerSprite(renderedKey);
+      if (hasSprite(renderedKey)) return renderedKey;
+    }
     const rivalCharacterKey = normalizedKey.replace(/^rival_+/, '');
     if (Neo.RIVAL_DEFS?.[rivalCharacterKey] && Neo.SPRITE_DEFS[rivalCharacterKey]) return rivalCharacterKey;
     const legacyRival = Object.entries(Neo.RIVAL_DEFS || {}).find(([, def]) => String(def?.name || '').trim().toLowerCase() === normalized);
@@ -2747,6 +2765,8 @@ export function resumeGame() {
 
   function getAttackerSpriteKey(attacker) {
     if (!attacker || typeof attacker !== 'object') return '';
+    const renderedKey = Neo.getActorRenderSpriteKey?.(attacker);
+    if (renderedKey) return String(renderedKey);
     if (attacker.type === 'rival') {
       return String(attacker.rivalData?.characterKey || attacker.rivalKey || attacker.characterKey || '');
     }
@@ -2785,7 +2805,8 @@ export function resumeGame() {
     const ctx = canvas.getContext('2d');
     ctx?.clearRect(0, 0, canvas.width, canvas.height);
     if (killer.spriteKey && typeof Neo.drawSpriteToCanvas === 'function') {
-      Neo.drawSpriteToCanvas(canvas, killer.spriteKey, size);
+      const portraitKey = Neo.getPortraitSpriteKey?.(killer.spriteKey) || killer.spriteKey;
+      Neo.drawSpriteToCanvas(canvas, portraitKey, size);
     } else if (killer.hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
       Neo.drawHazardKillerIcon(canvas, killer.hazardIcon);
     }
@@ -4368,6 +4389,8 @@ export function resumeGame() {
     // floorsEntered to their starting floor explicitly.
     Neo.floorsEntered = 0;
     Neo.enemies = [];
+    Neo.allies = {};
+    Neo.allyIdSeq = 1;
     Neo.deadBodies = [];
     Neo.particles = [];
     Neo.playerDeathAnim = null;
@@ -4551,6 +4574,11 @@ export function resumeGame() {
       resetMultiplayerState();
     }
     Neo.enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(Neo.migrateEnemyState) : [];
+    Neo.allies = snapshot.allies && typeof snapshot.allies === 'object' && !Array.isArray(snapshot.allies)
+      ? Object.fromEntries(Object.entries(snapshot.allies).map(([id, ally]) => [id,
+        globalThis.NeoNyke?.simulation?.normalizeAllyRecord?.(ally, snapshot.player) || ally]))
+      : {};
+    Neo.allyIdSeq = Math.max(1, Number(snapshot.allyIdSeq || 1));
     Neo.deadBodies = Array.isArray(snapshot.deadBodies) ? snapshot.deadBodies : [];
     Neo.particles = [];
     Neo.projectiles = snapshot.projectiles || [];
@@ -4571,6 +4599,8 @@ export function resumeGame() {
       Neo.currentRoom.hazards = Array.isArray(Neo.currentRoom.hazards) ? Neo.currentRoom.hazards : Neo.hazards;
       Neo.currentRoom.shopOffers = Array.isArray(Neo.currentRoom.shopOffers) ? Neo.currentRoom.shopOffers : Neo.shopOffers;
       Neo.currentRoom.shopWeaponOffers = Array.isArray(Neo.currentRoom.shopWeaponOffers) ? Neo.currentRoom.shopWeaponOffers : [];
+      Neo.currentRoom.shopAllyOffers = Array.isArray(Neo.currentRoom.shopAllyOffers) ? Neo.currentRoom.shopAllyOffers : [];
+      Neo.currentRoom.shopHasAllies = !!Neo.currentRoom.shopHasAllies;
       Neo.currentRoom.structures = Array.isArray(Neo.currentRoom.structures) ? Neo.currentRoom.structures : Neo.structures;
       Neo.currentRoom.decorations = Array.isArray(Neo.currentRoom.decorations) ? Neo.currentRoom.decorations : Neo.decorations;
       refreshRoomShopCosts(
@@ -4678,6 +4708,7 @@ export function resumeGame() {
   Neo.CUSTOM_CHARACTER_STAT_MAX = CUSTOM_CHARACTER_STAT_MAX;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.isMetaProgressBlockedMode = isMetaProgressBlockedMode;
+  Neo.areBlackItemsUnlocked = areBlackItemsUnlocked;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
   Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
   Neo.createDefaultTutorialState = createDefaultTutorialState;

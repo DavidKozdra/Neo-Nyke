@@ -978,7 +978,7 @@ describe('authored campaign enemy behaviors on the authority', () => {
     const turrets = room.hazards.filter(hazard => hazard.kind === 'holy_turret' && hazard.ownerId === rival.id);
     expect(turrets).toHaveLength(3);
     expect(turrets).toEqual(expect.arrayContaining([expect.objectContaining({
-      r: 26, ttl: expect.any(Number), interval: 0.6, range: 360, burstRadius: 56, damage: 32,
+      r: 26, ttl: expect.any(Number), interval: 0.9, range: 300, burstRadius: 48, damage: 19,
     })]));
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'PLAYER_HIT', data: expect.objectContaining({ enemyId: rival.id, attackKind: 'holy_turrets', knockbackMagnitude: 120 }),

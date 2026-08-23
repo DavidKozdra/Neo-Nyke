@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEO NYKE — Particle Lab</title>
+  <style>
+    :root { color-scheme: dark; --bg:#06090d; --panel:#0d131b; --line:#263747; --cyan:#5ce7f2; --text:#e0edf2; --muted:#8197a3; --warn:#ffb454; font-family:Inter,system-ui,sans-serif; }
+    * { box-sizing:border-box; } html,body { height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--text); }
+    button,input,select { font:inherit; color:inherit; } button,select,input[type=number],input[type=text] { min-height:34px; border:1px solid var(--line); border-radius:6px; background:#111a24; }
+    button { padding:7px 10px; cursor:pointer; } button:hover { border-color:var(--cyan); }
+    button.primary { background:var(--cyan); border-color:var(--cyan); color:#041014; font-weight:900; }
+    button.active { border-color:var(--cyan); background:#14232b; }
+    input[type=range] { width:100%; accent-color:var(--cyan); }
+    input[type=color] { width:100%; height:34px; background:#111a24; border:1px solid var(--line); border-radius:6px; padding:2px; }
+    input[type=number],input[type=text] { width:100%; padding:6px 8px; }
+    .app { height:100%; display:grid; grid-template-rows:54px minmax(0,1fr); }
+    header { display:flex; align-items:center; gap:10px; padding:9px 13px; border-bottom:1px solid var(--line); background:#090e14; }
+    .brand { color:var(--cyan); font-weight:900; letter-spacing:.14em; } header .spacer { flex:1; }
+    header .hint { color:var(--muted); font-size:11px; }
+    main { min-height:0; display:grid; grid-template-columns:224px minmax(0,1fr) 300px; }
+    aside { min-height:0; overflow:auto; background:var(--panel); }
+    aside:first-child { border-right:1px solid var(--line); } aside:last-child { border-left:1px solid var(--line); }
+    section { padding:14px; border-bottom:1px solid var(--line); }
+    h2 { margin:0 0 11px; color:#a9c0ca; font-size:11px; letter-spacing:.16em; text-transform:uppercase; }
+    .types { display:grid; gap:5px; }
+    .types button { text-align:left; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; }
+    .types button small { color:var(--muted); font-size:10px; }
+    .stage { position:relative; min-width:0; min-height:0; display:grid; place-items:center; overflow:hidden;
+      background-color:#090d12;
+      background-image:linear-gradient(45deg,#101821 25%,transparent 25%),linear-gradient(-45deg,#101821 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#101821 75%),linear-gradient(-45deg,transparent 75%,#101821 75%);
+      background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
+    #stageCanvas { max-width:calc(100% - 28px); max-height:calc(100% - 28px); box-shadow:0 24px 80px #000b; cursor:crosshair; touch-action:none; }
+    .status { position:absolute; left:12px; bottom:10px; display:flex; gap:6px; flex-wrap:wrap; }
+    .chip { padding:5px 8px; border:1px solid #263747aa; border-radius:5px; color:var(--muted); background:#080d13dd; font-size:10px; font-variant-numeric:tabular-nums; }
+    .chip b { color:var(--text); font-weight:700; }
+    .chip.warn { color:var(--warn); border-color:#ffb45455; }
+    .field { margin-bottom:11px; }
+    .field label { display:flex; justify-content:space-between; margin-bottom:5px; color:var(--muted); font-size:11px; }
+    .field output { color:var(--text); font-variant-numeric:tabular-nums; }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .buttons { display:grid; grid-template-columns:1fr 1fr; gap:7px; } .buttons .wide { grid-column:1/-1; }
+    .swatches { display:grid; grid-template-columns:repeat(8,1fr); gap:4px; margin-top:6px; }
+    .swatch { height:20px; border-radius:4px; border:1px solid #0006; cursor:pointer; padding:0; min-height:0; }
+    .note { color:var(--muted); font-size:10.5px; line-height:1.5; margin:8px 0 0; }
+    .presets { display:grid; gap:5px; }
+    .presets button { text-align:left; font-size:12px; }
+    code { color:var(--cyan); font-family:ui-monospace,monospace; font-size:10.5px; }
+    #emitCode { width:100%; height:112px; resize:vertical; padding:8px; border:1px solid var(--line); border-radius:6px;
+      background:#080d13; color:#cfe6ee; font-family:ui-monospace,monospace; font-size:10.5px; line-height:1.5; white-space:pre; overflow:auto; }
+    .row { display:flex; gap:7px; align-items:center; }
+    .row label { color:var(--muted); font-size:11px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="brand">PARTICLE LAB</span>
+    <span class="hint">Click / drag the canvas to emit at that point · Space pauses · C clears</span>
+    <span class="spacer"></span>
+    <button id="pauseBtn">Pause</button>
+    <button id="clearBtn">Clear</button>
+    <button id="burstBtn" class="primary">Burst ×25</button>
+  </header>
+  <main>
+    <aside>
+      <section>
+        <h2>Particle type</h2>
+        <div class="types" id="typeList"></div>
+      </section>
+      <section>
+        <h2>Presets</h2>
+        <div class="presets" id="presetList"></div>
+        <p class="note">Real spawn calls lifted from the game, so each preset reproduces that effect exactly.</p>
+      </section>
+    </aside>
+
+    <div class="stage">
+      <canvas id="stageCanvas" width="900" height="700"></canvas>
+      <div class="status">
+        <span class="chip">alive <b id="statCount">0</b></span>
+        <span class="chip">rate <b id="statRate">0</b>/s</span>
+        <span class="chip">fps <b id="statFps">0</b></span>
+        <span class="chip" id="statCap">cap 260</span>
+      </div>
+    </div>
+
+    <aside>
+      <section>
+        <h2>Emission</h2>
+        <div class="field">
+          <label>Rate <output id="rateOut">30/s</output></label>
+          <input type="range" id="rate" min="0" max="1200" step="1" value="30">
+        </div>
+        <div class="row" style="margin-bottom:11px">
+          <input type="checkbox" id="continuous" checked>
+          <label for="continuous">Emit continuously (off = click only)</label>
+        </div>
+        <div class="field">
+          <label>Spread <output id="spreadOut">360°</output></label>
+          <input type="range" id="spread" min="0" max="360" step="1" value="360">
+        </div>
+        <div class="field">
+          <label>Speed <output id="speedOut">120</output></label>
+          <input type="range" id="speed" min="0" max="1800" step="5" value="120">
+        </div>
+        <div class="field">
+          <label>Speed jitter <output id="jitterOut">40%</output></label>
+          <input type="range" id="jitter" min="0" max="100" step="1" value="40">
+        </div>
+        <div class="field">
+          <label>Particle cap <output id="capOut">260</output></label>
+          <input type="range" id="cap" min="24" max="780" step="4" value="260">
+        </div>
+        <p class="note">260 is the game's own cull (<code>MAX_PARTICLES</code>). Raise it to see what a rate would look like unculled — the cap chip shows <code>*</code> while it differs.</p>
+      </section>
+
+      <section>
+        <h2>Particle</h2>
+        <div class="field">
+          <label>Life <output id="lifeOut">0.60s</output></label>
+          <input type="range" id="life" min="0.05" max="9" step="0.05" value="0.6">
+        </div>
+        <div class="field">
+          <label>Size <output id="sizeOut">4</output></label>
+          <input type="range" id="size" min="1" max="120" step="0.5" value="4">
+        </div>
+        <div class="field">
+          <label>Radius <span style="font-size:10px">(ring / shockwave / core)</span> <output id="radiusOut">48</output></label>
+          <input type="range" id="radius" min="0" max="720" step="1" value="48">
+        </div>
+        <div class="two">
+          <div class="field">
+            <label>Drag <output id="dragOut">0</output></label>
+            <input type="range" id="drag" min="0" max="36" step="0.1" value="0">
+          </div>
+          <div class="field">
+            <label>Grow <output id="growOut">0</output></label>
+            <input type="range" id="grow" min="-120" max="240" step="1" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Spin <output id="spinOut">0</output></label>
+          <input type="range" id="spin" min="-60" max="60" step="0.5" value="0">
+        </div>
+        <div class="field">
+          <label>Colour</label>
+          <input type="color" id="color" value="#5ce7f2">
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="row" id="confettiField" style="margin-bottom:11px" hidden>
+          <input type="checkbox" id="confettiColors" checked>
+          <label for="confettiColors">Use the game's 7-colour confetti palette</label>
+        </div>
+        <div class="field" id="textField" hidden>
+          <label>Text</label>
+          <input type="text" id="text" value="1234">
+        </div>
+        <div class="row" style="margin-top:4px">
+          <input type="checkbox" id="groundFx">
+          <label for="groundFx">groundFx layer</label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Spawn call</h2>
+        <div id="emitCode"></div>
+        <div class="buttons" style="margin-top:9px">
+          <button class="wide" id="copyBtn">Copy spawnParticle call</button>
+        </div>
+        <p class="note">Uses the game's real <code>drawParticles()</code> from <code>js/draw/hud.js</code>, plus a verbatim copy of the <code>updateParticles</code> tick — so behaviour here matches the game exactly.</p>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script type="module">
+// The lab drives the GAME's own renderer rather than a lookalike: js/draw/hud.js
+// is an import-free IIFE whose drawParticles() needs only five Neo members, all
+// provided below. Anything that renders here renders identically in-game.
+const canvas = document.getElementById('stageCanvas');
+const ctx = canvas.getContext('2d');
+
+const Neo = window.Neo = {
+  ctx,
+  particles: [],
+  AOE_SHOCKWAVE_LIFE: 0.36,                       // mirrors core/game-core.js
+  clamp: (v, min, max) => Math.min(max, Math.max(min, v)),
+};
+// drawParticles reads window.NeoSettings for the perf/accessibility branches.
+// Report "not performance mode" so the full-glow path renders, matching how the
+// effect looks with settings at their most permissive.
+window.NeoSettings = { isPerformanceMode: () => false, getAccess: () => ({}) };
+
+await import('../js/draw/hud.js');
+
+// ---- Verbatim copies of world.js particle state ---------------------------
+// spawnParticle's field list, the +200/s ring growth, blood gravity, drag,
+// spin/grow integration and the MAX_PARTICLES cull are reproduced exactly as
+// js/game/world.js has them, so lifetimes and motion match the real game.
+const GAME_MAX_PARTICLES = 260;                 // js/game/world.js
+// The cull is what the game ships, but it would silently eat everything above
+// 260 and make the high end of the rate/life sliders unreachable. Keep the game
+// value as the default and let it be raised for stress work; the chip below
+// flags whenever the active cap differs from the shipping one.
+let maxParticles = GAME_MAX_PARTICLES;
+
+function spawnParticle(props) {
+  const p = {
+    x: props.x, y: props.y, life: props.life,
+    c: props.c ?? null, vx: props.vx ?? 0, vy: props.vy ?? 0,
+    text: props.text ?? null, size: props.size ?? null,
+    outline: props.outline ?? null, line: props.line ?? null,
+    shockwave: props.shockwave ?? null, impact: props.impact ?? null,
+    spark: props.spark ?? null, smoke: props.smoke ?? null,
+    square: props.square ?? null, explosionCore: props.explosionCore ?? null,
+    blood: props.blood ?? null,
+    // Same clamp world.js applies: ctx.arc() throws IndexSizeError on a
+    // negative radius, and the +200/s growth would keep it throwing.
+    ring: props.ring == null ? null : Math.max(0, Number(props.ring) || 0),
+    style: props.style ?? null, maxLife: props.maxLife ?? null,
+    radius: props.radius ?? null, angle: props.angle ?? null,
+    rotation: props.rotation ?? 0, spin: props.spin ?? 0,
+    drag: props.drag ?? 0, grow: props.grow ?? 0,
+    reducedFlash: props.reducedFlash ?? false,
+    groundFx: props.groundFx ?? false, silhouette: props.silhouette ?? null,
+    // Lab-only fields for confetti, which in-game lives in its own system
+    // (unlock-banner.js) rather than in the shared particle list.
+    confetti: props.confetti ?? null, ttl: props.ttl ?? null,
+    vr: props.vr ?? 0, sway: props.sway ?? 0,
+  };
+  Neo.particles.push(p);
+}
+
+function cullNonTextParticles(maxCount) {
+  if (Neo.particles.length <= maxCount) return;
+  let removeCount = Neo.particles.length - maxCount;
+  let writeIndex = 0;
+  for (let index = 0; index < Neo.particles.length; index += 1) {
+    const particle = Neo.particles[index];
+    if (removeCount > 0 && !particle.text) { removeCount -= 1; }
+    else { Neo.particles[writeIndex] = particle; writeIndex += 1; }
+  }
+  Neo.particles.length = writeIndex;
+}
+
+function updateParticles(dt) {
+  cullNonTextParticles(maxParticles);
+  let writeIndex = 0;
+  for (let index = 0; index < Neo.particles.length; index += 1) {
+    const particle = Neo.particles[index];
+    particle.life -= dt;
+    // Confetti is its own system in-game (js/ui/unlock-banner.js: a separate
+    // full-screen DOM canvas with its own rAF loop, never Neo.particles). Its
+    // motion is reproduced verbatim here — gravity 900, 0.99 horizontal decay,
+    // and a sinusoidal 40px sway — so the lab shows the real celebration.
+    if (particle.confetti) {
+      particle.vy += 900 * dt;
+      particle.vx *= 0.99;
+      particle.sway += dt * 6;
+      particle.x += (particle.vx + Math.sin(particle.sway) * 40) * dt;
+      particle.y += particle.vy * dt;
+      particle.rotation += particle.vr * dt;
+      if (particle.life > 0) { Neo.particles[writeIndex] = particle; writeIndex += 1; }
+      continue;
+    }
+    if (particle.blood) particle.vy = Math.min(220, particle.vy + 390 * dt);
+    if (particle.drag > 0) {
+      const drag = Math.exp(-particle.drag * dt);
+      particle.vx *= drag; particle.vy *= drag;
+    }
+    if (particle.vx) particle.x += particle.vx * dt;
+    if (particle.vy) particle.y += particle.vy * dt;
+    if (particle.spin) particle.rotation += particle.spin * dt;
+    if (particle.grow) particle.size += particle.grow * dt;
+    if (particle.ring) particle.ring += 200 * dt;
+    if (particle.life > 0) { Neo.particles[writeIndex] = particle; writeIndex += 1; }
+  }
+  Neo.particles.length = writeIndex;
+}
+
+// The game's drawParticles() has no confetti branch — confetti draws itself on
+// its own canvas — so the lab renders it here with unlock-banner.js's exact
+// draw code: a rotated fillRect of size × size*0.6, fading over the last 0.5s.
+function drawConfetti() {
+  for (const p of Neo.particles) {
+    if (!p.confetti) continue;
+    const fade = p.life < 0.5 ? Math.max(0, p.life / 0.5) : 1;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    ctx.fillStyle = p.c;
+    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    ctx.restore();
+  }
+}
+
+// ---- Particle vocabulary --------------------------------------------------
+// Every branch drawParticles() can take. `build` returns the flag/props that
+// select that branch; `uses` drives which sliders are relevant.
+const CONFETTI_COLORS = ['#ffd27d', '#83f3ff', '#ff9ccf', '#7bffa3', '#c08cff', '#ffe26b', '#ff7a9a'];
+
+const TYPES = [
+  { id:'plain',    label:'Plain dot',  hint:'default',  uses:['vel'],
+    build:() => ({}) },
+  { id:'spark',    label:'Spark',      hint:'streak',   uses:['vel','size'],
+    build:s => ({ spark:true, size:s.size }) },
+  { id:'blood',    label:'Blood',      hint:'gravity',  uses:['vel','size'],
+    build:s => ({ blood:true, size:s.size }) },
+  { id:'smoke',    label:'Smoke',      hint:'soft',     uses:['vel','size'],
+    build:s => ({ smoke:true, size:s.size }) },
+  { id:'square',   label:'Square',     hint:'ember',    uses:['vel','size','spin'],
+    build:s => ({ square:true, size:s.size, maxLife:s.life, rotation:Math.random()*Math.PI*2 }) },
+  { id:'text',     label:'Text',       hint:'popup',    uses:['size','text'],
+    build:s => ({ text:s.text, size:Math.max(8, s.size * 3) }) },
+  { id:'ring',     label:'Ring',       hint:'grows',    uses:['radius'],
+    build:s => ({ ring:s.radius }) },
+  { id:'shockwave',label:'Shockwave',  hint:'AoE',      uses:['radius','style'],
+    build:s => ({ shockwave:true, radius:s.radius, maxLife:s.life, style:s.style || 'normal' }) },
+  { id:'core',     label:'Explosion core', hint:'flash', uses:['radius'],
+    build:s => ({ explosionCore:true, radius:s.radius, maxLife:s.life }) },
+  { id:'impact',   label:'Impact',     hint:'hit fan',  uses:['size'],
+    build:s => ({ impact:true, size:s.size, maxLife:s.life, angle:Math.random()*Math.PI*2 }) },
+  { id:'confetti', label:'Confetti',   hint:'celebration', uses:['vel','size'],
+    // Mirrors spawnConfetti() in js/ui/unlock-banner.js: an upward fan
+    // (-90° ± 126°) at 320–780px/s, 5–12px flakes, 1.8–3.0s ttl, random spin.
+    // Colours cycle the game's own CONFETTI_COLORS unless one is picked.
+    build: (s, x, y) => {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
+      const speed = 320 + Math.random() * 460;
+      const ttl = 1.8 + Math.random() * 1.2;
+      return {
+        confetti: true,
+        size: 5 + Math.random() * 7,
+        c: s.confettiUseGameColors ? CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)] : s.color,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 12,
+        sway: Math.random() * Math.PI * 2,
+        life: ttl, ttl,
+      };
+    } },
+  { id:'line',     label:'Line',       hint:'lightning',uses:[],
+    build:(s, x, y) => ({ line:{ x1:x-90, y1:y-60, x2:x+90, y2:y+60, w:4.5, seg:6, jag:12, phase:Math.random()*6 } }) },
+];
+
+// Real spawn calls from the game, so each preset is a faithful reproduction.
+const PRESETS = [
+  { label:'Ring burst (hit pop)',      type:'ring',      set:{ radius:38, life:0.35, color:'#a9d8ff' } },
+  { label:'AoE shockwave — heavy',     type:'shockwave', set:{ radius:140, life:0.36, color:'#ff66cc', style:'heavy' } },
+  { label:'Barrel explosion core',     type:'core',      set:{ radius:130, life:0.24, color:'#ff8a24' } },
+  { label:'Barrel debris (embers)',    type:'square',    set:{ size:5, life:0.6, speed:230, spread:360, color:'#ff9a35', drag:1.6, spin:9 } },
+  { label:'Prop break (dust sparks)',  type:'spark',     set:{ size:2.6, life:0.46, speed:120, spread:360, color:'#d9c2a4', drag:2.2 } },
+  { label:'Blood fleck',               type:'blood',     set:{ size:3, life:0.7, speed:170, spread:150, color:'#a5001e' } },
+  { label:'Damage popup',              type:'text',      set:{ size:5, life:0.9, speed:0, color:'#ffe06f' } },
+  { label:'Melee impact fan',          type:'impact',    set:{ size:6, life:0.24, speed:0, color:'#ffffff' } },
+  { label:'Lightning arc',             type:'line',      set:{ life:0.35, color:'#dfe8ff' } },
+  { label:'Smoke plume',               type:'smoke',     set:{ size:9, life:1.4, speed:34, spread:70, color:'#2d2620', drag:1.1, grow:16 } },
+  // Unlock banner (unlock-banner.js) — the default 140-flake celebration burst.
+  { label:'Confetti — unlock banner',  type:'confetti',  set:{ confettiUseGameColors:true, rate:0, continuous:false, clickBurst:140 } },
+  // Win screen (controller.js:5426) — 90 flakes per corner, fired as a pair.
+  { label:'Confetti — win screen ×90', type:'confetti',  set:{ confettiUseGameColors:true, rate:0, continuous:false, clickBurst:90 } },
+];
+
+// ---- UI state -------------------------------------------------------------
+const el = id => document.getElementById(id);
+const state = {
+  type: 'spark', rate: 30, continuous: true, spread: 360, speed: 120, jitter: 40,
+  life: 0.6, size: 4, radius: 48, drag: 0, grow: 0, spin: 0,
+  color: '#5ce7f2', text: '1234', groundFx: false, style: 'normal',
+  confettiUseGameColors: true, clickBurst: 12,
+};
+
+const typeList = el('typeList');
+TYPES.forEach(t => {
+  const b = document.createElement('button');
+  b.innerHTML = `<span>${t.label}</span><small>${t.hint}</small>`;
+  b.dataset.type = t.id;
+  b.onclick = () => { state.type = t.id; syncUI(); };
+  typeList.appendChild(b);
+});
+
+const presetList = el('presetList');
+PRESETS.forEach(p => {
+  const b = document.createElement('button');
+  b.textContent = p.label;
+  b.onclick = () => {
+    state.type = p.type;
+    Object.assign(state, p.set);
+    // A preset defines the whole look; reset anything it does not name so a
+    // leftover slider from the previous preset cannot distort it.
+    for (const k of ['drag','grow','spin']) if (!(k in p.set)) state[k] = 0;
+    if (!('speed' in p.set)) state.speed = 0;
+    if (!('style' in p.set)) state.style = 'normal';
+    // Confetti presets are one-shot bursts; a non-confetti preset must restore
+    // continuous emission and the default click size rather than inherit them.
+    if (!('clickBurst' in p.set)) state.clickBurst = 12;
+    if (!('continuous' in p.set)) state.continuous = true;
+    if (!('rate' in p.set)) state.rate = 30;
+    el('continuous').checked = state.continuous;
+    syncUI(); pushToInputs();
+  };
+  presetList.appendChild(b);
+});
+
+const SWATCHES = ['#5ce7f2','#ffffff','#ffe06f','#ff8a24','#ff3070','#a5001e','#b575ff','#85df63'];
+const swatches = el('swatches');
+SWATCHES.forEach(c => {
+  const b = document.createElement('button');
+  b.className = 'swatch'; b.style.background = c; b.title = c;
+  b.onclick = () => { state.color = c; el('color').value = c; syncUI(); };
+  swatches.appendChild(b);
+});
+
+const BINDINGS = [
+  ['rate','rate',v=>+v,   v=>`${v}/s`],
+  ['spread','spread',v=>+v, v=>`${v}°`],
+  ['speed','speed',v=>+v, v=>`${v}`],
+  ['jitter','jitter',v=>+v, v=>`${v}%`],
+  ['life','life',v=>+v,   v=>`${(+v).toFixed(2)}s`],
+  ['size','size',v=>+v,   v=>`${v}`],
+  ['radius','radius',v=>+v, v=>`${v}`],
+  ['drag','drag',v=>+v,   v=>`${v}`],
+  ['grow','grow',v=>+v,   v=>`${v}`],
+  ['spin','spin',v=>+v,   v=>`${v}`],
+];
+BINDINGS.forEach(([id, key, parse, fmt]) => {
+  const input = el(id); const out = el(id + 'Out');
+  input.addEventListener('input', () => { state[key] = parse(input.value); if (out) out.textContent = fmt(input.value); syncUI(); });
+});
+el('cap').addEventListener('input', e => {
+  maxParticles = Number(e.target.value) || GAME_MAX_PARTICLES;
+  el('capOut').textContent = maxParticles;
+});
+el('confettiColors').addEventListener('change', e => { state.confettiUseGameColors = e.target.checked; syncUI(); });
+el('color').addEventListener('input', e => { state.color = e.target.value; syncUI(); });
+el('text').addEventListener('input', e => { state.text = e.target.value; syncUI(); });
+el('continuous').addEventListener('change', e => { state.continuous = e.target.checked; });
+el('groundFx').addEventListener('change', e => { state.groundFx = e.target.checked; syncUI(); });
+
+function pushToInputs() {
+  BINDINGS.forEach(([id, key, , fmt]) => {
+    const input = el(id); const out = el(id + 'Out');
+    input.value = state[key];
+    if (out) out.textContent = fmt(state[key]);
+  });
+  el('color').value = state.color;
+  el('text').value = state.text;
+}
+
+function syncUI() {
+  [...typeList.children].forEach(b => b.classList.toggle('active', b.dataset.type === state.type));
+  el('textField').hidden = state.type !== 'text';
+  el('confettiField').hidden = state.type !== 'confetti';
+  el('confettiColors').checked = !!state.confettiUseGameColors;
+  el('emitCode').textContent = buildCodeSample();
+}
+
+// ---- Emission -------------------------------------------------------------
+function emitOne(x, y) {
+  const type = TYPES.find(t => t.id === state.type) || TYPES[0];
+  const spreadRad = (state.spread / 360) * Math.PI * 2;
+  const angle = (Math.random() - 0.5) * spreadRad - Math.PI / 2;
+  const jitter = 1 + (Math.random() - 0.5) * 2 * (state.jitter / 100);
+  const speed = state.speed * jitter;
+  const props = {
+    x, y, life: state.life, c: state.color,
+    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    drag: state.drag, grow: state.grow, spin: state.spin,
+    groundFx: state.groundFx,
+    ...type.build(state, x, y),
+  };
+  spawnParticle(props);
+  emitted += 1;
+}
+
+function buildCodeSample() {
+  const type = TYPES.find(t => t.id === state.type) || TYPES[0];
+  const extra = type.build(state, 450, 350);
+  const parts = [`x, y`, `life: ${state.life}`, `c: '${state.color}'`];
+  if (state.speed) parts.push(`vx, vy`);
+  for (const [k, v] of Object.entries(extra)) {
+    if (v === true) parts.push(`${k}: true`);
+    else if (typeof v === 'number') parts.push(`${k}: ${Math.round(v * 100) / 100}`);
+    else if (typeof v === 'string') parts.push(`${k}: '${v}'`);
+    else if (v && typeof v === 'object') parts.push(`${k}: { … }`);
+  }
+  for (const k of ['drag','grow','spin']) if (state[k]) parts.push(`${k}: ${state[k]}`);
+  if (state.groundFx) parts.push('groundFx: true');
+  return `Neo.spawnParticle({\n  ${parts.join(',\n  ')},\n});`;
+}
+
+el('copyBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText(buildCodeSample()); el('copyBtn').textContent = 'Copied'; }
+  catch { el('copyBtn').textContent = 'Copy failed'; }
+  setTimeout(() => { el('copyBtn').textContent = 'Copy spawnParticle call'; }, 1200);
+};
+
+// ---- Pointer --------------------------------------------------------------
+let pointer = { x: canvas.width / 2, y: canvas.height / 2, down: false };
+function canvasPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+    y: (e.clientY - rect.top) * (canvas.height / rect.height),
+  };
+}
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointer = { ...canvasPoint(e), down: true };
+  // A click always emits, even at rate 0 or with continuous off, so the tool
+  // is usable as a one-shot inspector.
+  if (!state.continuous || state.rate === 0) {
+    const n = Math.max(1, Math.round(state.clickBurst || 12));
+    for (let i = 0; i < n; i += 1) emitOne(pointer.x, pointer.y);
+  }
+});
+canvas.addEventListener('pointermove', e => { const p = canvasPoint(e); pointer.x = p.x; pointer.y = p.y; });
+canvas.addEventListener('pointerup', e => { pointer.down = false; canvas.releasePointerCapture(e.pointerId); });
+
+el('burstBtn').onclick = () => {
+  // Follows the active preset's burst size so "Confetti — unlock banner" fires
+  // the real 140 flakes rather than a generic 25.
+  const n = Math.max(1, Math.round(state.clickBurst === 12 ? 25 : state.clickBurst));
+  for (let i = 0; i < n; i += 1) emitOne(pointer.x, pointer.y);
+  el('burstBtn').textContent = `Burst ×${n}`;
+};
+el('clearBtn').onclick = () => { Neo.particles.length = 0; };
+let paused = false;
+el('pauseBtn').onclick = () => { paused = !paused; el('pauseBtn').textContent = paused ? 'Resume' : 'Pause'; };
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); el('pauseBtn').click(); }
+  if (e.key === 'c' || e.key === 'C') el('clearBtn').click();
+});
+
+// ---- Loop -----------------------------------------------------------------
+let last = performance.now();
+let emitAccumulator = 0;
+let emitted = 0, emitWindow = 0, shownRate = 0;
+let frames = 0, fpsWindow = 0, shownFps = 0;
+
+function frame(now) {
+  // Clamp dt so an alt-tab stall cannot dump a huge burst in one frame.
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (!paused) {
+    if (state.continuous && state.rate > 0) {
+      emitAccumulator += state.rate * dt;
+      // Emit whole particles, keeping the remainder so fractional rates stay
+      // accurate over time instead of rounding away.
+      const count = Math.floor(emitAccumulator);
+      emitAccumulator -= count;
+      for (let i = 0; i < count; i += 1) emitOne(pointer.x, pointer.y);
+    }
+    updateParticles(dt);
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  Neo.drawParticles('all');
+  drawConfetti();
+
+  // Emission origin marker
+  ctx.save();
+  ctx.globalAlpha = 0.5; ctx.strokeStyle = '#5ce7f2'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pointer.x - 7, pointer.y); ctx.lineTo(pointer.x + 7, pointer.y);
+  ctx.moveTo(pointer.x, pointer.y - 7); ctx.lineTo(pointer.x, pointer.y + 7); ctx.stroke();
+  ctx.restore();
+
+  frames += 1; fpsWindow += dt; emitWindow += dt;
+  if (fpsWindow >= 0.5) { shownFps = Math.round(frames / fpsWindow); frames = 0; fpsWindow = 0; }
+  if (emitWindow >= 0.5) { shownRate = Math.round(emitted / emitWindow); emitted = 0; emitWindow = 0; }
+
+  el('statCount').textContent = Neo.particles.length;
+  el('statRate').textContent = shownRate;
+  el('statFps').textContent = shownFps;
+  // Surface the game's own cull so a rate above what MAX_PARTICLES sustains is
+  // visibly explained rather than looking like dropped particles.
+  const capped = Neo.particles.length >= maxParticles;
+  const raised = maxParticles !== GAME_MAX_PARTICLES;
+  el('statCap').textContent = `cap ${maxParticles}${raised ? '*' : ''}${capped ? ' — culling' : ''}`;
+  el('statCap').title = raised
+    ? `Raised above the game's ${GAME_MAX_PARTICLES}-particle cull`
+    : `Matches the game's cull (world.js MAX_PARTICLES)`;
+  el('statCap').classList.toggle('warn', capped);
+
+  requestAnimationFrame(frame);
+}
+
+pushToInputs();
+syncUI();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
