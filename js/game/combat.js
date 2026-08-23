@@ -113,6 +113,15 @@
     });
   }
 
+  // Zoomies is Mooggy's dash buff (12s of 5x move speed). While it is running
+  // the player also hits 5% harder — see ZOOMIES_DAMAGE_MULTIPLIER in
+  // SharedDamageSystem, which the multiplayer authority reads from too.
+  function getZoomiesDamageMultiplier() {
+    return globalThis.NeoNyke.simulation.getCampaignZoomiesDamageMultiplier(
+      Number(Neo.player?.mooggyZoomiesTime || 0) > 0,
+    );
+  }
+
   function scaleDamageAgainstEnemy(enemy, damage, options = {}, cachedStats = null) {
     const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
@@ -130,6 +139,7 @@
       attackPower: Neo.player?.attackPower,
       attackerDamageMultiplier: characterMultiplier,
       poisonDamageMultiplier: poisonMultiplier,
+      zoomiesDamageMultiplier: getZoomiesDamageMultiplier(),
       isBoss,
       hasBleed: Neo.getStatusStacks(enemy, 'bleed') > 0,
       applyBleedBonus,
@@ -306,6 +316,7 @@
       * characterMultiplier
       * (s.levelEdgeDamageMultiplier || 1)
       * (s.kronosDamageMultiplier || 1)
+      * getZoomiesDamageMultiplier()
       * (Neo.isChallengeActive?.('glass_cannon') ? 1.25 : 1);
     return Math.max(1, Math.round(powered));
   }

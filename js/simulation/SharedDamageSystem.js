@@ -21,6 +21,15 @@
     ), 0);
   }
 
+  // Mooggy's Zoomies is otherwise a pure movement buff. While it is up the
+  // player also deals +5% damage, so the window is worth entering a fight in
+  // rather than only worth running with.
+  const ZOOMIES_DAMAGE_MULTIPLIER = 1.05;
+
+  function getCampaignZoomiesDamageMultiplier(active) {
+    return active ? ZOOMIES_DAMAGE_MULTIPLIER : 1;
+  }
+
   function scaleCampaignDamage(options = {}) {
     const enemy = options.enemy || {};
     const stats = options.itemStats || {};
@@ -44,11 +53,18 @@
       * Math.max(0, Number(stats.kronosDamageMultiplier || 1))
       * bossMultiplier
       * Math.max(0, Number(options.bountyWeaknessMultiplier || 1))
+      * Math.max(0, Number(options.zoomiesDamageMultiplier || 1))
       * (options.glassCannon ? 1.25 : 1)
       * bleedMultiplier
       * factorOfElementsMultiplier;
     return Math.max(0, Math.round(powered * damageTakenMultiplier / defenseMultiplier - flatReduction));
   }
 
-  return { getCampaignEnemyDamageTakenMultiplier, getCampaignTotalStatusStacks, scaleCampaignDamage };
+  return {
+    ZOOMIES_DAMAGE_MULTIPLIER,
+    getCampaignEnemyDamageTakenMultiplier,
+    getCampaignTotalStatusStacks,
+    getCampaignZoomiesDamageMultiplier,
+    scaleCampaignDamage,
+  };
 });

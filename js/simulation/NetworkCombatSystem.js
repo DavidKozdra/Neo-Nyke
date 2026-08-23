@@ -143,6 +143,7 @@
     resolveRoomObstacleMovement = (_room, _entity, x, y) => ({ x, y, blockedX: false, blockedY: false }),
     circleIntersectsRoomObstacle = () => false,
     scaleCampaignDamage = options => Math.max(0, Number(options.damage || 0)),
+    getCampaignZoomiesDamageMultiplier = () => 1,
     resolveCampaignCrit = () => ({ isCrit: false, critMultiplier: 1 }),
     createCampaignStatusMap = () => ({}),
     ensureCampaignStatuses = entity => entity?.statuses || {},
@@ -2506,6 +2507,7 @@
       attackPower: attacker?.attackPower,
       attackerDamageMultiplier: Math.max(0.1, Number(attacker?.damageMultiplier || 1)),
       poisonDamageMultiplier: poisonMultiplier,
+      zoomiesDamageMultiplier: getPlayerZoomiesDamageMultiplier(state, attacker),
       isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
       hasBleed: getCampaignStatusStacks(enemy, 'bleed') > 0,
       applyBleedBonus: details.applyBleedBonus,
@@ -6882,6 +6884,7 @@
         itemStats: owner?.itemStats,
         attackPower: owner?.attackPower,
         attackerDamageMultiplier: Math.max(0.1, Number(owner?.damageMultiplier || 1)),
+        zoomiesDamageMultiplier: getPlayerZoomiesDamageMultiplier(state, owner),
         isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
         hasBleed: getCampaignStatusStacks(enemy, 'bleed') > 0,
         applyBleedBonus: key !== 'bleed',
@@ -7014,6 +7017,15 @@
   function livingRoomPlayers(state, roomId) {
     return Object.values(state.players || {})
       .filter(player => player && !player.downed && !player.disconnected && player.roomId === roomId);
+  }
+
+  // Mooggy's Zoomies grants +5% outgoing damage for as long as the speed buff
+  // runs. Campaign tracks this as player.mooggyZoomiesTime; the authority tracks
+  // it as a status deadline, so this is the authority-side read of the same buff.
+  function getPlayerZoomiesDamageMultiplier(state, player) {
+    if (!player) return 1;
+    const statusUntil = player.statusUntilTick || {};
+    return getCampaignZoomiesDamageMultiplier(state.tick < Number(statusUntil.mooggy_zoomies || 0));
   }
 
   function isPlayerConcealed(state, player) {
