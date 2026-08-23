@@ -54,6 +54,7 @@
       roomWeightBonus: 0,
       statMultiplier: 1,
       bossStatMultiplier: 0.8,
+      enemyDamageMultiplier: 0.85,
       bossHpGrowthMultiplier: 0.65,
       hpFloorScaleBonus: -0.045,
       eliteHpMultiplier: 0.6,
@@ -76,6 +77,7 @@
       roomWeightBonus: 0.05,
       statMultiplier: 1.06,
       bossStatMultiplier: 0.95,
+      enemyDamageMultiplier: 0.95,
       bossHpGrowthMultiplier: 0.9,
       itemDropChanceMultiplier: 1.1,
       hpFloorScaleBonus: -0.02,
@@ -97,6 +99,7 @@
       roomWeightBonus: 0.1,
       statMultiplier: 1.12,
       bossStatMultiplier: 1.16,
+      enemyDamageMultiplier: 1,
       bossHpGrowthMultiplier: 1.15,
       hpFloorScaleBonus: 0.02,
       speedMultiplier: 1.06,
@@ -120,6 +123,7 @@
       roomWeightBonus: 0.16,
       statMultiplier: 1.22,
       bossStatMultiplier: 1.28,
+      enemyDamageMultiplier: 1,
       bossHpGrowthMultiplier: 1.35,
       hpFloorScaleBonus: 0.05,
       speedMultiplier: 1.1,
@@ -144,6 +148,7 @@
       roomWeightBonus: 0.22,
       statMultiplier: 1.5,
       bossStatMultiplier: 1.6,
+      enemyDamageMultiplier: 1,
       bossHpGrowthMultiplier: 1.65,
       hpFloorScaleBonus: 0.08,
       speedMultiplier: 1.14,
@@ -171,6 +176,7 @@
       roomWeightBonus: 0,
       statMultiplier: 1,
       bossStatMultiplier: 1,
+      enemyDamageMultiplier: 1,
       bossHpGrowthMultiplier: 1,
       hpFloorScaleBonus: 0,
       speedMultiplier: 1,
@@ -188,6 +194,7 @@
     waveBonus: [0, 20],
     statMultiplier: [0.1, 10],
     bossStatMultiplier: [0.1, 10],
+    enemyDamageMultiplier: [0, 10],
     bossHpGrowthMultiplier: [0.1, 10],
     hpFloorScaleBonus: [-0.14, 2],
     speedMultiplier: [0.1, 5],
@@ -343,11 +350,15 @@
       0.3,
     );
     const damageSoftCap = isBoss ? (scaling.bossDamageSoftCap ?? 2.45) : (scaling.damageSoftCap ?? 2.15);
+    // This final difficulty modifier is intentionally outside the progression
+    // curve: Easy and Medium reduce every scaled enemy damage stat by their
+    // authored percentage without also changing HP, speed, or soft-cap timing.
+    const enemyDamageMultiplier = Math.max(0, Number(difficulty.enemyDamageMultiplier ?? 1));
     const damageScale = softCapEnemyScale(
       damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier * endlessDamageMultiplier,
       endlessWaveIndex > 0 ? Math.max(damageSoftCap, scaling.endlessWaveDamageSoftCap) : damageSoftCap,
       isBoss ? 0.38 : 0.34,
-    ) * bossLoopDamageMultiplier;
+    ) * bossLoopDamageMultiplier * enemyDamageMultiplier;
     const speedFloorMultiplier = 1 + floorsCleared * Number(scaling.speedFloor ?? 0.035);
     const speedLoopMultiplier = 1 + (loopNumber - 1) * Number(scaling.speedLoop ?? 0.07);
     const speedTimerMultiplier = 1 + gameMinutes * Number(scaling.speedMinute ?? 0.018);

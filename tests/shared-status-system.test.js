@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const {
   STATUS_EFFECT_KEYS,
   createCampaignStatusMap,
@@ -17,6 +18,30 @@ const {
 } = require('../js/simulation/SharedStatusSystem');
 
 describe('shared campaign status system', () => {
+  test('boots in the browser when a cached engine bundle lacks the expected status helpers', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedStatusSystem.js'), 'utf8');
+    const sandbox = {
+      KozEngine: {
+        Combat: { statusBook: {} },
+        Time: { stepTimer: {} },
+      },
+      NeoNyke: { simulation: {} },
+    };
+    sandbox.globalThis = sandbox;
+
+    vm.runInNewContext(source, sandbox, { filename: 'SharedStatusSystem.js' });
+
+    const browserApi = sandbox.NeoNyke.simulation;
+    const statuses = browserApi.createCampaignStatusMap();
+    expect(Object.keys(statuses)).toEqual(STATUS_EFFECT_KEYS);
+    expect(statuses.bleed).toEqual({ stacks: 0, duration: 0, tick: 0 });
+
+    const entity = {};
+    browserApi.applyCampaignStatus(entity, 'fire', 2, 3);
+    expect(entity.statuses.fire).toEqual(expect.objectContaining({ stacks: 2, duration: 3 }));
+    expect(() => browserApi.tickCampaignStatuses(entity, 0.1)).not.toThrow();
+  });
+
   test('creates and repairs the one canonical status-map shape', () => {
     const statuses = createCampaignStatusMap();
     expect(Object.keys(statuses)).toEqual(STATUS_EFFECT_KEYS);

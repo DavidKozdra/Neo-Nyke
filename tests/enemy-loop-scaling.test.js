@@ -153,19 +153,41 @@ describe('enemy loop scaling', () => {
   test('keeps Easy, Medium, and Hard boss tuning in the shared difficulty table', () => {
     expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.easy).toEqual(expect.objectContaining({
       bossStatMultiplier: 0.8,
+      enemyDamageMultiplier: 0.85,
       bossHpGrowthMultiplier: 0.65,
       bossProjectileSpeedMultiplier: 0.75,
     }));
     expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.medium).toEqual(expect.objectContaining({
       bossStatMultiplier: 0.95,
+      enemyDamageMultiplier: 0.95,
       bossHpGrowthMultiplier: 0.9,
       bossProjectileSpeedMultiplier: 0.9,
     }));
     expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard).toEqual(expect.objectContaining({
       bossStatMultiplier: 1.16,
+      enemyDamageMultiplier: 1,
       bossHpGrowthMultiplier: 1.15,
       bossProjectileSpeedMultiplier: 1.2,
     }));
+  });
+
+  test('reduces all Easy enemy damage by 15% and Medium enemy damage by 5%', () => {
+    const base = { maxHealth: 100, contactDamage: 200, moveSpeed: 100 };
+    const scaleDamage = enemyDamageMultiplier => scaleCampaignEnemyStats(base, {
+      progressionDepth: 1,
+      enemyLevel: 1,
+      difficulty: {
+        statMultiplier: 1,
+        bossStatMultiplier: 1,
+        speedMultiplier: 1,
+        enemyDamageMultiplier,
+      },
+    }).contactDamage;
+    const unchanged = scaleDamage(1);
+
+    expect(scaleDamage(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.easy.enemyDamageMultiplier)).toBe(Math.round(unchanged * 0.85));
+    expect(scaleDamage(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.medium.enemyDamageMultiplier)).toBe(Math.round(unchanged * 0.95));
+    expect(scaleDamage(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard.enemyDamageMultiplier)).toBe(unchanged);
   });
 
   test('reduces Easy and Medium boss health and damage from their previous profiles', () => {
@@ -229,7 +251,7 @@ describe('enemy loop scaling', () => {
       label: 'floor 1 Easy solo',
       base: { type: 'hunter', maxHealth: 84, contactDamage: 15, moveSpeed: 92, level: 1 },
       options: { type: 'hunter', progressionDepth: 1, enemyLevel: 1, elapsedSeconds: 0, difficultyKey: 'easy', partySize: 1 },
-      expected: { maxHealth: 80, contactDamage: 14, moveSpeed: 87.4, attackSpeed: 1 },
+      expected: { maxHealth: 80, contactDamage: 12, moveSpeed: 87.4, attackSpeed: 1 },
     },
     {
       label: 'floor 10 Hard duo',
@@ -247,7 +269,7 @@ describe('enemy loop scaling', () => {
       label: 'floor 7 Medium timed Cult Queen',
       base: { type: 'queen_cult', maxHealth: 912, contactDamage: 20, moveSpeed: 96, level: 9 },
       options: { type: 'queen_cult', isBoss: true, progressionDepth: 7, enemyLevel: 9, elapsedSeconds: 600, difficultyKey: 'medium', partySize: 1 },
-      expected: { maxHealth: 6230, contactDamage: 75, moveSpeed: 130.248992, attackSpeed: 1.171659 },
+      expected: { maxHealth: 6230, contactDamage: 71, moveSpeed: 130.248992, attackSpeed: 1.171659 },
     },
     {
       label: 'loop 2 God difficulty four-player final boss',

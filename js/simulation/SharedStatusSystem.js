@@ -21,8 +21,64 @@
   const MAX_STATUS_STACKS = 6;
   const COLD_SECONDS_PER_STACK = 15;
   const FIRE_FREEZE_DURATION_MULTIPLIER = 0.5;
-  const { createStatusMap, ensureStatusMap, clearStatusState, applyStackedStatus } = statusBook;
-  const { advanceCountdown, advanceInterval } = timerApi;
+
+  // The engine bundle and ES-module graph are cached as separate browser
+  // assets. During an update, an older bundle can briefly be paired with this
+  // module, so keep the campaign operational until the matching bundle takes
+  // control instead of capturing undefined helpers and crashing at Start Game.
+  const fallbackStatusBook = {
+    createStatusMap(keys) {
+      return Object.fromEntries((Array.isArray(keys) ? keys : []).map(key => [key, { stacks: 0, duration: 0, tick: 0 }]));
+    },
+    ensureStatusMap(entity, keys) {
+      if (!entity || typeof entity !== 'object') return fallbackStatusBook.createStatusMap(keys);
+      if (!entity.statuses || typeof entity.statuses !== 'object') entity.statuses = fallbackStatusBook.createStatusMap(keys);
+      for (const key of keys || []) {
+        if (!entity.statuses[key] || typeof entity.statuses[key] !== 'object') {
+          entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
+        }
+        const state = entity.statuses[key];
+        state.stacks = Math.max(0, Number(state.stacks || 0));
+        state.duration = Math.max(0, Number(state.duration || 0));
+        state.tick = Number(state.tick || 0);
+      }
+      return entity.statuses;
+    },
+    clearStatusState(state) {
+      if (!state || typeof state !== 'object') return state;
+      state.stacks = 0;
+      state.duration = 0;
+      state.tick = 0;
+      return state;
+    },
+    applyStackedStatus(state, { stacks = 0, duration = 0, maxStacks = Infinity } = {}) {
+      if (!state || typeof state !== 'object') return null;
+      state.stacks = Math.min(
+        Math.max(0, Number(maxStacks)),
+        Math.max(0, Number(state.stacks || 0)) + Math.max(0, Number(stacks || 0)),
+      );
+      state.duration = Math.max(Math.max(0, Number(state.duration || 0)), Math.max(0, Number(duration || 0)));
+      return { stacks: state.stacks, duration: state.duration };
+    },
+  };
+  const hasStatusBookApi = ['createStatusMap', 'ensureStatusMap', 'clearStatusState', 'applyStackedStatus']
+    .every(name => typeof statusBook?.[name] === 'function');
+  const statusApi = hasStatusBookApi ? statusBook : fallbackStatusBook;
+  const { createStatusMap, ensureStatusMap, clearStatusState, applyStackedStatus } = statusApi;
+
+  const fallbackTimerApi = {
+    advanceCountdown(remaining, delta) {
+      return Math.max(0, Number(remaining || 0) - Math.max(0, Number(delta || 0)));
+    },
+    advanceInterval(remaining, delta, interval) {
+      const period = Math.max(0.000001, Number(interval || 0));
+      const next = Number(remaining || 0) - Math.max(0, Number(delta || 0));
+      return next <= 0 ? { triggered: true, remaining: period } : { triggered: false, remaining: next };
+    },
+  };
+  const hasTimerApi = ['advanceCountdown', 'advanceInterval'].every(name => typeof timerApi?.[name] === 'function');
+  const resolvedTimerApi = hasTimerApi ? timerApi : fallbackTimerApi;
+  const { advanceCountdown, advanceInterval } = resolvedTimerApi;
 
   // Mirrors BLEED_RESIST_SCALING / STATUS_RESIST_SCALING in game-core.js. The
   // browser re-exports these same objects, so there is one set of numbers.
