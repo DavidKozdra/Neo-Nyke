@@ -859,6 +859,9 @@
     bowman_bane: { r: 36, hp: 2400, max: 2400, speed: 80, dmg: 50, attackCd: 1.4, phase: 1, bleedImmune: true, columnCd: 0, burstCd: 0, bowmanWarpCd: 2.8, thunderSmashCd: 0.6 },
     antony_blemmye: { r: 42, hp: 1250, max: 1250, speed: 78, dmg: 24, attackCd: 1.35, phase: 1, bleedImmune: true, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 },
     handsome_devil: { r: 34, hp: 1700, max: 1700, speed: 104, dmg: 50, attackCd: 1.1, phase: 1, fireImmune: true, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, clawCd: 0.4, giantLaserCd: 3.6, beamRange: 560 },
+    ent_of_pestilence: { r: 48, hp: 2050, max: 2050, speed: 82, dmg: 28, attackCd: 1.15, summonCd: 1.8, poisonImmune: true },
+    t_rex: { r: 58, hp: 2600, max: 2600, speed: 112, dmg: 42, attackCd: 1.05, bleedImmune: true, roarCd: 2.5 },
+    sea_snake: { r: 38, hp: 2350, max: 2350, speed: 156, dmg: 34, attackCd: 0.9, seaSnakeEntryTime: 2.4, seaSnakeCoilAngle: -Math.PI / 2, seaSnakeContactCd: 0 },
   };
 
   // Resolve a type's stat overrides: invoke the factory or return the flat object.
@@ -1015,6 +1018,262 @@
     const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return null;
     return spawnEnemy('god', safeSpawn.x, safeSpawn.y, false);
+  }
+
+  const BLACK_ITEM_BOSS_BY_KEY = Object.freeze({
+    bug_card: 'ent_of_pestilence',
+    dino_tooth: 't_rex',
+    heart_of_the_ocean: 'sea_snake',
+  });
+
+  function spawnBlackItemBoss(itemKey) {
+    const type = BLACK_ITEM_BOSS_BY_KEY[String(itemKey || '')];
+    if (!type || !Neo.player) return null;
+    const preferredX = type === 'sea_snake' ? Neo.ROOM_W / 2 : Neo.ROOM_W / 2;
+    const preferredY = type === 'sea_snake' ? Neo.WALL + 32 : Neo.ROOM_H / 2 - 70;
+    const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, type === 't_rex' ? 58 : 42)
+      || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 38);
+    if (!safeSpawn) return null;
+    const boss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, false, { level: Math.max(1, Number(Neo.player.level || 1)) });
+    if (!boss) return null;
+    boss.blackItemBoss = true;
+    boss.blackItemSource = itemKey;
+    boss.displayName = type === 'ent_of_pestilence'
+      ? 'Ent of Pestilence'
+      : type === 't_rex' ? 'T-Rex' : 'The Snake of the Sea';
+    if (type === 'sea_snake') {
+      boss.seaSnakeHole = { x: safeSpawn.x, y: Neo.WALL + 12, radius: 58 };
+      boss.seaSnakeSegments = Array.from({ length: 18 }, () => ({ x: safeSpawn.x, y: Neo.WALL + 12, r: 20 }));
+      // Shared swept-projectile collision treats these circles as extra hit
+      // bodies for the head entity, so any visible part of the snake can be hit.
+      boss.collisionCircles = boss.seaSnakeSegments;
+    }
+    if (Neo.currentRoom) Neo.currentRoom.cleared = false;
+    Neo.spawnParticle({
+      x: boss.x, y: boss.y - boss.r - 28, life: 1.8,
+      text: `BLACK RELIC BOSS: ${boss.displayName.toUpperCase()}`, c: '#b7c4d8',
+    });
+    const line = Neo.BOSS_OPENING_DIALOGUE?.[type];
+    if (line) Neo.sayOverEntity?.(boss, line, { speaker: boss.displayName, tone: 'boss', holdTime: 2.1, offsetY: boss.r + 36 });
+    Neo.updateObjective?.();
+    Neo.scheduleRunSave?.();
+    return boss;
+  }
+
+  // Black relics are a permanent debt, not a one-time toll: every floor the
+  // owner enters re-summons the boss bound to each black relic they hold. The
+  // pickup itself spawns the first one (applyBlackItemPickup), so this fires
+  // from generateFloor for every floor *after* the one it was collected on.
+  // Stacks do not multiply the debt — one boss per distinct relic owned.
+  function spawnBlackItemFloorBosses() {
+    if (!Neo.player) return [];
+    // The tutorial teaches basics with an authored encounter set; dropping a
+    // black boss into it would break that script.
+    if (Neo.isTutorialRun?.()) return [];
+    const spawned = [];
+    for (const itemKey of Object.keys(BLACK_ITEM_BOSS_BY_KEY)) {
+      if ((Neo.getItemCount?.(itemKey) || 0) <= 0) continue;
+      const boss = spawnBlackItemBoss(itemKey);
+      if (boss) spawned.push(boss);
+    }
+    return spawned;
+  }
+
+  function tryAwakenBlackBugAllies(enemy, dealtDamage) {
+    const stacks = Neo.getItemCount?.('bug_card') || 0;
+    if (!Neo.player || stacks <= 0 || Neo.player.blackBugAlliesAwakened || !enemy) return false;
+    const getThreshold = globalThis.NeoNyke?.simulation?.getBugCardHeavyHitThreshold;
+    const threshold = typeof getThreshold === 'function'
+      ? getThreshold(stacks)
+      : Math.max(0.01, 0.11 - stacks * 0.01);
+    const targetMaxHp = Math.max(1, Number(enemy.max || enemy.maxHealth || enemy.hp || 1));
+    if (Number(dealtDamage || 0) < targetMaxHp * threshold) return false;
+    Neo.player.blackBugAlliesAwakened = true;
+    Neo.player.blackBugAllyCount = 3;
+    Neo.itemStatsCacheFrame = -1;
+    ensureBlackBugAllies();
+    Neo.spawnParticle?.({
+      x: Neo.player.x, y: Neo.player.y - 36, life: 1.2,
+      text: `BUG SWARM! ${Math.round(threshold * 100)}% HIT`, c: '#a7ff4f',
+    });
+    Neo.scheduleRunSave?.();
+    return true;
+  }
+
+  function ensureBlackBugAllies() {
+    const ownsCard = (Neo.getItemCount?.('bug_card') || 0) > 0;
+    const awakened = ownsCard && !!Neo.player?.blackBugAlliesAwakened;
+    const allyCount = awakened ? 3 : 0;
+    if (Neo.player) {
+      Neo.player.blackBugAllyCount = allyCount;
+      Neo.player.blackBugTeamAllyCount = 0;
+    }
+    const slots = Neo.getActivePlayerSlots?.() || [];
+    slots.forEach(slot => {
+      const actor = slot.getEntity?.();
+      if (!actor) return;
+      if (actor === Neo.player) actor.blackBugAllyCount = allyCount;
+      else actor.blackBugTeamAllyCount = allyCount;
+    });
+    if (!awakened) { Neo.blackBugAllies = []; return []; }
+    Neo.blackBugAllies = Array.isArray(Neo.blackBugAllies) ? Neo.blackBugAllies : [];
+    while (Neo.blackBugAllies.length < 3) {
+      const index = Neo.blackBugAllies.length;
+      const angle = (index / 3) * Math.PI * 2;
+      Neo.blackBugAllies.push({
+        id: `black_bug_${index}`, x: Neo.player.x + Math.cos(angle) * 44,
+        y: Neo.player.y + Math.sin(angle) * 44, vx: 0, vy: 0, r: 10,
+        attackCd: index * 0.18, animSeed: index * 1.7,
+        fireBug: Neo.nextRandom?.('encounter') < 0.05,
+      });
+    }
+    return Neo.blackBugAllies;
+  }
+
+  function updateBlackBugAllies(dt) {
+    const allies = ensureBlackBugAllies();
+    allies.forEach((ally, index) => {
+      ally.attackCd = Math.max(0, Number(ally.attackCd || 0) - dt);
+      let target = null;
+      let targetDistance = Infinity;
+      for (const enemy of Neo.enemies || []) {
+        if (!enemy || enemy.dead) continue;
+        const distance = Neo.dist(ally.x, ally.y, enemy.x, enemy.y);
+        if (distance < targetDistance) { target = enemy; targetDistance = distance; }
+      }
+      const orbitAngle = Number(Neo.gameElapsedTime || 0) * 1.8 + (index / 3) * Math.PI * 2;
+      const destination = target
+        ? { x: target.x, y: target.y }
+        : { x: Neo.player.x + Math.cos(orbitAngle) * 48, y: Neo.player.y + Math.sin(orbitAngle) * 34 };
+      const dx = destination.x - ally.x;
+      const dy = destination.y - ally.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const speed = target ? 235 : 175;
+      ally.vx += ((dx / distance) * speed - ally.vx) * Math.min(1, dt * 8);
+      ally.vy += ((dy / distance) * speed - ally.vy) * Math.min(1, dt * 8);
+      ally.x += ally.vx * dt;
+      ally.y += ally.vy * dt;
+      if (target && targetDistance <= Number(target.r || 15) + ally.r + 8 && ally.attackCd <= 0) {
+        const angle = Math.atan2(target.y - ally.y, target.x - ally.x);
+        Neo.hitEnemy?.(target, Math.max(6, Math.round((Neo.getPlayerBaseDamage?.() || 20) * 0.34)), angle, 75, ally.fireBug ? '#ff8a3d' : '#a7ff4f', { source: 'bug_card_ally' });
+        if (ally.fireBug && !target.dead) Neo.applyStatus?.(target, 'fire', 1, 3.5);
+        ally.attackCd = 0.72;
+      }
+    });
+  }
+
+  function updateEntOfPestilence(enemy, dt) {
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    enemy.summonCd = Math.max(0, Number(enemy.summonCd || 0) - dt);
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.4, dt);
+    if (enemy.summonCd <= 0) {
+      for (let index = 0; index < 3; index += 1) {
+        const angle = (index / 3) * Math.PI * 2 + Neo.nextRandom('encounter') * 0.4;
+        const spawn = findSafeSummonSpawnPoint(enemy.x + Math.cos(angle) * 72, enemy.y + Math.sin(angle) * 72);
+        if (!spawn) continue;
+        const grub = spawnEnemy('cult_follower', spawn.x, spawn.y, false, { level: enemy.level });
+        grub.displayName = 'Pestilent Grub';
+        grub.pestilentGrub = true;
+      }
+      enemy.summonCd = 5.2;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r, life: 0.8, text: 'BROOD!', c: '#a7ff4f' });
+      return;
+    }
+    if (enemy.attackCd <= 0) {
+      const aim = Math.atan2(dy, dx);
+      for (let spread = -1; spread <= 1; spread += 1) {
+        const angle = aim + spread * 0.22;
+        Neo.spawnProjectile({ x: enemy.x, y: enemy.y, vx: Math.cos(angle) * 310, vy: Math.sin(angle) * 310, r: 7, life: 2.2, enemy: true, owner: enemy, kind: 'pestilence_spit', source: enemy.type, damage: Math.round(enemy.dmg * 0.75), statusEffects: [{ key: 'poison', stacks: 2, duration: 5 }] });
+      }
+      enemy.attackCd = 1.7;
+    }
+  }
+
+  function updateTRexBoss(enemy, dt) {
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    enemy.roarCd = Math.max(0, Number(enemy.roarCd || 0) - dt);
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.72; enemy.vy *= 0.72;
+      if (enemy.windup <= 0) { enemy.dashTime = 0.72; enemy.dashHit = false; }
+      return;
+    }
+    if (enemy.dashTime > 0) {
+      enemy.dashTime -= dt;
+      enemy.vx = Math.cos(enemy.dashAngle) * 610;
+      enemy.vy = Math.sin(enemy.dashAngle) * 610;
+      if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 16) {
+        enemy.dashHit = true;
+        Neo.damagePlayer(enemy.dmg + 22, enemy.dashAngle, 520, enemy.type, { attacker: enemy });
+      }
+      return;
+    }
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
+    if (distance < enemy.r + Neo.player.r + 18 && enemy.attackCd <= 0) {
+      Neo.damagePlayer(enemy.dmg, Math.atan2(dy, dx), 360, enemy.type, { attacker: enemy });
+      enemy.swingTime = 0.3;
+      enemy.attackCd = 0.9;
+    } else if (enemy.roarCd <= 0 && distance < 240) {
+      Neo.damagePlayer(Math.round(enemy.dmg * 0.45), Math.atan2(dy, dx), 440, enemy.type, { attacker: enemy });
+      Neo.ringBurst(enemy.x, enemy.y, 230, '#ffcf72', 0.55);
+      enemy.roarCd = 4.4;
+    } else if (enemy.attackCd <= 0 && distance > 170) {
+      enemy.dashAngle = Math.atan2(dy, dx);
+      enemy.windup = 0.55;
+      enemy.attackCd = 1.8;
+    }
+  }
+
+  function updateSeaSnakeSegments(enemy, dt) {
+    const segments = enemy.seaSnakeSegments || (enemy.seaSnakeSegments = []);
+    if (!segments.length) return;
+    let leaderX = enemy.x;
+    let leaderY = enemy.y;
+    const spacing = 27;
+    for (const segment of segments) {
+      const dx = leaderX - segment.x;
+      const dy = leaderY - segment.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      if (distance > spacing) {
+        const follow = Math.min(distance - spacing, Math.max(8, distance * dt * 9));
+        segment.x += (dx / distance) * follow;
+        segment.y += (dy / distance) * follow;
+      }
+      leaderX = segment.x;
+      leaderY = segment.y;
+    }
+    enemy.seaSnakeContactCd = Math.max(0, Number(enemy.seaSnakeContactCd || 0) - dt);
+    if (enemy.seaSnakeContactCd > 0) return;
+    const playerRadius = Number(Neo.player.r || 14);
+    const touched = segments.some(segment => Neo.dist(segment.x, segment.y, Neo.player.x, Neo.player.y) <= 20 + playerRadius);
+    if (touched) {
+      const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+      Neo.damagePlayer(Math.round(enemy.dmg * 0.7), angle, 180, 'sea_snake_body', { attacker: enemy, sourceLabel: 'Snake of the Sea — Body' });
+      enemy.seaSnakeContactCd = 0.48;
+    }
+  }
+
+  function updateSeaSnakeBoss(enemy, dt) {
+    enemy.seaSnakeEntryTime = Math.max(0, Number(enemy.seaSnakeEntryTime || 0) - dt);
+    enemy.seaSnakeCoilAngle = Number(enemy.seaSnakeCoilAngle || 0) + dt * (enemy.hp < enemy.max * 0.5 ? 1.45 : 1.05);
+    const elapsed = Math.max(0, 2.4 - enemy.seaSnakeEntryTime);
+    const constrictRadius = Math.max(48, 230 - elapsed * 9 - (1 - enemy.hp / Math.max(1, enemy.max)) * 95);
+    const targetX = Neo.player.x + Math.cos(enemy.seaSnakeCoilAngle) * constrictRadius;
+    const targetY = Neo.player.y + Math.sin(enemy.seaSnakeCoilAngle) * constrictRadius * 0.72;
+    const dx = targetX - enemy.x;
+    const dy = targetY - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed + Math.min(90, elapsed * 5), 5.2, dt);
+    updateSeaSnakeSegments(enemy, dt);
+    const playerDistance = Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y);
+    if (playerDistance < enemy.r + Neo.player.r + 10 && enemy.attackCd <= 0) {
+      Neo.damagePlayer(enemy.dmg, Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 260, enemy.type, { attacker: enemy });
+      enemy.attackCd = 0.72;
+    }
   }
 
   function playGodDialogue(phase) {
@@ -5372,6 +5631,14 @@
   Neo.spawnEnemy = spawnEnemy;
   Neo.makeGellehTurret = makeGellehTurret;
   Neo.spawnGodBoss = spawnGodBoss;
+  Neo.spawnBlackItemBoss = spawnBlackItemBoss;
+  Neo.spawnBlackItemFloorBosses = spawnBlackItemFloorBosses;
+  Neo.ensureBlackBugAllies = ensureBlackBugAllies;
+  Neo.tryAwakenBlackBugAllies = tryAwakenBlackBugAllies;
+  Neo.updateBlackBugAllies = updateBlackBugAllies;
+  Neo.updateEntOfPestilence = updateEntOfPestilence;
+  Neo.updateTRexBoss = updateTRexBoss;
+  Neo.updateSeaSnakeBoss = updateSeaSnakeBoss;
   Neo.playGodDialogue = playGodDialogue;
   Neo.tryPlayKnaveKnightCutscene = tryPlayKnaveKnightCutscene;
   Neo.tryPlayQueenMetaoCutscene = tryPlayQueenMetaoCutscene;

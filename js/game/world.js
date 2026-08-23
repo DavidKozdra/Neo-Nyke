@@ -1595,6 +1595,28 @@
     p.bouncesRemaining = Math.max(0, Math.floor(Number((props.bouncesRemaining ?? defaultBounces) || 0)));
     capProjectiles();
     Neo.projectiles.push(p);
+    // Heart of the Ocean turns every pair of player-created shots into a third
+    // wave. Echoes carry the original projectile payload but do not count toward
+    // the next pair, preventing recursive projectile growth.
+    if (!enemyProjectile && !props.heartOceanEcho && (Neo.getItemCount?.('heart_of_the_ocean') || 0) > 0) {
+      const requiredProjectiles = Math.max(1, Number(itemStats.heartOceanProjectileRequirement || 2));
+      Neo.player.heartOceanProjectileCount = Math.max(0, Number(Neo.player.heartOceanProjectileCount || 0)) + 1;
+      if (Neo.player.heartOceanProjectileCount >= requiredProjectiles) {
+        Neo.player.heartOceanProjectileCount = 0;
+        const speed = Math.hypot(Number(props.vx || 0), Number(props.vy || 0));
+        const baseAngle = speed > 0 ? Math.atan2(Number(props.vy || 0), Number(props.vx || 0)) : 0;
+        const echoAngle = baseAngle + (Neo.nextRandom?.('encounter') < 0.5 ? -0.12 : 0.12);
+        spawnProjectile({
+          ...props,
+          x: Number(props.x || 0) + Math.cos(echoAngle) * 5,
+          y: Number(props.y || 0) + Math.sin(echoAngle) * 5,
+          vx: Math.cos(echoAngle) * speed,
+          vy: Math.sin(echoAngle) * speed,
+          heartOceanEcho: true,
+          source: props.source || 'heart_of_the_ocean',
+        });
+      }
+    }
   }
 
   // Hard ceiling on simultaneous projectiles. Long-life shots plus dense enemy

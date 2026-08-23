@@ -643,6 +643,7 @@
         }
       } else if (hazard.kind === 'cult_follower_ally') {
         const sheet = Neo.CHARACTER_SPRITE_SHEETS?.cult_follower;
+        const allyColor = hazard.fireBug ? '#ff8a3d' : hazard.bugCardAlly ? '#a7ff4f' : '#b575ff';
         const attacking = Number(hazard.attackFlash || 0) > 0;
         const animation = attacking ? 'attack' : hazard.moving ? 'walk' : 'idle';
         const frameCount = Math.max(1, Number(sheet?.animationFrames?.[animation]?.length
@@ -656,12 +657,15 @@
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 10, 18, 8, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
-        Neo.ctx.strokeStyle = '#b575ff';
+        Neo.ctx.strokeStyle = allyColor;
+        Neo.ctx.shadowColor = allyColor;
+        Neo.ctx.shadowBlur = hazard.fireBug ? 12 : 7;
         Neo.ctx.lineWidth = 2;
         Neo.ctx.globalAlpha = 0.7;
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 2, 21, 0, Math.PI * 2);
         Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
         Neo.ctx.globalAlpha = 1;
         if (frame) {
           const size = 44;
@@ -675,7 +679,7 @@
           );
           Neo.ctx.restore();
         } else {
-          Neo.ctx.fillStyle = '#5b367d';
+          Neo.ctx.fillStyle = allyColor;
           Neo.ctx.beginPath();
           Neo.ctx.arc(0, 0, 15, 0, Math.PI * 2);
           Neo.ctx.fill();

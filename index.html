@@ -273,6 +273,7 @@
         <span class="rarity-count rarity-count--purple" title="Wizard relics — uncommon"><span class="rarity-count__glyph" aria-hidden="true">✳</span><span class="rarity-count__num">0</span></span>
         <span class="rarity-count rarity-count--blue" title="Artificer relics — crafted" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">⚒</span><span class="rarity-count__num">0</span></span>
         <span class="rarity-count rarity-count--green" title="Knave relics — lying" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">☘</span><span class="rarity-count__num">0</span></span>
+        <span class="rarity-count rarity-count--black" title="Black relics — boss-bound" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">◆</span><span class="rarity-count__num">0</span></span>
         <span class="rarity-count rarity-count--red" title="GOD relics — legendary"><span class="rarity-count__glyph" aria-hidden="true">✦</span><span class="rarity-count__num">0</span></span>
       </span>
     </div>
@@ -1351,9 +1352,7 @@
         </div>
         <div class="sandbox-card sandbox-card--wide" data-sandbox-section="gear" role="tabpanel" hidden>
           <h4>Starting Inventory</h4>
-          <div class="sandbox-search-row">
-            <input id="sandboxStartItemSearch" class="sandbox-search" type="search" placeholder="Search starting items..." aria-label="Search starting inventory items" autocomplete="off" spellcheck="false">
-          </div>
+          <div id="sandboxStartItemControls" class="item-picker__controls"></div>
           <div class="sandbox-toolbar">
             <button id="sandboxStartItemsAll" class="sandbox-mini-btn" type="button">All ×1</button>
             <button id="sandboxStartItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -1373,9 +1372,7 @@
         </div>
         <div class="sandbox-card" data-sandbox-section="pools" role="tabpanel" hidden>
           <h4>Items</h4>
-          <div class="sandbox-search-row">
-            <input id="sandboxItemSearch" class="sandbox-search" type="search" placeholder="Search items..." aria-label="Search items" autocomplete="off" spellcheck="false">
-          </div>
+          <div id="sandboxItemControls" class="item-picker__controls"></div>
           <div class="sandbox-toolbar">
             <button id="sandboxItemsAll" class="sandbox-mini-btn" type="button">All</button>
             <button id="sandboxItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -2043,6 +2040,7 @@
           <div class="sandbox-card">
             <h4>Starter Relics</h4>
             <p class="sandbox-card__hint">Choose up to two relics for this character.</p>
+            <div id="customCharacterRelicControls" class="item-picker__controls"></div>
             <div id="customCharacterRelicList" class="sandbox-token-grid sandbox-token-grid--items custom-character-relic-list"></div>
           </div>
         </div>
@@ -2773,6 +2771,7 @@
             <span class="rarity-count rarity-count--purple" title="Wizard relics — uncommon"><span class="rarity-count__glyph" aria-hidden="true">✳</span><span class="rarity-count__num" data-preview-field="rarityPurple">0</span></span>
             <span class="rarity-count rarity-count--blue" title="Artificer relics — crafted" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">⚒</span><span class="rarity-count__num" data-preview-field="rarityBlue">0</span></span>
             <span class="rarity-count rarity-count--green" title="Knave relics — lying" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">☘</span><span class="rarity-count__num" data-preview-field="rarityGreen">0</span></span>
+            <span class="rarity-count rarity-count--black" title="Black relics — boss-bound" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">◆</span><span class="rarity-count__num" data-preview-field="rarityBlack">0</span></span>
             <span class="rarity-count rarity-count--red" title="GOD relics — legendary"><span class="rarity-count__glyph" aria-hidden="true">✦</span><span class="rarity-count__num" data-preview-field="rarityRed">0</span></span>
           </span>
         </div>

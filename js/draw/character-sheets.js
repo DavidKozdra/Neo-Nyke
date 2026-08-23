@@ -349,6 +349,22 @@ const CHARACTER_SHEET_DEFS = {
     attackFrames: [12, 13, 14, 15, 16, 17],
     portraitFrame: 0,
   },
+  sea_snake: {
+    src: 'assets/sprites/chars/SeaSnake.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    frameCount: 8,
+    renderScale: 1,
+    stepRate: 5,
+    idleRate: 2,
+    idleFrames: [0, 5],
+    walkFrames: [0, 1, 2, 3, 4, 5],
+    // The two utility frames are atlas-addressable by the segmented renderer.
+    smashFrames: [6],
+    beamFrames: [7],
+    portraitFrame: 2,
+    mirrorFacing: false,
+  },
   // The God is authored one frame per file rather than as a strip, so both of
   // its forms composite through `srcFrames`. Phases 1-2 use the early form and
   // phases 3-5 the ascended one; getEnemySpriteKey picks between them.

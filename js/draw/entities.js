@@ -120,6 +120,8 @@
     if (enemy.type === 'healer') return 'healer';
     if (enemy.type === 'laser') return Neo.CHARACTER_SPRITE_SHEETS?.laser ? 'laser' : 'cult_mage';
     if (enemy.type === 'boss_spawner') return 'cult_mage';
+    if (enemy.type === 'ent_of_pestilence') return 'charger';
+    if (enemy.type === 't_rex') return 'bulk_golem';
     // The God transforms at the Council of Bosses (phase 3) and keeps the
     // ascended form through phases 4 and 5. Falling back to the early form if
     // that sheet is missing keeps a failed load on-character.
@@ -1291,12 +1293,64 @@
     ctx.restore();
   }
 
+  function drawSeaSnakeHole(enemy) {
+    const hole = enemy?.seaSnakeHole;
+    if (!hole) return;
+    const pulse = 1 + Math.sin(Number(Neo.gameElapsedTime || 0) * 3) * 0.05;
+    Neo.ctx.save();
+    Neo.ctx.translate(hole.x, hole.y);
+    Neo.ctx.scale(pulse, pulse * 0.42);
+    const gradient = Neo.ctx.createRadialGradient(0, 0, 4, 0, 0, hole.radius);
+    gradient.addColorStop(0, '#02070b');
+    gradient.addColorStop(0.62, '#06151b');
+    gradient.addColorStop(0.82, '#117b86');
+    gradient.addColorStop(1, 'rgba(35,241,238,0)');
+    Neo.ctx.fillStyle = gradient;
+    Neo.ctx.shadowColor = '#23f1ee';
+    Neo.ctx.shadowBlur = 18;
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(0, 0, hole.radius, 0, Math.PI * 2);
+    Neo.ctx.fill();
+    Neo.ctx.restore();
+  }
+
+  function drawSeaSnakeBody(enemy) {
+    const segments = enemy?.seaSnakeSegments;
+    if (!Array.isArray(segments) || segments.length === 0) return;
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      const segment = segments[index];
+      const leader = index === 0 ? enemy : segments[index - 1];
+      const angle = Math.atan2(leader.y - segment.y, leader.x - segment.x) + Math.PI / 2;
+      const taper = 0.62 + (1 - index / segments.length) * 0.34;
+      drawSpriteFrame('sea_snake:beam0', segment.x, segment.y, 50 * taper, {
+        rotation: angle,
+        shadowColor: '#23f1ee',
+        shadowBlur: index % 3 === 0 ? 6 : 0,
+      });
+    }
+  }
+
+  function drawBlackBugAllies(viewportBounds = null) {
+    (Neo.blackBugAllies || []).forEach(ally => {
+      if (!ally) return;
+      if (viewportBounds && (ally.x < viewportBounds.left - 40 || ally.x > viewportBounds.right + 40
+        || ally.y < viewportBounds.top - 40 || ally.y > viewportBounds.bottom + 40)) return;
+      const frame = getActorSpriteFrameKey('cult_follower', ally, { stepRate: 12, seedKey: ally.id });
+      const allyColor = ally.fireBug ? '#ff8a3d' : '#a7ff4f';
+      drawSpriteFrame(frame, ally.x, ally.y, 27, {
+        flipX: Number(ally.vx || 0) < 0,
+        shadowColor: allyColor, shadowBlur: ally.fireBug ? 14 : 9, tint: allyColor,
+      });
+    });
+  }
+
   function drawEnemies(viewportBounds = null) {
     const _now = Date.now();
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
     const denseEnemyFx = performanceMode && ((Neo.enemies?.length || 0) >= 40 || adaptiveQuality >= 1);
+    drawBlackBugAllies(viewportBounds);
     Neo.enemies.forEach(enemy => {
       if (!enemy) return;
       if (viewportBounds) {
@@ -1309,9 +1363,11 @@
           || enemy.y < viewportBounds.top - margin
           || enemy.y > viewportBounds.bottom + margin) return;
       }
+      if (enemy.type === 'sea_snake') drawSeaSnakeHole(enemy);
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       if (enemy.survivalAnimal) { drawSurvivalAnimal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
+      if (enemy.type === 'sea_snake') drawSeaSnakeBody(enemy);
       const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
       // Count active statuses first (no array allocation), then draw a ring per
       // active status. This runs per enemy per frame, so avoid filter()/forEach.
@@ -1418,6 +1474,9 @@
       };
       const hitFlash = isActorHitFlashActive(enemy);
       const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation, spriteKey);
+      if (enemy.type === 'sea_snake') {
+        enemyAnim.rotation = Math.atan2(Number(enemy.vy || -1), Number(enemy.vx || 0)) + Math.PI / 2;
+      }
       const enemyFrameKey = getActorSpriteFrameKey(spriteKey, enemy, enemyAnimation);
       // The Queen physically convulses while charging her death blast — jitter
       // her sprite by a magnitude that grows with the charge (set in enemies.js).

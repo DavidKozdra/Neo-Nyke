@@ -680,6 +680,12 @@ export function getItemStats() {
     const factorOfElements = getItemCount('factor_of_elements');
     const ironLung = getItemCount('iron_lung');
     const pendantOfRock = getItemCount('pendant_of_rock');
+    const bugCard = getItemCount('bug_card');
+    const dinoTooth = getItemCount('dino_tooth');
+    const heartOfTheOcean = getItemCount('heart_of_the_ocean');
+    const activeBugAllyCount = Math.max(0, Math.floor(Number(Neo.player?.blackBugAllyCount || 0)))
+      + Math.max(0, Math.floor(Number(Neo.player?.blackBugTeamAllyCount || 0)));
+    const bugAllyChanceBonus = activeBugAllyCount * 0.05;
     // Foley's Irish NewYork Charm (GREEN): really +1 flat on-hit damage per stack
     // (the +15 max HP per stack is granted on pickup in combat.js).
     const foleyCharm = getItemCount('foleys_irish_newyork_charm');
@@ -714,7 +720,7 @@ export function getItemStats() {
       : equippedWeaponKey === 'void_piercer'
         ? 0.20
         : 0;
-    const baseBleedChance = neoKnife * 0.10 + toughBandaid * 0.02;
+    const baseBleedChance = neoKnife * 0.10 + toughBandaid * 0.02 + bugAllyChanceBonus;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
     // Overheal barrier is now item-dependent: you must own Generic Health AND at
@@ -739,8 +745,10 @@ export function getItemStats() {
     // Thorn's floor curse (lowerCombat): a flat 50% cut to crit rate and bleed
     // chance for the whole floor. Applied to the raw chances before clamps/rollback.
     const rivalCombatCurse = Neo.floorRivalCurses?.lowerCombat ? 0.5 : 1;
-    let critChance = (critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.05 + princesGlassesCrit) * rivalCombatCurse;
+    let critChance = (critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.05
+      + princesGlassesCrit + bugAllyChanceBonus) * rivalCombatCurse;
     if (oracleLens) critChance *= 2;
+    if (dinoTooth > 0) critChance *= 2 ** dinoTooth;
     // Crit roll-back: let chance climb past the old 0.95 cap, then convert every
     // crossing of 100% into +50% crit damage and a roll-back to 75% (see
     // applyCritRollback). The base multiplier is built first, then the roll-back
@@ -751,7 +759,8 @@ export function getItemStats() {
     const baseCritMultiplier = 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus;
     const critRollback = Neo.applyCritRollback(critChance, baseCritMultiplier);
     critChance = Neo.clamp(critRollback.critChance, 0.01, 1);
-    const critMultiplier = critRollback.critMultiplier;
+    const dinoOverrollMultiplier = dinoTooth > 0 ? 1.5 * (3 ** (dinoTooth - 1)) : 1;
+    const critMultiplier = critRollback.critMultiplier * dinoOverrollMultiplier;
     // Pendant of Kronos: +2.5% base damage per god/yellow item owned (every stack
     // counts every god item), plus an extra +5% damage to bosses per stack.
     const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.025;
@@ -821,6 +830,9 @@ export function getItemStats() {
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 0.75),
       critChance,
       critMultiplier,
+      globalDamageMultiplier: (2 ** dinoTooth) * (1 + activeBugAllyCount * 0.05),
+      blackBugAllyCount: activeBugAllyCount,
+      blackBugHeavyHitThreshold: bugCard > 0 ? Math.max(0.01, 0.11 - bugCard * 0.01) : Infinity,
       kronosDamageMultiplier,
       kronosBossDamageMultiplier,
       factorOfElementsDamagePerStatusStack: factorOfElements * 0.05,
@@ -849,12 +861,14 @@ export function getItemStats() {
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
-      projectileBounces: ricocete,
+      projectileBounces: ricocete + heartOfTheOcean,
       projectilePierceBonus: tagCounts.projectile >= 9 ? 2 : tagCounts.projectile >= 4 ? 1 : 0,
       // 15% per stack, plus a quadratic bonus of 2% × stacks per stack
       // (so n stacks = 0.15n + 0.02n²): homing ramps up the more you invest.
-      projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02 + mooggyZoomies * 0.02,
-      projectileSpeedMultiplier: 1 + mooggyZoomies * 0.12,
+      projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02
+        + mooggyZoomies * 0.02 + heartOfTheOcean * 0.15,
+      projectileSpeedMultiplier: 1 + mooggyZoomies * 0.12 + heartOfTheOcean * 0.20,
+      heartOceanProjectileRequirement: heartOfTheOcean > 0 ? Math.max(1, 3 - heartOfTheOcean) : Infinity,
       projectileLifeMultiplier: 1 + mooggyZoomies * 0.10,
       healingMultiplier: 1 + drinkMaster * 0.2,
       potionPickupHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,

@@ -2459,7 +2459,7 @@ export function resumeGame() {
   }
 
   function getItemRarityCounts(playerState = Neo.player) {
-    const counts = { white: 0, purple: 0, red: 0, blue: 0, green: 0 };
+    const counts = { white: 0, purple: 0, red: 0, blue: 0, green: 0, black: 0 };
     Neo.ITEM_KEYS.forEach(key => {
       const count = Math.max(0, Number(playerState?.items?.[key] || 0));
       if (count <= 0) return;
@@ -2468,6 +2468,7 @@ export function resumeGame() {
       else if (rarity === 'wizard' || rarity === 'purple') counts.purple += count;
       else if (rarity === 'blue' || rarity === 'artificer') counts.blue += count;
       else if (rarity === 'green') counts.green += count;
+      else if (rarity === 'black') counts.black += count;
       else counts.white += count;
     });
     return counts;
@@ -2480,7 +2481,7 @@ export function resumeGame() {
   function applyRarityCountBadges(container, counts) {
     if (!container || !counts) return;
     const ALWAYS = ['white', 'purple', 'red'];
-    ['white', 'purple', 'red', 'blue', 'green'].forEach(rarity => {
+    ['white', 'purple', 'red', 'blue', 'green', 'black'].forEach(rarity => {
       const badge = container.querySelector(`.rarity-count--${rarity}`);
       if (!badge) return;
       const value = Math.max(0, Number(counts[rarity] || 0));
@@ -4284,7 +4285,7 @@ export function resumeGame() {
 
   function buildPracticeEnemyGrid() {
     if (!Neo.ui.practiceEnemyGrid) return;
-    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
+    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'ent_of_pestilence', 't_rex', 'sea_snake', 'god']);
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',

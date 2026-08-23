@@ -112,12 +112,14 @@
     const gains = getArtificerLevelGains(artificerStacks);
     const milestone = getLevelMilestone(player.level, player.character || player.characterKey);
     const stat = milestone?.stat || {};
-    const maxHpGain = gains.maxHp + Number(stat.maxHp || 0);
+    const levelBonusMultiplier = Math.max(1, Number(options.levelBonusMultiplier
+      ?? (Number(player.items?.dino_tooth || 0) > 0 ? 2 : 1)) || 1);
+    const maxHpGain = (gains.maxHp + Number(stat.maxHp || 0)) * levelBonusMultiplier;
     player.maxHp = Math.max(1, Number(player.maxHp || 100)) + maxHpGain;
     player.hp = Math.min(player.maxHp, Number(player.hp || 0) + maxHpGain);
-    player.attackPower = Number(player.attackPower || 0) + gains.attackPower + Number(stat.attackPower || 0);
-    player.attackSpeed = Number(player.attackSpeed || 1) + gains.attackSpeed + Number(stat.attackSpeed || 0);
-    return { level: player.level, maxHpGain, gains, milestone };
+    player.attackPower = Number(player.attackPower || 0) + (gains.attackPower + Number(stat.attackPower || 0)) * levelBonusMultiplier;
+    player.attackSpeed = Number(player.attackSpeed || 1) + (gains.attackSpeed + Number(stat.attackSpeed || 0)) * levelBonusMultiplier;
+    return { level: player.level, maxHpGain, gains, milestone, levelBonusMultiplier };
   }
 
   return {

@@ -12,7 +12,8 @@ describe('shared Neo Nyke enemy content', () => {
   test('catalogs the complete authored standard and boss roster', () => {
     expect(STANDARD_ENEMY_TYPES).toHaveLength(13);
     expect(BOSS_ENEMY_TYPES).toEqual([
-      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil',
+      'ent_of_pestilence', 't_rex', 'sea_snake', 'god',
     ]);
     [...STANDARD_ENEMY_TYPES, ...BOSS_ENEMY_TYPES, 'mirror_knight', 'mooggy'].forEach(type => {
       expect(ENEMY_CATALOG[type]).toEqual(expect.objectContaining({ type, behavior: expect.any(String), maxHealth: expect.any(Number) }));

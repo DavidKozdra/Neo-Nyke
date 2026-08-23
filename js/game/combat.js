@@ -314,6 +314,7 @@
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     const powered = (Number(base) + (Neo.player?.attackPower || 0))
       * characterMultiplier
+      * (s.globalDamageMultiplier || 1)
       * (s.levelEdgeDamageMultiplier || 1)
       * (s.kronosDamageMultiplier || 1)
       * getZoomiesDamageMultiplier()
@@ -4767,6 +4768,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       }
     }
     enemy.hp -= dealt;
+    Neo.tryAwakenBlackBugAllies?.(enemy, dealt);
     Neo.applyImpulse(enemy, angle, appliedKnockback);
     if (Number.isFinite(angle)) {
       enemy._lastHitAngle = angle;
@@ -6429,7 +6431,8 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   }
 
   function canDuplicateItemPickup(itemKey) {
-    return itemKey !== 'artificer_charger';
+    return itemKey !== 'artificer_charger'
+      && !['bug_card', 'dino_tooth', 'heart_of_the_ocean'].includes(itemKey);
   }
 
   // Paul Cunt's House Keys (GREEN, lies in its tooltip): really lets the player
@@ -6529,6 +6532,23 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Number(Neo.player.hp || 0) + gain));
   }
 
+  function applyDinoToothPickup() {
+    for (let index = 0; index < 2; index += 1) {
+      const result = globalThis.NeoNyke?.simulation?.applyCampaignLevelUp?.(Neo.player);
+      if (!result) continue;
+      window.achievementEvents?.emit('player:leveled', { level: Neo.player.level });
+      applyLevelMilestone(Neo.player.level, false);
+    }
+    Neo.markInventoryPanelDirty?.();
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.35, text: `PRIMAL LEVELS: ${Neo.player.level}`, c: '#ffcf72' });
+  }
+
+  function applyBlackItemPickup(itemKey) {
+    if (itemKey === 'bug_card') Neo.ensureBlackBugAllies?.();
+    if (itemKey === 'dino_tooth') applyDinoToothPickup();
+    Neo.spawnBlackItemBoss?.(itemKey);
+  }
+
   function presentJestersDiceAcquisition(result) {
     Object.entries(result?.bonusItemCounts || {}).forEach(([key, amount]) => {
       Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
@@ -6555,6 +6575,9 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     titan_heart: ({ collectCount }) => applyTitanHeartPickup(collectCount),
     veggys_pendant: ({ collectCount }) => applyVeggysPendantPickup(collectCount),
     foleys_irish_newyork_charm: ({ collectCount }) => applyFoleyCharmPickup(collectCount),
+    bug_card: () => applyBlackItemPickup('bug_card'),
+    dino_tooth: () => applyBlackItemPickup('dino_tooth'),
+    heart_of_the_ocean: () => applyBlackItemPickup('heart_of_the_ocean'),
   };
 
   // Predicate-matched LATE handlers: run when match(itemKey) is true and the item

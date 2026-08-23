@@ -292,6 +292,9 @@ export function loop(timestamp) {
       if (!Neo.isBlocked(enemy.x, nextY, enemy.r)) enemy.y = nextY;
       return;
     }
+    if (enemy.type === 'ent_of_pestilence') { Neo.updateEntOfPestilence?.(enemy, dt); return; }
+    if (enemy.type === 't_rex') { Neo.updateTRexBoss?.(enemy, dt); return; }
+    if (enemy.type === 'sea_snake') { Neo.updateSeaSnakeBoss?.(enemy, dt); return; }
     simulationApi.invokeCampaignEnemyAI(enemy, dt, Neo);
   }
 
@@ -762,6 +765,7 @@ export function loop(timestamp) {
       Neo.enemyTryBreakBlockingObstacle(enemy, dt);
       Neo.moveCircle(enemy, dt);
     }
+    Neo.updateBlackBugAllies?.(dt);
 
     const scarfDrain = Neo.simulation?.advanceCampaignHemesScarfDrain?.(Neo.player, totalBleed, dt, { itemStats })
       || { started: false, heal: 0 };

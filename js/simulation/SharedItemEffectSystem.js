@@ -70,6 +70,21 @@
     return { critChance: chance, critMultiplier: multiplier };
   }
 
+  function getBugCardHeavyHitThreshold(stacks = 1) {
+    const count = Math.max(1, Math.floor(Number(stacks || 1)));
+    return Math.max(0.01, 0.11 - count * 0.01);
+  }
+
+  function getDinoToothFreeOverrollMultiplier(stacks = 0) {
+    const count = Math.max(0, Math.floor(Number(stacks || 0)));
+    return count <= 0 ? 1 : 1.5 * (3 ** (count - 1));
+  }
+
+  function getHeartOceanProjectileRequirement(stacks = 0) {
+    const count = Math.max(0, Math.floor(Number(stacks || 0)));
+    return count <= 0 ? Infinity : Math.max(1, 3 - count);
+  }
+
   function deriveCampaignItemStats(player, options = {}) {
     const tagCounts = getItemTagCounts(player);
     const stacks = key => count(player, key);
@@ -97,10 +112,21 @@
     const princesGlasses = stacks('princes_glasses');
     const princesGlassesCrit = princesGlasses > 0 ? 0.05 + (princesGlasses - 1) * 0.02 : 0;
     const princesGlassesDefense = princesGlasses > 0 ? 0.10 + (princesGlasses - 1) * 0.02 : 0;
-    let critChance = (critCharmBonus + keenEyeBonus + stacks('pendant_of_kronos') * godItemStacks * 0.05 + princesGlassesCrit) * rivalCombatCurse;
+    const dinoToothStacks = stacks('dino_tooth');
+    const heartOceanStacks = stacks('heart_of_the_ocean');
+    const ownBugAllyCount = Math.max(0, Math.floor(Number(player?.blackBugAllyCount || 0)));
+    const teamBugAllyCount = Math.max(0, Math.floor(Number(player?.blackBugTeamAllyCount || 0)));
+    const activeBugAllyCount = ownBugAllyCount + teamBugAllyCount;
+    const bugAllyChanceBonus = activeBugAllyCount * 0.05;
+    let critChance = (critCharmBonus + keenEyeBonus + stacks('pendant_of_kronos') * godItemStacks * 0.05
+      + princesGlassesCrit + bugAllyChanceBonus) * rivalCombatCurse;
     if (stacks('oracles_lens') > 0) critChance *= 2;
+    if (dinoToothStacks > 0) critChance *= 2 ** dinoToothStacks;
     critChance = Math.max(0.01, critChance);
     const rollback = applyCritRollback(critChance, 1.6 + (stacks('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus);
+    // The first Dino Tooth grants one free 1.5x over-roll. Every additional
+    // stack triples that free-over-roll contribution without consuming chance.
+    rollback.critMultiplier *= getDinoToothFreeOverrollMultiplier(dinoToothStacks);
     critChance = clamp(rollback.critChance, 0.01, 1);
     const legacyGoldVac = player?.equipmentEffects?.gold_vac || {};
     const activeGoldVacStacks = (
@@ -111,7 +137,8 @@
     const levelSpeedBonus = (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
     const genericHealthStacks = stacks('generic_health_item');
     const cloakStacks = stacks('cloak_of_naked_king');
-    const bleedChance = (stacks('neo_knife') * 0.10 + stacks('tough_bandaid') * 0.02) * rivalCombatCurse;
+    const bleedChance = (stacks('neo_knife') * 0.10 + stacks('tough_bandaid') * 0.02
+      + bugAllyChanceBonus) * rivalCombatCurse;
     const weaponBleedChance = (equippedWeaponKey === 'claw_gauntlets' ? 0.22 : equippedWeaponKey === 'thorns_bleed_blade' ? 0.10 : 0) * rivalCombatCurse;
     const weaponCritChance = (equippedWeaponKey === 'hunters_bow' ? 0.10 : equippedWeaponKey === 'void_piercer' ? 0.20 : 0) * rivalCombatCurse;
     return {
@@ -152,6 +179,9 @@
       potionDoubleChance: clamp(stacks('drink_master') * 0.5, 0, 1),
       itemDuplicateChance: clamp(stacks('copycat_charm') * 0.3, 0, 0.75),
       critChance, critMultiplier: rollback.critMultiplier,
+      globalDamageMultiplier: (2 ** dinoToothStacks) * (1 + activeBugAllyCount * 0.05),
+      blackBugAllyCount: activeBugAllyCount,
+      blackBugHeavyHitThreshold: getBugCardHeavyHitThreshold(Math.max(1, stacks('bug_card'))),
       kronosDamageMultiplier: 1 + stacks('pendant_of_kronos') * godItemStacks * 0.025,
       kronosBossDamageMultiplier: 1 + stacks('pendant_of_kronos') * 0.05,
       factorOfElementsDamagePerStatusStack: stacks('factor_of_elements') * 0.05,
@@ -172,10 +202,12 @@
       beamDamageMultiplier: 1 + stacks('dragon_orb') * 0.35,
       beamChainTargets: stacks('dragon_orb') > 0 ? Math.min(2, stacks('dragon_orb')) : 0,
       beamChainDamageMultiplier: stacks('dragon_orb') > 0 ? 0.6 + (stacks('dragon_orb') - 1) * 0.15 : 0,
-      projectileBounces: stacks('ricocete'),
+      projectileBounces: stacks('ricocete') + heartOceanStacks,
       projectilePierceBonus: tagCounts.projectile >= 9 ? 2 : tagCounts.projectile >= 4 ? 1 : 0,
-      projectileHomingStrength: stacks('enemy_magnet') * 0.15 + stacks('enemy_magnet') ** 2 * 0.02 + stacks('mooggy_zoomies') * 0.02,
-      projectileSpeedMultiplier: 1 + stacks('mooggy_zoomies') * 0.12,
+      projectileHomingStrength: stacks('enemy_magnet') * 0.15 + stacks('enemy_magnet') ** 2 * 0.02
+        + stacks('mooggy_zoomies') * 0.02 + heartOceanStacks * 0.15,
+      projectileSpeedMultiplier: 1 + stacks('mooggy_zoomies') * 0.12 + heartOceanStacks * 0.20,
+      heartOceanProjectileRequirement: getHeartOceanProjectileRequirement(heartOceanStacks),
       projectileLifeMultiplier: 1 + stacks('mooggy_zoomies') * 0.10,
       healingMultiplier: 1 + stacks('drink_master') * 0.2,
       potionPickupHealingMultiplier: 1 + stacks('mateos_bag') * 0.10,
@@ -241,6 +273,9 @@
     getItemTagCounts,
     getActiveBuildTags,
     applyCritRollback,
+    getBugCardHeavyHitThreshold,
+    getDinoToothFreeOverrollMultiplier,
+    getHeartOceanProjectileRequirement,
     deriveCampaignItemStats,
     scaleCampaignItemEffects,
     resolveFractionalItemEffectCount,

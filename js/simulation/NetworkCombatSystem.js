@@ -158,6 +158,7 @@
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
     deriveCampaignItemStats = () => ({}),
+    getBugCardHeavyHitThreshold = stacks => Math.max(0.01, 0.11 - Math.max(1, Number(stacks || 1)) * 0.01),
     MIRROR_ITEM_EFFECT_STRENGTH = 0.88,
     scaleCampaignItemEffects = stats => ({ ...(stats || {}) }),
     resolveFractionalItemEffectCount = value => Math.max(0, Math.floor(Number(value || 0))),
@@ -2475,6 +2476,7 @@
     const itemStats = attacker?.itemStats || {};
     return Math.max(0, Number(amount || 0))
       * Math.max(0.1, Number(attacker?.damageMultiplier || 1))
+      * Math.max(0, Number(itemStats.globalDamageMultiplier || 1))
       * Math.max(0, Number(itemStats.kronosDamageMultiplier || 1))
       * Math.max(0, Number(itemStats.levelEdgeDamageMultiplier || 1));
   }
@@ -2541,6 +2543,8 @@
     const dealt = incoming - absorbed;
     enemy.health = Math.max(0, Number(enemy.health || 0) - dealt);
     enemy.hitTick = state.tick;
+    const playerAttacker = state.players?.[playerId];
+    if (playerAttacker) tryAwakenAuthorityBlackBugAllies(state, playerAttacker, enemy, dealt, emitEvent);
     // Campaign parity: a hit shield unit cannot re-shield for a moment.
     if (enemy.type === 'shield_unit') enemy._shieldHitLockout = 1.1;
     // Knockback + heavy-hit stun, mirroring hitEnemy in combat.js. Bosses and
@@ -2751,6 +2755,21 @@
     });
     projectile.expiresTick = state.tick + Math.ceil(Number(projectile.lifeTicks || lifeTicks));
     state.projectiles[projectileId] = projectile;
+    if (!definition.heartOceanEcho && Number(player.items?.heart_of_the_ocean || 0) > 0) {
+      const requiredProjectiles = Math.max(1, Number(player.itemStats?.heartOceanProjectileRequirement || 2));
+      player.heartOceanProjectileCount = Math.max(0, Number(player.heartOceanProjectileCount || 0)) + 1;
+      if (player.heartOceanProjectileCount >= requiredProjectiles) {
+        player.heartOceanProjectileCount = 0;
+        const echoAngle = angle + ((randomService?.next?.('encounter') ?? 0.5) < 0.5 ? -0.12 : 0.12);
+        createPlayerProjectile(state, player, {
+          ...definition,
+          heartOceanEcho: true,
+          originX: projectile.x,
+          originY: projectile.y,
+          spawnDistance: 0,
+        }, echoAngle);
+      }
+    }
     return projectile;
   }
 
@@ -2953,9 +2972,38 @@
         return;
       }
       const owner = state.players?.[entity.ownerId];
-      if (!owner || owner.disconnected || owner.roomId !== entity.roomId) {
+      if (!owner || owner.disconnected
+        || (owner.roomId !== entity.roomId && entity.kind !== 'cult_follower_ally')) {
         delete state.abilityEntities[entityId];
         return;
+      }
+      if (entity.kind === 'cult_follower_ally') {
+        if (Number(owner.items?.bug_card || 0) <= 0 || !owner.blackBugAlliesAwakened) {
+          delete state.abilityEntities[entityId];
+          emitEvent('ABILITY_ENTITY_REMOVED', { entityId, roomId: entity.roomId, reason: 'item_lost' });
+          return;
+        }
+        entity.roomId = owner.roomId;
+        const target = livingEncounterEnemies(state, entity.roomId)
+          .map(enemy => ({ enemy, distance: Math.hypot(enemy.x - entity.x, enemy.y - entity.y) }))
+          .sort((first, second) => first.distance - second.distance)[0];
+        const orbitAngle = state.tick * 0.09 + Number(entity.allyIndex || 0) * Math.PI * 2 / 3;
+        const destinationX = target?.enemy?.x ?? Number(owner.x) + Math.cos(orbitAngle) * 48;
+        const destinationY = target?.enemy?.y ?? Number(owner.y) + Math.sin(orbitAngle) * 34;
+        const dx = destinationX - Number(entity.x);
+        const dy = destinationY - Number(entity.y);
+        const distance = Math.hypot(dx, dy) || 1;
+        const stopDistance = target ? Number(target.enemy.radius || 18) + Number(entity.radius || 10) + 8 : 8;
+        entity.aimAngle = Math.atan2(dy, dx);
+        entity.moving = distance > stopDistance;
+        if (entity.moving) {
+          const speed = target ? 235 : 175;
+          const step = Math.min(Math.max(0, distance - stopDistance), speed * fixedDelta);
+          const wall = Number(state.floorState?.wallThickness || 28) + Number(entity.radius || 10);
+          entity.x = Math.max(wall, Math.min(Number(state.floorState?.width || 900) - wall, Number(entity.x) + dx / distance * step));
+          entity.y = Math.max(wall, Math.min(Number(state.floorState?.height || 700) - wall, Number(entity.y) + dy / distance * step));
+        }
+        if (!target || target.distance > Number(target.enemy.radius || 18) + Number(entity.radius || 10) + 14) return;
       }
       if (entity.followOwner) {
         entity.x = Number(owner.x);
@@ -3095,7 +3143,7 @@
         pulseX += Math.cos(pulseAngle) * distance;
         pulseY += Math.sin(pulseAngle) * distance;
         pulseRadius = Number(entity.burstRadius || 52);
-      } else if (entity.kind === 'holy_turret') {
+      } else if (entity.kind === 'holy_turret' || entity.kind === 'cult_follower_ally') {
         const target = livingEncounterEnemies(state, entity.roomId)
           .map(enemy => ({ enemy, distance: Math.hypot(enemy.x - entity.x, enemy.y - entity.y) }))
           .filter(candidate => candidate.distance <= Number(entity.range || 360))
@@ -3126,9 +3174,14 @@
           applyPoisonStatus(state, enemy, 1, Number(entity.poisonDurationSeconds || 4.8), owner.id);
           if (entity.isMetao) applyFireStatus(state, enemy, 1, Number(entity.fireDurationSeconds || 3.5), owner.id);
         }
+        if (!enemy.dead && abilityId === 'bug_card' && entity.fireBug) {
+          applyAuthorityStatus(state, enemy, 'fire', 1, 3.5, owner.id);
+        }
         targetIds.push(enemy.id);
       });
-      if (entity.kind !== 'lava') damageRivalsInRadius(state, owner, pulseX, pulseY, pulseRadius, entity.damage, emitEvent, abilityId, targetIds);
+      if (entity.kind !== 'lava' && entity.kind !== 'cult_follower_ally') {
+        damageRivalsInRadius(state, owner, pulseX, pulseY, pulseRadius, entity.damage, emitEvent, abilityId, targetIds);
+      }
       if (entity.kind === 'healing_zone') {
         const healTarget = livingRoomPlayers(state, entity.roomId)
           .map(player => ({ player, distance: Math.hypot(player.x - pulseX, player.y - pulseY) }))
@@ -6896,6 +6949,7 @@
       damage = scaleCampaignDamage({
         damage: Math.max(1, Math.round(damage)),
         enemy,
+        itemStats: owner?.itemStats,
         raw: true,
         loopNumber,
         enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
@@ -8689,6 +8743,67 @@
     enemy.state = 'mirrorMelee';
   }
 
+  function updateAuthoritySeaSnake(state, enemy, fixedDelta, emitEvent, floor) {
+    const target = nearestLivingPlayer(state, enemy);
+    if (!target.player) {
+      enemy.vx = 0;
+      enemy.vy = 0;
+      enemy.state = 'idle';
+      return;
+    }
+    const hpRatio = Number(enemy.health || 0) / Math.max(1, Number(enemy.maxHealth || 1));
+    const elapsed = Math.max(0, (state.tick - Number(enemy.seaSnakeEntryTick || enemy.spawnTick || state.tick)) / 20);
+    enemy.seaSnakeCoilAngle = Number(enemy.seaSnakeCoilAngle || 0) + fixedDelta * (hpRatio < 0.5 ? 1.45 : 1.05);
+    const coilRadius = Math.max(48, 230 - elapsed * 9 - (1 - hpRatio) * 95);
+    const destinationX = Number(target.player.x) + Math.cos(enemy.seaSnakeCoilAngle) * coilRadius;
+    const destinationY = Number(target.player.y) + Math.sin(enemy.seaSnakeCoilAngle) * coilRadius * 0.72;
+    const dx = destinationX - Number(enemy.x);
+    const dy = destinationY - Number(enemy.y);
+    const distance = Math.hypot(dx, dy) || 1;
+    const speed = Number(enemy.moveSpeed || 156) + Math.min(90, elapsed * 5);
+    const desiredVx = dx / distance * speed;
+    const desiredVy = dy / distance * speed;
+    const steering = Math.min(1, fixedDelta * 5.2);
+    enemy.vx = Number(enemy.vx || 0) + (desiredVx - Number(enemy.vx || 0)) * steering;
+    enemy.vy = Number(enemy.vy || 0) + (desiredVy - Number(enemy.vy || 0)) * steering;
+    const inset = Number(floor.wallThickness || 28) + Number(enemy.radius || 38);
+    enemy.x = Math.max(inset, Math.min(Number(floor.width || 900) - inset, Number(enemy.x) + enemy.vx * fixedDelta));
+    enemy.y = Math.max(inset, Math.min(Number(floor.height || 700) - inset, Number(enemy.y) + enemy.vy * fixedDelta));
+    enemy.state = 'constricting';
+
+    let leaderX = Number(enemy.x);
+    let leaderY = Number(enemy.y);
+    (enemy.seaSnakeSegments || []).forEach(segment => {
+      const segmentDx = leaderX - Number(segment.x);
+      const segmentDy = leaderY - Number(segment.y);
+      const segmentDistance = Math.hypot(segmentDx, segmentDy) || 1;
+      if (segmentDistance > 27) {
+        const follow = Math.min(segmentDistance - 27, Math.max(8, segmentDistance * fixedDelta * 9));
+        segment.x = Number(segment.x) + segmentDx / segmentDistance * follow;
+        segment.y = Number(segment.y) + segmentDy / segmentDistance * follow;
+      }
+      leaderX = Number(segment.x);
+      leaderY = Number(segment.y);
+    });
+
+    const contacts = enemy.seaSnakeContactCooldowns || (enemy.seaSnakeContactCooldowns = {});
+    livingRoomPlayers(state, enemy.roomId).forEach(player => {
+      if (state.tick < Number(contacts[player.id] || 0)) return;
+      const playerRadius = Number(player.radius || CAMPAIGN_PLAYER_RADIUS);
+      const headTouch = Math.hypot(player.x - enemy.x, player.y - enemy.y) <= Number(enemy.radius || 38) + playerRadius + 4;
+      const bodyTouch = (enemy.seaSnakeSegments || []).some(segment => (
+        Math.hypot(player.x - Number(segment.x), player.y - Number(segment.y)) <= Number(segment.radius || segment.r || 20) + playerRadius
+      ));
+      if (!headTouch && !bodyTouch) return;
+      contacts[player.id] = state.tick + 10;
+      damagePlayer(state, player, headTouch ? enemy.contactDamage : Math.round(Number(enemy.contactDamage || 34) * 0.7), enemy.id, emitEvent,
+        headTouch ? 'sea_snake' : 'sea_snake_body', {
+          angle: Math.atan2(Number(player.y) - Number(enemy.y), Number(player.x) - Number(enemy.x)),
+          knockback: headTouch ? 260 : 180,
+        });
+    });
+  }
+
   function updateEnemies(state, fixedDelta, emitEvent) {
     const floor = state.floorState || {};
     behaviorRuntime.state = state;
@@ -8709,6 +8824,10 @@
       }
       if (enemy.state === 'spawning') enemy.state = 'chasing';
       updateMinorEnemyPackPressure(state, enemy);
+      if (enemy.type === 'sea_snake') {
+        updateAuthoritySeaSnake(state, enemy, fixedDelta, emitEvent, floor);
+        return;
+      }
       // Mirror champions use the same tactical policy as the campaign, then
       // execute the matching authoritative action body.  Keep this ahead of
       // the generic enemy loop so it never silently falls back to a different
@@ -9350,19 +9469,29 @@
         }
       }
       const hitIds = new Set(Array.isArray(projectile.hitEnemyIds) ? projectile.hitEnemyIds : []);
+      const projectileTargets = livingEncounterEnemies(state, projectile.roomId).flatMap(candidate => {
+        if (!Array.isArray(candidate.seaSnakeSegments)) return [candidate];
+        return [candidate, ...candidate.seaSnakeSegments.map((segment, index) => ({
+          ...segment,
+          id: `${candidate.id}:body:${index}`,
+          radius: Number(segment.radius || segment.r || 20),
+          parentEnemy: candidate,
+        }))];
+      });
       const enemy = findCampaignProjectileEntitySweepHit(
         projectile,
         previous,
-        livingEncounterEnemies(state, projectile.roomId),
-        { include: candidate => !hitIds.has(candidate.id) },
+        projectileTargets,
+        { include: candidate => !hitIds.has(candidate.parentEnemy?.id || candidate.id) },
       )?.entity;
-      if (!enemy) return;
+      const hitEnemy = enemy?.parentEnemy || enemy;
+      if (!hitEnemy) return;
       if (projectile.kind === 'love_bomb') {
         detonateLoveBomb(projectile);
         delete state.projectiles[projectileId];
         return;
       }
-      damageEnemy(state, enemy, projectile.damage, projectile.ownerId, emitEvent, {
+      damageEnemy(state, hitEnemy, projectile.damage, projectile.ownerId, emitEvent, {
         projectileId,
         attackKind: projectile.attackKind,
         // Player shots shove along their travel direction.
@@ -9372,8 +9501,8 @@
         ignoreGodMode: !!projectile.ignoreGodMode,
       });
       const projectileOwner = state.players?.[projectile.ownerId];
-      if (!enemy.dead && projectileOwner) {
-        applyAuthorityOnHitStatusProcs(state, enemy, projectileOwner, projectile.hitOptions || {}, random);
+      if (!hitEnemy.dead && projectileOwner) {
+        applyAuthorityOnHitStatusProcs(state, hitEnemy, projectileOwner, projectile.hitOptions || {}, random);
       }
       if (Number(projectile.splash || 0) > 0) {
         livingEncounterEnemies(state, projectile.roomId).forEach(candidate => {
@@ -9393,20 +9522,20 @@
               projectile.ownerId,
             );
           } else if (Number(projectile.splashFireStacks || 0) > 0 || Number(projectile.fireStacks || 0) > 0) {
-            const directStacks = candidate.id === enemy.id ? Number(projectile.fireStacks || 0) : 0;
+            const directStacks = candidate.id === hitEnemy.id ? Number(projectile.fireStacks || 0) : 0;
             applyFireStatus(state, candidate, directStacks + Number(projectile.splashFireStacks || 0), projectile.fireDuration, projectile.ownerId);
           }
         });
       } else if (Number(projectile.fireStacks || 0) > 0) {
-        applyFireStatus(state, enemy, projectile.fireStacks, projectile.fireDuration, projectile.ownerId);
+        applyFireStatus(state, hitEnemy, projectile.fireStacks, projectile.fireDuration, projectile.ownerId);
       }
       if (Number(projectile.remainingPierces || 0) > 0) {
         projectile.remainingPierces -= 1;
-        projectile.hitEnemyIds = [...hitIds, enemy.id];
+        projectile.hitEnemyIds = [...hitIds, hitEnemy.id];
       } else {
         if (projectile.returning && projectile.returnPhase === 'out') {
           if (!beginBoomerangReturn(projectile)) delete state.projectiles[projectileId];
-          emitEvent('SARGES_HAMMER_BOUNCED', { projectileId, playerId: projectile.ownerId, enemyId: enemy.id, lightning: true });
+          emitEvent('SARGES_HAMMER_BOUNCED', { projectileId, playerId: projectile.ownerId, enemyId: hitEnemy.id, lightning: true });
         } else {
           delete state.projectiles[projectileId];
         }
@@ -9416,7 +9545,18 @@
 
   function collectAuthorityCampaignPickup(state, player, itemKey, options = {}, emitEvent = () => {}) {
     const acquisition = collectCampaignPickup(state, player, itemKey, options);
-    if (!acquisition?.ok || acquisition.itemKey !== 'rich_mans_blues') return acquisition;
+    if (!acquisition?.ok) return acquisition;
+    if (acquisition.itemKey === 'dino_tooth') {
+      for (let index = 0; index < 2; index += 1) {
+        const result = applyCampaignLevelUp(player);
+        if (result) emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHp, source: 'dino_tooth' });
+      }
+    }
+    const blackBossType = {
+      bug_card: 'ent_of_pestilence', dino_tooth: 't_rex', heart_of_the_ocean: 'sea_snake',
+    }[acquisition.itemKey];
+    if (blackBossType) spawnAuthorityBlackItemBoss(state, player, blackBossType, acquisition.itemKey, emitEvent);
+    if (acquisition.itemKey !== 'rich_mans_blues') return acquisition;
     const practiceMode = (state.gameMode || state.matchRules?.gameMode || state.matchRules?.mode) === 'practice';
     if (practiceMode) return acquisition;
     const crystals = getCampaignRichMansBluesCrystalReward(
@@ -9432,6 +9572,115 @@
       loopCrystals: player.loopCrystals, source: 'item_pickup',
     });
     return acquisition;
+  }
+
+  function ensureAuthorityBlackBugAllies(state, player, emitEvent) {
+    if (!player?.blackBugAlliesAwakened || Number(player.items?.bug_card || 0) <= 0) return [];
+    const existing = Object.values(state.abilityEntities || {})
+      .filter(entity => entity?.kind === 'cult_follower_ally' && entity.ownerId === player.id);
+    for (let index = existing.length; index < 3; index += 1) {
+      const angle = index * Math.PI * 2 / 3;
+      const ally = createAbilityEntity(state, player, {
+        kind: 'cult_follower_ally', abilityId: 'bug_card',
+        x: Number(player.x) + Math.cos(angle) * 44,
+        y: Number(player.y) + Math.sin(angle) * 44,
+        radius: 10, range: 900, burstRadius: 13, damage: 8,
+        pulseIntervalTicks: 14, durationTicks: 2_000_000_000,
+      });
+      ally.allyIndex = index;
+      ally.bugCardAlly = true;
+      const stream = combatRandomByState.get(state)?.scoped?.(`bug-card-ally:${player.id}:${index}`);
+      ally.fireBug = Number(stream?.next?.() ?? 1) < 0.05;
+      emitEvent('ABILITY_ENTITY_SPAWNED', {
+        entityId: ally.id, playerId: player.id, roomId: player.roomId,
+        abilityId: 'bug_card', kind: ally.kind, allyIndex: index,
+      });
+    }
+    return Object.values(state.abilityEntities || {})
+      .filter(entity => entity?.kind === 'cult_follower_ally' && entity.ownerId === player.id);
+  }
+
+  function tryAwakenAuthorityBlackBugAllies(state, player, enemy, dealtDamage, emitEvent) {
+    const stacks = Math.max(0, Number(player?.items?.bug_card || 0));
+    if (!player || stacks <= 0 || player.blackBugAlliesAwakened || !enemy) return false;
+    const threshold = getBugCardHeavyHitThreshold(stacks);
+    if (Number(dealtDamage || 0) < Math.max(1, Number(enemy.maxHealth || enemy.health || 1)) * threshold) return false;
+    player.blackBugAlliesAwakened = true;
+    player.blackBugAllyCount = 3;
+    ensureAuthorityBlackBugAllies(state, player, emitEvent);
+    updateAuthorityBlackBugTeamState(state, emitEvent);
+    emitEvent('BUG_CARD_SWARM_AWAKENED', {
+      playerId: player.id, enemyId: enemy.id, roomId: player.roomId,
+      threshold, damage: Number(dealtDamage || 0), allyCount: 3,
+    });
+    return true;
+  }
+
+  function updateAuthorityBlackBugTeamState(state, emitEvent) {
+    const party = activePlayers(state);
+    const owners = party.filter(member => Number(member.items?.bug_card || 0) > 0 && member.blackBugAlliesAwakened);
+    const totalAllies = owners.length * 3;
+    party.forEach(member => {
+      const ownAllies = owners.includes(member) ? 3 : 0;
+      member.blackBugAllyCount = ownAllies;
+      member.blackBugTeamAllyCount = Math.max(0, totalAllies - ownAllies);
+    });
+    owners.forEach(owner => ensureAuthorityBlackBugAllies(state, owner, emitEvent));
+  }
+
+  function spawnAuthorityBlackItemBoss(state, player, type, itemKey, emitEvent) {
+    const room = currentRoom(state, player.roomId);
+    const archetype = getEnemyDefinition(type);
+    if (!room || !archetype) return null;
+    const enemyLevel = Math.max(1, authorityProgressionDepth(state), Number(player.level || 1));
+    const scaled = scaleAuthorityEnemyStats(state, {
+      type, level: enemyLevel, maxHealth: archetype.maxHealth,
+      contactDamage: archetype.contactDamage, moveSpeed: archetype.moveSpeed,
+    }, { type, isBoss: true, enemyLevel });
+    const enemyId = state.allocateEntityId('enemy');
+    const enemy = {
+      id: enemyId, type, spriteKey: archetype.spriteKey, behavior: archetype.behavior,
+      roomId: room.id, x: Number(state.floorState?.width || 900) / 2,
+      y: type === 'sea_snake' ? Number(state.floorState?.wallThickness || 28) + 48 : Number(state.floorState?.height || 700) / 2 - 70,
+      vx: 0, vy: 0, radius: archetype.radius, moveSpeed: scaled.moveSpeed,
+      maxHealth: scaled.maxHealth, health: scaled.maxHealth,
+      contactDamage: scaled.contactDamage,
+      projectileDamage: Math.max(5, Math.round(scaled.contactDamage * 0.75)),
+      enemyLevelAttackSpeedMultiplier: scaled.enemyLevelAttackSpeedMultiplier,
+      level: enemyLevel, boss: true, blackItemBoss: true, blackItemSource: itemKey,
+      patterns: archetype.patterns || [], statuses: createCampaignStatusMap(),
+      attackCooldownUntilTick: state.tick + Math.round(Number(archetype.attackCooldown || 1) * 20),
+      attackWindupUntilTick: 0, contactCooldownUntilTick: 0,
+      state: 'chasing', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0,
+      swingTime: 0, dashTime: 0, attackCd: Number(archetype.attackCooldown || 1),
+      bleedImmune: !!archetype.bleedImmune, poisonImmune: !!archetype.poisonImmune,
+    };
+    if (type === 'sea_snake') {
+      const holeY = Number(state.floorState?.wallThickness || 28) + 12;
+      enemy.displayName = 'The Snake of the Sea';
+      enemy.seaSnakeHole = { x: enemy.x, y: holeY, radius: 58 };
+      enemy.seaSnakeSegments = Array.from({ length: 18 }, () => ({ x: enemy.x, y: holeY, r: 20, radius: 20 }));
+      enemy.seaSnakeCoilAngle = 0;
+      enemy.seaSnakeEntryTick = state.tick;
+      enemy.seaSnakeContactCooldowns = {};
+    } else {
+      enemy.displayName = type === 'ent_of_pestilence' ? 'Ent of Pestilence' : 'T-Rex';
+    }
+    state.enemies[enemyId] = enemy;
+    state.floorState.encounters = state.floorState.encounters || {};
+    const encounter = state.floorState.encounters[room.id] || {
+      roomId: room.id, roomType: room.type, status: 'active', enemyIds: [], startedTick: state.tick, clearedTick: null,
+    };
+    encounter.status = 'active';
+    encounter.clearedTick = null;
+    encounter.enemyIds = Array.isArray(encounter.enemyIds) ? encounter.enemyIds : [];
+    encounter.enemyIds.push(enemyId);
+    state.floorState.encounters[room.id] = encounter;
+    room.cleared = false;
+    emitEvent('BLACK_ITEM_BOSS_SPAWNED', { enemyId, enemyType: type, roomId: room.id, playerId: player.id, itemKey });
+    announceAuthorityBossIntro(state, enemy, emitEvent);
+    return enemy;
   }
 
   function updatePickups(state, emitEvent, random) {
@@ -9932,6 +10181,27 @@
     emitEvent('INTERACTABLE_SPAWNED', { interactableId, kind: 'stairs', roomId: exitRoomId, final: isFinalFloor });
   }
 
+  // Black relics are a permanent debt: every floor their owner enters
+  // re-summons the bound boss. The party shares one floor, so the debt is
+  // deduped by relic — two players holding Dino Tooth summon one T-Rex, not
+  // two — and the summoner is the highest-level owner so the boss scales to
+  // the strongest player carrying it.
+  function spawnPartyBlackItemFloorBosses(state, emitEvent) {
+    const bossByKey = {
+      bug_card: 'ent_of_pestilence', dino_tooth: 't_rex', heart_of_the_ocean: 'sea_snake',
+    };
+    const party = activePlayers(state);
+    Object.keys(bossByKey).forEach(itemKey => {
+      const owners = party.filter(member => Number(member.items?.[itemKey] || 0) > 0);
+      if (!owners.length) return;
+      const summoner = owners.reduce(
+        (best, member) => (Number(member.level || 1) > Number(best.level || 1) ? member : best),
+        owners[0],
+      );
+      spawnAuthorityBlackItemBoss(state, summoner, bossByKey[itemKey], itemKey, emitEvent);
+    });
+  }
+
   // Regenerate the floor at floorNumber+1 and reset the party into its start
   // room. Enemies, projectiles, pickups and interactables are cleared; the
   // floor seed is derived deterministically from the match seed.
@@ -9993,6 +10263,7 @@
     applyPartyRivalCurses(state, emitEvent);
     schedulePartyRivalCompanions(state, emitEvent);
     scheduleRivalReturns(state, emitEvent);
+    spawnPartyBlackItemFloorBosses(state, emitEvent);
     emitEvent('FLOOR_ADVANCED', {
       floorNumber: nextFloorNumber,
       floorSeed,
@@ -10280,6 +10551,7 @@
       // Refresh before movement/actions so starter and newly acquired stats
       // apply immediately; refresh again after equipment activation below so
       // a defensive tool cannot leave a one-tick damage window.
+      updateAuthorityBlackBugTeamState(state, emitEvent);
       syncCampaignItemStats(state);
       ensureAuthorityTreasureHunt(state, random);
       ensureAuthorityBossRush(state, random, emitEvent);

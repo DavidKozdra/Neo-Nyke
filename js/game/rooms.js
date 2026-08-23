@@ -203,6 +203,11 @@
     const curses = applyRivalCurses();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
+    // Black relics re-summon their bound boss on every floor their owner
+    // enters. This sits after enterRoom so the start room (and Neo.currentRoom)
+    // exists for the spawn, and so the boss lands in the room the player is
+    // standing in rather than one they may never visit.
+    Neo.spawnBlackItemFloorBosses?.();
     announceRivalCurses(curses);
     if (Array.isArray(Neo.pendingRivalDescends) && Neo.pendingRivalDescends.length > 0) {
       Neo.pendingRivalDescends.forEach((rival, i) => {

@@ -636,6 +636,7 @@ export const RARITY_NAME_COLORS = {
     blue: '#58b7ff',
     princess: '#ff9de8',
     green: '#3ef07a', // GREEN tier — post-loop "lying" items
+    black: '#aeb8c7', // BLACK tier — enormous power with an immediate boss debt
   };
 export const RARITY_DISPLAY_NAMES = {
     knight: 'Knight',
@@ -648,6 +649,7 @@ export const RARITY_DISPLAY_NAMES = {
     artificer: 'Artificer',
     princess: 'Princess',
     green: 'Knave',
+    black: 'Black',
   };
 export function getRarityDisplayName(rarity) {
   const key = String(rarity || '').toLowerCase();
@@ -666,6 +668,7 @@ export const RARITY_GLYPHS = {
     god: '✦',     // ✦ star (God)
     red: '✦',
     princess: '♥',// ♥ heart
+    black: '◆',
   };
 export function getRarityGlyph(rarity) {
   const key = String(rarity || '').toLowerCase();
@@ -680,6 +683,7 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     red: 4.75,
     blue: 4.75,
     green: 3.0, // greens never reach the shop (drop-only), but priced as a sink in case forge/voucher math reads this
+    black: 7.5,
   };
 // A shop has a 50% chance to feature a guaranteed god-tier item. It is a
 // deliberate splurge: priced at the normal god multiplier (4.75x) plus this
@@ -705,7 +709,8 @@ export const VOUCHER_COLORS = VOUCHER_TYPES;
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-    'queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye', 'handsome_devil', 'god', 'mirror_knight', 'mooggy',
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye', 'handsome_devil',
+    'ent_of_pestilence', 't_rex', 'sea_snake', 'god', 'mirror_knight', 'mooggy',
   ];
 export const ITEM_DROP_WEIGHTS = globalThis.NeoNyke?.content?.ITEM_DROP_WEIGHTS || [];
 export const ITEM_RARITY_DROP_WEIGHTS = globalThis.NeoNyke?.content?.ITEM_RARITY_DROP_WEIGHTS || {};
@@ -1168,8 +1173,8 @@ export const ui = {
     sandboxItemList: document.getElementById('sandboxItemList'),
     sandboxStartItemList: document.getElementById('sandboxStartItemList'),
     sandboxEnemySearch: document.getElementById('sandboxEnemySearch'),
-    sandboxItemSearch: document.getElementById('sandboxItemSearch'),
-    sandboxStartItemSearch: document.getElementById('sandboxStartItemSearch'),
+    sandboxItemControls: document.getElementById('sandboxItemControls'),
+    sandboxStartItemControls: document.getElementById('sandboxStartItemControls'),
     sandboxStartItemsAll: document.getElementById('sandboxStartItemsAll'),
     sandboxStartItemsNone: document.getElementById('sandboxStartItemsNone'),
     sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
@@ -1186,6 +1191,7 @@ export const ui = {
     customCharacterName: document.getElementById('customCharacterName'),
     customCharacterMoveLoadout: document.getElementById('customCharacterMoveLoadout'),
     customCharacterWeaponLoadout: document.getElementById('customCharacterWeaponLoadout'),
+    customCharacterRelicControls: document.getElementById('customCharacterRelicControls'),
     customCharacterRelicList: document.getElementById('customCharacterRelicList'),
     customCharacterReset: document.getElementById('customCharacterReset'),
     customCharacterRemove: document.getElementById('customCharacterRemove'),

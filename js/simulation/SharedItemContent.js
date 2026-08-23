@@ -32,6 +32,8 @@
     ['wizards_paw', 6, 'god'], ['jesters_dice', 4, 'god'],
     ['shield_of_aegis', 4, 'god'], ['pendant_of_kronos', 5, 'god'],
     ['robot_arm', 3, 'god'], ['rich_mans_luck', 5, 'god'],
+    ['bug_card', 1, 'black'], ['dino_tooth', 1, 'black'],
+    ['heart_of_the_ocean', 1, 'black'],
     ['princes_glasses', 14, 'wizard'], ['procy_pickle', 5, 'god'],
     ['factor_of_elements', 5, 'god'],
     ['veggys_pendant', 0, 'wizard'], ['mateos_bag', 10, 'wizard'],
@@ -41,8 +43,8 @@
   ].map(entry => Object.freeze(entry)));
   const ITEM_DROP_WEIGHTS = Object.freeze(ITEM_DROP_ENTRIES.map(([key, weight]) => Object.freeze([key, weight])));
   const ITEM_RARITY_BY_KEY = Object.freeze(Object.fromEntries(ITEM_DROP_ENTRIES.map(([key, , rarity]) => [key, rarity])));
-  const ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 80, wizard: 15, god: 5 });
-  const ELITE_ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 65, wizard: 25, god: 10 });
+  const ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 79, wizard: 15, god: 5, black: 1 });
+  const ELITE_ITEM_RARITY_DROP_WEIGHTS = Object.freeze({ knight: 64, wizard: 25, god: 10, black: 1 });
   // Boss Rush opens with a seeded relic draft. The first half preserves the
   // original five-roll rarity pattern; the second half adds five more offers so
   // players can build a five-relic loadout from ten distinct choices.

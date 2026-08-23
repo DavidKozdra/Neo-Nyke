@@ -91,6 +91,7 @@ import './core/sfx.js';
 import './core/music.js';
 import './ui/input.js';
 import './core/status.js';
+import './ui/item-picker.js';
 import './ui/notifications.js';
 import './ui/unlock-banner.js';
 import './ui/panels.js';

@@ -35,7 +35,8 @@
     const excluded = new Set(options.exclude || []);
     const owned = options.player?.items || {};
     return Object.entries(definitions.ITEM_DEFS || {})
-      .filter(([key, item]) => item && !SCROLL_KEYS.has(key) && !item.voucher && item.rarity !== 'blue' && !excluded.has(key))
+      .filter(([key, item]) => item && !SCROLL_KEYS.has(key) && !item.voucher
+        && item.rarity !== 'blue' && item.rarity !== 'black' && !excluded.has(key))
       .filter(([key]) => !options.ownedOnly || itemCount({ items: owned }, key) > 0)
       .filter(([, item]) => !options.rarity || String(item.rarity || item.category || 'knight').toLowerCase() === options.rarity)
       .map(([key]) => key)
@@ -124,11 +125,15 @@
     const rollItem = typeof options.rollItem === 'function'
       ? options.rollItem
       : () => '';
+    const blackKeys = Object.entries(definitions.ITEM_DEFS || {})
+      .filter(([, item]) => item?.rarity === 'black')
+      .map(([itemKey]) => itemKey);
     runState.floorSkipPending = Math.max(0, Number(runState.floorSkipPending || 0)) + 3 * copies;
     const bonusItemCounts = {};
     for (let index = 0; index < 10 * copies; index += 1) {
-      const key = String(rollItem(random, ['jesters_dice']) || '');
-      if (!key || key === 'jesters_dice' || !definitions.ITEM_DEFS?.[key]) continue;
+      const key = String(rollItem(random, ['jesters_dice', ...blackKeys]) || '');
+      if (!key || key === 'jesters_dice' || !definitions.ITEM_DEFS?.[key]
+        || definitions.ITEM_DEFS[key].rarity === 'black') continue;
       const collected = inventory.collectCampaignItem(player, key);
       if (!collected?.ok) continue;
       bonusItemCounts[key] = Number(bonusItemCounts[key] || 0) + 1;
@@ -145,7 +150,9 @@
     if (options.noItems) return { ok: false, reason: 'ITEMS_DISABLED' };
     const random = typeof options.random === 'function' ? options.random : deterministicRandom;
     const duplicateChance = Math.max(0, Math.min(0.75, Number(options.duplicateChance || 0)));
-    const canDuplicate = options.canDuplicate !== false && key !== 'artificer_charger';
+    const canDuplicate = options.canDuplicate !== false
+      && key !== 'artificer_charger'
+      && definitions.ITEM_DEFS[key]?.rarity !== 'black';
     const duplicated = canDuplicate && duplicateChance > 0 && random() < duplicateChance;
     const amount = Math.max(1, Math.floor(Number(options.amount || 1))) * (duplicated ? 2 : 1);
     const collected = inventory.collectCampaignItem(player, key, { amount });

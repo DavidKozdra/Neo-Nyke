@@ -60,6 +60,7 @@ const KOZ_PWA_CONFIG = {
     "/assets/sprites/chars/PXL_20260820_142621256.MP.jpg",
     "/assets/sprites/chars/queen_1.png",
     "/assets/sprites/chars/Sarge.png",
+    "/assets/sprites/chars/SeaSnake.png",
     "/assets/sprites/chars/shield_unit.png",
     "/assets/sprites/chars/sniper.png",
     "/assets/sprites/chars/summoner.png",
@@ -204,6 +205,7 @@ const KOZ_PWA_CONFIG = {
     "/js/ui/credits.js",
     "/js/ui/custom-sprite-editor.js",
     "/js/ui/input.js",
+    "/js/ui/item-picker.js",
     "/js/ui/lazy-panels.js",
     "/js/ui/menu-background.js",
     "/js/ui/move-preview.js",
@@ -290,14 +292,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 277,
-    "bytes": 56251051,
-    "criticalEntries": 217,
-    "criticalBytes": 13285066,
+    "entries": 279,
+    "bytes": 56317182,
+    "criticalEntries": 219,
+    "criticalBytes": 13351197,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "57821c8dd4f1d444"
+  "version": "8e6b1919beebf629"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

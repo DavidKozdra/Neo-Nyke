@@ -38,7 +38,7 @@
     const flatReduction = Math.max(0, Number(enemy.flatDamageReduction || 0));
     const damageTakenMultiplier = getCampaignEnemyDamageTakenMultiplier(enemy, options);
     if (options.raw) {
-      return Math.max(0, Math.round(rawDamage * damageTakenMultiplier / defenseMultiplier - flatReduction));
+      return Math.max(0, Math.round(rawDamage * Math.max(0, Number(stats.globalDamageMultiplier || 1)) * damageTakenMultiplier / defenseMultiplier - flatReduction));
     }
     const bossMultiplier = options.isBoss ? Math.max(0, Number(stats.kronosBossDamageMultiplier || 1)) : 1;
     const bleedMultiplier = options.applyBleedBonus !== false && options.hasBleed
@@ -49,6 +49,7 @@
     const powered = (rawDamage + Math.max(0, Number(options.attackPower || 0)))
       * Math.max(0, Number(options.attackerDamageMultiplier || 1))
       * Math.max(0, Number(options.poisonDamageMultiplier || 1))
+      * Math.max(0, Number(stats.globalDamageMultiplier || 1))
       * Math.max(0, Number(stats.levelEdgeDamageMultiplier || 1))
       * Math.max(0, Number(stats.kronosDamageMultiplier || 1))
       * bossMultiplier

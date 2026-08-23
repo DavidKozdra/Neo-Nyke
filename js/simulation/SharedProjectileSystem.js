@@ -252,25 +252,32 @@
     candidates.forEach(candidate => {
       const entity = getEntity(candidate);
       if (!entity || !include(candidate, entity)) return;
-      const centerX = Number(entity.x);
-      const centerY = Number(entity.y);
-      if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return;
-      const radius = projectileRadius + Math.max(0, Number(entity.radius ?? entity.r ?? 0));
-      const offsetX = fromX - centerX;
-      const offsetY = fromY - centerY;
-      let t = null;
-      if (offsetX * offsetX + offsetY * offsetY <= radius * radius) {
-        t = 0;
-      } else if (lengthSquared > 0) {
-        const b = 2 * (offsetX * dx + offsetY * dy);
-        const c = offsetX * offsetX + offsetY * offsetY - radius * radius;
-        const discriminant = b * b - 4 * lengthSquared * c;
-        if (discriminant >= 0) {
-          const root = (-b - Math.sqrt(discriminant)) / (2 * lengthSquared);
-          if (root >= 0 && root <= 1) t = root;
+      const collisionBodies = [entity];
+      if (Array.isArray(entity.collisionCircles)) collisionBodies.push(...entity.collisionCircles);
+      let entityHitT = null;
+      collisionBodies.forEach(body => {
+        const centerX = Number(body?.x);
+        const centerY = Number(body?.y);
+        if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return;
+        const radius = projectileRadius + Math.max(0, Number(body.radius ?? body.r ?? entity.radius ?? entity.r ?? 0));
+        const offsetX = fromX - centerX;
+        const offsetY = fromY - centerY;
+        let t = null;
+        if (offsetX * offsetX + offsetY * offsetY <= radius * radius) {
+          t = 0;
+        } else if (lengthSquared > 0) {
+          const b = 2 * (offsetX * dx + offsetY * dy);
+          const c = offsetX * offsetX + offsetY * offsetY - radius * radius;
+          const discriminant = b * b - 4 * lengthSquared * c;
+          if (discriminant >= 0) {
+            const root = (-b - Math.sqrt(discriminant)) / (2 * lengthSquared);
+            if (root >= 0 && root <= 1) t = root;
+          }
         }
-      }
-      if (t == null) return;
+        if (t != null && (entityHitT == null || t < entityHitT)) entityHitT = t;
+      });
+      if (entityHitT == null) return;
+      const t = entityHitT;
       const id = String(getId(candidate, entity));
       if (!closest || t < closest.t || (t === closest.t && id < closest.id)) {
         closest = { candidate, entity, id, t, x: fromX + dx * t, y: fromY + dy * t };

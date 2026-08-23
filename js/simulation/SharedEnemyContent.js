@@ -42,6 +42,9 @@
     bowman_bane: enemy('bowman_bane', 'boss', { radius: 36, maxHealth: 2400, moveSpeed: 80, contactDamage: 50, attackCooldown: 1.4 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['columns', 'burst', 'warp', 'thunder_smash']) }),
     antony_blemmye: enemy('antony_blemmye', 'boss', { radius: 42, maxHealth: 1250, moveSpeed: 78, contactDamage: 24, attackCooldown: 1.35 }, { boss: true, bleedImmune: true, patterns: Object.freeze(['hammer', 'bite', 'slash', 'death_ball']) }),
     handsome_devil: enemy('handsome_devil', 'boss', { radius: 34, maxHealth: 1700, moveSpeed: 104, contactDamage: 50, attackCooldown: 1.1 }, { boss: true, fireImmune: true, patterns: Object.freeze(['spikes', 'lava_grid', 'laser', 'claw']) }),
+    ent_of_pestilence: enemy('ent_of_pestilence', 'boss', { radius: 48, maxHealth: 2050, moveSpeed: 82, contactDamage: 28, attackCooldown: 1.15 }, { spriteKey: 'charger', boss: true, poisonImmune: true, patterns: Object.freeze(['brood', 'spit', 'rush']) }),
+    t_rex: enemy('t_rex', 'boss', { radius: 58, maxHealth: 2600, moveSpeed: 112, contactDamage: 42, attackCooldown: 1.05 }, { spriteKey: 'bulk_golem', boss: true, bleedImmune: true, patterns: Object.freeze(['bite', 'charge', 'roar']) }),
+    sea_snake: enemy('sea_snake', 'boss', { radius: 38, maxHealth: 2350, moveSpeed: 156, contactDamage: 34, attackCooldown: 0.9 }, { spriteKey: 'sea_snake', boss: true, patterns: Object.freeze(['enter', 'coil', 'constrict']) }),
     god: enemy('god', 'boss', { radius: 34, maxHealth: 920, moveSpeed: 108, contactDamage: 18, attackCooldown: 1.4 }, { boss: true, patterns: Object.freeze(['laser', 'sweep', 'partition', 'charge', 'sword_ring']) }),
     mirror_knight: enemy('mirror_knight', 'mirror', { radius: 18, maxHealth: 180, moveSpeed: 180, contactDamage: 20, attackCooldown: 0.8 }, { spriteKey: 'thorn_knight' }),
     rival: enemy('rival', 'mirror', { radius: 18, maxHealth: 220, moveSpeed: 228, contactDamage: 22, attackCooldown: 0.7 }, { spriteKey: 'thorn_knight' }),
@@ -200,6 +203,27 @@
       { melee: 'mooggy_swipe', laser: 'god_sweep', smash: 'floor_lava', dash: 'warp' },
       'claw_gauntlets', { hemes_scarf: 1, churu_stick: 1 },
     ),
+    ent_of_pestilence: playableEnemyBuild(
+      'Ent of Pestilence', 'wizard', 'Plague broodmother', 'Summon and infect',
+      'A hero-scaled pestilent boss that surrounds itself with cult followers, spits ritual bolts, and rushes through the opening.',
+      { damageMultiplier: 1.06, hpMultiplier: 1.12, moveSpeedMultiplier: 0.9, aoeRadiusMultiplier: 1.2 },
+      { melee: 'fire_balls', laser: 'cult_bolt_volley', smash: 'summon_cult_followers', dash: 'charger_rush' },
+      'metao_fire_staff', { drink_master: 1, tough_bandaid: 1 },
+    ),
+    t_rex: playableEnemyBuild(
+      'T-Rex', 'knight', 'Prehistoric juggernaut', 'Roar and charge',
+      'The dungeon tyrant becomes a heavy hero: stone fists, a crushing shockwave, a seismic smash, and its signature headlong rush.',
+      { damageMultiplier: 1.2, hpMultiplier: 1.35, moveSpeedMultiplier: 0.92, aoeRadiusMultiplier: 1.22 },
+      { melee: 'slash', laser: 'laser_shockwave', smash: 'hammer_smash', dash: 'charger_rush' },
+      'stone_fists', { turtle_shell: 1, tough_bandaid: 1 },
+    ),
+    sea_snake: playableEnemyBuild(
+      'Snake of the Sea', 'wizard', 'Constricting leviathan', 'Circle and collapse',
+      'A swift controller inspired by the segmented boss: ricochet water-like beams, a storm of columns, and warp-speed repositioning.',
+      { damageMultiplier: 1.05, hpMultiplier: 1.05, moveSpeedMultiplier: 1.2, aoeRadiusMultiplier: 1.25 },
+      { melee: 'slash', laser: 'turtle_wave', smash: 'laser_nova', dash: 'warp' },
+      'lazer_glasses', { princes_glasses: 1, enemy_magnet: 1 },
+    ),
     god: playableEnemyBuild(
       'GOD', 'god', 'Divine controller', 'Judge the whole arena',
       'A normalized final-boss form combining chained judgement, the divine sweep, Excalibur strikes, and lightning movement without final-boss health inflation.',
@@ -333,7 +357,10 @@
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner', 'golem', 'cult_mage',
     'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
   ]);
-  const BOSS_ENEMY_TYPES = Object.freeze(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
+  const BOSS_ENEMY_TYPES = Object.freeze([
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil',
+    'ent_of_pestilence', 't_rex', 'sea_snake', 'god',
+  ]);
   const ELITE_POWER_TYPES = Object.freeze(['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed']);
   const BOSS_RUSH_START_LEVEL = 2;
 

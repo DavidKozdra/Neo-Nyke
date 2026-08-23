@@ -411,7 +411,10 @@ export const PERF_BUDGET_60FPS = 1000 / 60;
 export const PERF_AVG_WEIGHT = 0.12;
 export const PERF_OVERLAY_INTERVAL = 250;
 
-export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil']);
+export const BOSS_TYPES = new Set([
+  'god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane',
+  'antony_blemmye', 'handsome_devil', 'ent_of_pestilence', 't_rex', 'sea_snake',
+]);
 export const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
 export const CHALLENGE_TRIAL_TYPES = ['mirror', 'circuit', 'bomb', 'survival', 'runes', 'storm'];
 export const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
@@ -433,6 +436,9 @@ export const BOSS_OPENING_DIALOGUE = {
   bowman_bane: 'You came back. I was waiting.',
   antony_blemmye: '. GOrba GORBA !.',
   handsome_devil: 'Try not to stare.',
+  ent_of_pestilence: 'The hive remembers every boot that crushed it.',
+  t_rex: 'RRAAAAAAWWWR!',
+  sea_snake: 'The tide closes around you.',
 };
 // Archive of story beats playable from the Credits gallery. Each entry is a
 // self-contained list of dialogue lines (speaker labels match the portrait

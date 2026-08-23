@@ -3502,7 +3502,21 @@ export function createUIController(view) {
           return type;
         }
 
-        const sandboxSearch = { enemies: '', items: '', startItems: '' };
+        const sandboxSearch = { enemies: '' };
+        // Unified item-picker state: each surface owns a { query, rarities } pair
+        // that Neo.ItemPicker reads when filtering and rendering.
+        const itemPickerState = {
+          items: { query: '', rarities: new Set() },
+          startItems: { query: '', rarities: new Set() },
+          customRelics: { query: '', rarities: new Set() },
+        };
+        // Which relics the custom character currently has selected; kept in sync
+        // from syncCustomCharacterPanelFields() so the picker can style them active.
+        const customRelicSelection = new Set();
+        // False until each picker has rendered its controls markup once; afterwards
+        // re-renders patch the chips in place so a live search keeps its caret.
+        let itemPickerControlsReady = false;
+        let customRelicControlsReady = false;
         const SANDBOX_CONFIG_TABS = ['rules', 'loadout', 'gear', 'pools'];
         const SANDBOX_RULE_PRESETS = Object.freeze({
           standard: Object.freeze({
@@ -3578,15 +3592,6 @@ export function createUIController(view) {
           return key.includes(query) || label.includes(query);
         }
 
-        function itemMatchesSandboxSearch(key, query) {
-          if (!query) return true;
-          const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key] || {};
-          const label = String(item.name || key).toLowerCase();
-          const rarity = String(item.rarity || '').toLowerCase();
-          const idKey = String(key || '').toLowerCase();
-          return label.includes(query) || idKey.includes(query) || rarity.includes(query);
-        }
-
         function renderSandboxEmptyState(text) {
           return `<div class="sandbox-empty">${Neo.escapeHtml(text)}</div>`;
         }
@@ -3596,14 +3601,83 @@ export function createUIController(view) {
             const key = String(el.dataset.sboxEnemyIcon || 'hunter');
             Neo.drawSpriteToCanvas(el, getSandboxEnemySpriteKey(key), 22);
           });
-          Neo.drawItemIconCanvases?.(view.sandboxItemList, 'data-sbox-item-icon');
-          Neo.drawItemIconCanvases?.(view.sandboxStartItemList, 'data-sbox-start-item-icon');
+        }
+
+        // Re-renders one item-picker surface: its search/rarity controls plus the
+        // filtered token grid. All three item-choice surfaces go through here so
+        // they share one search, one rarity filter and one token markup.
+        function renderItemPickerSurface(name, { preserveSearchValue = false } = {}) {
+          const picker = Neo.ItemPicker;
+          if (!picker) return;
+          const state = itemPickerState[name];
+          const keys = Neo.ITEM_KEYS || [];
+          const surfaces = {
+            items: {
+              controls: view.sandboxItemControls,
+              list: view.sandboxItemList,
+              searchPlaceholder: 'Search items...',
+              searchLabel: 'Search items',
+              opts: {
+                dataAttr: 'data-sbox-item',
+                iconAttr: 'data-sbox-item-icon',
+                isActive: key => Neo.sandboxSettings.allowedItems.includes(key),
+                emptyText: 'No items match your filters.',
+              },
+            },
+            startItems: {
+              controls: view.sandboxStartItemControls,
+              list: view.sandboxStartItemList,
+              searchPlaceholder: 'Search starting items...',
+              searchLabel: 'Search starting inventory items',
+              opts: {
+                mode: 'stepper',
+                dataAttr: 'data-sbox-start-item',
+                iconAttr: 'data-sbox-start-item-icon',
+                stepAttr: 'data-sbox-start-item-key',
+                getCount: key => {
+                  const starting = Neo.sandboxSettings.startingItems;
+                  return starting && typeof starting === 'object' ? Number(starting[key]) || 0 : 0;
+                },
+                emptyText: 'No starting items match your filters.',
+              },
+            },
+            customRelics: {
+              controls: view.customCharacterRelicControls,
+              list: view.customCharacterRelicList,
+              searchPlaceholder: 'Search relics...',
+              searchLabel: 'Search starter relics',
+              opts: {
+                dataAttr: 'data-custom-relic',
+                iconAttr: 'data-custom-relic-icon',
+                isActive: key => customRelicSelection.has(key),
+                emptyText: 'No relics match your filters.',
+              },
+            },
+          };
+          const surface = surfaces[name];
+          if (!surface) return;
+          // Rewriting the controls markup would drop the search caret, so once the
+          // controls exist only the chips' pressed state is refreshed in place.
+          if (surface.controls) {
+            if (preserveSearchValue) {
+              surface.controls.querySelectorAll('[data-item-picker-rarity]').forEach(chip => {
+                const tier = String(chip.dataset.itemPickerRarity || '');
+                const on = tier ? state.rarities.has(tier) : state.rarities.size === 0;
+                chip.classList.toggle('is-active', on);
+                chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+              });
+            } else {
+              surface.controls.innerHTML = picker.renderControls(keys, state, {
+                searchPlaceholder: surface.searchPlaceholder,
+                searchLabel: surface.searchLabel,
+              });
+            }
+          }
+          picker.renderList(surface.list, keys, state, surface.opts);
         }
 
         function renderSandboxTokenLists() {
           const enemyQuery = normalizeSandboxSearchValue(sandboxSearch.enemies);
-          const itemQuery = normalizeSandboxSearchValue(sandboxSearch.items);
-          const startItemQuery = normalizeSandboxSearchValue(sandboxSearch.startItems);
 
           if (view.sandboxEnemyList) {
             const filteredEnemies = Neo.SANDBOX_ENEMY_TYPES.filter(type => enemyMatchesSandboxSearch(type, enemyQuery));
@@ -3618,51 +3692,12 @@ export function createUIController(view) {
             }).join('')
               : renderSandboxEmptyState('No enemy types match your search.');
           }
-          if (view.sandboxItemList) {
-            const filteredItems = Neo.ITEM_KEYS.filter(key => itemMatchesSandboxSearch(key, itemQuery));
-            view.sandboxItemList.innerHTML = filteredItems.length
-              ? filteredItems.map(key => {
-              const active = Neo.sandboxSettings.allowedItems.includes(key);
-              const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
-              const label = item?.name || key.replace(/_/g, ' ');
-              const rarity = String(item?.rarity || 'knight');
-              return `<button class="sandbox-token sandbox-token--item sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-item="${key}" type="button">`
-                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${Neo.escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
-                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
-                + `</button>`;
-            }).join('')
-              : renderSandboxEmptyState('No items match your search.');
-          }
-          if (view.sandboxStartItemList) {
-            const startingItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
-              ? Neo.sandboxSettings.startingItems
-              : {};
-            const filteredStartItems = Neo.ITEM_KEYS.filter(key => itemMatchesSandboxSearch(key, startItemQuery));
-            view.sandboxStartItemList.innerHTML = filteredStartItems.length
-              ? filteredStartItems.map(key => {
-              const count = Math.max(0, Math.min(99, Math.round(Number(startingItems[key]) || 0)));
-              const active = count > 0;
-              const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
-              const label = item?.name || key.replace(/_/g, ' ');
-              const rarity = String(item?.rarity || 'knight');
-              const safeKey = Neo.escapeHtml(key);
-              // Tooltip parity with the death screen: title + aria-label + data-tooltip
-              // carry the item description (with the same fallback text).
-              const tooltipText = item?.description || 'No item description available.';
-              const safeTooltip = Neo.escapeHtml(tooltipText);
-              const safeAria = Neo.escapeHtml(`${label}. ${tooltipText}`);
-              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">`
-                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-start-item-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
-                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
-                + `<div class="sandbox-token__stepper">`
-                  + `<button class="sandbox-token__step" data-sbox-start-step="-1" data-sbox-start-item-key="${safeKey}" type="button" aria-label="Decrease ${Neo.escapeHtml(label)}">−</button>`
-                  + `<span class="sandbox-token__count" data-sbox-start-count>${count}</span>`
-                  + `<button class="sandbox-token__step" data-sbox-start-step="1" data-sbox-start-item-key="${safeKey}" type="button" aria-label="Increase ${Neo.escapeHtml(label)}">+</button>`
-                + `</div>`
-                + `</div>`;
-              }).join('')
-                : renderSandboxEmptyState('No starting items match your search.');
-          }
+          // Called on every settings sync (toggling a single item re-syncs the
+          // whole panel), so keep any live search field and its caret intact.
+          const keepSearch = { preserveSearchValue: itemPickerControlsReady };
+          renderItemPickerSurface('items', keepSearch);
+          renderItemPickerSurface('startItems', keepSearch);
+          itemPickerControlsReady = true;
           hydrateSandboxTokenIcons();
         }
 
@@ -3785,22 +3820,13 @@ export function createUIController(view) {
             if (slider) slider.value = String(value);
             if (numInput) numInput.value = String(value);
           });
-          if (view.customCharacterRelicList) {
-            const selectedRelics = new Set(custom.starterRelics || []);
-            view.customCharacterRelicList.innerHTML = Neo.ITEM_KEYS.map(key => {
-              const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key];
-              const label = item?.name || key.replace(/_/g, ' ');
-              const rarity = String(item?.rarity || 'knight');
-              const active = selectedRelics.has(key);
-              const safeKey = Neo.escapeHtml(key);
-              const tooltipText = item?.description || 'No item description available.';
-              return `<button class="sandbox-token sandbox-token--item sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-custom-relic="${safeKey}" type="button" aria-pressed="${active ? 'true' : 'false'}" title="${Neo.escapeHtml(tooltipText)}">`
-                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-custom-relic-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
-                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
-                + `</button>`;
-            }).join('');
-            Neo.drawItemIconCanvases?.(view.customCharacterRelicList, 'data-custom-relic-icon');
-          }
+          // Mirror the saved relic picks into the shared selection set the unified
+          // item picker reads when marking tokens active. This runs on every relic
+          // click, so only build the controls markup the first time.
+          customRelicSelection.clear();
+          (custom.starterRelics || []).forEach(key => customRelicSelection.add(key));
+          renderItemPickerSurface('customRelics', { preserveSearchValue: customRelicControlsReady });
+          customRelicControlsReady = true;
           void Neo.CustomSpriteEditor?.open?.(customKey);
         }
 
@@ -3840,8 +3866,6 @@ export function createUIController(view) {
             });
           });
           if (view.sandboxEnemySearch) view.sandboxEnemySearch.value = sandboxSearch.enemies;
-          if (view.sandboxItemSearch) view.sandboxItemSearch.value = sandboxSearch.items;
-          if (view.sandboxStartItemSearch) view.sandboxStartItemSearch.value = sandboxSearch.startItems;
           renderSandboxTokenLists();
           updateSandboxPresetState();
         }
@@ -4018,15 +4042,14 @@ export function createUIController(view) {
           renderSandboxTokenLists();
         });
 
-        view.sandboxItemSearch?.addEventListener('input', () => {
-          sandboxSearch.items = String(view.sandboxItemSearch?.value || '');
-          renderSandboxTokenLists();
-        });
-
-        view.sandboxStartItemSearch?.addEventListener('input', () => {
-          sandboxSearch.startItems = String(view.sandboxStartItemSearch?.value || '');
-          renderSandboxTokenLists();
-        });
+        // Search + rarity chips for every item-picker surface are delegated once
+        // here; each re-renders only its own grid.
+        Neo.ItemPicker?.attachControls(view.sandboxItemControls, itemPickerState.items,
+          opts => renderItemPickerSurface('items', opts));
+        Neo.ItemPicker?.attachControls(view.sandboxStartItemControls, itemPickerState.startItems,
+          opts => renderItemPickerSurface('startItems', opts));
+        Neo.ItemPicker?.attachControls(view.customCharacterRelicControls, itemPickerState.customRelics,
+          opts => renderItemPickerSurface('customRelics', opts));
 
         view.sandboxEnemyList?.addEventListener('click', event => {
           const btn = event.target instanceof Element ? event.target.closest('[data-sbox-enemy]') : null;

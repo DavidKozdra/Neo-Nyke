@@ -1758,14 +1758,14 @@
     setField('timer', runPlayer ? (Neo.ui?.timerDisplay?.textContent || '0:00') : '0:00');
     const diffKey = run?.difficulty || meta.selectedDifficulty || Neo.selectedDifficulty;
     setField('difficulty', String(Neo.getDifficultyDef?.(diffKey)?.name || diffKey || 'EASY').toUpperCase());
-    const rarity = Neo.getItemRarityCounts?.(runPlayer || { items: {} }) || { white: 0, purple: 0, red: 0, blue: 0, green: 0 };
+    const rarity = Neo.getItemRarityCounts?.(runPlayer || { items: {} }) || { white: 0, purple: 0, red: 0, blue: 0, green: 0, black: 0 };
     setField('rarityWhite', rarity.white);
     setField('rarityPurple', rarity.purple);
     setField('rarityRed', rarity.red);
     // Blue (Artificer) / green (Knave) badges only appear once owned — mirror the
     // live HUD's conditional reveal in the preview too. Toggle the badge wrapper,
     // not the inner count span that holds the data-preview-field marker.
-    [['rarityBlue', rarity.blue], ['rarityGreen', rarity.green]].forEach(([field, value]) => {
+    [['rarityBlue', rarity.blue], ['rarityGreen', rarity.green], ['rarityBlack', rarity.black]].forEach(([field, value]) => {
       const el = frame.querySelector(`[data-preview-field="${field}"]`);
       if (!el) return;
       el.textContent = String(value || 0);

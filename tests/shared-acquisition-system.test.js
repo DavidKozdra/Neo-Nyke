@@ -6,6 +6,7 @@ const {
   getVoucherItemPool,
   redeemCampaignVoucher,
   createCampaignScrollPoolChoices,
+  getScrollItemPool,
   applyCampaignScrollSelection,
   applyJestersDiceAcquisition,
   collectCampaignPickup,
@@ -87,6 +88,17 @@ describe('shared campaign acquisition transactions', () => {
     expect(createCampaignScrollPoolChoices(() => rolls.shift(), 4)).toEqual(
       createCampaignScrollPoolChoices(() => 0.25, 4),
     );
+  });
+
+  test('black relics cannot bypass their boss encounter through scrolls or duplication', () => {
+    expect(getScrollItemPool()).not.toEqual(expect.arrayContaining(['bug_card', 'dino_tooth', 'heart_of_the_ocean']));
+    const target = player();
+    const result = collectCampaignPickup({}, target, 'dino_tooth', {
+      duplicateChance: 0.75,
+      random: () => 0,
+    });
+    expect(result).toMatchObject({ ok: true, amount: 1, duplicated: false });
+    expect(target.items.dino_tooth).toBe(1);
   });
 
   test('Jester acquisition grants ten shared items and three pending floors per copy', () => {
