@@ -174,7 +174,8 @@ describe('Sarge tutorial v2', () => {
     expect(gameState).toContain("if (Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
     // The character-select UI disables Sarge's card and the Go button.
     expect(uiController).toContain('const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.()');
-    expect(uiController).toContain("unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked)");
+    expect(uiController).toContain('unlocked.has(itemKey)');
+    expect(uiController).toContain("&& !(itemKey === 'sarge' && sargeTutorialBlocked)");
     expect(uiController).toContain("if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first'");
     expect(uiController).toContain('goBtn.disabled = !isSelectable(selected) || inactiveCustom');
     // Programmatic (carousel/keyboard) selection of a gated Sarge is rejected.

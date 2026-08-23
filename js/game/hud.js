@@ -1115,11 +1115,13 @@
     // so we can banner any that the new total just made available.
     const difficultiesBefore = Neo.getUnlockedDifficultySet ? new Set(Neo.getUnlockedDifficultySet()) : null;
     if (!Neo.isMetaProgressBlockedMode?.()) {
+      Neo.metaProgress.gameBeaten = true;
       const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
       const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
       const victoryCrystals = 1 + crystalBonus + titheBonus;
       Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + victoryCrystals;
       Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + victoryCrystals;
+      Neo.persistMetaSoon?.();
     }
     if (difficultiesBefore && Neo.getUnlockedDifficultySet) {
       for (const key of Neo.getUnlockedDifficultySet()) {

@@ -242,6 +242,7 @@ export function bindInput() {
           Neo.spawnParticle?.({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 1.1, text: 'Unlock the full roster to play the tutorial as Sarge', c: '#ff6f7f' });
           return;
         }
+        if (Neo.isCustomCharacterKey?.(characterKey) && !Neo.hasBeatenGame?.()) return;
         if (Neo.charSelectPhase === 'p2') { Neo.chosenCharacter2 = characterKey; }
         else if (Neo.charSelectPhase === 'p3') { Neo.chosenCharacter3 = characterKey; }
         else if (Neo.charSelectPhase === 'p4') { Neo.chosenCharacter4 = characterKey; }

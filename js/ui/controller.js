@@ -1361,6 +1361,13 @@ export function createUIController(view) {
       const addButton = track?.querySelector('[data-add-custom-character]');
       if (!track || !addButton) return;
       track.querySelectorAll('[data-generated-custom-character]').forEach(node => node.remove());
+      const customCharactersUnlocked = !!Neo.hasBeatenGame?.();
+      addButton.hidden = !customCharactersUnlocked;
+      if (!customCharactersUnlocked) {
+        refreshCharacterButtons();
+        updateCarouselArrowState(selectedCarouselKey);
+        return;
+      }
       const customs = Neo.normalizeCustomCharactersSettings?.(Neo.metaProgress?.customCharacters) || [];
       customs.forEach(custom => {
         const key = `custom_character_${custom.id}`;
@@ -3274,6 +3281,7 @@ export function createUIController(view) {
     }
 
     function setCustomCharacterPanelOpen(open) {
+      if (open && !Neo.hasBeatenGame?.()) return;
       if (open) Neo.mountLazyPanel?.('customCharacterPanel');
       if (open) {
         syncCustomCharacterPanelFieldsHook?.();
@@ -3431,7 +3439,7 @@ export function createUIController(view) {
         rosterTrack?.addEventListener('click', event => {
           const addButton = event.target instanceof Element ? event.target.closest('[data-add-custom-character]') : null;
           if (addButton) {
-            if (!Neo.hasAllCharactersUnlocked?.()) return;
+            if (!Neo.hasBeatenGame?.()) return;
             const newKey = Neo.createCustomCharacter?.();
             if (!newKey) return;
             Neo.editingCustomCharacterKey = newKey;
@@ -4734,10 +4742,14 @@ export function createUIController(view) {
         // (he stays playable in normal runs once earned — this only affects
         // the tutorial flow when the prereq somehow isn't met yet).
         const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.();
+        const customCharactersUnlocked = !!Neo.hasBeatenGame?.();
         const isSelectable = (itemKey) =>
-          unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked);
+          unlocked.has(itemKey)
+          && !(itemKey === 'sarge' && sargeTutorialBlocked)
+          && (!Neo.isCustomCharacterKey?.(itemKey) || customCharactersUnlocked);
         const unlockText = (itemKey) => {
           if (Neo.isCustomCharacterKey?.(itemKey)) {
+            if (!customCharactersUnlocked) return 'Locked';
             return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
           }
           if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first';
@@ -4756,13 +4768,13 @@ export function createUIController(view) {
           return 'Locked';
         };
 
-        const allCharactersUnlocked = !!Neo.hasAllCharactersUnlocked?.();
         const addCustomButton = document.querySelector('[data-add-custom-character]');
         if (addCustomButton) {
-          addCustomButton.classList.toggle('locked', !allCharactersUnlocked);
-          addCustomButton.disabled = !allCharactersUnlocked;
+          addCustomButton.hidden = !customCharactersUnlocked;
+          addCustomButton.classList.toggle('locked', !customCharactersUnlocked);
+          addCustomButton.disabled = !customCharactersUnlocked;
           const addHint = addCustomButton.querySelector('small');
-          const addHintText = allCharactersUnlocked ? 'New custom' : 'Unlock the full roster first';
+          const addHintText = customCharactersUnlocked ? 'New custom' : 'Locked';
           if (addHint) addHint.textContent = addHintText;
           addCustomButton.setAttribute('aria-label', `Add custom character. ${addHintText}.`);
         }

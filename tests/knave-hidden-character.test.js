@@ -41,9 +41,10 @@ describe('Knave, the hidden playable character', () => {
     expect(state).toContain("const fallback = ['princess', 'thorn_knight', 'metao'];");
     expect(state).not.toMatch(/unlocked\.add\('knave'\)/);
 
-    // Custom-character creation is gated on the full roster; the hidden hero
-    // must be excluded or finding the egg becomes mandatory for that feature.
-    expect(state).toContain("key !== 'custom_character' && key !== 'knave'");
+    // Custom-character creation is a game-completion reward, independent of
+    // whether the hidden credits hero has been discovered.
+    expect(state).toContain('function hasBeatenGame()');
+    expect(state).not.toContain('function hasAllCharactersUnlocked()');
   });
 
   test('stays out of every roster surface until he has been found', () => {

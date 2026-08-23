@@ -39,6 +39,7 @@ export function resumeGame() {
       selectedCharacter: 'thorn_knight',
       characterKitChoices: {},
       customCharacters: normalizeCustomCharactersSettings(),
+      gameBeaten: false,
       godsKilled: 0,
       mooggyDefeats: 0,
       bowmanBaneDefeats: 0,
@@ -156,7 +157,7 @@ export function resumeGame() {
   }
 
   function createCustomCharacter() {
-    if (!Neo.metaProgress) return '';
+    if (!Neo.metaProgress || !hasBeatenGame()) return '';
     const id = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     const custom = normalizeCustomCharacterSettings({ id, name: 'Custom', active: true }, id);
     const list = normalizeCustomCharactersSettings(Neo.metaProgress.customCharacters);
@@ -558,17 +559,10 @@ export function resumeGame() {
     return isReplayTutorialRequested() && !hasSargeUnlockPrereq();
   }
 
-  // Custom character creation is a reward for completing the earnable hero
-  // roster. Secret credits unlocks (Knave and the enemy roster) do not gate it.
-  function hasAllCharactersUnlocked() {
-    const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
-    if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh');
-    if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
-    if (Number(Neo.metaProgress?.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
-    const isPlayableEnemy = globalThis.NeoNyke?.content?.isPlayableEnemyCharacterKey;
-    const baseKeys = Object.keys(Neo.CHARACTER_DEFS || {})
-      .filter(key => key !== 'custom_character' && key !== 'knave' && !isPlayableEnemy?.(key));
-    return baseKeys.every(key => unlocked.has(key));
+  // Custom characters are a completion reward. Older saves migrate their
+  // existing victory counter into this explicit flag during load.
+  function hasBeatenGame() {
+    return Neo.metaProgress?.gameBeaten === true;
   }
 
   // Turtle Boy unlocks the moment the player has his signature weapon and
@@ -1210,6 +1204,7 @@ export function resumeGame() {
           storySkipTutorial: savedMeta.storySkipTutorial === true,
           characterKitChoices: migrateCharacterKitChoices(savedMeta.characterKitChoices),
           customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
+          gameBeaten: savedMeta.gameBeaten === true || Number(savedMeta.godsKilled || 0) > 0,
         };
         // Guardrail: loading must never lose an earned unlock. If a key was in the save
         // but isn't after normalization, a normalizer/migration dropped it (e.g. a key
@@ -1236,7 +1231,8 @@ export function resumeGame() {
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
         if (Number(Neo.metaProgress.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
-        getCustomCharacterKeys().forEach(key => unlocked.add(key));
+        if (hasBeatenGame()) getCustomCharacterKeys().forEach(key => unlocked.add(key));
+        else [...unlocked].filter(isCustomCharacterKey).forEach(key => unlocked.delete(key));
         // Persist the derived unlocks back into the saved list. Gelleh/Mooggy/Sarge were
         // only ever re-derived from their counters at load and never written back, so
         // adding new always-unlocked starters (turtle_boy) made the earned unlocks look
@@ -2994,7 +2990,8 @@ export function resumeGame() {
     if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     if (Number(Neo.metaProgress.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
-    getCustomCharacterKeys().forEach(key => unlocked.add(key));
+    if (hasBeatenGame()) getCustomCharacterKeys().forEach(key => unlocked.add(key));
+    else [...unlocked].filter(isCustomCharacterKey).forEach(key => unlocked.delete(key));
     const storyCharacters = new Set(globalThis.NeoNyke?.story?.STORY_CHARACTERS || []);
     const storyUnlocked = isStory
       ? new Set([...unlocked].filter(key => storyCharacters.has(key)))
@@ -3030,6 +3027,14 @@ export function resumeGame() {
     if (Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked()) {
       const fallback = ['thorn_knight', 'princess', 'metao'].find(key => unlocked.has(key))
         || [...unlocked].find(key => key !== 'sarge' && !isCustomCharacterKey(key));
+      if (fallback) {
+        Neo.chosenCharacter = fallback;
+        Neo.metaProgress.selectedCharacter = fallback;
+        activeChar = fallback;
+      }
+    }
+    if (!hasBeatenGame() && isCustomCharacterKey(Neo.chosenCharacter)) {
+      const fallback = ['thorn_knight', 'princess', 'metao'].find(key => unlocked.has(key));
       if (fallback) {
         Neo.chosenCharacter = fallback;
         Neo.metaProgress.selectedCharacter = fallback;
@@ -3149,6 +3154,17 @@ export function resumeGame() {
     // Multiplayer panel can still offer a return. This is the fix for Single
     // Player re-opening the multiplayer game and its HUD bleeding into the menu.
     Neo.detachBrowserMultiplayerGame?.();
+    // A stale save or programmatic caller must not bypass the character-select
+    // lock. Existing runs may resume, but every new run falls back to a starter
+    // until the game has been beaten once.
+    if (!resume && !Neo.hasBeatenGame?.()) {
+      ['chosenCharacter', 'chosenCharacter2', 'chosenCharacter3', 'chosenCharacter4'].forEach(field => {
+        if (Neo.isCustomCharacterKey?.(Neo[field])) Neo[field] = 'thorn_knight';
+      });
+      if (Neo.isCustomCharacterKey?.(Neo.metaProgress?.selectedCharacter)) {
+        Neo.metaProgress.selectedCharacter = 'thorn_knight';
+      }
+    }
     if (Neo.gameMode === 'endless') { startEndless(); return; }
     if (Neo.gameMode === 'practice') { startPractice(); return; }
     if (Neo.gameMode === 'boss_rush') { startBossRush(); return; }
@@ -4674,7 +4690,7 @@ export function resumeGame() {
   Neo.isReplayTutorialRequested = isReplayTutorialRequested;
   Neo.hasSargeUnlockPrereq = hasSargeUnlockPrereq;
   Neo.isSargeTutorialBlocked = isSargeTutorialBlocked;
-  Neo.hasAllCharactersUnlocked = hasAllCharactersUnlocked;
+  Neo.hasBeatenGame = hasBeatenGame;
   Neo.checkTurtleBoyUnlock = checkTurtleBoyUnlock;
   Neo.unlockKnaveCharacter = unlockKnaveCharacter;
   Neo.hasPlayableEnemyRosterUnlocked = hasPlayableEnemyRosterUnlocked;
