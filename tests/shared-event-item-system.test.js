@@ -1,4 +1,4 @@
-const { applyCampaignKillCharge, chargeRequirement, applyCampaignRevive, applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation, getCampaignHemesScarfPassiveBleedStacks, advanceCampaignHemesScarfDrain, resetGenericHealthRegen, advanceGenericHealthRegen, advanceUniversalHealthRegen, resolveCampaignKillAreaEffects, resolveCampaignSargesHammerDoubleKill, resolveCampaignMoggysCoatOpening, resolveCampaignRoomEntryItemEffects, applyCampaignRoomEntryReset } = require('../js/simulation/SharedEventItemSystem.js');
+const { applyCampaignKillCharge, chargeRequirement, applyCampaignRevive, applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation, getCampaignHemesScarfPassiveBleedStacks, advanceCampaignHemesScarfDrain, resetGenericHealthRegen, advanceGenericHealthRegen, resolveCampaignKillAreaEffects, resolveCampaignSargesHammerDoubleKill, resolveCampaignMoggysCoatOpening, resolveCampaignRoomEntryItemEffects, applyCampaignRoomEntryReset } = require('../js/simulation/SharedEventItemSystem.js');
 const { getCampaignPotionCarryCap } = require('../js/simulation/SharedPotionSystem.js');
 
 describe('SharedEventItemSystem kill transactions', () => {
@@ -56,27 +56,6 @@ describe('SharedEventItemSystem kill transactions', () => {
     player.hp = 90;
     expect(advanceGenericHealthRegen(player, 0.5).healed).toBe(0);
     expect(advanceGenericHealthRegen(player, 0.5).healed).toBe(1);
-  });
-
-  test('regenerates every living character by a flat 1 HP each second', () => {
-    const player = { hp: 50, maxHp: 100 };
-    expect(advanceUniversalHealthRegen(player, 0.75)).toEqual({ healed: 0, pulses: [] });
-    expect(advanceUniversalHealthRegen(player, 0.25)).toEqual({ healed: 1, pulses: [1] });
-    expect(player.hp).toBe(51);
-
-    expect(advanceUniversalHealthRegen(player, 2)).toEqual({ healed: 2, pulses: [1, 1] });
-    expect(player.hp).toBe(53);
-  });
-
-  test('does not bank universal regen at full health or heal downed characters', () => {
-    const player = { hp: 100, maxHp: 100 };
-    advanceUniversalHealthRegen(player, 20);
-    player.hp = 90;
-    expect(advanceUniversalHealthRegen(player, 0.99).healed).toBe(0);
-    expect(advanceUniversalHealthRegen(player, 0.01).healed).toBe(1);
-
-    player.downed = true;
-    expect(advanceUniversalHealthRegen(player, 10).healed).toBe(0);
   });
 
   test('charge requirement shares adapter and tag synergy reductions', () => {

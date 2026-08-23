@@ -177,7 +177,6 @@
     applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
     resetGenericHealthRegen = () => false,
     advanceGenericHealthRegen = () => ({ active: false, healed: 0, pulses: [] }),
-    advanceUniversalHealthRegen = () => ({ healed: 0, pulses: [] }),
     applyCampaignInsuranceOnHit = player => ({ triggered: false, health: player?.hp || 0 }),
     resolveCampaignHemesScarfRetaliation = () => null,
     getCampaignHemesScarfPassiveBleedStacks = () => 0,
@@ -6993,14 +6992,6 @@
   function updateGenericHealthRegen(state, fixedDelta, emitEvent) {
     Object.values(state.players || {}).forEach(player => {
       if (!player || player.downed || player.disconnected) return;
-      const universalRegen = advanceUniversalHealthRegen(player, fixedDelta);
-      universalRegen.pulses.forEach(healedAmount => emitEvent('PLAYER_HEALED', {
-        playerId: player.id,
-        roomId: player.roomId,
-        source: 'universal_regen',
-        healedAmount,
-        health: player.hp,
-      }));
       const regen = advanceGenericHealthRegen(player, fixedDelta, { itemStats: player.itemStats });
       regen.pulses.forEach(healedAmount => emitEvent('PLAYER_HEALED', {
         playerId: player.id,

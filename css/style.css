@@ -9742,19 +9742,15 @@ button.alt.danger {
   transition: opacity .14s;
 }
 
+/* A green orb stands in for the XP pickup, so the half reads icon + name +
+   balance exactly like the gold half (a literal "XP" badge just repeated the
+   label sitting next to it). */
 .anvil-pay-btn__icon--xp {
-  display: grid;
-  place-items: center;
-  width: auto;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border-radius: 4px;
-  font-size: calc(9px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .04em;
-  color: #0d1a12;
-  background: #56e07f;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #d6ffe4, #56e07f 58%, #2ba354);
+  box-shadow: 0 0 5px rgba(86,224,127,.6);
 }
 
 .anvil-pay-btn.is-active .anvil-pay-btn__icon {

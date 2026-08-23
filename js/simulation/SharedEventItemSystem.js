@@ -11,38 +11,6 @@
   const count = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
   const GENERIC_HEALTH_REGEN_DELAY_SECONDS = 5;
   const GENERIC_HEALTH_REGEN_INTERVAL_SECONDS = 1;
-  const UNIVERSAL_HEALTH_REGEN_PER_SECOND = 1;
-  const UNIVERSAL_HEALTH_REGEN_INTERVAL_SECONDS = 1;
-
-  function advanceUniversalHealthRegen(player, deltaSeconds, options = {}) {
-    if (!player) return { healed: 0, pulses: [] };
-    const maxHp = Math.max(0, Number(player.maxHp || 0));
-    const hp = Number(player.hp || 0);
-    const delta = Math.max(0, Number(deltaSeconds || 0));
-    if (maxHp <= 0 || hp <= 0 || hp >= maxHp || player.downed || player.coopDowned) {
-      player.universalHealthRegenAccum = 0;
-      return { healed: 0, pulses: [] };
-    }
-
-    player.universalHealthRegenAccum = Math.max(0, Number(player.universalHealthRegenAccum || 0)) + delta;
-    const pulses = [];
-    while (player.universalHealthRegenAccum >= UNIVERSAL_HEALTH_REGEN_INTERVAL_SECONDS) {
-      player.universalHealthRegenAccum -= UNIVERSAL_HEALTH_REGEN_INTERVAL_SECONDS;
-      const before = Number(player.hp || 0);
-      let gained;
-      if (typeof options.heal === 'function') gained = Math.max(0, Number(options.heal(UNIVERSAL_HEALTH_REGEN_PER_SECOND) || 0));
-      else {
-        player.hp = Math.min(maxHp, before + UNIVERSAL_HEALTH_REGEN_PER_SECOND);
-        gained = Math.max(0, Number(player.hp || 0) - before);
-      }
-      if (gained > 0) pulses.push(gained);
-      if (Number(player.hp || 0) >= maxHp) {
-        player.universalHealthRegenAccum = 0;
-        break;
-      }
-    }
-    return { healed: pulses.reduce((sum, amount) => sum + amount, 0), pulses };
-  }
 
   function resetGenericHealthRegen(player) {
     if (!player) return false;
@@ -386,7 +354,7 @@
 
   return {
     chargeRequirement, critCharmRequirement, applyCampaignKillCharge, applyCampaignRevive,
-    resetGenericHealthRegen, advanceGenericHealthRegen, advanceUniversalHealthRegen,
+    resetGenericHealthRegen, advanceGenericHealthRegen,
     applyCampaignInsuranceOnHit, resolveCampaignHemesScarfRetaliation,
     getCampaignHemesScarfPassiveBleedStacks,
     advanceCampaignHemesScarfDrain,
