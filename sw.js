@@ -291,13 +291,13 @@ const KOZ_PWA_CONFIG = {
   "warmOptionalOnInstall": false,
   "manifestSummary": {
     "entries": 277,
-    "bytes": 56249333,
+    "bytes": 56249838,
     "criticalEntries": 217,
-    "criticalBytes": 13283348,
+    "criticalBytes": 13283853,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "fb4b604b84666426"
+  "version": "c482f017d405ce5d"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
