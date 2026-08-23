@@ -110,7 +110,7 @@
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner', 'golem',
     'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
     'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye',
-    'handsome_devil', 'god', 'mooggy', 'mirror_knight', 'rival',
+    'handsome_devil', 'ent_of_pestilence', 'god', 'mooggy', 'mirror_knight', 'rival',
   ]);
 
   // Queen finisher tuning (verbatim from game/enemies.js).
@@ -978,6 +978,55 @@
 
       if (enemy.windup > 0 || enemy.beamTime > 0) {
         updateCultMageEnemy(enemy, dt);
+      }
+    }
+
+    function updateEntOfPestilence(enemy, dt) {
+      const player = ctx.getPlayer(enemy);
+      if (!player) return;
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      if (enemy.stun > 0) {
+        enemy.vx *= 0.88;
+        enemy.vy *= 0.88;
+        return;
+      }
+      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.4, dt);
+      enemy.summonCd = Math.max(0, Number(enemy.summonCd || 0) - dt);
+      if (enemy.summonCd <= 0) {
+        for (let index = 0; index < 3; index += 1) {
+          const angle = index * Math.PI * 2 / 3 + random('encounter') * 0.4;
+          ctx.spawnSummon(enemy, 'cult_follower', enemy.x + Math.cos(angle) * 72, enemy.y + Math.sin(angle) * 72, {
+            displayName: 'Pestilent Grub',
+            pestilentGrub: true,
+            spriteKey: 'ent_boss',
+          });
+        }
+        enemy.summonCd = 5.2;
+        enemy.attackAnimT = 0.24;
+        ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'pestilent_brood', summonCount: 3 });
+        return;
+      }
+      if (enemy.attackCd <= 0) {
+        const aim = Math.atan2(dy, dx);
+        for (let spread = -1; spread <= 1; spread += 1) {
+          const angle = aim + spread * 0.22;
+          ctx.spawnProjectile(enemy, {
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(angle) * 310,
+            vy: Math.sin(angle) * 310,
+            r: 7,
+            life: 2.2,
+            kind: 'pestilence_spit',
+            source: enemy.type,
+            damage: Math.round(enemy.dmg * 0.75),
+            statusEffects: [{ key: 'poison', stacks: 2, duration: 5 }],
+          });
+        }
+        enemy.attackCd = 1.7;
+        enemy.attackAnimT = 0.24;
       }
     }
 
@@ -3077,6 +3126,7 @@
       updateBowmanBane,
       updateAntonyBlemmyeBoss,
       updateHandsomeDevilBoss,
+      updateEntOfPestilence,
       updateGod,
       updateMooggyEnemy,
       updateMirrorChampion,

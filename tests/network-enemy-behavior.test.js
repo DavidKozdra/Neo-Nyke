@@ -82,6 +82,26 @@ function tick(simulation, count = 1) {
 }
 
 describe('authored campaign enemy behaviors on the authority', () => {
+  test('Ent of Pestilence guarantees a three-grub brood in multiplayer', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const ent = injectEnemy(state, 'ent_of_pestilence', 420, 340, { summonCd: 0, attackCd: 1 });
+
+    tick(simulation);
+
+    const brood = Object.values(state.enemies).filter(enemy => enemy.summonedBy === ent.id);
+    expect(brood).toHaveLength(3);
+    brood.forEach(grub => expect(grub).toEqual(expect.objectContaining({
+      type: 'cult_follower',
+      spriteKey: 'ent_boss',
+      displayName: 'Pestilent Grub',
+      pestilentGrub: true,
+    })));
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ENEMY_SUPPORT_USED',
+      data: expect.objectContaining({ enemyId: ent.id, supportKind: 'pestilent_brood', summonCount: 3 }),
+    }));
+  });
+
   test('Endless creates the campaign sealed single-arena floor at multiplayer startup', () => {
     const floorState = createNetworkFloorState({ matchSeed: 'endless-layout', floorSeed: 'endless-layout|floor:1', gameMode: 'endless' });
     expect(floorState.layout.rooms).toHaveLength(1);

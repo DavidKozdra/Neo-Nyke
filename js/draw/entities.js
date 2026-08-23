@@ -112,6 +112,7 @@
   }
 
   function getEnemySpriteKey(enemy) {
+    if (enemy.pestilentGrub) return 'ent_boss';
     if (enemy.type === 'rival') {
       const rivalCharacterKey = enemy.rivalData?.characterKey
         || enemy.rivalKey

@@ -138,6 +138,7 @@
     stockCampaignShop = () => null,
     purchaseCampaignShop = () => ({ ok: false, reason: 'SHOP_UNAVAILABLE' }),
     advanceAllies = () => [],
+    reconcileGuaranteedItemAllies = () => ({ allies: [], created: [], removed: [] }),
     damageAlly: damageSharedAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
     transferMoveToAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
     recallAllyMove = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
@@ -6917,7 +6918,7 @@
     state.enemies[enemyId] = {
       id: enemyId,
       type: definition.type,
-      spriteKey: definition.spriteKey,
+      spriteKey: String(options.spriteKey || definition.spriteKey),
       behavior: definition.behavior,
       roomId: summoner.roomId,
       x: Math.max(wall, Math.min(Number(state.floorState?.width || 900) - wall, x)),
@@ -6937,6 +6938,8 @@
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
       statuses: createCampaignStatusMap(),
       summonedBy: summoner.id,
+      displayName: String(options.displayName || ''),
+      pestilentGrub: !!options.pestilentGrub,
       stun: 0, windup: 0, beamTime: 0, beamTick: 0, beamAngle: 0, swingTime: 0, dashTime: 0,
       attackCd: Number(definition.attackCooldown || 0.85),
     };
@@ -7548,8 +7551,8 @@
     getElapsedSeconds() {
       return Number(behaviorRuntime.state.elapsedSeconds || Number(behaviorRuntime.state.tick || 0) / 20);
     },
-    spawnSummon(enemy, type, x, y) {
-      spawnSummonedEnemy(behaviorRuntime.state, enemy, behaviorRuntime.emitEvent, { type, x, y });
+    spawnSummon(enemy, type, x, y, options = {}) {
+      spawnSummonedEnemy(behaviorRuntime.state, enemy, behaviorRuntime.emitEvent, { ...options, type, x, y });
     },
     spawnFloorBoss(enemy) {
       spawnAuthorityFloorBoss(behaviorRuntime.state, enemy, behaviorRuntime.emitEvent);
@@ -9615,31 +9618,35 @@
 
   function ensureAuthorityBlackBugAllies(state, player, emitEvent) {
     if (!player?.blackBugAlliesAwakened || Number(player.items?.bug_card || 0) <= 0) return [];
-    const existing = Object.values(state.allies || {})
-      .filter(entity => entity?.source?.kind === 'item' && entity.source.key === 'bug_card' && entity.ownerId === player.id);
-    for (let index = existing.length; index < 3; index += 1) {
-      const angle = index * Math.PI * 2 / 3;
-      const stream = combatRandomByState.get(state)?.scoped?.(`bug-card-ally:${player.id}:${index}`);
-      const ally = createSourcedAlly(state, player, {
-        id: `black-bug-${player.id}-${index}`,
-        seed: 7100 + index,
-        name: `Pestilent Bug ${index + 1}`,
-        sourceKind: 'item', sourceKey: 'bug_card', archetypeKey: 'brawler',
-        spriteKey: 'cult_follower', allyIndex: index,
-        x: Number(player.x) + Math.cos(angle) * 44,
-        y: Number(player.y) + Math.sin(angle) * 44,
-        radius: 10, attackRange: 48, attackInterval: 0.7,
-        fireBug: Number(stream?.next?.() ?? 1) < 0.05,
-        tags: ['species:bug', 'source:item'],
-      });
-      if (!ally) continue;
+    const result = reconcileGuaranteedItemAllies(state, player, {
+      sourceKey: 'bug_card',
+      count: 3,
+      idForIndex: index => `black-bug-${player.id}-${index}`,
+      optionsForIndex: index => {
+        const angle = index * Math.PI * 2 / 3;
+        const stream = combatRandomByState.get(state)?.scoped?.(`bug-card-ally:${player.id}:${index}`);
+        return {
+          seed: 7100 + index,
+          name: `Pestilent Bug ${index + 1}`,
+          archetypeKey: 'brawler',
+          spriteKey: 'ent_boss',
+          x: Number(player.x) + Math.cos(angle) * 44,
+          y: Number(player.y) + Math.sin(angle) * 44,
+          radius: 10,
+          attackRange: 48,
+          attackInterval: 0.7,
+          fireBug: Number(stream?.next?.() ?? 1) < 0.05,
+          tags: ['species:bug', 'source:item'],
+        };
+      },
+    });
+    result.created.forEach(ally => {
       emitEvent('ABILITY_ENTITY_SPAWNED', {
         entityId: ally.id, playerId: player.id, roomId: player.roomId,
-        abilityId: 'bug_card', kind: 'ally', allyIndex: index,
+        abilityId: 'bug_card', kind: 'ally', allyIndex: ally.allyIndex,
       });
-    }
-    return Object.values(state.allies || {})
-      .filter(entity => entity?.source?.kind === 'item' && entity.source.key === 'bug_card' && entity.ownerId === player.id);
+    });
+    return result.allies;
   }
 
   function tryAwakenAuthorityBlackBugAllies(state, player, enemy, dealtDamage, emitEvent) {
@@ -9661,13 +9668,20 @@
   function updateAuthorityBlackBugTeamState(state, emitEvent) {
     const party = activePlayers(state);
     const owners = party.filter(member => Number(member.items?.bug_card || 0) > 0 && member.blackBugAlliesAwakened);
-    const totalAllies = owners.length * 3;
+    const alliesByOwner = new Map(owners.map(owner => [
+      owner.id,
+      ensureAuthorityBlackBugAllies(state, owner, emitEvent),
+    ]));
+    const activeCountByOwner = new Map([...alliesByOwner].map(([ownerId, allies]) => [
+      ownerId,
+      allies.filter(ally => ally?.status === 'active').length,
+    ]));
+    const totalAllies = [...activeCountByOwner.values()].reduce((sum, count) => sum + count, 0);
     party.forEach(member => {
-      const ownAllies = owners.includes(member) ? 3 : 0;
+      const ownAllies = Number(activeCountByOwner.get(member.id) || 0);
       member.blackBugAllyCount = ownAllies;
       member.blackBugTeamAllyCount = Math.max(0, totalAllies - ownAllies);
     });
-    owners.forEach(owner => ensureAuthorityBlackBugAllies(state, owner, emitEvent));
   }
 
   function spawnAuthorityBlackItemBoss(state, player, type, itemKey, emitEvent) {

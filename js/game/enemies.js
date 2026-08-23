@@ -1103,11 +1103,53 @@
   function ensureBlackBugAllies() {
     const ownsCard = (Neo.getItemCount?.('bug_card') || 0) > 0;
     const awakened = ownsCard && !!Neo.player?.blackBugAlliesAwakened;
-    const allyCount = awakened ? 3 : 0;
-    if (Neo.player) {
-      Neo.player.blackBugAllyCount = allyCount;
-      Neo.player.blackBugTeamAllyCount = 0;
+    Neo.allies = Neo.allies && typeof Neo.allies === 'object' && !Array.isArray(Neo.allies) ? Neo.allies : {};
+    const ownerId = String(Neo.player?.id || 'local-player-1');
+    const current = Object.values(Neo.allies).filter(ally => ally?.source?.kind === 'item'
+      && ally.source.key === 'bug_card' && ally.ownerId === ownerId);
+    if (!awakened) {
+      current.forEach(ally => { delete Neo.allies[ally.id]; });
+      if (Neo.player) {
+        Neo.player.blackBugAllyCount = 0;
+        Neo.player.blackBugTeamAllyCount = 0;
+      }
+      (Neo.getActivePlayerSlots?.() || []).forEach(slot => {
+        const actor = slot.getEntity?.();
+        if (!actor) return;
+        actor.blackBugAllyCount = 0;
+        actor.blackBugTeamAllyCount = 0;
+      });
+      Neo.blackBugAllies = [];
+      return [];
     }
+    const reconcile = globalThis.NeoNyke?.simulation?.reconcileGuaranteedItemAllies;
+    if (typeof reconcile !== 'function') throw new Error('Shared guaranteed item-ally rules are unavailable');
+    const state = { allies: Neo.allies, players: { [ownerId]: Neo.player }, nextEntityId: Neo.allyIdSeq || 1 };
+    const result = reconcile(state, Neo.player, {
+      sourceKey: 'bug_card',
+      count: 3,
+      idForIndex: index => `black_bug_${ownerId}_${index}`,
+      optionsForIndex: index => {
+        const angle = (index / 3) * Math.PI * 2;
+        return {
+          seed: 7100 + index,
+          name: `Pestilent Bug ${index + 1}`,
+          archetypeKey: 'brawler',
+          spriteKey: 'ent_boss',
+          x: Neo.player.x + Math.cos(angle) * 44,
+          y: Neo.player.y + Math.sin(angle) * 44,
+          radius: 10,
+          attackCooldown: index * 0.18,
+          fireBug: Neo.nextRandom?.('encounter') < 0.05,
+          tags: ['species:bug', 'source:item'],
+        };
+      },
+    });
+    Neo.allies = state.allies;
+    Neo.allyIdSeq = Math.max(Number(Neo.allyIdSeq || 1), Number(state.nextEntityId || 1));
+    const allyCount = result.allies.filter(ally => ally?.status === 'active').length;
+    Neo.player.blackBugAllyCount = allyCount;
+    Neo.player.blackBugTeamAllyCount = 0;
     const slots = Neo.getActivePlayerSlots?.() || [];
     slots.forEach(slot => {
       const actor = slot.getEntity?.();
@@ -1115,31 +1157,8 @@
       if (actor === Neo.player) actor.blackBugAllyCount = allyCount;
       else actor.blackBugTeamAllyCount = allyCount;
     });
-    Neo.allies = Neo.allies && typeof Neo.allies === 'object' && !Array.isArray(Neo.allies) ? Neo.allies : {};
-    const current = Object.values(Neo.allies).filter(ally => ally?.source?.kind === 'item'
-      && ally.source.key === 'bug_card' && ally.ownerId === String(Neo.player?.id || 'local-player-1'));
-    if (!awakened) {
-      current.forEach(ally => { delete Neo.allies[ally.id]; });
-      Neo.blackBugAllies = [];
-      return [];
-    }
-    const createSourcedAlly = globalThis.NeoNyke?.simulation?.createSourcedAlly;
-    for (let index = current.length; index < 3; index += 1) {
-      const angle = (index / 3) * Math.PI * 2;
-      const id = `black_bug_${String(Neo.player?.id || 'local-player-1')}_${index}`;
-      const ally = createSourcedAlly?.({ allies: Neo.allies, nextEntityId: Neo.allyIdSeq || 1 }, Neo.player, {
-        id, seed: 7100 + index, name: `Pestilent Bug ${index + 1}`,
-        sourceKind: 'item', sourceKey: 'bug_card', archetypeKey: 'brawler',
-        spriteKey: 'cult_follower', allyIndex: index,
-        x: Neo.player.x + Math.cos(angle) * 44, y: Neo.player.y + Math.sin(angle) * 44,
-        radius: 10, attackCooldown: index * 0.18,
-        fireBug: Neo.nextRandom?.('encounter') < 0.05,
-        tags: ['species:bug', 'source:item'],
-      });
-      if (ally) current.push(ally);
-    }
     Neo.blackBugAllies = [];
-    return current;
+    return result.allies;
   }
 
   function updateBlackBugAllies(dt) {
@@ -1155,11 +1174,19 @@
     if (enemy.summonCd <= 0) {
       for (let index = 0; index < 3; index += 1) {
         const angle = (index / 3) * Math.PI * 2 + Neo.nextRandom('encounter') * 0.4;
-        const spawn = findSafeSummonSpawnPoint(enemy.x + Math.cos(angle) * 72, enemy.y + Math.sin(angle) * 72);
-        if (!spawn) continue;
+        const preferredX = enemy.x + Math.cos(angle) * 72;
+        const preferredY = enemy.y + Math.sin(angle) * 72;
+        // A brood cast guarantees all three grubs. If room geometry exhausts
+        // the safe-point search, use a wall-clamped fallback; normal movement
+        // collision resolves the minion out of nearby obstacles next tick.
+        const spawn = findSafeSummonSpawnPoint(preferredX, preferredY) || {
+          x: Neo.clamp(preferredX, Neo.WALL + SUMMON_SPAWN_RADIUS, Neo.ROOM_W - Neo.WALL - SUMMON_SPAWN_RADIUS),
+          y: Neo.clamp(preferredY, Neo.WALL + SUMMON_SPAWN_RADIUS, Neo.ROOM_H - Neo.WALL - SUMMON_SPAWN_RADIUS),
+        };
         const grub = spawnEnemy('cult_follower', spawn.x, spawn.y, false, { level: enemy.level });
         grub.displayName = 'Pestilent Grub';
         grub.pestilentGrub = true;
+        grub.spriteKey = 'ent_boss';
       }
       enemy.summonCd = 5.2;
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r, life: 0.8, text: 'BROOD!', c: '#a7ff4f' });

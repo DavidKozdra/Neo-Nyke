@@ -21,6 +21,7 @@
   const ALLY_SHOP_CHANCE = 0.70;
   const ALLY_RECRUIT_CAP = 3;
   const ITEM_ALLY_RESPAWN_SECONDS = 15;
+  const BUG_CARD_GUARANTEED_ALLY_COUNT = 3;
   const ALLY_TICK_RATE = 20;
 
   const ALLY_ARCHETYPES = Object.freeze({
@@ -451,10 +452,81 @@
     return ally;
   }
 
+  // Item summons are promises, not best-effort spawns. Reconcile by stable slot
+  // index so losing the middle bug cannot make a length-based loop overwrite a
+  // surviving slot forever. This also repairs dead/corrupt item records and
+  // removes duplicates while safely returning any move attached to one.
+  function reconcileGuaranteedItemAllies(state, owner, options = {}) {
+    const allies = getAllyCollection(state);
+    const ownerId = String(owner?.id || '');
+    const sourceKey = String(options.sourceKey || '');
+    const count = Math.max(0, integer(options.count, BUG_CARD_GUARANTEED_ALLY_COUNT));
+    if (!ownerId || !sourceKey || count <= 0) return { allies: [], created: [], removed: [] };
+    const idForIndex = typeof options.idForIndex === 'function'
+      ? options.idForIndex
+      : index => `item-ally-${sourceKey}-${ownerId}-${index}`;
+    const optionsForIndex = typeof options.optionsForIndex === 'function'
+      ? options.optionsForIndex
+      : () => ({});
+    const candidates = Object.entries(allies).filter(([, ally]) => (
+      ally?.source?.kind === 'item'
+      && ally.source.key === sourceKey
+      && String(ally.ownerId || '') === ownerId
+    ));
+    const keptIds = new Set();
+    const guaranteed = [];
+    const created = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const preferredId = String(idForIndex(index));
+      let entry = candidates.find(([id]) => id === preferredId && !keptIds.has(id));
+      if (!entry) entry = candidates.find(([id, ally]) => !keptIds.has(id) && integer(ally.allyIndex, -1) === index);
+      let ally = entry?.[1] || null;
+      if (!ally) {
+        let id = preferredId;
+        if (allies[id]) id = `${preferredId}:repair`;
+        ally = createSourcedAlly(state, owner, {
+          ...optionsForIndex(index),
+          id,
+          sourceKind: 'item',
+          sourceKey,
+          allyIndex: index,
+        });
+        created.push(ally);
+      }
+      ally.ownerId = ownerId;
+      ally.teamId = String(owner.teamId || ally.teamId || 'players');
+      ally.roomId = String(owner.roomId || ally.roomId || '');
+      ally.source = { kind: 'item', key: sourceKey };
+      ally.allyIndex = index;
+      ally.tags = normalizeTags([...(ally.tags || []), 'source:item', 'trait:respawning']);
+      if (ally.status === 'dead' || (ally.status === 'active' && number(ally.health) <= 0)) {
+        ally.status = 'respawning';
+        ally.health = 0;
+        ally.respawnRemaining = number(ally.respawnRemaining) > 0
+          ? number(ally.respawnRemaining)
+          : ITEM_ALLY_RESPAWN_SECONDS;
+      }
+      keptIds.add(ally.id);
+      guaranteed.push(ally);
+    }
+
+    const removed = [];
+    candidates.forEach(([id, ally]) => {
+      if (keptIds.has(id)) return;
+      if (ally.transferredMove) returnTransferredMove(ally, state?.players, { player: owner });
+      removeRecruitId(owner, id);
+      delete allies[id];
+      removed.push(id);
+    });
+    return { allies: guaranteed, created, removed };
+  }
+
   return {
     ALLY_SHOP_CHANCE,
     ALLY_RECRUIT_CAP,
     ITEM_ALLY_RESPAWN_SECONDS,
+    BUG_CARD_GUARANTEED_ALLY_COUNT,
     ALLY_TICK_RATE,
     ALLY_ARCHETYPES,
     ALLY_PALETTES,
@@ -480,5 +552,6 @@
     scaleAllyWithOwner,
     advanceAllies,
     createSourcedAlly,
+    reconcileGuaranteedItemAllies,
   };
 });

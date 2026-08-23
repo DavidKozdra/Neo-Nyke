@@ -2,6 +2,7 @@ const {
   ALLY_SHOP_CHANCE,
   ALLY_RECRUIT_CAP,
   ITEM_ALLY_RESPAWN_SECONDS,
+  BUG_CARD_GUARANTEED_ALLY_COUNT,
   generateAllyName,
   generateAllyAppearance,
   generateAllyOffer,
@@ -11,6 +12,7 @@ const {
   damageAlly,
   advanceAllies,
   createSourcedAlly,
+  reconcileGuaranteedItemAllies,
 } = require('../js/simulation/SharedAllySystem');
 const { stockCampaignShop, purchaseCampaignShop } = require('../js/simulation/SharedShopSystem');
 
@@ -103,6 +105,47 @@ describe('shared ally generation and lifecycle', () => {
     });
     expect(advanceAllies(state, 1, state.players)).toContainEqual(expect.objectContaining({ type: 'ALLY_EXPIRED', allyId: 'summon' }));
     expect(state.allies.summon).toBeUndefined();
+  });
+
+  test('guarantees every indexed Bug Card ally and repairs missing or dead slots', () => {
+    const owner = player();
+    const state = { allies: {}, players: { p1: owner }, nextEntityId: 1 };
+    const options = {
+      sourceKey: 'bug_card',
+      count: BUG_CARD_GUARANTEED_ALLY_COUNT,
+      idForIndex: index => `black-bug-p1-${index}`,
+      optionsForIndex: index => ({
+        seed: 7100 + index,
+        name: `Pestilent Bug ${index + 1}`,
+        archetypeKey: 'brawler',
+      }),
+    };
+    createSourcedAlly(state, owner, {
+      id: 'black-bug-p1-0', sourceKind: 'item', sourceKey: 'bug_card',
+      archetypeKey: 'brawler', allyIndex: 0,
+    });
+    createSourcedAlly(state, owner, {
+      id: 'black-bug-p1-2', sourceKind: 'item', sourceKey: 'bug_card',
+      archetypeKey: 'brawler', allyIndex: 2,
+    });
+
+    const repairedMiddle = reconcileGuaranteedItemAllies(state, owner, options);
+    expect(repairedMiddle.allies).toHaveLength(3);
+    expect(repairedMiddle.created.map(ally => ally.allyIndex)).toEqual([1]);
+    expect(state.allies['black-bug-p1-0']).toBeDefined();
+    expect(state.allies['black-bug-p1-1']).toBeDefined();
+    expect(state.allies['black-bug-p1-2']).toBeDefined();
+
+    delete state.allies['black-bug-p1-1'];
+    state.allies['black-bug-p1-2'].status = 'dead';
+    state.allies['black-bug-p1-2'].health = 0;
+    const repairedAgain = reconcileGuaranteedItemAllies(state, owner, options);
+    expect(repairedAgain.allies).toHaveLength(3);
+    expect(repairedAgain.created).toHaveLength(1);
+    expect(state.allies['black-bug-p1-2']).toEqual(expect.objectContaining({
+      status: 'respawning',
+      respawnRemaining: ITEM_ALLY_RESPAWN_SECONDS,
+    }));
   });
 });
 

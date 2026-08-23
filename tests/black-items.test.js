@@ -154,9 +154,12 @@ describe('black relics', () => {
     expect(combat).toContain('Neo.tryAwakenBlackBugAllies?.(enemy, dealt)');
     expect(enemies).toContain('getBugCardHeavyHitThreshold');
     expect(enemies).toContain("fireBug: Neo.nextRandom?.('encounter') < 0.05");
+    expect(enemies).toContain("spriteKey: 'ent_boss'");
+    expect(enemies).toContain('reconcileGuaranteedItemAllies');
     expect(world).toContain('Neo.player.heartOceanProjectileCount >= requiredProjectiles');
     expect(world).toContain('heartOceanEcho: true');
     expect(authority).toContain('tryAwakenAuthorityBlackBugAllies(state, playerAttacker, enemy, dealt, emitEvent)');
+    expect(authority).toContain('reconcileGuaranteedItemAllies(state, player');
     expect(authority).toContain('player.heartOceanProjectileCount >= requiredProjectiles');
     expect(authority).toContain("applyAuthorityStatus(state, enemy, 'fire', 1, 3.5, owner.id)");
   });
