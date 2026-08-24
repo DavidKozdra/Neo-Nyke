@@ -1556,6 +1556,40 @@ describe('authored boss behaviors on the authority', () => {
     expect(player.statuses.bleed.duration).toBeGreaterThan(0);
   });
 
+  test('bursts damaging rocks when a T-Rex charge hits a wall', () => {
+    const { state, events, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const radius = 58;
+    const rex = injectEnemy(
+      state,
+      't_rex',
+      Number(state.floorState.width) - Number(state.floorState.wallThickness) - radius - 1,
+      player.y,
+      {
+        radius,
+        attackCd: 9,
+        roarCd: 99,
+        windup: 0,
+        dashTime: 0.5,
+        dashAngle: 0,
+        dashHasMoved: true,
+        vx: 700,
+        vy: 0,
+      },
+    );
+
+    tick(simulation, 1);
+
+    const rocks = Object.values(state.projectiles).filter(projectile => projectile.type === 'rock');
+    expect(rocks).toHaveLength(10);
+    expect(rocks.every(projectile => projectile.damage > 0 && projectile.hostile)).toBe(true);
+    expect(rex.dashTime).toBe(0);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'ENEMY_ATTACKED',
+      data: expect.objectContaining({ enemyId: rex.id, attackKind: 't_rex_wall_impact' }),
+    }));
+  });
+
   test('the Bulk Golem leaps at distant players and slams down with an impact blast', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;

@@ -1210,14 +1210,37 @@
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.72; enemy.vy *= 0.72;
-      if (enemy.windup <= 0) { enemy.dashTime = 0.72; enemy.dashHit = false; }
+      if (enemy.windup <= 0) {
+        enemy.dashTime = 0.72;
+        enemy.dashHit = false;
+        enemy.dashHasMoved = false;
+      }
       return;
     }
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
+      const simulation = globalThis.NeoNyke?.simulation;
+      if (simulation?.isTRexChargeWallImpact?.(enemy, {
+        wall: Neo.WALL,
+        width: Neo.ROOM_W,
+        height: Neo.ROOM_H,
+      })) {
+        simulation.createTRexWallRockDescriptors(enemy).forEach(rock => {
+          Neo.spawnProjectile({ ...rock, enemy: true, owner: enemy });
+        });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 30, '#b99a72', 0.45);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r, life: 0.65, text: 'CRASH!', c: '#d6b88a' });
+        enemy.dashTime = 0;
+        enemy.dashHasMoved = false;
+        enemy.vx = -Math.cos(enemy.dashAngle) * 140;
+        enemy.vy = -Math.sin(enemy.dashAngle) * 140;
+        enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+        return;
+      }
       const chargeSpeed = Math.max(610, Number(enemy.speed || 0) * 2);
       enemy.vx = Math.cos(enemy.dashAngle) * chargeSpeed;
       enemy.vy = Math.sin(enemy.dashAngle) * chargeSpeed;
+      enemy.dashHasMoved = true;
       if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 16) {
         enemy.dashHit = true;
         Neo.damagePlayer(enemy.dmg + 22, enemy.dashAngle, 520, enemy.type, { attacker: enemy });
@@ -1239,6 +1262,7 @@
       const predictedY = Neo.player.y + Number(Neo.player.vy || 0) * 0.25;
       enemy.dashAngle = Math.atan2(predictedY - enemy.y, predictedX - enemy.x);
       enemy.windup = 0.55;
+      enemy.dashHasMoved = false;
       enemy.attackCd = 1.8;
     }
   }

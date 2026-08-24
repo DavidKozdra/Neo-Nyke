@@ -149,6 +149,46 @@
     return Math.max(6, Math.round(Math.max(0, Number(enemyDamage || 0)) * 0.2));
   }
 
+  function createTRexWallRockDescriptors(enemy) {
+    const count = 10;
+    const damage = Math.max(1, Math.round(Number(enemy?.dmg ?? enemy?.contactDamage ?? 0) * 0.45));
+    return Array.from({ length: count }, (_, index) => {
+      const angle = index * Math.PI * 2 / count;
+      const speed = 260 + (index % 2) * 70;
+      return {
+        x: Number(enemy?.x || 0),
+        y: Number(enemy?.y || 0),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 6,
+        life: 1.15,
+        kind: 'rock',
+        source: 't_rex_wall_impact',
+        damage,
+        knockback: 140,
+      };
+    });
+  }
+
+  function isTRexChargeWallImpact(enemy, bounds = {}) {
+    if (!enemy?.dashHasMoved) return false;
+    const angle = Number(enemy.dashAngle || 0);
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    const forwardVelocity = Number(enemy.vx || 0) * dirX + Number(enemy.vy || 0) * dirY;
+    if (forwardVelocity < -25) return true;
+    const radius = Math.max(1, Number(enemy.r ?? enemy.radius ?? 1));
+    const wall = Math.max(0, Number(bounds.wall || 0));
+    const minX = wall + radius + 1;
+    const minY = wall + radius + 1;
+    const maxX = Math.max(minX, Number(bounds.width || 900) - wall - radius - 1);
+    const maxY = Math.max(minY, Number(bounds.height || 700) - wall - radius - 1);
+    return (enemy.x <= minX && dirX < -0.15)
+      || (enemy.x >= maxX && dirX > 0.15)
+      || (enemy.y <= minY && dirY < -0.15)
+      || (enemy.y >= maxY && dirY > 0.15);
+  }
+
   function createCampaignEnemyBehaviors(ctx) {
     const tuningOf = () => ctx.getTuning?.() || { reaction: 1, rangedCadence: 1, supportPower: 1 };
     const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -1048,14 +1088,26 @@
         if (enemy.windup <= 0) {
           enemy.dashTime = 0.72;
           enemy.dashHit = false;
+          enemy.dashHasMoved = false;
         }
         return;
       }
       if (enemy.dashTime > 0) {
         enemy.dashTime -= dt;
+        if (isTRexChargeWallImpact(enemy, ctx.bounds?.(enemy))) {
+          createTRexWallRockDescriptors(enemy).forEach(rock => ctx.spawnProjectile?.(enemy, rock));
+          ctx.emit?.('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: 't_rex_wall_impact' });
+          enemy.dashTime = 0;
+          enemy.dashHasMoved = false;
+          enemy.vx = -Math.cos(enemy.dashAngle) * 140;
+          enemy.vy = -Math.sin(enemy.dashAngle) * 140;
+          enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+          return;
+        }
         const chargeSpeed = Math.max(610, Number(enemy.speed || 0) * 2);
         enemy.vx = Math.cos(enemy.dashAngle) * chargeSpeed;
         enemy.vy = Math.sin(enemy.dashAngle) * chargeSpeed;
+        enemy.dashHasMoved = true;
         if (!enemy.dashHit && distance < enemy.r + player.r + 16) {
           enemy.dashHit = true;
           ctx.damagePlayer(enemy, player, enemy.dmg + 22, enemy.dashAngle, 520, enemy.type);
@@ -1076,6 +1128,7 @@
         const predictedY = player.y + Number(player.vy || 0) * 0.25;
         enemy.dashAngle = Math.atan2(predictedY - enemy.y, predictedX - enemy.x);
         enemy.windup = 0.55;
+        enemy.dashHasMoved = false;
         enemy.attackCd = 1.8;
       }
     }
@@ -3196,6 +3249,8 @@
     createCampaignBulkGolemSplitPlan,
     getHandsomeDevilSpikeDamage,
     getHandsomeDevilLavaDamagePerSecond,
+    createTRexWallRockDescriptors,
+    isTRexChargeWallImpact,
     lineIntersectsRect,
     segmentHitsCircle,
     turnAngleToward,
