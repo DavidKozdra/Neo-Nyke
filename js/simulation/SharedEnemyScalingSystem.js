@@ -68,6 +68,7 @@
       shopPriceMultiplier: 1,
       ccResistScale: 0.04,
       statusResistScale: 0,
+      statusDurationMultiplier: 0.6,
     }),
     medium: Object.freeze({
       key: 'medium',
@@ -91,6 +92,7 @@
       shopPriceMultiplier: 1.08,
       ccResistScale: 0.12,
       statusResistScale: 0.06,
+      statusDurationMultiplier: 0.7,
     }),
     hard: Object.freeze({
       key: 'hard',
@@ -113,6 +115,7 @@
       shopPriceMultiplier: 1.16,
       ccResistScale: 0.30,
       statusResistScale: 0.16,
+      statusDurationMultiplier: 0.8,
       enemyBleedDamageMultiplier: 0.8,
       itemDropChanceMultiplier: 0.8,
       shopItemOffers: 2,
@@ -218,6 +221,7 @@
     itemDropChanceMultiplier: [0, 10],
     ccResistScale: [0, 10],
     statusResistScale: [0, 10],
+    statusDurationMultiplier: [0.1, 2],
     enemyBleedDamageMultiplier: [0, 10],
     enemyLoopDamageReduction: [0, 1],
     shopItemOffers: [1, 10],

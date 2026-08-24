@@ -127,35 +127,41 @@
     clearStatusState(state);
     state.damageMultiplier = 1;
     state.ownerId = null;
+    delete state.coldSecondsPerStack;
   }
 
-  function getColdStacksFromDuration(duration) {
-    return Math.min(MAX_STATUS_STACKS, Math.max(0, Math.ceil((Number(duration || 0) - 0.001) / COLD_SECONDS_PER_STACK)));
+  function getColdStacksFromDuration(duration, secondsPerStack = COLD_SECONDS_PER_STACK) {
+    const interval = Math.max(0.001, Number(secondsPerStack || COLD_SECONDS_PER_STACK));
+    return Math.min(MAX_STATUS_STACKS, Math.max(0, Math.ceil((Number(duration || 0) - 0.001) / interval)));
   }
 
   // The numeric core of the campaign's applyStatus (core/status.js): immunity,
-  // resistance-scaled stacks/duration, the 6-stack cap with max-duration merge,
-  // and the player's cold stack-time budget. `options.resistance` is the
-  // realized 0..0.95 resistance the caller looked up; `severity` is the
-  // player's negativeStatusMultiplier (1 for enemies).
+  // difficulty/resistance-scaled stacks and duration, the 6-stack cap with
+  // max-duration merge, and the player's cold stack-time budget.
+  // `options.resistance` is the realized 0..0.95 resistance the caller looked
+  // up; `durationMultiplier` comes from the difficulty preset; `severity` is
+  // the player's negativeStatusMultiplier (1 for enemies).
   function applyCampaignStatus(entity, key, stacks, duration, options = {}) {
     if (!entity || !STATUS_EFFECT_KEYS.includes(key)) return null;
     if (entity[`${key}Immune`]) return null;
     const statuses = ensureCampaignStatuses(entity);
     const state = statuses[key];
     const resistanceMultiplier = 1 - Math.max(0, Math.min(0.95, Number(options.resistance || 0)));
+    const durationMultiplier = Math.max(0, Number(options.durationMultiplier ?? 1));
     const addedStacks = Math.max(0, Number(stacks || 0)) * resistanceMultiplier;
     const severity = Math.max(0, Number(options.severity ?? 1));
-    const adjustedDuration = Math.max(0, Number(duration || 0)) * severity * resistanceMultiplier;
+    const adjustedDuration = Math.max(0, Number(duration || 0)) * durationMultiplier * severity * resistanceMultiplier;
     if (key === 'slow' && options.playerColdBudget) {
+      const coldSecondsPerStack = COLD_SECONDS_PER_STACK * durationMultiplier * severity;
       const existingBudget = Number(state.duration || 0) > 0
         ? Number(state.duration || 0)
-        : Math.max(0, Number(state.stacks || 0)) * COLD_SECONDS_PER_STACK;
+        : Math.max(0, Number(state.stacks || 0)) * coldSecondsPerStack;
+      state.coldSecondsPerStack = coldSecondsPerStack;
       state.duration = Math.min(
-        MAX_STATUS_STACKS * COLD_SECONDS_PER_STACK * severity,
-        existingBudget + addedStacks * COLD_SECONDS_PER_STACK * severity,
+        MAX_STATUS_STACKS * coldSecondsPerStack,
+        existingBudget + addedStacks * coldSecondsPerStack,
       );
-      state.stacks = getColdStacksFromDuration(state.duration);
+      state.stacks = getColdStacksFromDuration(state.duration, coldSecondsPerStack);
     } else {
       applyStackedStatus(state, { stacks: addedStacks, duration: adjustedDuration, maxStacks: MAX_STATUS_STACKS });
     }
@@ -166,7 +172,7 @@
       const freeze = statuses.slow;
       if (Number(freeze.stacks || 0) > 0 && Number(freeze.duration || 0) > 0) {
         freeze.duration *= FIRE_FREEZE_DURATION_MULTIPLIER;
-        if (options.playerColdBudget) freeze.stacks = getColdStacksFromDuration(freeze.duration);
+        if (options.playerColdBudget) freeze.stacks = getColdStacksFromDuration(freeze.duration, freeze.coldSecondsPerStack);
       }
     }
     if (options.ownerId != null && addedStacks > 0) state.ownerId = options.ownerId;
@@ -277,7 +283,7 @@
         if (typeof hooks.onTick === 'function') hooks.onTick('slow', slow);
       }
       if (slow.duration <= 0) clearCampaignStatus(entity, 'slow');
-      else if (hooks.playerColdBudget) slow.stacks = getColdStacksFromDuration(slow.duration);
+      else if (hooks.playerColdBudget) slow.stacks = getColdStacksFromDuration(slow.duration, slow.coldSecondsPerStack);
     }
     return results;
   }

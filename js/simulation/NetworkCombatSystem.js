@@ -2645,6 +2645,7 @@
       && Number(state.tick || 0) < Number(target.potionBathStatusResistUntilTick || 0)) return null;
     return applyCampaignStatus(target, key, stacks, duration, {
       resistance: options.resistance ?? getAuthorityStatusResistance(state, target, key),
+      durationMultiplier: options.durationMultiplier ?? Number(state.matchRules?.statusDurationMultiplier ?? 1),
       severity: options.severity ?? 1,
       playerColdBudget: !!options.playerColdBudget,
       ownerId,

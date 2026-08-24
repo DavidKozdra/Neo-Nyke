@@ -121,6 +121,7 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
   // operation; browser-only attribution and signals stay here.
   const result = globalThis.NeoNyke.simulation.applyCampaignStatus(entity, key, stacks, duration, {
     resistance: getStatusResistance(entity, key),
+    durationMultiplier: Number(Neo.getDifficultyDef?.()?.statusDurationMultiplier ?? 1),
     severity: entity === Neo.player
       ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
       : 1,

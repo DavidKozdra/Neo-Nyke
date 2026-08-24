@@ -74,7 +74,7 @@ describe('God boss buffs', () => {
     expect(statusSource).toContain('simulation.applyCampaignStatus(entity, key, stacks, duration, {');
     expect(sharedStatusSource).toContain('const resistanceMultiplier = 1 - Math.max(0, Math.min(0.95');
     expect(sharedStatusSource).toContain('Number(stacks || 0)) * resistanceMultiplier');
-    expect(sharedStatusSource).toContain('Number(duration || 0)) * severity * resistanceMultiplier');
+    expect(sharedStatusSource).toContain('Number(duration || 0)) * durationMultiplier * severity * resistanceMultiplier');
   });
 
   test('partition attack uses four or five rotating beams with a windup preview', () => {

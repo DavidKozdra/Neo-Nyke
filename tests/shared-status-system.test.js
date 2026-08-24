@@ -16,6 +16,7 @@ const {
   tickCampaignStatuses,
   resolveCampaignOnHitStatusProcs,
 } = require('../js/simulation/SharedStatusSystem');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 
 describe('shared campaign status system', () => {
   test('boots in the browser when a cached engine bundle lacks the expected status helpers', () => {
@@ -65,6 +66,25 @@ describe('shared campaign status system', () => {
       stacks: 6, duration: 2.25, ownerId: 'p2', damageMultiplier: 2.25,
     }));
     expect(getCampaignStatusStacks(enemy, 'bleed')).toBe(6);
+  });
+
+  test('shortens every status on Easy, Medium, and Hard', () => {
+    const expectedMultipliers = { easy: 0.6, medium: 0.7, hard: 0.8 };
+    Object.entries(expectedMultipliers).forEach(([difficulty, multiplier]) => {
+      expect(CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[difficulty].statusDurationMultiplier).toBe(multiplier);
+
+      const enemy = {};
+      applyCampaignStatus(enemy, 'fire', 1, 10, { durationMultiplier: multiplier });
+      expect(enemy.statuses.fire.duration).toBeCloseTo(10 * multiplier);
+
+      const player = {};
+      applyCampaignStatus(player, 'slow', 2, 4, {
+        durationMultiplier: multiplier,
+        playerColdBudget: true,
+      });
+      expect(player.statuses.slow.duration).toBeCloseTo(30 * multiplier);
+      expect(player.statuses.slow.stacks).toBe(2);
+    });
   });
 
   test('uses the campaign player cold stack-time budget and decays visible stacks', () => {
