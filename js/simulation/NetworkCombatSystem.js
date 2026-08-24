@@ -141,6 +141,7 @@
     stockCampaignShop = () => null,
     purchaseCampaignShop = () => ({ ok: false, reason: 'SHOP_UNAVAILABLE' }),
     advanceAllies = () => [],
+    ALLY_DAMAGE_MULTIPLIER = 0.5,
     reconcileGuaranteedItemAllies = () => ({ allies: [], created: [], removed: [] }),
     damageAlly: damageSharedAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
     transferMoveToAlly = () => ({ ok: false, reason: 'ALLY_UNAVAILABLE' }),
@@ -9702,7 +9703,6 @@
           seed: 7100 + index,
           name: `Pestilent Bug ${index + 1}`,
           archetypeKey: 'brawler',
-          spriteKey: 'ent_boss',
           x: Number(player.x) + Math.cos(angle) * 44,
           y: Number(player.y) + Math.sin(angle) * 44,
           radius: 10,
@@ -10717,7 +10717,8 @@
         const moveRange = Math.max(90, Number(moveStats.range || ally.attackRange || 360));
         if (target.distance <= moveRange + Number(target.enemy.radius || 18)) {
           const gifted = moveKey === ally.transferredMove?.key;
-          const damage = Math.max(2, Number(moveStats.damage || ally.basicDamage || 8) * (gifted ? 0.70 : 0.55));
+          const damage = Math.max(2, Number(moveStats.damage || ally.basicDamage || 8)
+            * (gifted ? 0.70 : 0.55) * ALLY_DAMAGE_MULTIPLIER);
           damageEnemy(state, target.enemy, damage, ally.ownerId, emitEvent, {
             attackKind: moveKey, canCrit: true, angle: Math.atan2(Number(target.enemy.y) - Number(ally.y), Number(target.enemy.x) - Number(ally.x)), knockback: 80,
           });

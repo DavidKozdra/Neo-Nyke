@@ -1538,6 +1538,24 @@ describe('authored boss behaviors on the authority', () => {
     expect(getHandsomeDevilLavaDamagePerSecond(100)).toBe(20);
   });
 
+  test('makes T-Rex three times faster and applies bleed when its charge connects', () => {
+    const { state, simulation } = behaviorHarness();
+    const player = state.players.p1;
+    const rex = injectEnemy(state, 't_rex', player.x + 300, player.y, {
+      attackCd: 0,
+      roarCd: 99,
+      windup: 0,
+      dashTime: 0,
+    });
+    expect(rex.moveSpeed).toBe(336);
+
+    tick(simulation, 24);
+
+    expect(rex.dashHit).toBe(true);
+    expect(player.statuses.bleed.stacks).toBe(3);
+    expect(player.statuses.bleed.duration).toBeGreaterThan(0);
+  });
+
   test('the Bulk Golem leaps at distant players and slams down with an impact blast', () => {
     const { state, events, simulation } = behaviorHarness();
     const player = state.players.p1;

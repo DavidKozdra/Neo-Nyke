@@ -8,6 +8,8 @@
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.content, {
     ALLY_ARCHETYPES: api.ALLY_ARCHETYPES,
+    ALLY_SPRITE_KEY: api.ALLY_SPRITE_KEY,
+    ALLY_DAMAGE_MULTIPLIER: api.ALLY_DAMAGE_MULTIPLIER,
     ALLY_SHOP_CHANCE: api.ALLY_SHOP_CHANCE,
     ALLY_RECRUIT_CAP: api.ALLY_RECRUIT_CAP,
   });
@@ -23,6 +25,8 @@
   const ITEM_ALLY_RESPAWN_SECONDS = 15;
   const BUG_CARD_GUARANTEED_ALLY_COUNT = 3;
   const ALLY_TICK_RATE = 20;
+  const ALLY_SPRITE_KEY = 'cult_follower';
+  const ALLY_DAMAGE_MULTIPLIER = 0.5;
 
   const ALLY_ARCHETYPES = Object.freeze({
     guardian: Object.freeze({
@@ -174,6 +178,7 @@
       name,
       archetypeKey,
       nativeMoveKey,
+      spriteKey: ALLY_SPRITE_KEY,
       appearance: generateAllyAppearance(seed, archetypeKey),
       tags: normalizeTags([...archetype.tags, 'source:shop']),
       bought: false,
@@ -217,7 +222,7 @@
   function resolveAllyStats(ally, owner) {
     const archetype = ALLY_ARCHETYPES[ally?.archetypeKey] || ALLY_ARCHETYPES.ranger;
     const maxHealth = Math.max(35, Math.round(ownerMaxHealth(owner) * archetype.hpRatio));
-    const basicDamage = Math.max(4, Math.round(ownerBaseDamage(owner) * archetype.basicDamageRatio));
+    const basicDamage = Math.max(2, Math.round(ownerBaseDamage(owner) * archetype.basicDamageRatio * ALLY_DAMAGE_MULTIPLIER));
     return {
       maxHealth,
       basicDamage,
@@ -248,7 +253,7 @@
       },
       archetypeKey,
       nativeMoveKey: String(source.nativeMoveKey || ''),
-      spriteKey: String(source.spriteKey || ''),
+      spriteKey: ALLY_SPRITE_KEY,
       allyIndex: integer(source.allyIndex),
       fireBug: !!source.fireBug,
       transferredMove: source.transferredMove?.key ? {
@@ -279,7 +284,9 @@
     const stats = resolveAllyStats(record, owner);
     record.maxHealth = Math.max(1, number(source.maxHealth ?? source.maxHp ?? source.max, stats.maxHealth));
     record.health = Math.max(0, Math.min(record.maxHealth, number(source.health ?? source.hp, record.maxHealth)));
-    record.basicDamage = Math.max(1, number(source.basicDamage, stats.basicDamage));
+    record.basicDamage = Math.max(1, source.basicDamage == null
+      ? stats.basicDamage
+      : number(source.basicDamage) * ALLY_DAMAGE_MULTIPLIER);
     record.speed = Math.max(1, number(source.speed, stats.speed));
     record.attackRange = Math.max(1, number(source.attackRange, stats.attackRange));
     record.attackInterval = Math.max(0.1, number(source.attackInterval, stats.attackInterval));
@@ -406,6 +413,7 @@
     const events = [];
     const delta = Math.max(0, number(deltaSeconds));
     Object.values(getAllyCollection(state)).forEach(ally => {
+      ally.spriteKey = ALLY_SPRITE_KEY;
       const owner = playersById?.[ally.ownerId];
       if (owner) scaleAllyWithOwner(ally, owner);
       ally.attackCooldown = Math.max(0, number(ally.attackCooldown) - delta);
@@ -523,6 +531,8 @@
   }
 
   return {
+    ALLY_SPRITE_KEY,
+    ALLY_DAMAGE_MULTIPLIER,
     ALLY_SHOP_CHANCE,
     ALLY_RECRUIT_CAP,
     ITEM_ALLY_RESPAWN_SECONDS,

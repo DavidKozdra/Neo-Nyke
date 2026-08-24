@@ -110,7 +110,7 @@
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner', 'golem',
     'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
     'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye',
-    'handsome_devil', 'ent_of_pestilence', 'god', 'mooggy', 'mirror_knight', 'rival',
+    'handsome_devil', 'ent_of_pestilence', 't_rex', 'god', 'mooggy', 'mirror_knight', 'rival',
   ]);
 
   // Queen finisher tuning (verbatim from game/enemies.js).
@@ -1031,6 +1031,52 @@
         }
         enemy.attackCd = 1.7;
         enemy.attackAnimT = 0.24;
+      }
+    }
+
+    function updateTRexBoss(enemy, dt) {
+      const player = ctx.getPlayer(enemy);
+      if (!player) return;
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      enemy.roarCd = Math.max(0, Number(enemy.roarCd || 0) - dt);
+      if (enemy.windup > 0) {
+        enemy.windup -= dt;
+        enemy.vx *= 0.72;
+        enemy.vy *= 0.72;
+        if (enemy.windup <= 0) {
+          enemy.dashTime = 0.72;
+          enemy.dashHit = false;
+        }
+        return;
+      }
+      if (enemy.dashTime > 0) {
+        enemy.dashTime -= dt;
+        const chargeSpeed = Math.max(610, Number(enemy.speed || 0) * 2);
+        enemy.vx = Math.cos(enemy.dashAngle) * chargeSpeed;
+        enemy.vy = Math.sin(enemy.dashAngle) * chargeSpeed;
+        if (!enemy.dashHit && distance < enemy.r + player.r + 16) {
+          enemy.dashHit = true;
+          ctx.damagePlayer(enemy, player, enemy.dmg + 22, enemy.dashAngle, 520, enemy.type);
+          ctx.applyPlayerStatus?.(enemy, player, 'bleed', 3, 5);
+        }
+        return;
+      }
+      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
+      if (distance < enemy.r + player.r + 18 && enemy.attackCd <= 0) {
+        ctx.damagePlayer(enemy, player, enemy.dmg, Math.atan2(dy, dx), 360, enemy.type);
+        enemy.swingTime = 0.3;
+        enemy.attackCd = 0.9;
+      } else if (enemy.roarCd <= 0 && distance < 240) {
+        ctx.damagePlayer(enemy, player, Math.round(enemy.dmg * 0.45), Math.atan2(dy, dx), 440, enemy.type);
+        enemy.roarCd = 4.4;
+      } else if (enemy.attackCd <= 0 && distance > enemy.r + player.r + 40) {
+        const predictedX = player.x + Number(player.vx || 0) * 0.25;
+        const predictedY = player.y + Number(player.vy || 0) * 0.25;
+        enemy.dashAngle = Math.atan2(predictedY - enemy.y, predictedX - enemy.x);
+        enemy.windup = 0.55;
+        enemy.attackCd = 1.8;
       }
     }
 
@@ -3131,6 +3177,7 @@
       updateAntonyBlemmyeBoss,
       updateHandsomeDevilBoss,
       updateEntOfPestilence,
+      updateTRexBoss,
       updateGod,
       updateMooggyEnemy,
       updateMirrorChampion,

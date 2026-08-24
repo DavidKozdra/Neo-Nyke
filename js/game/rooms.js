@@ -2044,7 +2044,7 @@
       name: rival.name,
       sourceKind: 'rival', sourceKey: rival.rivalId || rival.characterKey,
       archetypeKey: archetypeByCharacter[rival.characterKey] || 'brawler',
-      nativeMoveKey, spriteKey: rival.characterKey,
+      nativeMoveKey,
       x: liveEnemy?.x ?? Neo.player.x, y: liveEnemy?.y ?? Neo.player.y,
       radius: rival.r, tags: ['source:rival', `hero:${rival.characterKey}`],
     });

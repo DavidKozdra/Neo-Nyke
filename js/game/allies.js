@@ -50,6 +50,22 @@ export function drawAllyPortrait(canvas, ally, options = {}) {
   if (!ctx) return;
   const width = canvas.width || 64;
   const height = canvas.height || 64;
+  const spriteKey = String(ally.spriteKey || globalThis.NeoNyke?.content?.ALLY_SPRITE_KEY || 'cult_follower');
+  const atlas = Neo.SPRITE_ATLAS;
+  const frame = atlas?.frames?.[`${spriteKey}:idle0`] || atlas?.frames?.[spriteKey];
+  if (frame && atlas?.canvas) {
+    const size = Math.min(width, height) * 0.88;
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      atlas.canvas,
+      frame.x, frame.y, frame.w, frame.h,
+      (width - size) / 2, (height - size) / 2, size, size,
+    );
+    ctx.restore();
+    return;
+  }
   const appearance = ally.appearance || {};
   const palettes = globalThis.NeoNyke?.simulation?.ALLY_PALETTES || [];
   const palette = palettes[Number(appearance.palette || 0) % Math.max(1, palettes.length)]
@@ -132,7 +148,8 @@ function allyMoveDamage(ally, moveKey, gifted = false) {
   const owner = ownerForAlly(ally);
   const forgeSteps = owner?.anvilUpgrades?.move?.[moveKey]?.damage || 0;
   const forgeStep = globalThis.NeoNyke?.simulation?.MOVE_UPGRADEABLE_STATS?.damage?.step || 5;
-  return Math.max(2, (base + forgeSteps * forgeStep) * (gifted ? 0.70 : 0.55));
+  return Math.max(2, (base + forgeSteps * forgeStep) * (gifted ? 0.70 : 0.55)
+    * Number(globalThis.NeoNyke?.content?.ALLY_DAMAGE_MULTIPLIER ?? 0.5));
 }
 
 function allyMoveCooldown(ally, moveKey, gifted = false) {

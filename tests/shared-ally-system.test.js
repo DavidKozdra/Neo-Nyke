@@ -1,4 +1,6 @@
 const {
+  ALLY_SPRITE_KEY,
+  ALLY_DAMAGE_MULTIPLIER,
   ALLY_SHOP_CHANCE,
   ALLY_RECRUIT_CAP,
   ITEM_ALLY_RESPAWN_SECONDS,
@@ -6,6 +8,7 @@ const {
   generateAllyName,
   generateAllyAppearance,
   generateAllyOffer,
+  normalizeAllyRecord,
   recruitAlly,
   transferMoveToAlly,
   recallAllyMove,
@@ -46,6 +49,30 @@ describe('shared ally generation and lifecycle', () => {
     expect(generateAllyAppearance(777, 'ranger')).toEqual(generateAllyAppearance(777, 'ranger'));
     const first = generateAllyName(777);
     expect(generateAllyName(777, [first])).not.toBe(first);
+  });
+
+  test('uses the Cult Follower sprite for every ally source and repairs old records', () => {
+    expect(ALLY_SPRITE_KEY).toBe('cult_follower');
+    expect(generateAllyOffer({ random: () => 0.2 }).spriteKey).toBe(ALLY_SPRITE_KEY);
+    expect(normalizeAllyRecord({ spriteKey: 'princess' }, player()).spriteKey).toBe(ALLY_SPRITE_KEY);
+
+    const owner = player();
+    const state = { allies: {}, players: { p1: owner }, nextEntityId: 1 };
+    const ally = createSourcedAlly(state, owner, {
+      id: 'legacy-ally',
+      sourceKind: 'item',
+      spriteKey: 'ent_boss',
+    });
+    ally.spriteKey = 'ent_boss';
+    advanceAllies(state, 0, state.players);
+    expect(ally.spriteKey).toBe(ALLY_SPRITE_KEY);
+  });
+
+  test('halves basic and authored ally damage at the shared boundary', () => {
+    expect(ALLY_DAMAGE_MULTIPLIER).toBe(0.5);
+    const owner = player({ baseDamage: 30 });
+    expect(normalizeAllyRecord({ archetypeKey: 'brawler' }, owner).basicDamage).toBe(8);
+    expect(normalizeAllyRecord({ archetypeKey: 'brawler', basicDamage: 40 }, owner).basicDamage).toBe(20);
   });
 
   test('caps purchased recruits at three per player', () => {

@@ -2215,7 +2215,7 @@
           seed: Math.max(1, Number(Neo.simulationTick || 1) * 13 + index),
           name: `Cult Follower ${index + 1}`,
           sourceKind: 'move', sourceKey: 'summon_cult_followers',
-          archetypeKey: 'brawler', spriteKey: 'cult_follower', allyIndex: index,
+          archetypeKey: 'brawler', allyIndex: index,
           x: Neo.clamp(Neo.player.x + Math.cos(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_W - Neo.WALL - 24),
           y: Neo.clamp(Neo.player.y + Math.sin(summonAngle) * 58, Neo.WALL + 24, Neo.ROOM_H - Neo.WALL - 24),
           radius: 15, duration, expiresRemaining: duration,

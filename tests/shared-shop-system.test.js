@@ -1,5 +1,9 @@
 const { RandomService } = require('../js/simulation/RandomService');
-const { stockCampaignShop, purchaseCampaignShop } = require('../js/simulation/SharedShopSystem');
+const {
+  ALLY_RECRUIT_PRICE_MULTIPLIER,
+  stockCampaignShop,
+  purchaseCampaignShop,
+} = require('../js/simulation/SharedShopSystem');
 const { isMoveAllowedForCharacter } = require('../js/simulation/SharedMoveContent');
 const { WEAPON_PROJECTILE_ATTACKS } = require('../js/simulation/SharedCombatContent');
 const fs = require('fs');
@@ -169,6 +173,15 @@ describe('shared complete campaign shop', () => {
     expect(room.shopMoveOffers).toHaveLength(4);
     expect(room.shopWeaponOffers).toHaveLength(3);
     expect(room.shopTradeOffer).toEqual(expect.objectContaining({ type: 'trade', unavailable: false }));
+  });
+
+  test('doubles every generated ally recruitment price before difficulty scaling', () => {
+    expect(ALLY_RECRUIT_PRICE_MULTIPLIER).toBe(2);
+    const state = { floorNumber: 1, elapsedSeconds: 0, matchRules: {} };
+    const room = { id: 'ally-price-shop', type: 'shop' };
+    const player = { items: {}, ownedMoves: {}, ownedWeapons: {}, xp: 0, xpToNext: 20 };
+    stockCampaignShop(state, room, player, { next: () => 0 });
+    expect(room.shopAllyOffers.map(offer => offer.cost)).toEqual([180, 196, 212]);
   });
 
   test('reads authority shop pressure from the canonical nested difficulty', () => {

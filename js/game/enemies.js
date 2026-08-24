@@ -861,7 +861,7 @@
     antony_blemmye: { r: 42, hp: 1250, max: 1250, speed: 78, dmg: 24, attackCd: 1.35, phase: 1, bleedImmune: true, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 },
     handsome_devil: { r: 34, hp: 1700, max: 1700, speed: 104, dmg: 50, attackCd: 1.1, phase: 1, fireImmune: true, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, clawCd: 0.4, giantLaserCd: 3.6, beamRange: 560 },
     ent_of_pestilence: { r: 48, hp: 2050, max: 2050, speed: 82, dmg: 28, attackCd: 1.15, summonCd: 1.8, poisonImmune: true },
-    t_rex: { r: 58, hp: 2600, max: 2600, speed: 112, dmg: 42, attackCd: 1.05, bleedImmune: true, roarCd: 2.5 },
+    t_rex: { r: 58, hp: 2600, max: 2600, speed: 336, dmg: 42, attackCd: 1.05, phase: 1, bleedImmune: true, roarCd: 2.5 },
     sea_snake: { r: 38, hp: 2350, max: 2350, speed: 156, dmg: 34, attackCd: 0.9, seaSnakeEntryTime: 2.4, seaSnakeCoilAngle: -Math.PI / 2, seaSnakeContactCd: 0 },
   };
 
@@ -1136,7 +1136,6 @@
           seed: 7100 + index,
           name: `Pestilent Bug ${index + 1}`,
           archetypeKey: 'brawler',
-          spriteKey: 'ent_boss',
           x: Neo.player.x + Math.cos(angle) * 44,
           y: Neo.player.y + Math.sin(angle) * 44,
           radius: 10,
@@ -1216,11 +1215,13 @@
     }
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
-      enemy.vx = Math.cos(enemy.dashAngle) * 610;
-      enemy.vy = Math.sin(enemy.dashAngle) * 610;
+      const chargeSpeed = Math.max(610, Number(enemy.speed || 0) * 2);
+      enemy.vx = Math.cos(enemy.dashAngle) * chargeSpeed;
+      enemy.vy = Math.sin(enemy.dashAngle) * chargeSpeed;
       if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 16) {
         enemy.dashHit = true;
         Neo.damagePlayer(enemy.dmg + 22, enemy.dashAngle, 520, enemy.type, { attacker: enemy });
+        Neo.applyBleed?.(Neo.player, 3, 5, enemy);
       }
       return;
     }
@@ -1233,8 +1234,10 @@
       Neo.damagePlayer(Math.round(enemy.dmg * 0.45), Math.atan2(dy, dx), 440, enemy.type, { attacker: enemy });
       Neo.ringBurst(enemy.x, enemy.y, 230, '#ffcf72', 0.55);
       enemy.roarCd = 4.4;
-    } else if (enemy.attackCd <= 0 && distance > 170) {
-      enemy.dashAngle = Math.atan2(dy, dx);
+    } else if (enemy.attackCd <= 0 && distance > enemy.r + Neo.player.r + 40) {
+      const predictedX = Neo.player.x + Number(Neo.player.vx || 0) * 0.25;
+      const predictedY = Neo.player.y + Number(Neo.player.vy || 0) * 0.25;
+      enemy.dashAngle = Math.atan2(predictedY - enemy.y, predictedX - enemy.x);
       enemy.windup = 0.55;
       enemy.attackCd = 1.8;
     }

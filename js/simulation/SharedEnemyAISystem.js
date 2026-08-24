@@ -12,7 +12,7 @@
   const ENEMY_UPDATE_METHOD_BY_TYPE = Object.freeze({
     god: 'updateGod', queen_cult: 'updateCultQueenBoss', bulk_golem: 'updateBulkGolemBoss', artificer_knave: 'updateArtificerBoss',
     bowman_bane: 'updateBowmanBane', antony_blemmye: 'updateAntonyBlemmyeBoss', handsome_devil: 'updateHandsomeDevilBoss',
-    ent_of_pestilence: 'updateEntOfPestilence',
+    ent_of_pestilence: 'updateEntOfPestilence', t_rex: 'updateTRexBoss',
     mirror_knight: 'updateMirrorChampion', mooggy: 'updateMooggyEnemy', rival: 'updateRivalEnemy', cult_mage: 'updateCultMageEnemy',
     knave: 'updateKnaveEnemy', sniper: 'updateSniperEnemy', machine_gunner: 'updateMachineGunnerEnemy', golem: 'updateGolemEnemy',
     summoner: 'updateSummonerEnemy', shield_unit: 'updateShieldUnitEnemy', healer: 'updateHealerEnemy',

@@ -14,6 +14,7 @@ const {
   SEA_SNAKE_SEGMENT_SPACING,
   advanceCampaignSeaSnakeBody,
 } = require('../js/simulation/SharedEnemyBehaviorSystem');
+const { ALLY_SPRITE_KEY } = require('../js/simulation/SharedAllySystem');
 
 describe('black relics', () => {
   test.each([
@@ -154,7 +155,7 @@ describe('black relics', () => {
     expect(combat).toContain('Neo.tryAwakenBlackBugAllies?.(enemy, dealt)');
     expect(enemies).toContain('getBugCardHeavyHitThreshold');
     expect(enemies).toContain("fireBug: Neo.nextRandom?.('encounter') < 0.05");
-    expect(enemies).toContain("spriteKey: 'ent_boss'");
+    expect(ALLY_SPRITE_KEY).toBe('cult_follower');
     expect(enemies).toContain('reconcileGuaranteedItemAllies');
     expect(world).toContain('Neo.player.heartOceanProjectileCount >= requiredProjectiles');
     expect(world).toContain('heartOceanEcho: true');

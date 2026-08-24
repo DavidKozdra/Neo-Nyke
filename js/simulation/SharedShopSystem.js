@@ -24,6 +24,7 @@
   const PURPLE_WEAPON_POOL = Object.freeze(['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90']);
   const GOD_WEAPON_POOL = Object.freeze(['gelleh_lightning_spear', 'excalibur', 'katana_excalibur_777x', 'golden_fleece', 'void_piercer']);
   const SCROLL_KEYS = Object.freeze(['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego']);
+  const ALLY_RECRUIT_PRICE_MULTIPLIER = 2;
   const rarityOf = key => itemApi.ITEM_DEFS?.[key]?.rarity
     || itemApi.SCROLL_DEFS?.[key]?.rarity
     || itemApi.ITEM_RARITY_BY_KEY?.[key]
@@ -176,7 +177,8 @@
     if (room.shopHasAllies) {
       const existingNames = Object.values(state?.allies || {}).map(ally => ally?.name).filter(Boolean);
       for (let index = 0; index < 3; index += 1) {
-        const baseCost = 80 + Number(state.floorNumber || 1) * 10 + index * 8;
+        const baseCost = (80 + Number(state.floorNumber || 1) * 10 + index * 8)
+          * ALLY_RECRUIT_PRICE_MULTIPLIER;
         const offer = allyApi.generateAllyOffer?.({
           id: `shop:${room.id}:ally:${index}`,
           random,
@@ -285,6 +287,7 @@
   }
 
   return {
+    ALLY_RECRUIT_PRICE_MULTIPLIER,
     SHOP_MOVE_POOL, WHITE_WEAPON_POOL, PURPLE_WEAPON_POOL, GOD_WEAPON_POOL, SCROLL_KEYS,
     shopPrice, itemCost, getShopItemSlot, layoutShopItemOffers, ensureFeaturedGodOffer,
     stockCampaignShop, purchaseCampaignShop,

@@ -1373,40 +1373,43 @@
       if (!ally || ally.status !== 'active') return;
       if (viewportBounds && (ally.x < viewportBounds.left - 48 || ally.x > viewportBounds.right + 48
         || ally.y < viewportBounds.top - 48 || ally.y > viewportBounds.bottom + 48)) return;
-      let canvas = allyPortraitCanvases.get(ally.id);
       if (ally.spriteKey && Neo.SPRITE_ATLAS?.frames?.[`${ally.spriteKey}:idle0`]) {
         const frame = getActorSpriteFrameKey(ally.spriteKey, ally, { stepRate: 12, seedKey: ally.id });
-        const tint = ally.fireBug ? '#ff8a3d' : '#a7ff4f';
         drawSpriteFrame(frame, ally.x, ally.y, 30, {
           flipX: Number(ally.vx || 0) < 0,
-          shadowColor: tint, shadowBlur: ally.fireBug ? 14 : 8, tint,
         });
-        return;
+      } else {
+        let canvas = allyPortraitCanvases.get(ally.id);
+        if (!canvas) {
+          canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          allyPortraitCanvases.set(ally.id, canvas);
+        }
+        Neo.drawAllyPortrait?.(canvas, ally, { moving: Math.hypot(Number(ally.vx || 0), Number(ally.vy || 0)) > 10 });
+        Neo.ctx.save();
+        Neo.ctx.translate(ally.x, ally.y);
+        const facing = Number(ally.vx || 0) < 0 ? -1 : 1;
+        Neo.ctx.scale(facing, 1);
+        Neo.ctx.globalAlpha = Number(ally.attackFlash || 0) > 0 ? 1 : 0.94;
+        Neo.ctx.drawImage(canvas, -24, -29, 48, 48);
+        Neo.ctx.restore();
       }
-      if (!canvas) {
-        canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        allyPortraitCanvases.set(ally.id, canvas);
-      }
-      Neo.drawAllyPortrait?.(canvas, ally, { moving: Math.hypot(Number(ally.vx || 0), Number(ally.vy || 0)) > 10 });
-      Neo.ctx.save();
-      Neo.ctx.translate(ally.x, ally.y);
-      const facing = Number(ally.vx || 0) < 0 ? -1 : 1;
-      Neo.ctx.scale(facing, 1);
-      Neo.ctx.globalAlpha = Number(ally.attackFlash || 0) > 0 ? 1 : 0.94;
-      Neo.ctx.drawImage(canvas, -24, -29, 48, 48);
-      Neo.ctx.restore();
       const hpRatio = Neo.clamp(Number(ally.health || 0) / Math.max(1, Number(ally.maxHealth || 1)), 0, 1);
       Neo.ctx.save();
-      Neo.ctx.fillStyle = 'rgba(3,8,12,0.78)';
-      Neo.ctx.fillRect(ally.x - 19, ally.y - 35, 38, 5);
-      Neo.ctx.fillStyle = hpRatio > 0.45 ? '#65df8e' : '#e05264';
-      Neo.ctx.fillRect(ally.x - 18, ally.y - 34, 36 * hpRatio, 3);
-      Neo.ctx.font = '7px system-ui';
+      Neo.ctx.fillStyle = 'rgba(3,8,12,0.88)';
+      Neo.ctx.fillRect(ally.x - 28, ally.y - 46, 56, 19);
+      Neo.ctx.strokeStyle = 'rgba(143,238,188,0.72)';
+      Neo.ctx.lineWidth = 1;
+      Neo.ctx.strokeRect(ally.x - 27.5, ally.y - 45.5, 55, 18);
+      Neo.ctx.font = 'bold 9px system-ui';
       Neo.ctx.textAlign = 'center';
-      Neo.ctx.fillStyle = '#dffcff';
-      Neo.ctx.fillText(String(ally.name || 'ALLY'), ally.x, ally.y - 39);
+      Neo.ctx.fillStyle = '#effff6';
+      Neo.ctx.fillText(String(ally.name || 'ALLY'), ally.x, ally.y - 36);
+      Neo.ctx.fillStyle = 'rgba(0,0,0,0.9)';
+      Neo.ctx.fillRect(ally.x - 24, ally.y - 33, 48, 5);
+      Neo.ctx.fillStyle = hpRatio > 0.45 ? '#65df8e' : '#e05264';
+      Neo.ctx.fillRect(ally.x - 23, ally.y - 32, 46 * hpRatio, 3);
       Neo.ctx.restore();
     });
   }
