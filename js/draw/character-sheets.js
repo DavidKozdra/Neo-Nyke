@@ -382,42 +382,39 @@ const CHARACTER_SHEET_DEFS = {
     portraitFrame: 2,
     mirrorFacing: false,
   },
-  // The God is authored one frame per file rather than as a strip, so both of
-  // its forms composite through `srcFrames`. Phases 1-2 use the early form and
-  // phases 3-5 the ascended one; getEnemySpriteKey picks between them.
+  // Both God forms live in one authored strip. Phases 1-2 use the first six
+  // frames and phases 3-5 use the ten-frame ascended section; the enemy sprite
+  // resolver still picks the active form from the current phase.
   god: {
-    srcFrames: [
-      'assets/sprites/chars/God (1)1.png',
-      'assets/sprites/chars/God (1)2.png',
-    ],
+    src: 'assets/sprites/chars/God.png',
     frameWidth: 48,
     frameHeight: 48,
-    frameCount: 2,
+    frameCount: 6,
     // The early form only fills 20x28 of its 48px box (the ascended form fills
     // 40x46), so it needs the larger scale of the two just to match it in world
     // size — and still stays the smaller silhouette.
     renderScale: 1.9,
     stepRate: 5,
     idleRate: 1.6,
-    idleFrames: [0, 1],
-    walkFrames: [0, 1],
+    idleFrames: [0, 1, 2, 3, 4, 5],
+    walkFrames: [0, 1, 2, 3, 4, 5],
     portraitFrame: 0,
   },
   god_ascended: {
-    srcFrames: [
-      'assets/sprites/chars/God (1)3.png',
-      'assets/sprites/chars/God (1)4.png',
-      'assets/sprites/chars/God (1)5.png',
-    ],
+    src: 'assets/sprites/chars/God.png',
     frameWidth: 48,
     frameHeight: 48,
-    frameCount: 3,
+    frameCount: 10,
+    sourceOffsetX: 288,
     renderScale: 1.5,
     stepRate: 6,
     idleRate: 2.2,
-    idleFrames: [0, 1, 2],
-    walkFrames: [0, 1, 2],
-    portraitFrame: 0,
+    actionRate: 8,
+    idleFrames: [4, 5, 6, 7, 8, 9],
+    walkFrames: [4, 5, 6, 7, 8, 9],
+    attackFrames: [0, 1, 2, 3],
+    beamFrames: [0, 1, 2, 3],
+    portraitFrame: 4,
   },
   bulk_golem: {
     src: 'assets/sprites/chars/large-golem.png',
@@ -517,9 +514,8 @@ function loadImage(src) {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
-    // Spaces survive a plain src assignment, but parentheses in a filename
-    // (e.g. "God (1)1.png") are not reliably passed through the fetch/service
-    // worker path, so encode anything that isn't already escaped.
+    // Preserve authored filenames containing spaces or other URL-sensitive
+    // characters when the sheet is fetched through the service worker.
     image.src = /%[0-9a-fA-F]{2}/.test(src) ? src : encodeURI(src);
   });
 }

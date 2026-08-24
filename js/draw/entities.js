@@ -157,6 +157,15 @@
   }
 
   function getEnemySpriteActionOptions(enemy) {
+    if (enemy?.type === 'god') {
+      const firingBeam = enemy.state === 'godLaser'
+        || enemy.state === 'godSweep'
+        || enemy.state === 'godPartition';
+      if (firingBeam && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)) {
+        return { action: 'beam' };
+      }
+      return {};
+    }
     if (enemy?.type === 'laser') {
       return Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0
         ? { action: 'beam' }

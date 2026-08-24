@@ -591,42 +591,42 @@ describe('character sprite sheet assets', () => {
     });
   });
 
-  // The God is authored one frame per file instead of as a strip, so it is the
-  // only sheet that goes through the `srcFrames` compositing path. Its frames
-  // are measured individually — countOpaquePixels assumes a single grid image.
   test.each([
-    ['god', 2, [
-      'assets/sprites/chars/God (1)1.png',
-      'assets/sprites/chars/God (1)2.png',
-    ]],
-    ['god_ascended', 3, [
-      'assets/sprites/chars/God (1)3.png',
-      'assets/sprites/chars/God (1)4.png',
-      'assets/sprites/chars/God (1)5.png',
-    ]],
-  ])('%s composites its authored per-file frames into one cycle', async (key, frameCount, srcFrames) => {
+    ['god', 6, 0, [0, 1, 2, 3, 4, 5], []],
+    ['god_ascended', 10, 288, [4, 5, 6, 7, 8, 9], [0, 1, 2, 3]],
+  ])('%s uses its authored section of the shared God strip', async (
+    key,
+    frameCount,
+    sourceOffsetX,
+    movementFrames,
+    actionFrames,
+  ) => {
     const defs = extractCharacterSheetDefs();
     const def = defs[key];
-    const everyFrame = Array.from({ length: frameCount }, (_, index) => index);
     expect(def).toEqual(expect.objectContaining({
-      srcFrames,
+      src: 'assets/sprites/chars/God.png',
       frameWidth: 48,
       frameHeight: 48,
       frameCount,
-      // Both forms run one continuous cycle: every frame is both idle and walk.
-      idleFrames: everyFrame,
-      walkFrames: everyFrame,
-      portraitFrame: 0,
+      idleFrames: movementFrames,
+      walkFrames: movementFrames,
     }));
-    expect(def.src).toBeUndefined();
-    expect(def.srcFrames).toHaveLength(frameCount);
+    expect(def.sourceOffsetX || 0).toBe(sourceOffsetX);
+    expect(def.attackFrames || []).toEqual(actionFrames);
+    expect(def.beamFrames || []).toEqual(actionFrames);
 
-    await Promise.all(def.srcFrames.map(async src => {
-      const image = await loadImage(path.join(__dirname, '..', src));
-      expect(image.naturalWidth).toBe(def.frameWidth);
-      expect(image.naturalHeight).toBe(def.frameHeight);
-      expect(countOpaquePixels(image, 0, def.frameWidth, def.frameHeight)).toBeGreaterThan(100);
-    }));
+    const image = await loadImage(path.join(__dirname, '..', def.src));
+    expect(image.naturalWidth).toBe(768);
+    expect(image.naturalHeight).toBe(def.frameHeight);
+    [...movementFrames, ...actionFrames].forEach(frameIndex => {
+      expect(countOpaquePixels(
+        image,
+        frameIndex,
+        def.frameWidth,
+        def.frameHeight,
+        sourceOffsetX,
+      )).toBeGreaterThan(100);
+    });
   });
 
   test('the God draws only from its sheets, not the removed procedural def', () => {
