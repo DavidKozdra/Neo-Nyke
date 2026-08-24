@@ -32,6 +32,7 @@ const {
   revealCampaignBowmanBaneEscape,
   useCampaignLadder,
 } = require('../js/simulation/SharedRoomLifecycleSystem');
+const { getCampaignChallengeTimerMultipliers } = require('../js/simulation/SharedEnemyScalingSystem');
 
 describe('SharedRoomLifecycleSystem', () => {
   test('selects seeded floor-appropriate challenge types and owns completion state', () => {
@@ -65,6 +66,22 @@ describe('SharedRoomLifecycleSystem', () => {
     expect(started.switches[0]).toEqual(expect.objectContaining({ type: 'challengeSwitch', switchIndex: 0, armed: true, x: 230, y: 245 }));
     expect(room.challengeData).toEqual(expect.objectContaining({ phase: 'solve', progress: 0, maxTimer: 18, wrongPressPenalty: 2 }));
     expect(advanceCampaignCircuitChallenge(room, 18)).toEqual(expect.objectContaining({ ok: true, failed: true, timer: 0 }));
+  });
+
+  test('separates harder deadline pressure from longer endurance exposure', () => {
+    const hard = getCampaignChallengeTimerMultipliers('hard');
+    expect(hard.deadline).toBeLessThan(1);
+    expect(hard.endurance).toBeGreaterThan(1);
+    expect(getCampaignChallengeTrialTuning('circuit', {
+      difficultyStatMultiplier: 1.12,
+      deadlineTimerMultiplier: hard.deadline,
+    }).timer).toBeLessThan(18);
+    expect(getCampaignChallengeTrialTuning('storm', {
+      enduranceTimerMultiplier: hard.endurance,
+    }).timer).toBeGreaterThan(17);
+    expect(getCampaignChallengeTrialTuning('survival', {
+      enduranceTimerMultiplier: hard.endurance,
+    }).timer).toBeGreaterThan(24);
   });
 
   test('creates the complete campaign challenge reward transaction', () => {

@@ -1490,21 +1490,19 @@
 
   function getProjectileSpeedMultiplier(props, enemyProjectile, itemStats) {
     const difficultyKey = Neo.selectedDifficulty;
-    const legacyDifficultyMultiplier = difficultyKey === 'easy' ? 0.8 : difficultyKey === 'hard' ? 1.2 : 1;
+    const legacyPlayerMultiplier = difficultyKey === 'easy' ? 0.8 : difficultyKey === 'hard' ? 1.2 : 1;
     const itemMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
-    if (!enemyProjectile) return itemMultiplier * legacyDifficultyMultiplier;
-
-    const bossProjectile = props.bossProjectile === true || Neo.isBossType?.(props.owner?.type);
-    if (!bossProjectile) return legacyDifficultyMultiplier;
+    if (!enemyProjectile) return itemMultiplier * legacyPlayerMultiplier;
 
     const difficulty = Neo.getDifficultyDef?.() || {};
-    const difficultyMultiplier = Math.max(
-      0.1,
-      Number(difficulty.bossProjectileSpeedMultiplier ?? difficulty.speedMultiplier ?? 1),
-    );
-    const gameMinutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
-    const timeRate = Math.max(0, Number(Neo.ENEMY_SCALING?.speedMinute ?? 0.018));
-    return difficultyMultiplier * (1 + gameMinutes * timeRate);
+    const bossProjectile = props.bossProjectile === true || Neo.isBossType?.(props.owner?.type);
+    const resolve = globalThis.NeoNyke?.simulation?.getCampaignEnemyProjectileSpeedMultiplier;
+    if (typeof resolve !== 'function') throw new Error('Shared enemy projectile speed scaling is unavailable');
+    return resolve(difficulty, {
+      boss: bossProjectile,
+      elapsedSeconds: Neo.gameElapsedTime,
+      speedMinute: Neo.ENEMY_SCALING?.speedMinute,
+    });
   }
 
   function spawnProjectile(props) {

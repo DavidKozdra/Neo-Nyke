@@ -1805,15 +1805,20 @@ export function resumeGame() {
     const statPressure = Neo.clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
     const roomPressure = Neo.clamp(Number(difficulty?.roomWeightBonus || 0) / 0.22, 0, 1);
     const economyPressure = Neo.clamp((Number(difficulty?.shopPriceMultiplier || 1) - 1) / 0.42, 0, 1);
+    const challengeTimers = globalThis.NeoNyke?.simulation?.getCampaignChallengeTimerMultipliers?.(difficulty)
+      || { deadline: 1 - roomPressure * 0.2, endurance: 1 + roomPressure * 0.2 };
+    const coinRewardMultiplier = globalThis.NeoNyke?.simulation?.getCampaignCoinRewardMultiplier?.(difficulty)
+      ?? (1 + economyPressure * 0.24);
     return {
       key: String(difficulty?.key || normalizeDifficulty(key)),
       eventCheckIntervalMultiplier: 1 - roomPressure * 0.18,
       eventChanceMultiplier: 1 + roomPressure * 0.26,
       eventTimerMultiplier: 1 - statPressure * 0.22,
       eventPenaltyMultiplier: 1 + statPressure * 0.38,
-      challengeTimerMultiplier: 1 - roomPressure * 0.2,
+      challengeTimerMultiplier: challengeTimers.deadline,
+      challengeEnduranceTimerMultiplier: challengeTimers.endurance,
       potionHealMultiplier: 1 - statPressure * 0.16,
-      coinRewardMultiplier: 1 + economyPressure * 0.24,
+      coinRewardMultiplier,
       bribeCostMultiplier: 1 + economyPressure * 0.22,
       memoryMatchMaxFlips: Math.max(2, 6 - Math.round(statPressure * 2)),
     };
@@ -1823,6 +1828,7 @@ export function resumeGame() {
     const config = getDifficultyRuntimeConfig();
     return {
       challengeTimerMultiplier: Number(config.challengeTimerMultiplier || 1),
+      challengeEnduranceTimerMultiplier: Number(config.challengeEnduranceTimerMultiplier || 1),
       potionHealMultiplier: Number(config.potionHealMultiplier || 1),
       coinRewardMultiplier: Number(config.coinRewardMultiplier || 1),
     };
@@ -1836,6 +1842,11 @@ export function resumeGame() {
 
   function scaleChallengeTimer(baseSeconds) {
     const scaledSeconds = Math.round(Number(baseSeconds || 0) * getRunDifficultyScalars().challengeTimerMultiplier);
+    return Math.max(6, scaledSeconds);
+  }
+
+  function scaleChallengeEnduranceTimer(baseSeconds) {
+    const scaledSeconds = Math.round(Number(baseSeconds || 0) * getRunDifficultyScalars().challengeEnduranceTimerMultiplier);
     return Math.max(6, scaledSeconds);
   }
 
@@ -4796,6 +4807,7 @@ export function resumeGame() {
   Neo.getRunDifficultyScalars = getRunDifficultyScalars;
   Neo.getRandomItemDropChance = getRandomItemDropChance;
   Neo.scaleChallengeTimer = scaleChallengeTimer;
+  Neo.scaleChallengeEnduranceTimer = scaleChallengeEnduranceTimer;
   Neo.scalePotionHealing = scalePotionHealing;
   Neo.getPotionHealAmount = getPotionHealAmount;
   Neo.getPlayerHealingMultiplier = getPlayerHealingMultiplier;

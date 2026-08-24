@@ -410,12 +410,13 @@
     if (type === 'storm') {
       return globalThis.NeoNyke.simulation.getCampaignChallengeTrialTuning('storm', {
         floorNumber: floor,
-        scaleTimer: Neo.scaleChallengeTimer,
+        scaleEnduranceTimer: Neo.scaleChallengeEnduranceTimer,
       });
     }
     if (type === 'survival') {
       return globalThis.NeoNyke.simulation.getCampaignChallengeTrialTuning('survival', {
-        floorNumber: floor, scaleTimer: Neo.scaleChallengeTimer,
+        floorNumber: floor,
+        scaleEnduranceTimer: Neo.scaleChallengeEnduranceTimer,
       });
     }
     if (type === 'runes') {

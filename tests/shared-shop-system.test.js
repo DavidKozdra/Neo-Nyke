@@ -171,6 +171,27 @@ describe('shared complete campaign shop', () => {
     expect(room.shopTradeOffer).toEqual(expect.objectContaining({ type: 'trade', unavailable: false }));
   });
 
+  test('reads authority shop pressure from the canonical nested difficulty', () => {
+    const player = { items: {}, ownedMoves: {}, ownedWeapons: {}, xp: 0, xpToNext: 20 };
+    const easyRoom = { id: 'easy-shop', type: 'shop' };
+    const godRoom = { id: 'god-shop', type: 'shop' };
+    stockCampaignShop(
+      { floorNumber: 1, elapsedSeconds: 0, matchRules: { difficulty: { shopPriceMultiplier: 1, shopItemOffers: 3 } } },
+      easyRoom,
+      player,
+      new RandomService({ matchSeed: 'nested-shop' }).stream('shop'),
+    );
+    stockCampaignShop(
+      { floorNumber: 1, elapsedSeconds: 0, matchRules: { difficulty: { shopPriceMultiplier: 1.42, shopItemOffers: 1 } } },
+      godRoom,
+      player,
+      new RandomService({ matchSeed: 'nested-shop' }).stream('shop'),
+    );
+    expect(godRoom.shopOffers.filter(offer => offer.type === 'item')).toHaveLength(1);
+    expect(godRoom.shopOffers.find(offer => offer.type === 'item').cost)
+      .toBeGreaterThan(easyRoom.shopOffers.find(offer => offer.type === 'item').cost);
+  });
+
   test('one purchase resolver owns items, moves, weapons, trades, and healing', () => {
     const state = { floorNumber: 7, elapsedSeconds: 0, matchRules: {} };
     const room = { id: 'shop', type: 'shop' };

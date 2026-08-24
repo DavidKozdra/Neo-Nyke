@@ -35,30 +35,40 @@
 
   function getCampaignChallengeTrialTuning(type, options = {}) {
     const floor = Math.max(1, Number(options.floorNumber || 1));
-    const scaleTimer = typeof options.scaleTimer === 'function'
-      ? options.scaleTimer : seconds => Math.max(6, Math.round(Number(seconds || 0)));
+    const defaultScale = (seconds, multiplier) => Math.max(
+      6,
+      Math.round(Number(seconds || 0) * Math.max(0.1, Number(multiplier ?? 1))),
+    );
+    const scaleDeadlineTimer = typeof options.scaleDeadlineTimer === 'function'
+      ? options.scaleDeadlineTimer
+      : typeof options.scaleTimer === 'function'
+        ? options.scaleTimer
+        : seconds => defaultScale(seconds, options.deadlineTimerMultiplier);
+    const scaleEnduranceTimer = typeof options.scaleEnduranceTimer === 'function'
+      ? options.scaleEnduranceTimer
+      : seconds => defaultScale(seconds, options.enduranceTimerMultiplier);
     if (type === 'storm') {
       return {
-        timer: scaleTimer(17),
+        timer: scaleEnduranceTimer(17),
         tick: Math.max(0.68, 1.05 - floor * 0.02),
         burstCount: floor >= 7 ? 4 : floor >= 4 ? 3 : 2,
       };
     }
     if (type === 'survival') {
       return {
-        timer: scaleTimer(24),
+        timer: scaleEnduranceTimer(24),
         tickStart: 2.2,
         tickEnd: 1.35,
         spawnCount: floor >= 6 ? 6 : 3,
       };
     }
     if (type === 'runes') {
-      return { timer: scaleTimer(20), tick: Math.max(2.0, 2.9 - floor * 0.06), spawnCount: 1 };
+      return { timer: scaleDeadlineTimer(20), tick: Math.max(2.0, 2.9 - floor * 0.06), spawnCount: 1 };
     }
-    if (type === 'bomb') return { timer: scaleTimer(17), tick: Math.max(1.2, 2.4 - floor * 0.1), spawnCount: floor >= 7 ? 2 : 1 };
+    if (type === 'bomb') return { timer: scaleDeadlineTimer(17), tick: Math.max(1.2, 2.4 - floor * 0.1), spawnCount: floor >= 7 ? 2 : 1 };
     if (type === 'circuit' || type === 'stillness') {
       const pressure = Math.max(0, Math.min(1, (Number(options.difficultyStatMultiplier || 1) - 1) / 0.52));
-      return { timer: scaleTimer(18), sequenceLength: 4 + Math.round(pressure * 2), wrongPressPenalty: 2 };
+      return { timer: scaleDeadlineTimer(18), sequenceLength: 4 + Math.round(pressure * 2), wrongPressPenalty: 2 };
     }
     return {};
   }

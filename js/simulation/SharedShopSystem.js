@@ -48,7 +48,11 @@
   function shopPrice(baseCost, state, player) {
     const depth = Math.max(1, Number(state.floorNumber || 1));
     const minutes = Math.max(0, Number(state.elapsedSeconds || 0) / 60);
-    const difficultyMultiplier = Number(state.matchRules?.shopPriceMultiplier || 1);
+    const difficultyMultiplier = Number(
+      state.matchRules?.difficulty?.shopPriceMultiplier
+      ?? state.matchRules?.shopPriceMultiplier
+      ?? 1,
+    );
     const cursedMultiplier = state.matchRules?.cursedShops ? 1.5 : 1;
     const sealDiscount = Number(player?.items?.scholar_seal || 0) > 0
       ? Math.max(0, Math.min(1, Number(player.xp || 0) / Math.max(1, Number(player.xpToNext || 1)))) * 0.1
@@ -108,7 +112,11 @@
   function stockCampaignShop(state, room, player, random) {
     if (!room || room.type !== 'shop' || !random) return null;
     if (room.shopStocked) return room;
-    const baseItems = Math.max(0, Math.floor(Number(state.matchRules?.shopItemOffers ?? 3)));
+    const baseItems = Math.max(0, Math.floor(Number(
+      state.matchRules?.difficulty?.shopItemOffers
+      ?? state.matchRules?.shopItemOffers
+      ?? 3,
+    )));
     const extraItems = Math.min(3, Math.max(0, Math.floor(Number(
       player?.itemStats?.shopExtraItemOffers ?? player?.items?.rich_mans_luck ?? 0,
     ))));

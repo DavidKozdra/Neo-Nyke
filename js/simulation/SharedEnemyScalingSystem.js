@@ -62,6 +62,7 @@
       itemDropChanceMultiplier: 1.15,
       speedMultiplier: 1,
       bossProjectileSpeedMultiplier: 0.75,
+      enemyProjectileSpeedMultiplier: 0.8,
       enemyReactionMultiplier: 0.8,
       rangedCadenceMultiplier: 1.2,
       supportPowerMultiplier: 1,
@@ -86,6 +87,7 @@
       hpFloorScaleBonus: -0.02,
       speedMultiplier: 1.03,
       bossProjectileSpeedMultiplier: 0.9,
+      enemyProjectileSpeedMultiplier: 1,
       enemyReactionMultiplier: 0.8,
       rangedCadenceMultiplier: 1.2,
       supportPowerMultiplier: 1.08,
@@ -109,6 +111,7 @@
       hpFloorScaleBonus: 0.02,
       speedMultiplier: 1.06,
       bossProjectileSpeedMultiplier: 1.2,
+      enemyProjectileSpeedMultiplier: 1.2,
       enemyReactionMultiplier: 1.12,
       rangedCadenceMultiplier: 0.9,
       supportPowerMultiplier: 1.14,
@@ -135,6 +138,7 @@
       hpFloorScaleBonus: 0.05,
       speedMultiplier: 1.1,
       bossProjectileSpeedMultiplier: 1.3,
+      enemyProjectileSpeedMultiplier: 1.3,
       enemyReactionMultiplier: 1.2,
       rangedCadenceMultiplier: 0.82,
       supportPowerMultiplier: 1.22,
@@ -161,6 +165,7 @@
       hpFloorScaleBonus: 0.08,
       speedMultiplier: 1.14,
       bossProjectileSpeedMultiplier: 1.4,
+      enemyProjectileSpeedMultiplier: 1.4,
       enemyReactionMultiplier: 1.28,
       rangedCadenceMultiplier: 0.74,
       supportPowerMultiplier: 1.3,
@@ -189,6 +194,7 @@
       bossHpGrowthMultiplier: 1,
       hpFloorScaleBonus: 0,
       speedMultiplier: 1,
+      enemyProjectileSpeedMultiplier: 1,
       enemyReactionMultiplier: 1,
       rangedCadenceMultiplier: 1,
       supportPowerMultiplier: 1,
@@ -214,6 +220,7 @@
     miniBossChanceMultiplier: [0, 10],
     roomWeightBonus: [-1, 10],
     bossProjectileSpeedMultiplier: [0.1, 5],
+    enemyProjectileSpeedMultiplier: [0.1, 5],
     enemyReactionMultiplier: [0.1, 5],
     rangedCadenceMultiplier: [0.1, 5],
     supportPowerMultiplier: [0.1, 10],
@@ -275,6 +282,39 @@
     const amount = Math.max(0, Number(damage || 0));
     if (amount <= 0) return 0;
     return Math.max(1, Math.round(amount * getCampaignEnemyLaserDamageMultiplier(difficulty)));
+  }
+
+  function getCampaignEnemyProjectileSpeedMultiplier(source, options = {}) {
+    const difficulty = typeof source === 'string'
+      ? CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[source] || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY
+      : resolveCampaignEnemyDifficulty(source);
+    const boss = options.boss === true;
+    const base = Math.max(0.1, Number(boss
+      ? difficulty.bossProjectileSpeedMultiplier ?? difficulty.speedMultiplier
+      : difficulty.enemyProjectileSpeedMultiplier ?? difficulty.speedMultiplier) || 1);
+    if (!boss) return base;
+    const elapsedMinutes = Math.max(0, Number(options.elapsedSeconds || 0) / 60);
+    const timeRate = Math.max(0, Number(options.speedMinute ?? CAMPAIGN_ENEMY_SCALING.speedMinute));
+    return base * (1 + elapsedMinutes * timeRate);
+  }
+
+  function getCampaignChallengeTimerMultipliers(source) {
+    const difficulty = typeof source === 'string'
+      ? CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[source] || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY
+      : resolveCampaignEnemyDifficulty(source);
+    const roomPressure = clamp(Number(difficulty.roomWeightBonus || 0) / 0.22, 0, 1);
+    return {
+      deadline: 1 - roomPressure * 0.2,
+      endurance: 1 + roomPressure * 0.2,
+    };
+  }
+
+  function getCampaignCoinRewardMultiplier(source) {
+    const difficulty = typeof source === 'string'
+      ? CAMPAIGN_ENEMY_DIFFICULTY_PRESETS[source] || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY
+      : resolveCampaignEnemyDifficulty(source);
+    const economyPressure = clamp((Number(difficulty.shopPriceMultiplier || 1) - 1) / 0.42, 0, 1);
+    return 1 + economyPressure * 0.24;
   }
 
   function softCapEnemyScale(value, cap, curve = 0.35) {
@@ -438,6 +478,9 @@
     resolveCampaignEnemyDifficulty,
     getCampaignEnemyLaserDamageMultiplier,
     scaleCampaignEnemyLaserDamage,
+    getCampaignEnemyProjectileSpeedMultiplier,
+    getCampaignChallengeTimerMultipliers,
+    getCampaignCoinRewardMultiplier,
     softCapEnemyScale,
     getEnemyLevelStatMultipliers,
     getBossLevelHpMultiplier,

@@ -4,6 +4,7 @@ const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState, TEST_ROOM } = require('../js/multiplayer/LocalMultiplayerSession');
 const { MOVE_SLOT_KEYS, MOVE_BASE_STATS } = require('../js/simulation/SharedMoveContent');
 const { createCampaignBulkGolemSplitPlan } = require('../js/simulation/SharedEnemyBehaviorSystem');
+const { CAMPAIGN_ENEMY_DIFFICULTY_PRESETS } = require('../js/simulation/SharedEnemyScalingSystem');
 const {
   ATTACK_COOLDOWN_TICKS,
   applyNetworkHeroProfile,
@@ -92,6 +93,21 @@ describe('authoritative network combat system', () => {
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'ENEMY_PROJECTILE_DETONATED', data: expect.objectContaining({ projectileId: 'frostBlast', damage: 14, radius: 80 }),
     }));
+  });
+
+  test('reads authoritative status duration from the nested difficulty policy', () => {
+    const { state, simulation } = combatHarness();
+    const player = state.players.p1;
+    state.matchRules.difficulty = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard;
+    simulation.updateGame({}, 0.05);
+    state.projectiles.hardSlow = {
+      id: 'hardSlow', hostile: true, ownerId: 'enemy', roomId: player.roomId,
+      x: player.x, y: player.y, vx: 0, vy: 0, radius: 8, damage: 1,
+      attackKind: 'hard_slow', expiresTick: state.tick,
+      enemyBlast: { radius: 80, damage: 1, statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
+    };
+    simulation.updateGame({}, 0.05);
+    expect(player.statuses.slow.duration).toBeCloseTo(2.4);
   });
 
   test('keeps Sweepy Box mines armed until proximity then resolves their campaign blast and bleed', () => {
@@ -183,7 +199,7 @@ describe('authoritative network combat system', () => {
     expect(player).toEqual(expect.objectContaining({ insuranceReady: false, insuranceActive: false, insuranceChargeKills: 0 }));
     // Mooggy starts with Heme's Scarf: its passive upkeep supplies one stack,
     // then the on-hit retaliation supplies the second.
-    expect(attacker.statuses.bleed).toEqual(expect.objectContaining({ stacks: 2, duration: 4 }));
+    expect(attacker.statuses.bleed).toEqual(expect.objectContaining({ stacks: 2, duration: 2.8 }));
     expect(events).toEqual(expect.arrayContaining([
       expect.objectContaining({ eventType: 'ITEM_DAMAGE_EFFECT', data: expect.objectContaining({ itemKey: 'insurance' }) }),
       expect.objectContaining({ eventType: 'ITEM_DAMAGE_EFFECT', data: expect.objectContaining({ itemKey: 'hemes_scarf', enemyId: attacker.id }) }),
@@ -329,7 +345,7 @@ describe('authoritative network combat system', () => {
       items: { scholar_seal: 1 },
       ownedWeapons: {},
     };
-    state.matchRules.difficulty = { statMultiplier: 1 };
+    state.matchRules.difficulty = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.hard;
     state.floorState.currentRoomId = room.id;
     state.pickups.circuitStarter = {
       id: 'circuitStarter', type: 'challengeStarter', trial: 'circuit', roomId: room.id,
@@ -341,6 +357,7 @@ describe('authoritative network combat system', () => {
     const switches = Object.values(state.pickups).filter(pickup => pickup.type === 'challengeSwitch');
     expect(room.challengeStarted).toBe(true);
     expect(switches).toHaveLength(4);
+    expect(room.challengeData.maxTimer).toBeLessThan(18);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'CHALLENGE_STARTED', data: expect.objectContaining({ roomId: room.id, challengeType: 'circuit' }),
     }));
@@ -363,8 +380,8 @@ describe('authoritative network combat system', () => {
     const xpEvents = events.filter(event => event.eventType === 'XP_AWARDED'
       && event.data.source === 'challenge_reward');
     expect(xpEvents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ data: expect.objectContaining({ playerId: player.id, amount: 33 }) }),
-      expect.objectContaining({ data: expect.objectContaining({ playerId: 'p2', amount: 38 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ playerId: player.id, amount: 34 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ playerId: 'p2', amount: 39 }) }),
     ]));
     expect(xpEvents).toHaveLength(2);
     expect(events).toContainEqual(expect.objectContaining({
@@ -701,7 +718,7 @@ describe('authoritative network combat system', () => {
     expect(state.rivalRoster[0]).toEqual(expect.objectContaining({ lives: 0, dead: true, relationship: -5 }));
     expect(player.rivalReputation).toBe(1);
     expect(Object.values(state.pickups).filter(pickup => pickup.source === 'rival_reward')
-      .reduce((sum, pickup) => sum + pickup.value, 0)).toBe(22);
+      .reduce((sum, pickup) => sum + pickup.value, 0)).toBe(23);
     expect(Object.values(state.pickups)).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'item', source: 'rival_final', key: expect.any(String) }),
     ]));
@@ -1168,7 +1185,7 @@ describe('authoritative network combat system', () => {
     });
     random.next = () => 0;
     simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
-    expect(enemy.statuses.dark_drain).toEqual(expect.objectContaining({ stacks: 2 }));
+    expect(enemy.statuses.dark_drain.stacks).toBeCloseTo(1.88);
 
     enemy.x = player.x + 400;
     simulation.updateGame({ p1: { actions: [
@@ -2117,8 +2134,8 @@ describe('authoritative network combat system', () => {
     simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'mooggy_hairball', aimDirection: 0 }] } }, 0.05);
 
     expect(enemy.health).toBeLessThan(10000);
-    expect(enemy.statuses.poison).toEqual(expect.objectContaining({ stacks: 3 }));
-    expect(enemy.statuses.slow).toEqual(expect.objectContaining({ stacks: 1 }));
+    expect(enemy.statuses.poison.stacks).toBeCloseTo(2.82);
+    expect(enemy.statuses.slow.stacks).toBeCloseTo(0.94);
     // The enemy update consumes the first 50ms in this same cast frame.
     expect(enemy.stunnedUntilTick - state.tick).toBeGreaterThanOrEqual(15);
     expect(events).toContainEqual(expect.objectContaining({
@@ -2365,7 +2382,7 @@ describe('authoritative network combat system', () => {
     expect(enemy.roomId).toBe(targetRoom.id);
     expect(enemy.x).toBe(53);
     expect(enemy.y).toBe(316);
-    expect(enemy.vx).toBeGreaterThanOrEqual(1800);
+    expect(enemy.vx).toBeGreaterThan(1799);
     expect(player.vx).toBeLessThanOrEqual(-260);
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'ENEMY_ROOM_TRANSFERRED',
@@ -2577,6 +2594,10 @@ describe('authoritative network combat system', () => {
     const { state, events } = combatHarness();
     state.players.p1.level = 4;
     const room = state.floorState.layout.rooms.find(candidate => candidate.type === 'combat');
+    state.matchRules.difficulty = {
+      ...CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.medium,
+      eliteFloor: 1,
+    };
     state.players.p1.roomId = room.id;
     const stream = { next: () => 0, chance: () => true, int: () => 0 };
     ensureNetworkEncounter(state, { scoped: () => stream }, (eventType, data) => events.push({ eventType, data }), room.id);
@@ -2594,6 +2615,28 @@ describe('authoritative network combat system', () => {
     }));
   });
 
+  test('uses named difficulty for authority elites, minibosses, and the God start ambush', () => {
+    const godStart = combatHarness();
+    godStart.state.matchRules.difficulty = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god;
+    const startEncounter = ensureNetworkEncounter(godStart.state, godStart.random);
+    const startEnemies = startEncounter.enemyIds.map(id => godStart.state.enemies[id]);
+    expect(startEnemies).toHaveLength(2);
+    expect(startEnemies.every(enemy => enemy.elite)).toBe(true);
+
+    const godFloor = combatHarness();
+    godFloor.state.matchRules.difficulty = CAMPAIGN_ENEMY_DIFFICULTY_PRESETS.god;
+    godFloor.state.floorNumber = 5;
+    godFloor.state.floorsEntered = 5;
+    const room = godFloor.state.floorState.layout.rooms.find(candidate => candidate.type === 'combat');
+    godFloor.state.players.p1.roomId = room.id;
+    const stream = { next: () => 0, chance: () => true, int: () => 0 };
+    ensureNetworkEncounter(godFloor.state, { scoped: () => stream }, undefined, room.id);
+    expect(Object.values(godFloor.state.enemies)).toContainEqual(expect.objectContaining({
+      miniBoss: true,
+      maxHealth: expect.any(Number),
+    }));
+  });
+
   test("consumes Moggy's Coat once when the next authoritative encounter begins", () => {
     const { state, random, events } = combatHarness();
     const player = state.players.p1;
@@ -2604,7 +2647,8 @@ describe('authoritative network combat system', () => {
     const targets = encounter.enemyIds.map(enemyId => state.enemies[enemyId]);
     expect(player.moggysCoatPrimed).toBe(false);
     targets.forEach(enemy => {
-      expect(enemy.statuses.dark_drain).toEqual(expect.objectContaining({ stacks: 2, duration: 2 }));
+      expect(enemy.statuses.dark_drain.stacks).toBeCloseTo(1.88);
+      expect(enemy.statuses.dark_drain.duration).toBeCloseTo(1.316);
     });
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'MOGGYS_COAT_TRIGGERED',

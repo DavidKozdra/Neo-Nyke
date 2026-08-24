@@ -1,5 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  getCampaignEnemyProjectileSpeedMultiplier,
+} = require('../js/simulation/SharedEnemyScalingSystem');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);
@@ -32,6 +35,7 @@ describe('boss projectile speed scaling', () => {
       gameElapsedTime: elapsedSeconds,
       ENEMY_SCALING: { speedMinute: 0.018 },
       getDifficultyDef: () => ({
+        key: 'custom',
         ...(difficultyMultiplier == null ? {} : { bossProjectileSpeedMultiplier: difficultyMultiplier }),
         speedMultiplier,
       }),
@@ -39,8 +43,9 @@ describe('boss projectile speed scaling', () => {
     };
     const getProjectileSpeedMultiplier = new Function(
       'Neo',
+      'globalThis',
       `${declaration}; return getProjectileSpeedMultiplier;`,
-    )(Neo);
+    )(Neo, { NeoNyke: { simulation: { getCampaignEnemyProjectileSpeedMultiplier } } });
 
     return getProjectileSpeedMultiplier({ bossProjectile }, true, {});
   }
@@ -63,7 +68,10 @@ describe('boss projectile speed scaling', () => {
     expect(getMultiplier({ difficultyMultiplier: null, speedMultiplier: 1.25 })).toBeCloseTo(1.25);
   });
 
-  test('does not add elapsed-time scaling to regular enemy projectiles', () => {
+  test('keeps regular enemy projectiles monotonic without elapsed-time scaling', () => {
     expect(getMultiplier({ elapsedSeconds: 600, bossProjectile: false })).toBeCloseTo(1);
+    const multipliers = ['easy', 'medium', 'hard', 'impossible', 'god']
+      .map(key => getCampaignEnemyProjectileSpeedMultiplier(key, { elapsedSeconds: 600 }));
+    expect(multipliers).toEqual([0.8, 1, 1.2, 1.3, 1.4]);
   });
 });

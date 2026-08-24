@@ -24,6 +24,9 @@
   const {
     scaleCampaignEnemyStats,
     scaleCampaignEnemyLaserDamage = damage => Math.max(0, Number(damage || 0)),
+    getCampaignEnemyProjectileSpeedMultiplier = () => 1,
+    getCampaignChallengeTimerMultipliers = () => ({ deadline: 1, endurance: 1 }),
+    getCampaignCoinRewardMultiplier = () => 1,
     sanitizeCampaignEnemyDifficulty,
     DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY = {},
   } = enemyScalingApi || {};
@@ -544,6 +547,33 @@
     return String(state.matchRules?.gameMode || state.matchRules?.mode || state.gameMode || 'normal');
   }
 
+  function authorityDifficulty(state) {
+    return state.matchRules?.difficulty || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY;
+  }
+
+  function authorityEnemyProjectileSpeedMultiplier(state, enemy) {
+    return getCampaignEnemyProjectileSpeedMultiplier(authorityDifficulty(state), {
+      boss: !!enemy?.boss || !!getEnemyDefinition(enemy?.type)?.boss,
+      elapsedSeconds: state.elapsedSeconds,
+    });
+  }
+
+  function authorityEnemyCcLevel(state, enemy) {
+    if (enemy?.mirrorExactCopy) return 0;
+    const difficulty = authorityDifficulty(state);
+    const isBoss = !!enemy?.boss || enemy?.type === 'god' || !!getEnemyDefinition(enemy?.type)?.boss;
+    const isElite = !!enemy?.elite;
+    const scale = Math.max(0, Number(difficulty.ccResistScale || 0));
+    const depth = authorityProgressionDepth(state);
+    const minutes = Math.max(0, Number(state.elapsedSeconds ?? Number(state.tick || 0) / 20) / 60);
+    const progress = (depth - 1) / MAX_FLOOR + minutes / 6;
+    let level = scale * progress;
+    if (isBoss) level += 0.6;
+    else if (isElite) level += 0.3;
+    if (Number(enemy?.eliteUnfazed || 0) > 0) level += Number(enemy.eliteUnfazed) * 0.1;
+    return Math.max(0, level);
+  }
+
   function authorityProgressionDepth(state) {
     return Math.max(
       1,
@@ -581,7 +611,7 @@
       gameMode: authorityGameMode(state),
       endlessWave: state.endlessWave,
       maxFloor: MAX_FLOOR,
-      difficulty: state.matchRules?.difficulty || DEFAULT_CAMPAIGN_ENEMY_DIFFICULTY,
+      difficulty: authorityDifficulty(state),
       partySize: activePlayers(state).length,
     });
   }
@@ -730,6 +760,7 @@
     const centerX = Number(state.floorState?.width || 900) / 2;
     const centerY = Number(state.floorState?.height || 700) / 2;
     createCampaignCoinDropPlan(centerX, centerY - 20, 80 + rush.stage * 30, {
+      coinRewardMultiplier: getCampaignCoinRewardMultiplier(authorityDifficulty(state)),
       random: () => stream?.next?.() ?? 0.5,
     }).forEach(descriptor => {
       const pickupId = state.allocateEntityId('pickup');
@@ -934,7 +965,10 @@
       const stream = random?.scoped?.(`rival-rumble:stage:${rumble.stage}:reward`);
       const x = Number(state.floorState?.width || 900) / 2;
       const y = Number(state.floorState?.height || 700) / 2;
-      createCampaignCoinDropPlan(x, y - 20, 80 + rumble.stage * 30, { random: () => stream?.next?.() ?? 0.5 }).forEach(descriptor => {
+      createCampaignCoinDropPlan(x, y - 20, 80 + rumble.stage * 30, {
+        coinRewardMultiplier: getCampaignCoinRewardMultiplier(authorityDifficulty(state)),
+        random: () => stream?.next?.() ?? 0.5,
+      }).forEach(descriptor => {
         const id = state.allocateEntityId('pickup');
         state.pickups[id] = { id, ...descriptor, roomId: room.id, radius: 13, amount: descriptor.value, spawnTick: state.tick };
       });
@@ -1143,7 +1177,7 @@
     if (mode === 'endless') return Number(state.endlessWave || 0) >= 2;
     const floor = Math.max(1, Number(state.floorNumber || 1));
     const loop = Math.max(1, Math.floor((floor - 1) / MAX_FLOOR) + 1);
-    const eliteFloor = Math.max(1, Number(state.matchRules?.difficulty?.eliteFloor ?? 8) - (loop - 1) * 2);
+    const eliteFloor = Math.max(1, Number(authorityDifficulty(state).eliteFloor ?? 8) - (loop - 1) * 2);
     return floor >= eliteFloor && floor <= MAX_FLOOR;
   }
 
@@ -1512,29 +1546,56 @@
     const bossRush = gameMode === 'boss_rush' ? ensureAuthorityBossRush(state, random, emitEvent) : null;
     if (gameMode === 'boss_rush' && !bossRush?.active) return null;
     const stream = random.scoped(`enemy-spawning:${state.floorNumber}:${room.id}`);
+    const difficulty = authorityDifficulty(state);
+    if (room.type === 'start') {
+      room.startRoomEliteCount = Math.max(0, Math.floor(Number(difficulty.startRoomEliteCount || 0)));
+      if (room.startRoomEliteCount > 0) room.cleared = false;
+    }
     const plan = gameMode === 'endless'
       ? createCampaignEndlessWavePlan(Number(state.endlessWave || 0) + 1, {
         floorNumber: state.floorNumber, random: stream,
-        roomWeightBonus: Number(state.matchRules?.difficulty?.roomWeightBonus || 0),
+        roomWeightBonus: Number(difficulty.roomWeightBonus || 0),
       })
       : gameMode === 'boss_rush'
         ? [BOSS_RUSH_ORDER[Math.max(0, Number(bossRush.stage || 0))]].filter(Boolean)
       : getCampaignEncounterPlan(room, {
-      floorNumber: state.floorNumber,
-      random: stream,
-      difficulty: state.matchRules?.difficulty || {},
-      challengeBonus: state.matchRules?.swarmRooms ? 2 : 0,
-      roomWeightBonus: Number(state.matchRules?.difficulty?.roomWeightBonus || 0),
+        floorNumber: state.floorNumber,
+        random: stream,
+        difficulty,
+        challengeBonus: state.matchRules?.swarmRooms ? 2 : 0,
+        roomWeightBonus: Number(difficulty.roomWeightBonus || 0),
       });
+    let miniBossIndex = -1;
+    if (!['endless', 'boss_rush', 'rival_rumble', 'practice'].includes(gameMode)
+      && Number(state.floorNumber || 1) >= 5 && ['combat', 'ladder', 'challenge'].includes(room.type)) {
+      const baseChance = Math.max(0.08, Math.min(0.34, 0.08 + (Number(state.floorNumber) - 5) * 0.02));
+      const roomMultiplier = room.type === 'ladder' ? 3 : 1;
+      const chance = Math.min(room.type === 'ladder' ? 0.95 : 0.8,
+        baseChance * Math.max(0, Number(difficulty.miniBossChanceMultiplier || 0)) * roomMultiplier);
+      if (stream.chance(chance)) {
+        const pool = room.type === 'ladder'
+          ? ['golem', 'knave', 'cult_mage', 'sniper']
+          : ['knave', 'cult_mage', 'sniper', 'golem'];
+        miniBossIndex = plan.length;
+        plan.push(pool[stream.int(0, pool.length - 1)] || pool[0]);
+      }
+    }
     const enemyIds = [];
     for (let index = 0; index < plan.length; index += 1) {
       const enemyId = state.allocateEntityId('enemy');
       const angle = stream.next() * Math.PI * 2;
       const distance = 175 + stream.next() * 95;
       const type = plan[index];
+      const miniBoss = index === miniBossIndex;
       const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
-      const elite = !archetype.boss && room.type !== 'start' && stream.chance(room.type === 'challenge' ? 0.3 : 0.08);
+      const progressionLoop = Math.max(1, Math.floor((authorityProgressionDepth(state) - 1) / MAX_FLOOR) + 1);
+      const eliteChance = Math.min(0.85, Math.max(0, Number(difficulty.eliteChance || 0)) + (progressionLoop - 1) * 0.1);
+      const forceStartElite = room.type === 'start' && Number(room.startRoomEliteCount || 0) > 0;
+      const elite = !archetype.boss && (
+        forceStartElite
+        || (room.type !== 'start' && authorityCanSpawnCampaignElite(state) && stream.chance(eliteChance))
+      );
       const enemyLevel = gameMode === 'boss_rush'
         ? getBossRushBossLevel(bossRush.stage)
         : Math.max(
@@ -1578,6 +1639,7 @@
         eliteTypes: [], elitePowers: [],
         patterns: archetype.patterns || [],
         boss: !!archetype.boss,
+        miniBoss,
         ...(gameMode === 'boss_rush' ? {
           bossRushBoss: true,
           bossRushStage: Number(bossRush.stage || 0),
@@ -1618,6 +1680,12 @@
       };
       if (elite) applyAuthorityEliteProfile(state, enemy, enemyLevel, () => stream.next());
       else enemy.level = enemyLevel;
+      if (miniBoss) {
+        enemy.maxHealth = Math.max(1, Math.round(enemy.maxHealth * 1.9));
+        enemy.health = enemy.maxHealth;
+        enemy.moveSpeed *= 0.94;
+        enemy.radius = Math.round(enemy.radius * 1.08);
+      }
       enemy.projectileDamage = Math.max(5, Math.round(enemy.contactDamage * projectileDamageRatio));
       state.enemies[enemyId] = enemy;
       enemyIds.push(enemyId);
@@ -2483,7 +2551,7 @@
     if (coinAmount > 0) {
       const plan = createCampaignCoinDropPlan(enemy.x, enemy.y, coinAmount, {
         gameMode: state.matchRules?.gameMode || state.matchRules?.mode,
-        coinRewardMultiplier: state.matchRules?.difficulty?.coinRewardMultiplier,
+        coinRewardMultiplier: getCampaignCoinRewardMultiplier(authorityDifficulty(state)),
         random: nextRandom,
       });
       plan.forEach(descriptor => {
@@ -2561,7 +2629,7 @@
       applyBleedBonus: details.applyBleedBonus,
       glassCannon: !!state.matchRules?.glassCannon,
       loopNumber,
-      enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+      enemyLoopDamageReduction: authorityDifficulty(state).enemyLoopDamageReduction,
     });
     if (details.lightning) {
       const copperPennyStacks = Math.max(0, Number(attacker?.items?.copper_penny || 0));
@@ -2599,7 +2667,7 @@
     // physics carries the shove, then the client shakes on the ENEMY_HIT event.
     const knockback = Number(details.knockback || 0) * getEntityLevelKnockbackMultiplier(attacker);
     if (knockback > 0 && Number.isFinite(Number(details.angle))) {
-      const ccLevel = enemy.boss || enemy.type === 'god' ? 0.6 : enemy.elite ? 0.3 : 0;
+      const ccLevel = authorityEnemyCcLevel(state, enemy);
       const resistFactor = 1 / (1 + ccLevel + Math.max(0, Number(enemy.stunResistance || 0)));
       const applied = knockback * resistFactor;
       applyCampaignImpulse(enemy, Number(details.angle), applied);
@@ -2632,8 +2700,9 @@
   function getAuthorityStatusResistance(state, target, key) {
     const general = Number(target?.statusResistance || 0);
     const keyed = Number(target?.statusResistances?.[key] || 0);
-    const ramped = getCampaignGenericStatusResistance(key, {
-      statusResistScale: Number(state.matchRules?.statusResistScale || 0),
+    const playerTarget = !!target?.id && !!state.players?.[target.id];
+    const ramped = playerTarget ? 0 : getCampaignGenericStatusResistance(key, {
+      statusResistScale: Number(authorityDifficulty(state).statusResistScale || 0),
       elapsedSeconds: Number(state.tick || 0) / 20,
     });
     return Math.max(0, Math.min(0.95, Math.max(general, keyed, ramped)));
@@ -2645,7 +2714,7 @@
       && Number(state.tick || 0) < Number(target.potionBathStatusResistUntilTick || 0)) return null;
     return applyCampaignStatus(target, key, stacks, duration, {
       resistance: options.resistance ?? getAuthorityStatusResistance(state, target, key),
-      durationMultiplier: options.durationMultiplier ?? Number(state.matchRules?.statusDurationMultiplier ?? 1),
+      durationMultiplier: options.durationMultiplier ?? Number(authorityDifficulty(state).statusDurationMultiplier ?? 1),
       severity: options.severity ?? 1,
       playerColdBudget: !!options.playerColdBudget,
       ownerId,
@@ -6876,6 +6945,7 @@
   function createEnemyProjectile(state, enemy, target) {
     const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
     const projectileId = state.allocateEntityId('projectile');
+    const speed = 390 * authorityEnemyProjectileSpeedMultiplier(state, enemy);
     state.projectiles[projectileId] = {
       id: projectileId,
       type: enemy.type === 'hunter' ? 'hunter_arrow' : enemy.behavior === 'beam' ? 'enemy_beam_bolt' : enemy.behavior === 'burst' ? 'enemy_burst_round' : `${enemy.type}_shot`,
@@ -6884,8 +6954,8 @@
       roomId: enemy.roomId,
       x: enemy.x + Math.cos(angle) * (Number(enemy.radius || 19) + 10),
       y: enemy.y + Math.sin(angle) * (Number(enemy.radius || 19) + 10),
-      vx: Math.cos(angle) * 390,
-      vy: Math.sin(angle) * 390,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
       radius: enemy.behavior === 'beam' ? 9 : enemy.behavior === 'burst' ? 4 : 6,
       damage: Number(enemy.projectileDamage || 9),
       // colour is derived client-side from `behavior` (see NetworkGameView cosmetics)
@@ -6995,7 +7065,7 @@
         applyBleedBonus: key !== 'bleed',
         glassCannon: !!state.matchRules?.glassCannon,
         loopNumber,
-        enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+        enemyLoopDamageReduction: authorityDifficulty(state).enemyLoopDamageReduction,
       });
     } else {
       damage = scaleCampaignDamage({
@@ -7004,7 +7074,7 @@
         itemStats: owner?.itemStats,
         raw: true,
         loopNumber,
-        enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+        enemyLoopDamageReduction: authorityDifficulty(state).enemyLoopDamageReduction,
       });
     }
     if (key === 'bleed') {
@@ -7015,7 +7085,7 @@
       const innateResistance = Math.max(0, Math.min(0.8, Number(enemy.bleedResistance || 0)));
       damage = damage / divisor
         * Math.max(0.2, 1 - innateResistance)
-        * Math.max(0, Number(state.matchRules?.enemyBleedDamageMultiplier ?? 1));
+        * Math.max(0, Number(authorityDifficulty(state).enemyBleedDamageMultiplier ?? 1));
     }
     return Math.max(1, Math.round(damage));
   }
@@ -7448,6 +7518,7 @@
     spawnProjectile(enemy, descriptor) {
       const state = behaviorRuntime.state;
       const projectileId = state.allocateEntityId('projectile');
+      const speedMultiplier = authorityEnemyProjectileSpeedMultiplier(state, enemy);
       state.projectiles[projectileId] = {
         id: projectileId,
         type: descriptor.kind || 'enemy_shot',
@@ -7455,7 +7526,7 @@
         hostile: true,
         roomId: enemy.roomId,
         x: Number(descriptor.x), y: Number(descriptor.y),
-        vx: Number(descriptor.vx), vy: Number(descriptor.vy),
+        vx: Number(descriptor.vx) * speedMultiplier, vy: Number(descriptor.vy) * speedMultiplier,
         radius: Number(descriptor.r || 6),
         damage: Number(descriptor.damage || enemy.projectileDamage || 9),
         knockback: Number(descriptor.knockback || 120),
@@ -7466,7 +7537,7 @@
         ...(descriptor.homing ? {
           homing: true,
           homingTurnRate: Number(descriptor.homingTurnRate || 1.6),
-          homingSpeed: Number(descriptor.homingSpeed || 280),
+          homingSpeed: Number(descriptor.homingSpeed || 280) * speedMultiplier,
           homingAccel: Number(descriptor.homingAccel || 2.2),
         } : {}),
         ...(Number(descriptor.drainHeal || 0) > 0 ? { drainHeal: Number(descriptor.drainHeal) } : {}),
@@ -7708,6 +7779,7 @@
     const projectileId = state.allocateEntityId('projectile');
     const mirrorStats = enemy.mirrorItemStats || {};
     const speed = Math.max(1, Number(options.speed || 760) * Math.max(0.1, Number(mirrorStats.projectileSpeedMultiplier || 1)));
+    const difficultySpeedMultiplier = authorityEnemyProjectileSpeedMultiplier(state, enemy);
     const explicitHoming = Object.prototype.hasOwnProperty.call(options, 'homing');
     const homingStrength = Math.max(0, Number(mirrorStats.projectileHomingStrength || 0));
     const grantedHoming = !explicitHoming && homingStrength > 0;
@@ -7731,7 +7803,7 @@
       id: projectileId, type: options.type || 'mirror_shot', kind: options.kind || options.type || 'mirror_shot', ownerId: enemy.id, hostile: true, roomId: enemy.roomId,
       x: Number.isFinite(Number(options.originX)) ? Number(options.originX) : Number(enemy.x) + Math.cos(angle) * (Number(enemy.radius || 16) + 7),
       y: Number.isFinite(Number(options.originY)) ? Number(options.originY) : Number(enemy.y) + Math.sin(angle) * (Number(enemy.radius || 16) + 7),
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: Number(options.radius || 6),
+      vx: Math.cos(angle) * speed * difficultySpeedMultiplier, vy: Math.sin(angle) * speed * difficultySpeedMultiplier, radius: Number(options.radius || 6),
       damage: Math.max(1, Number(options.damage || enemy.contactDamage || 20)),
       knockback: Math.max(0, Number(options.knockback || 120) * Number(mirrorStats.knockbackMultiplier || 1)), attackKind: options.attackKind || 'mirror_weapon',
       spawnTick: state.tick, expiresTick: state.tick + Math.max(1, Math.ceil(Number(options.life || 1) * 20)),
@@ -7747,7 +7819,7 @@
       bouncesRemaining: Math.max(0, Math.floor(Number(options.bouncesRemaining || 0))) + itemBounces,
       homing: explicitHoming ? !!options.homing : grantedHoming, homingTargetId: options.homingTargetId || null,
       homingRadius: Math.max(0, Number(options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : 0))),
-      homingSpeed: Math.max(0, Number(options.homingSpeed ?? (grantedHoming ? speed : 0))),
+      homingSpeed: Math.max(0, Number(options.homingSpeed ?? (grantedHoming ? speed : 0))) * difficultySpeedMultiplier,
       homingAccel: Math.max(0, Number(options.homingAccel ?? (grantedHoming ? 1.2 + homingStrength * 6 : 0))),
       homingTurnRate: Math.max(0, Number(options.homingTurnRate ?? (grantedHoming ? 0.75 + homingStrength * 3.5 : 0))),
       subSpawn: options.subSpawn ? {
@@ -8975,7 +9047,7 @@
     const random = typeof options.random === 'function' ? options.random : (stream ? () => stream.next() : authorityFallbackRandom);
     const plan = createCampaignCoinDropPlan(enemy.x, enemy.y, amount, {
       gameMode: state.matchRules?.gameMode || state.matchRules?.mode,
-      coinRewardMultiplier: state.matchRules?.difficulty?.coinRewardMultiplier,
+      coinRewardMultiplier: getCampaignCoinRewardMultiplier(authorityDifficulty(state)),
       random,
     });
     plan.forEach(descriptor => {
@@ -9871,6 +9943,7 @@
       if (pickup.type === 'challengeStarter') {
         const room = currentRoom(state, pickup.roomId);
         if (!room || room.type !== 'challenge' || room.challengeStarted) return;
+        const challengeTimers = getCampaignChallengeTimerMultipliers(authorityDifficulty(state));
         room.challengeStarted = true;
         room.challengeLifecycleState = 'active';
         room.challengeFailed = false;
@@ -9883,6 +9956,7 @@
           const stream = random.scoped(`challenge:circuit:${state.floorNumber}:${room.id}`);
           const started = startCampaignCircuitChallenge(room, {
             difficultyStatMultiplier: state.matchRules?.difficulty?.statMultiplier,
+            deadlineTimerMultiplier: challengeTimers.deadline,
             random: () => stream.next(),
           });
           if (!started.ok) return;
@@ -9893,12 +9967,18 @@
           });
         }
         if ((room.challengeType || pickup.trial) === 'storm') {
-          const started = startCampaignStormChallenge(room, { floorNumber: state.floorNumber });
+          const started = startCampaignStormChallenge(room, {
+            floorNumber: state.floorNumber,
+            enduranceTimerMultiplier: challengeTimers.endurance,
+          });
           if (!started.ok) return;
         }
         if ((room.challengeType || pickup.trial) === 'survival') {
           const started = startCampaignSurvivalChallenge(room, {
-            floorNumber: state.floorNumber, width: state.floorState?.width, height: state.floorState?.height,
+            floorNumber: state.floorNumber,
+            width: state.floorState?.width,
+            height: state.floorState?.height,
+            enduranceTimerMultiplier: challengeTimers.endurance,
           });
           if (!started.ok) return;
         }
@@ -9906,6 +9986,7 @@
           const runeStream = random.scoped(`challenge:runes:${state.floorNumber}:${room.id}`);
           const started = startCampaignRuneChallenge(room, {
             floorNumber: state.floorNumber, width: state.floorState?.width, height: state.floorState?.height,
+            deadlineTimerMultiplier: challengeTimers.deadline,
             random: () => runeStream.next(),
           });
           if (!started.ok) return;
@@ -9918,6 +9999,7 @@
           const bombStream = random.scoped(`challenge:bombs:${state.floorNumber}:${room.id}`);
           const started = startCampaignBombChallenge(room, {
             floorNumber: state.floorNumber, width: state.floorState?.width, height: state.floorState?.height,
+            deadlineTimerMultiplier: challengeTimers.deadline,
             random: () => bombStream.next(),
           });
           if (!started.ok) return;
