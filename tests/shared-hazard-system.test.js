@@ -45,6 +45,7 @@ describe('shared campaign hazard geometry', () => {
       applyFire: true, statusInterval: 0.45,
     }));
     expect(advanceCampaignLavaContact({ kind: 'lava', playerDamagePerSecond: 6 }, { delta: 0.05 }).damage).toBeCloseTo(0.3);
+    expect(advanceCampaignLavaContact({ kind: 'lava', playerDamagePerSecond: 20 }, { delta: 0.05 }).damage).toBeCloseTo(1);
     expect(lava.statusTick).toBe(0.45);
     expect(advanceCampaignLavaContact(lava, { delta: 0.05 })).toEqual(expect.objectContaining({
       applyFire: false, statusInterval: 0.45,

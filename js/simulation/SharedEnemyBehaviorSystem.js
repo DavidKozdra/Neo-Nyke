@@ -145,6 +145,10 @@
     return Math.round(Math.max(0, Number(enemyDamage || 0)) * HANDSOME_DEVIL_SPIKE_DAMAGE_MULTIPLIER);
   }
 
+  function getHandsomeDevilLavaDamagePerSecond(enemyDamage) {
+    return Math.max(6, Math.round(Math.max(0, Number(enemyDamage || 0)) * 0.2));
+  }
+
   function createCampaignEnemyBehaviors(ctx) {
     const tuningOf = () => ctx.getTuning?.() || { reaction: 1, rangedCadence: 1, supportPower: 1 };
     const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -2202,7 +2206,7 @@
           kind: 'lava', shape: 'rect', enemy: true, source: 'handsome_devil',
           x, y: top + h / 2, left: x - thickness / 2, top, w: thickness, h,
           ttl: 4.2, phase: index * 0.7, pulse: 1.9, statusStacks: 5,
-          damage: 10,
+          playerDamagePerSecond: getHandsomeDevilLavaDamagePerSecond(enemy.dmg ?? enemy.contactDamage),
         });
       });
       horizontals.forEach((y, index) => {
@@ -2212,7 +2216,7 @@
           kind: 'lava', shape: 'rect', enemy: true, source: 'handsome_devil',
           x: left + w / 2, y, left, top: y - thickness / 2, w, h: thickness,
           ttl: 4.2, phase: index * 0.9 + 1.3, pulse: 1.9, statusStacks: 5,
-          damage: 10,
+          playerDamagePerSecond: getHandsomeDevilLavaDamagePerSecond(enemy.dmg ?? enemy.contactDamage),
         });
       });
       ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: 'devil_lava_grid' });
@@ -3144,6 +3148,7 @@
     createCampaignEnemyBehaviors,
     createCampaignBulkGolemSplitPlan,
     getHandsomeDevilSpikeDamage,
+    getHandsomeDevilLavaDamagePerSecond,
     lineIntersectsRect,
     segmentHitsCircle,
     turnAngleToward,

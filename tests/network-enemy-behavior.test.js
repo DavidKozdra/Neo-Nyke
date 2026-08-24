@@ -8,6 +8,7 @@ const {
   BULK_GOLEM_KNOCKBACK_MULTIPLIER,
   createCampaignEnemyBehaviors,
   getHandsomeDevilSpikeDamage,
+  getHandsomeDevilLavaDamagePerSecond,
 } = require('../js/simulation/SharedEnemyBehaviorSystem');
 const {
   applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, advanceToNextFloor,
@@ -1519,13 +1520,22 @@ describe('authored boss behaviors on the authority', () => {
     const spikes = (room.hazards || []).filter(hazard => hazard.kind === 'red_spikes');
     expect(spikes).toHaveLength(5);
     expect(spikes.every(hazard => hazard.damage === getHandsomeDevilSpikeDamage(devil.dmg))).toBe(true);
-    expect((room.hazards || []).filter(hazard => hazard.kind === 'lava' && hazard.enemy).length).toBe(5);
+    const lava = (room.hazards || []).filter(hazard => hazard.kind === 'lava' && hazard.enemy);
+    expect(lava).toHaveLength(5);
+    expect(lava.every(hazard => hazard.playerDamagePerSecond === getHandsomeDevilLavaDamagePerSecond(devil.dmg))).toBe(true);
+    expect(lava.every(hazard => hazard.damage === undefined)).toBe(true);
   });
 
   test('nerfs Handsome Devil spike damage by 25% without changing his base damage', () => {
     const previousSpikeDamage = Math.round(40 * 1.1);
     expect(previousSpikeDamage).toBe(44);
     expect(getHandsomeDevilSpikeDamage(40)).toBe(33);
+  });
+
+  test('scales Handsome Devil lava DPS from boss damage without dropping below floor lava', () => {
+    expect(getHandsomeDevilLavaDamagePerSecond(20)).toBe(6);
+    expect(getHandsomeDevilLavaDamagePerSecond(50)).toBe(10);
+    expect(getHandsomeDevilLavaDamagePerSecond(100)).toBe(20);
   });
 
   test('the Bulk Golem leaps at distant players and slams down with an impact blast', () => {

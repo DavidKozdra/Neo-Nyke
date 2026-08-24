@@ -4139,6 +4139,7 @@
         phase: index * 0.7,
         pulse: 1.9,
         statusStacks: getBossStatusStacks(enemy, 1),
+        playerDamagePerSecond: globalThis.NeoNyke.simulation.getHandsomeDevilLavaDamagePerSecond(enemy.dmg),
       });
     });
     horizontals.forEach((y, index) => {
@@ -4160,6 +4161,7 @@
         phase: index * 0.9 + 1.3,
         pulse: 1.9,
         statusStacks: getBossStatusStacks(enemy, 1),
+        playerDamagePerSecond: globalThis.NeoNyke.simulation.getHandsomeDevilLavaDamagePerSecond(enemy.dmg),
       });
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.58, text: 'LAVA GRID', c: '#ff7a32' });
