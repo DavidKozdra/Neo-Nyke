@@ -1009,7 +1009,7 @@ export function createTutorialController() {
     if (changed) {
       const justCleared = cleared.filter(step => isStepAvailable(step, state)).at(-1);
       if (justCleared && state.lastCelebratedStep !== justCleared.id) {
-        Neo.playSfx?.('powerup');
+        Neo.playSfx?.('item_collect');
         celebrateStep(justCleared);
       } else {
         Neo.playSfx?.('achievement');
@@ -1383,7 +1383,7 @@ export function createTutorialController() {
         speaker.classList.remove('tutorial-speaker--announce');
         void speaker.offsetWidth;
         speaker.classList.add('tutorial-speaker--announce');
-        if (lastChapter) Neo.playSfx?.('powerup');
+        if (lastChapter) Neo.playSfx?.('item_collect');
         lastChapter = chapter;
       }
     }

@@ -162,7 +162,12 @@
   const NETWORK_SFX_PRELOAD_IDS = Object.freeze([
     'sword_swing', 'fire', 'fire_burn', 'lazer_blast', 'aoe',
     'lightning_charge', 'dash', 'enemy_hit', 'coin', 'item_collect',
+    'player_hurt',
   ]);
+  // Matches the campaign gate in world.js: drop chip/DoT ticks and rate-limit
+  // the rest so the hurt cue stays a signal instead of a stutter.
+  const PLAYER_HURT_SFX_MIN_GAP_MS = 220;
+  const PLAYER_HURT_SFX_MIN_RATIO = 0.012;
   // The authority owns the hold-to-charge table (button bit + maxChargeTicks).
   // Deriving both the held-button map and the predicted charge clock from it
   // keeps client presentation on exactly the profile the server will release
@@ -2202,6 +2207,17 @@
       }
     }
 
+    _playLocalPlayerHurtSfx(damage, maxHp) {
+      const dealt = Number(damage || 0);
+      if (!(dealt > 0)) return;
+      if (dealt < Math.max(1, Number(maxHp || 0) * PLAYER_HURT_SFX_MIN_RATIO)) return;
+      const now = Date.now();
+      if (now - (this._lastPlayerHurtSfxAt || 0) < PLAYER_HURT_SFX_MIN_GAP_MS) return;
+      this._lastPlayerHurtSfxAt = now;
+      // Late audio on a hit you already saw land is worse than no audio.
+      this.neo.playSfx?.('player_hurt', { maxStartDelayMs: NETWORK_SFX_MAX_DECODE_DELAY_MS });
+    }
+
     _spawnGameplayEventEffect(event) {
       const state = this.currentSample?.state;
       const data = event.data || {};
@@ -2232,6 +2248,11 @@
         const ratio = clamp(Number(data.damage || 0) / maxHp, 0, 1);
         const isPlayerHit = event.eventType === 'PLAYER_HIT';
         const relevant = isPlayerHit ? data.playerId === localPlayerId : true;
+        // Only the local player's own hits get the hurt grunt. A remote player
+        // being shot across the room is their feedback, not yours.
+        if (isPlayerHit && relevant) {
+          this._playLocalPlayerHurtSfx(Number(data.damage || 0), maxHp);
+        }
         if (relevant && (data.crit || ratio >= 0.04 || Number(data.knockback || 0) >= 120)) {
           const heavy = clamp(ratio * 2.4, 0, 1);
           const trauma = (data.crit ? 0.32 : 0.16) + heavy * 0.3;

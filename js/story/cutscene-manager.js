@@ -554,7 +554,7 @@ export class StoryCutsceneManager {
     Neo.storyState.rewards[rewardId] = true;
     Neo.player.items[key] = Number(Neo.player.items[key] || 0) + Math.max(1, Number(count) || 1);
     Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.1, text: `${Neo.ITEM_DEFS?.[key]?.name || key} +${count}`, c: Neo.ITEM_DEFS?.[key]?.color || '#fff' });
-    Neo.playSfx?.('powerup');
+    Neo.playSfx?.('item_collect');
     Neo.updateHud?.();
     Neo.scheduleRunSave?.();
     return true;
@@ -725,7 +725,7 @@ export class StoryCutsceneManager {
     }
     if (options.announce !== false) {
       Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.5, text: 'THORN JOINS YOU', c: '#8dc7ff' });
-      Neo.playSfx?.('powerup');
+      Neo.playSfx?.('item_collect');
     }
     Neo.scheduleRunSave?.();
     Neo.updateObjective?.();
@@ -832,7 +832,7 @@ export class StoryCutsceneManager {
       actor.smashCd = 5.2;
       actor.attackAnimT = 0.5;
       Neo.blastRadius?.(actor.x, actor.y, 132, Math.round(baseDamage * 1.25), '#ff3048');
-      Neo.playSfx?.('heavy_slam');
+      Neo.playSfx?.('aoe');
     } else if (targetDistance <= 88) {
       actor.attackCd = 0.68;
       actor.attackAnimT = 0.34;
@@ -859,7 +859,7 @@ export class StoryCutsceneManager {
         color: '#ff5b72',
         source: 'story_thorn_ally',
       });
-      Neo.playSfx?.('laser');
+      Neo.playSfx?.('lazer_blast');
     }
   }
 }

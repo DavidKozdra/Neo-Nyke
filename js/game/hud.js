@@ -1020,7 +1020,7 @@
     const name = Neo.CHARACTER_DEFS?.[resolution.characterKey]?.name || resolution.characterKey;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 2.0, text: `REBORN AS ${String(name).toUpperCase()}`, c: '#9ce070' });
     Neo.ringBurst?.(Neo.player.x, Neo.player.y, 60, '#9ce070', 0.6);
-    Neo.playSfx?.('powerup');
+    Neo.playSfx?.('item_collect');
     updateHud();
     scheduleRunSave();
     return true;

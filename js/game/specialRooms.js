@@ -753,7 +753,7 @@ export function trySpecialRoomChoiceInteract(actor = Neo.player) {
       text: String(choice.disabledReason || 'UNAVAILABLE').toUpperCase(),
       c: '#ff8b98',
     });
-    Neo.playSfx?.('menu_error');
+    Neo.playSfx?.('menu_click');
     return true;
   }
   return applySharedSpecialChoice(nearest.choice.id);

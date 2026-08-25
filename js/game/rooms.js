@@ -103,7 +103,7 @@
       Neo.player.turtleLaserSteps = Number(Neo.player.turtleLaserSteps || 0) + 1;
       Neo.spawnParticle?.({ x: Neo.START_X, y: Neo.START_Y - 28, life: 1.1, text: 'LASER +', c: '#7fe0ff' });
       Neo.ringBurst?.(Neo.START_X, Neo.START_Y, 40, '#7fe0ff', 0.5);
-      Neo.playSfx?.('powerup');
+      Neo.playSfx?.('item_collect');
     }
     // Survival uses a single scrolling overworld rather than the campaign's
     // fixed 900×700 room. Other modes restore the canonical combat dimensions.

@@ -30,6 +30,21 @@
     { id: 'heal_player', path: 'assets/sounds/Heal_player.wav', volume: 0.7, priority: priority.HIGH, mixDb: 3 },
     { id: 'player_death', path: 'assets/sounds/Player Death.wav', volume: 0.8, priority: priority.CRITICAL, mixDb: 3, lowCutHz: 45 },
     {
+      // The player taking damage. Shares the deepest enemy grunt sample, pitched
+      // down and low-cut so a hit *on you* reads as closer and heavier than the
+      // same grunt coming off an enemy you struck. CRITICAL priority keeps it
+      // from being voice-stolen during a busy fight — missing this cue is worse
+      // than dropping any other one-shot.
+      id: 'player_hurt',
+      path: 'assets/sounds/sfx_enemy hit_uuua_deep.wav',
+      volume: 0.75,
+      priority: priority.CRITICAL,
+      mixDb: 4,
+      lowCutHz: 40,
+      playbackRate: 0.82,
+      duckMusicGain: 0.85,
+    },
+    {
       id: 'buy_sell',
       volume: 0.7,
       priority: priority.NORMAL,
@@ -178,6 +193,7 @@
     dash:            { label: 'Dash',                category: 'Combat' },
     enemy_hit:       { label: 'Enemy Hit',           category: 'Combat' },
     enemy_hurt:      { label: 'Enemy Hurt',          category: 'Combat' },
+    player_hurt:     { label: 'Player Hurt',         category: 'Combat' },
     player_death:    { label: 'Player Death',        category: 'Combat' },
     // Pickups & economy
     item_collect:    { label: 'Item Collect',        category: 'Pickups' },
@@ -362,6 +378,11 @@
 
           const source = ctx.createBufferSource();
           source.buffer = buffer;
+          // Optional pitch shift. Lets one sample serve two roles (e.g. the
+          // player's hurt grunt is the enemy grunt dropped a few semitones) so
+          // the listener reads "that was me" without a second asset.
+          const rate = Number(options.playbackRate ?? def.playbackRate);
+          if (Number.isFinite(rate) && rate > 0) source.playbackRate.value = rate;
           const gain = ctx.createGain();
           const mixGain = mixerApi?.dbToGain?.(def.mixDb ?? 0) ?? Math.pow(10, Number(def.mixDb || 0) / 20);
           // getSoundGain already folds in the sound's baseline volume (or the

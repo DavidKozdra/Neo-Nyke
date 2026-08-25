@@ -86,7 +86,7 @@
     Neo.runRevivesUsed = Number(Neo.runRevivesUsed || 0) + 1;
     Neo.ringBurst?.(actor.x, actor.y, actor.r + 18, slot.color || '#9af7d8', 0.65);
     Neo.spawnParticle({ x: actor.x, y: actor.y - 34, life: 1, text: `${slot.label} REVIVED`, c: '#9af7d8' });
-    Neo.playSfx?.('heal');
+    Neo.playSfx?.('heal_player');
   }
 
   function updateLocalCoopRevives(dt) {
@@ -459,6 +459,7 @@
       pn.inv = 0.75;
     }
     if (amount >= 1) spawnDamagePopup(pn.x, pn.y - 18, amount, { color: '#a8d8ff', size: 16 });
+    playPlayerHurtSfx(amount, pn.maxHp, n);
     if (pn.hp <= 0) {
       pn.hp = 0;
       recordLastDamageSource(source, options);
@@ -511,6 +512,26 @@
     return hitSegment;
   }
 
+  // Player hurt cue. Burn/bleed/poison ticks and dense multi-hit AOEs can land
+  // many small hits per second; without a floor the grunt machine-guns and stops
+  // reading as damage at all. Chip ticks are dropped entirely and the rest are
+  // rate-limited, so the sound stays a meaningful "you got hit" signal.
+  // Keyed per slot so a co-op partner getting shot never swallows your own cue.
+  const lastPlayerHurtSfxAt = new Map();
+  const PLAYER_HURT_SFX_MIN_GAP_MS = 220;
+  const PLAYER_HURT_SFX_MIN_RATIO = 0.012;
+  function playPlayerHurtSfx(amount, maxHp, slotId = 1) {
+    const dealt = Number(amount || 0);
+    if (!(dealt > 0)) return;
+    // Scale the floor to max HP so the cue doesn't go silent for a tanky build
+    // (nor fire on every tick for a fragile one).
+    if (dealt < Math.max(1, Number(maxHp || 0) * PLAYER_HURT_SFX_MIN_RATIO)) return;
+    const now = Date.now();
+    if (now - (lastPlayerHurtSfxAt.get(slotId) || 0) < PLAYER_HURT_SFX_MIN_GAP_MS) return;
+    lastPlayerHurtSfxAt.set(slotId, now);
+    Neo.playSfx?.('player_hurt');
+  }
+
   function damagePlayer2(amount, angle, knockback, source = '', options = {}) {
     if (!Neo.player2 || Neo.p2DeadInCoop) return;
     if (Neo.player2.inv > 0 && !options.ignoreInv) return;
@@ -520,6 +541,7 @@
       Neo.player2.inv = 0.75;
     }
     if (amount >= 1) spawnDamagePopup(Neo.player2.x, Neo.player2.y - 18, amount, { color: '#4ca8ff', size: 16 });
+    playPlayerHurtSfx(amount, Neo.player2.maxHp, 2);
     if (Neo.player2.hp <= 0) {
       Neo.player2.hp = 0;
       recordLastDamageSource(source, options);
@@ -705,6 +727,7 @@
 
     finalAmount = Math.max(0, hpBeforeHit - Neo.player.hp);
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
+    if (finalAmount > 0) playPlayerHurtSfx(finalAmount, Neo.player.maxHp, 1);
     // Heme's Scarf retaliates: when hit, a chance per scarf stack to bleed the
     // attacker. Bleeds the enemy, never the player.
     const scarfAttacker = Neo.findKillerEnemyEntity?.(options.sourceKey || source, Neo.lastDamageSource);
@@ -3597,7 +3620,7 @@
           text: `NEED ${result.price}g`,
           c: '#ff8894',
         });
-        Neo.playSfx?.('error');
+        Neo.playSfx?.('menu_click');
       }
       return false;
     }
