@@ -3023,14 +3023,18 @@
         const swingRemaining = attacking && Number.isFinite(actor._networkMeleeStartedAt)
           ? Math.max(0, activeSeconds - (presentationClock - actor._networkMeleeStartedAt))
           : 0;
-        const spriteAction = player.action === 'dash'
+        const spriteAction = player.action === 'attack' && player.actionKind === 'antony_bite'
+          ? 'bite'
+          : player.action === 'dash'
           ? 'dash'
           : player.action === 'ability'
             ? (player.actionMode === 'laser' ? 'beam' : player.actionMode)
             : null;
-        const spriteActionDuration = player.characterKey === 'sarge' && player.actionKind === 'hammer_smash'
-          ? 0.3
-          : 0.6;
+        const spriteActionDuration = spriteAction === 'bite'
+          ? 0.8
+          : player.characterKey === 'sarge' && player.actionKind === 'hammer_smash'
+            ? 0.3
+            : 0.6;
         const spriteActionKey = spriteAction
           ? `${Number(player.actionTick || 0)}:${spriteAction}:${player.actionKind || ''}`
           : '';
@@ -3064,7 +3068,7 @@
           swing: swingRemaining,
           swingA: Number(player.aimDirection || 0),
           swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
-          ...(spriteAction && ['beam', 'smash', 'dash'].includes(spriteAction) ? {
+          ...(spriteAction && ['beam', 'smash', 'dash', 'bite'].includes(spriteAction) ? {
             spriteAction,
             spriteActionStartedAt: actor._networkSpriteActionStartedAt,
             spriteActionUntil: actor._networkSpriteActionStartedAt + spriteActionDuration,

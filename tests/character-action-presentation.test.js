@@ -10,6 +10,9 @@ describe('character action presentation', () => {
   const particles = read('js/draw/hud.js');
   const world = read('js/game/world.js');
   const combat = read('js/game/combat.js');
+  const enemies = read('js/game/enemies.js');
+  const sharedEnemyBehavior = read('js/simulation/SharedEnemyBehaviorSystem.js');
+  const networkView = read('js/rendering/NetworkGameView.js');
   const threeRenderer = read('js/draw/three-renderer.js');
 
   function loadEntityPresentationApi() {
@@ -125,6 +128,40 @@ describe('character action presentation', () => {
     expect(combat).toContain("characterKey === 'sarge' && smashMoveKey === 'hammer_smash'");
     expect(combat).toMatch(/const smashSpriteDuration[\s\S]+?\? 0\.3[\s\S]+?: 0\.6;/);
     expect(combat).toContain("startPlayerSpriteAction('smash', smashSpriteDuration)");
+  });
+
+  test('Anthony bite plays its dedicated eight-frame action for players and bosses', () => {
+    const Neo = loadEntityPresentationApi();
+    Neo.CHARACTER_SPRITE_SHEETS.antony_blemmye = {
+      animations: { bite: Array.from({ length: 8 }, (_, index) => `bite${index}`) },
+      actionRate: 10,
+    };
+    Neo.SPRITE_ATLAS.frames = {
+      antony_blemmye: {},
+      ...Object.fromEntries(Array.from(
+        { length: 8 },
+        (_, index) => [`antony_blemmye:bite${index}`, {}],
+      )),
+    };
+
+    Neo.gameElapsedTime = 4.4;
+    const player = {
+      spriteAction: 'bite',
+      spriteActionStartedAt: 4,
+      spriteActionUntil: 4.8,
+    };
+    expect(Neo.getActorSpriteFrameKey('antony_blemmye', player)).toBe('antony_blemmye:bite4');
+
+    const boss = { type: 'antony_blemmye', biteAnimT: 0.4 };
+    const bossAction = Neo.getEnemySpriteActionOptions(boss);
+    expect(bossAction.action).toBe('bite');
+    expect(bossAction.actionProgress).toBeCloseTo(0.5);
+    expect(Neo.getActorSpriteFrameKey('antony_blemmye', boss, bossAction)).toBe('antony_blemmye:bite4');
+
+    expect(combat).toContain("startPlayerSpriteAction('bite', 0.8)");
+    expect(enemies).toContain('enemy.biteAnimT = 0.8');
+    expect(sharedEnemyBehavior).toContain('enemy.biteAnimT = 0.8');
+    expect(networkView).toContain("player.actionKind === 'antony_bite'");
   });
 
   test('AOE particles render below players while readable foreground particles remain above', () => {

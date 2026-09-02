@@ -824,6 +824,9 @@
       darkDrainStacks: bite.darkDrainStacks,
       darkDrainDuration: bite.darkDrainDurationSeconds,
     });
+    // The authored Att2 tag is eight 100ms frames. Keep the full bite visible
+    // after the short generic melee swing has already applied its hit.
+    startPlayerSpriteAction('bite', 0.8);
   }
   function castAntonyFreezeBall() {
     const move = 'antony_freeze_ball';

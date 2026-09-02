@@ -3939,6 +3939,7 @@
     enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
     enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
     enemy.antonyComboTimer = Math.max(0, Number(enemy.antonyComboTimer || 0) - dt);
+    enemy.biteAnimT = Math.max(0, Number(enemy.biteAnimT || 0) - dt);
 
     if (enemy.beamTime > 0 && enemy.state === 'antonyMouthBeam') {
       Neo.tickEnemyBeam(enemy, dt, {
@@ -4008,6 +4009,7 @@
       const angle = Math.atan2(dy, dx);
       const biteDamage = Math.round(enemy.dmg * 0.82);
       enemy.attackAnimT = 0.28;
+      enemy.biteAnimT = 0.8;
       Neo.damagePlayer(biteDamage, angle, 240, enemy.type, { attacker: enemy });
       if (enemy.level >= 20) {
         enemy.antonyComboQueued = true;

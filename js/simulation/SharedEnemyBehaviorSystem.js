@@ -2168,6 +2168,7 @@
       enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
       enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
       enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
+      enemy.biteAnimT = Math.max(0, Number(enemy.biteAnimT || 0) - dt);
 
       if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
 
@@ -2203,6 +2204,7 @@
         const angle = Math.atan2(dy, dx);
         const biteDamage = Math.round(enemy.dmg * 0.82);
         enemy.attackAnimT = 0.28;
+        enemy.biteAnimT = 0.8;
         ctx.damagePlayer(enemy, player, biteDamage, angle, 240, enemy.type);
         if (random('encounter') < 0.35) {
           ctx.applyPlayerStatus(enemy, player, 'dark_drain', 2, 4.2);

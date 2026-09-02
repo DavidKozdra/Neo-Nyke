@@ -32,10 +32,25 @@ const KOZ_PWA_CONFIG = {
     "/assets/icons/neo-nyke_Icon.png",
     "/assets/icons/NeoNykeTitle.png",
     "/assets/itch/neo-nyke-itch-background.png",
-    "/assets/sprites/chars/Anthony.png",
     "/assets/sprites/chars/Anthony1.png",
+    "/assets/sprites/chars/Anthony10.png",
+    "/assets/sprites/chars/Anthony11.png",
+    "/assets/sprites/chars/Anthony12.png",
+    "/assets/sprites/chars/Anthony13.png",
+    "/assets/sprites/chars/Anthony14.png",
+    "/assets/sprites/chars/Anthony15.png",
+    "/assets/sprites/chars/Anthony16.png",
+    "/assets/sprites/chars/Anthony17.png",
+    "/assets/sprites/chars/Anthony18.png",
+    "/assets/sprites/chars/Anthony19.png",
     "/assets/sprites/chars/Anthony2.png",
     "/assets/sprites/chars/Anthony3.png",
+    "/assets/sprites/chars/Anthony4.png",
+    "/assets/sprites/chars/Anthony5.png",
+    "/assets/sprites/chars/Anthony6.png",
+    "/assets/sprites/chars/Anthony7.png",
+    "/assets/sprites/chars/Anthony8.png",
+    "/assets/sprites/chars/Anthony9.png",
     "/assets/sprites/chars/bowman.png",
     "/assets/sprites/chars/charger.png",
     "/assets/sprites/chars/cultMage.png",
@@ -291,14 +306,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 278,
-    "bytes": 56419545,
-    "criticalEntries": 218,
-    "criticalBytes": 13453560,
+    "entries": 293,
+    "bytes": 56435560,
+    "criticalEntries": 233,
+    "criticalBytes": 13469575,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "4e38fea5c7d5482c"
+  "version": "ed7ca4d7a4f8fdeb"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

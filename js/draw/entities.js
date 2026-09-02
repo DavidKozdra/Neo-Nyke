@@ -178,6 +178,12 @@
     ) {
       return { action: 'beam' };
     }
+    if (enemy?.type === 'antony_blemmye' && Number(enemy.biteAnimT || 0) > 0) {
+      return {
+        action: 'bite',
+        actionProgress: Neo.clamp(1 - Number(enemy.biteAnimT) / 0.8, 0, 0.999),
+      };
+    }
     if (enemy?.type === 'handsome_devil') {
       const firingLightning = enemy.state === 'devilLaser' || enemy.state === 'devilGiantLaser';
       if (firingLightning && (Number(enemy.windup || 0) > 0 || Number(enemy.beamTime || 0) > 0)) {

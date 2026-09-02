@@ -502,28 +502,32 @@ describe('character sprite sheet assets', () => {
     expect(countOpaquePixels(image, 5, def.frameWidth, def.frameHeight)).toBe(0);
   });
 
-  test('Anthony The Blessed Blemmye uses the supplied idle, mouth-beam, and attack frames', async () => {
+  test('Anthony The Blessed Blemmye uses all supplied idle, walk, attack, and bite frames', async () => {
     const defs = extractCharacterSheetDefs();
     const def = defs.antony_blemmye;
     expect(def).toEqual(expect.objectContaining({
-      src: 'assets/sprites/chars/Anthony.png',
       frameWidth: 64,
-      frameHeight: 64,
-      frameCount: 3,
+      frameHeight: 48,
+      frameCount: 19,
       renderScale: 2.3,
       idleFrames: [0, 1],
-      walkFrames: [0, 1],
-      attackFrames: [2],
-      beamFrames: [1],
-      smashFrames: [2],
+      walkFrames: [2, 3, 4, 5],
+      attackFrames: [6, 7, 8, 9, 10],
+      biteFrames: [11, 12, 13, 14, 15, 16, 17, 18],
+      beamFrames: [11],
+      smashFrames: [6, 7, 8, 9, 10],
       portraitFrame: 0,
     }));
 
-    const image = await loadImage(path.join(__dirname, '..', def.src));
-    expect(image.naturalWidth).toBe(192);
-    expect(image.naturalHeight).toBe(64);
-    [def.portraitFrame, ...def.idleFrames, ...def.attackFrames, ...def.beamFrames, ...def.smashFrames].forEach(frameIndex => {
-      expect(countOpaquePixels(image, frameIndex, def.frameWidth, def.frameHeight)).toBeGreaterThan(500);
+    expect(def.srcFrames).toEqual(Array.from(
+      { length: 19 },
+      (_, index) => `assets/sprites/chars/Anthony${index + 1}.png`,
+    ));
+    const images = await Promise.all(def.srcFrames.map(src => loadImage(path.join(__dirname, '..', src))));
+    images.forEach(image => {
+      expect(image.naturalWidth).toBe(def.frameWidth);
+      expect(image.naturalHeight).toBe(def.frameHeight);
+      expect(countOpaquePixels(image, 0, def.frameWidth, def.frameHeight)).toBeGreaterThan(500);
     });
   });
 

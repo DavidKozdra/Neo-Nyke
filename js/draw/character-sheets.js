@@ -336,19 +336,46 @@ const CHARACTER_SHEET_DEFS = {
     portraitFrame: 0,
   },
   antony_blemmye: {
-    src: 'assets/sprites/chars/Anthony.png',
+    // Anthony is exported one frame per file. These ranges mirror the tags in
+    // the authored Aseprite source: Walk (2-5), Att1 (6-10), Att2 (11-18).
+    // Att2 is his full body-transforming bite and gets a dedicated action so
+    // it is not shortened to the generic melee attack pulse.
+    srcFrames: [
+      'assets/sprites/chars/Anthony1.png',
+      'assets/sprites/chars/Anthony2.png',
+      'assets/sprites/chars/Anthony3.png',
+      'assets/sprites/chars/Anthony4.png',
+      'assets/sprites/chars/Anthony5.png',
+      'assets/sprites/chars/Anthony6.png',
+      'assets/sprites/chars/Anthony7.png',
+      'assets/sprites/chars/Anthony8.png',
+      'assets/sprites/chars/Anthony9.png',
+      'assets/sprites/chars/Anthony10.png',
+      'assets/sprites/chars/Anthony11.png',
+      'assets/sprites/chars/Anthony12.png',
+      'assets/sprites/chars/Anthony13.png',
+      'assets/sprites/chars/Anthony14.png',
+      'assets/sprites/chars/Anthony15.png',
+      'assets/sprites/chars/Anthony16.png',
+      'assets/sprites/chars/Anthony17.png',
+      'assets/sprites/chars/Anthony18.png',
+      'assets/sprites/chars/Anthony19.png',
+    ],
     frameWidth: 64,
-    frameHeight: 64,
-    frameCount: 3,
+    frameHeight: 48,
+    frameCount: 19,
     renderScale: 2.3,
-    stepRate: 4,
+    stepRate: 10,
     idleRate: 1.5,
-    actionRate: 8,
+    actionRate: 10,
     idleFrames: [0, 1],
-    walkFrames: [0, 1],
-    attackFrames: [2],
-    beamFrames: [1],
-    smashFrames: [2],
+    walkFrames: [2, 3, 4, 5],
+    attackFrames: [6, 7, 8, 9, 10],
+    biteFrames: [11, 12, 13, 14, 15, 16, 17, 18],
+    // The boss's mouth beam holds on the open-mouth anticipation frame. The
+    // playable freeze ball uses Att1, like his knife throw and boss strikes.
+    beamFrames: [11],
+    smashFrames: [6, 7, 8, 9, 10],
     portraitFrame: 0,
   },
   handsome_devil: {
@@ -480,7 +507,7 @@ function createCharacterSheetFromImage(key, def, image) {
   }
   const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
   const animationFrames = {};
-  ['attack', 'dash', 'smash', 'beam'].forEach(action => {
+  ['attack', 'dash', 'smash', 'beam', 'bite'].forEach(action => {
     const indices = Array.isArray(def[`${action}Frames`])
       ? def[`${action}Frames`].filter(index => Number.isInteger(index) && index >= 0 && index < frameCount)
       : [];
