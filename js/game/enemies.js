@@ -3940,6 +3940,10 @@
     enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
     enemy.antonyComboTimer = Math.max(0, Number(enemy.antonyComboTimer || 0) - dt);
     enemy.biteAnimT = Math.max(0, Number(enemy.biteAnimT || 0) - dt);
+    // Unlike most melee bodies, Anthony starts his slash in a helper rather
+    // than a state branch. Retire that presentation timer here so locomotion
+    // returns to the walk cycle as soon as the strike is over.
+    enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt);
 
     if (enemy.beamTime > 0 && enemy.state === 'antonyMouthBeam') {
       Neo.tickEnemyBeam(enemy, dt, {

@@ -2169,6 +2169,11 @@
       enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
       enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
       enemy.biteAnimT = Math.max(0, Number(enemy.biteAnimT || 0) - dt);
+      // Local play retires attackAnimT in its campaign wrapper and swingTime in
+      // Anthony's body. The headless authority owns both responsibilities here,
+      // so retire them explicitly and let a moving Anthony resume walk frames.
+      enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt);
+      enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
       if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
 

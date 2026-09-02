@@ -164,6 +164,34 @@ describe('character action presentation', () => {
     expect(networkView).toContain("player.actionKind === 'antony_bite'");
   });
 
+  test('Anthony resumes his walk cycle while moving after an attack finishes', () => {
+    const Neo = loadEntityPresentationApi();
+    Neo.CHARACTER_SPRITE_SHEETS.antony_blemmye = {
+      animations: {
+        idle: ['idle0', 'idle1'],
+        walk: ['walk0', 'walk1', 'walk2', 'walk3'],
+        attack: ['attack0', 'attack1', 'attack2', 'attack3', 'attack4'],
+      },
+      stepRate: 10,
+    };
+    Neo.SPRITE_ATLAS.frames = Object.fromEntries([
+      ['antony_blemmye', {}],
+      ...Array.from({ length: 4 }, (_, index) => [`antony_blemmye:walk${index}`, {}]),
+      ...Array.from({ length: 5 }, (_, index) => [`antony_blemmye:attack${index}`, {}]),
+    ]);
+    const boss = { type: 'antony_blemmye', vx: 70, vy: 0, animSeed: 0 };
+
+    Neo.gameElapsedTime = 0.11;
+    expect(Neo.getActorSpriteFrameKey('antony_blemmye', boss, { attackProgress: 0.5 }))
+      .toBe('antony_blemmye:attack2');
+    expect(Neo.getActorSpriteFrameKey('antony_blemmye', boss, { attackProgress: 0 }))
+      .toBe('antony_blemmye:walk1');
+
+    expect(enemies).toContain('enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt)');
+    expect(sharedEnemyBehavior).toContain('enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt)');
+    expect(sharedEnemyBehavior).toContain('enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt)');
+  });
+
   test('AOE particles render below players while readable foreground particles remain above', () => {
     const groundPass = viewport.indexOf("Neo.drawParticles('ground')");
     const beamPass = viewport.indexOf('Neo.drawActivePlayerEffects?.()', groundPass);
