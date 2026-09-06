@@ -4570,13 +4570,9 @@
       let leaderSlotId = 1;
       for (const slot of getLocalCoopSlots({ livingOnly: true })) {
         const actor = slot.getEntity();
-        const exitDepth = actor.r + 6;
-        door =
-          actor.y < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'n') && Math.abs(actor.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 'n' :
-          actor.y > Neo.ROOM_H - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 's') && Math.abs(actor.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 's' :
-          actor.x < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(actor.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
-          actor.x > Neo.ROOM_W - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(actor.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
-          null;
+        door = globalThis.NeoNyke.simulation.getCampaignRoomExitDirection(actor, {
+          width: Neo.ROOM_W, height: Neo.ROOM_H, wallThickness: Neo.WALL, doorWidth: Neo.DOOR,
+        }, Object.fromEntries(['n', 's', 'w', 'e'].map(dir => [dir, Neo.hasRoomExit(Neo.currentRoom, dir)])));
         if (door) {
           leaderSlotId = slot.id;
           break;

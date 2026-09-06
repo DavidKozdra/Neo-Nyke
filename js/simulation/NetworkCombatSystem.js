@@ -4758,8 +4758,10 @@
           attackSpeed: getNetworkCampaignAttackSpeed(state, player),
           godMode: godModeActive(state, player),
         });
-        const dashTicks = Math.max(1, Math.round(dash.durationSeconds * 20));
-        player.dashUntilTick = state.tick + dashTicks;
+        const dashTicks = Math.max(1, Math.ceil(dash.durationSeconds * 20));
+        // Actions resolve after this tick's movement. The first glide step is
+        // next tick; preserve all four campaign steps of the 0.16s dash.
+        player.dashUntilTick = state.tick + 1 + dashTicks;
         player.dashVx = dash.vx;
         player.dashVy = dash.vy;
         player.vx = player.dashVx;

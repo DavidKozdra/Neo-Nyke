@@ -244,7 +244,10 @@
     Neo.ctx.textBaseline = 'middle';
     const ladderHint = Neo.getLadderControlHint ? Neo.getLadderControlHint() : Neo.formatControlLabel('e', 'e');
     const inputMode = window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard';
-    const text = inputMode === 'touch'
+    const exitStatus = ladder.networkExit ? Neo.multiplayerGameView?.getFloorExitStatus?.(ladder.id) : null;
+    const text = ladder.networkExit
+      ? exitStatus?.prompt || 'Stand on the ladder to ready up'
+      : inputMode === 'touch'
       ? 'Tap the ladder to go to next floor'
       : `Press [${ladderHint}] to go to next floor`;
     const pad = 14;

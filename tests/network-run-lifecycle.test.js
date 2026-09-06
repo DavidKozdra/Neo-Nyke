@@ -1,6 +1,7 @@
 const { GameState } = require('../js/simulation/GameState');
 const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { RandomService } = require('../js/simulation/RandomService');
+const { deriveFloorExitStatus } = require('../js/rendering/NetworkGameView');
 const { createNetworkFloorState } = require('../js/multiplayer/LocalMultiplayerSession');
 const {
   STAIRS_DWELL_TICKS,
@@ -52,13 +53,58 @@ describe('networked run lifecycle', () => {
     expect(state.floorNumber).toBe(1);
     const stairs = Object.values(state.interactables).find(item => item.kind === 'stairs');
     expect(stairs).toEqual(expect.objectContaining({ requiredPlayers: 2, readyPlayers: 1 }));
+    expect(deriveFloorExitStatus(state.snapshot(), 'p1')).toMatchObject({
+      visible: true, title: 'NEXT FLOOR · 2', count: '1 / 2 READY', progress: 0,
+      prompt: 'You’re ready — stay on the ladder', departure: 'Waiting for 1 player',
+      players: [{ id: 'p1', ready: true }, { id: 'p2', ready: false, status: 'Move onto ladder' }],
+    });
 
+    // Readiness is visible to the teammate in another room, and stepping away
+    // cancels it on the next authority tick rather than leaving a stale vote.
+    state.players.p2.roomId = state.floorState.layout.startRoomId;
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toMatchObject({
+      visible: true, count: '1 / 2 READY', prompt: 'Stand on the ladder to ready up',
+      players: [{ ready: true }, { status: 'In another room' }],
+    });
+    state.players.p1.x = 700;
+    simulation.updateGame({}, 0.05);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toMatchObject({ visible: false, count: '0 / 2 READY', progress: 0 });
+
+    state.players.p1.x = 450;
+    state.players.p2.roomId = exitRoom.id;
     state.players.p2.x = 450;
     state.players.p2.y = 350;
-    for (let tick = 0; tick < STAIRS_DWELL_TICKS; tick += 1) simulation.updateGame({}, 0.05);
+    for (let tick = 0; tick < STAIRS_DWELL_TICKS / 2; tick += 1) simulation.updateGame({}, 0.05);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toMatchObject({
+      count: '2 / 2 READY', allReady: true, progress: 0.5, departure: 'Leaving in 0.8s',
+    });
+    for (let tick = 0; tick < STAIRS_DWELL_TICKS / 2; tick += 1) simulation.updateGame({}, 0.05);
     expect(state.floorNumber).toBe(2);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p1')).toBeNull();
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'FLOOR_ADVANCED' }));
     expect(new Set(Object.values(state.players).map(entry => entry.roomId))).toEqual(new Set([state.floorState.layout.startRoomId]));
+  });
+
+  test('exit readiness explains revive blockers and excludes disconnected players', () => {
+    const state = stateFor('coop');
+    const exitRoomId = state.floorState.layout.exitRoomId;
+    state.floorState.encounters = { [exitRoomId]: { roomId: exitRoomId, status: 'cleared', enemyIds: [] } };
+    state.players.p1.roomId = exitRoomId;
+    state.players.p2.downed = true;
+    state.players.p2.hp = 0;
+    const simulation = new GameSimulation({ state, systems: [createFloorProgressionSystem()] });
+    simulation.updateGame({}, 0.05);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toMatchObject({
+      count: '1 / 2 READY', progress: 0,
+      prompt: 'You need a revive before you can leave',
+      players: [{ ready: true }, { ready: false, status: 'Needs revive' }],
+    });
+    state.players.p2.disconnected = true;
+    simulation.updateGame({}, 0.05);
+    const status = deriveFloorExitStatus(state.snapshot(), 'p1');
+    expect(status).toMatchObject({ count: '1 / 1 READY', allReady: true });
+    expect(status.players).toHaveLength(1);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toBeNull();
   });
 
   test('rival projectiles are authority-owned and downed rivals respawn', () => {
@@ -100,8 +146,14 @@ describe('networked run lifecycle', () => {
       state,
       systems: [createFloorProgressionSystem({ emitEvent: (eventType, data) => events.push({ eventType, data }) })],
     });
-    for (let tick = 0; tick < STAIRS_DWELL_TICKS; tick += 1) simulation.updateGame({}, 0.05);
+    simulation.updateGame({}, 0.05);
+    expect(deriveFloorExitStatus(state.snapshot(), 'p2')).toMatchObject({
+      visible: true, title: 'FINISH RUN', count: '1 / 1 READY', allReady: true,
+      hint: 'First player to stay on the ladder advances.',
+    });
+    for (let tick = 1; tick < STAIRS_DWELL_TICKS; tick += 1) simulation.updateGame({}, 0.05);
     expect(state.status).toBe('ended');
+    expect(deriveFloorExitStatus(state.snapshot(), 'p1')).toBeNull();
     expect(state.runStats.winnerPlayerId).toBe('p1');
     expect(events).toContainEqual(expect.objectContaining({
       eventType: 'RUN_ENDED',

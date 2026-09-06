@@ -24,9 +24,62 @@
     return Math.hypot(cx - nearestX, cy - nearestY) < radius;
   }
   function structureRect(structure) {
-    const width = Number(structure.w || structure.size || 34);
-    const height = Number(structure.h || structure.size || 34);
+    const width = Math.max(0, Number(structure?.w || 0));
+    const height = Math.max(0, Number(structure?.h || 0));
+    if (structure.kind === 'pillar') {
+      const footprintH = Math.max(6, height * 0.28);
+      return { x: Number(structure.x) - width / 2, y: Number(structure.y) + height / 2 - footprintH, w: width, h: footprintH };
+    }
     return { x: Number(structure.x) - width / 2, y: Number(structure.y) - height / 2, w: width, h: height };
+  }
+
+  function getCampaignRoomWallRects(geometry = {}, doors = {}) {
+    const width = Number(geometry.width || 900);
+    const height = Number(geometry.height || 700);
+    const wall = Number(geometry.wallThickness ?? 28);
+    const door = Number(geometry.doorWidth || 140);
+    const hw = (width - door) / 2;
+    const hh = (height - door) / 2;
+    const walls = [
+      { x: 0, y: 0, w: hw, h: wall }, { x: width - hw, y: 0, w: hw, h: wall },
+      { x: 0, y: height - wall, w: hw, h: wall }, { x: width - hw, y: height - wall, w: hw, h: wall },
+      { x: 0, y: 0, w: wall, h: hh }, { x: 0, y: height - hh, w: wall, h: hh },
+      { x: width - wall, y: 0, w: wall, h: hh }, { x: width - wall, y: height - hh, w: wall, h: hh },
+    ];
+    if (!doors.n) walls.push({ x: hw, y: 0, w: door, h: wall });
+    if (!doors.s) walls.push({ x: hw, y: height - wall, w: door, h: wall });
+    if (!doors.w) walls.push({ x: 0, y: hh, w: wall, h: door });
+    if (!doors.e) walls.push({ x: width - wall, y: hh, w: wall, h: door });
+    return walls;
+  }
+
+  function getCampaignRoomMoveBounds(entity, geometry = {}, doors = {}) {
+    const radius = Number(entity.radius || entity.r || 14);
+    const width = Number(geometry.width || 900);
+    const height = Number(geometry.height || 700);
+    const wall = Number(geometry.wallThickness ?? 28);
+    const door = Number(geometry.doorWidth || 140);
+    const alignedV = Math.abs(entity.x - width / 2) < door / 2 - radius;
+    const alignedH = Math.abs(entity.y - height / 2) < door / 2 - radius;
+    return {
+      minX: alignedH && doors.w ? radius : wall + radius,
+      maxX: width - (alignedH && doors.e ? radius : wall + radius),
+      minY: alignedV && doors.n ? radius : wall + radius,
+      maxY: height - (alignedV && doors.s ? radius : wall + radius),
+    };
+  }
+
+  function getCampaignRoomExitDirection(entity, geometry = {}, doors = {}) {
+    const radius = Number(entity.radius || entity.r || 14);
+    const width = Number(geometry.width || 900);
+    const height = Number(geometry.height || 700);
+    const door = Number(geometry.doorWidth || 140);
+    const exitDepth = radius + 6;
+    if (entity.y < exitDepth && doors.n && Math.abs(entity.x - width / 2) < door / 2) return 'n';
+    if (entity.y > height - exitDepth && doors.s && Math.abs(entity.x - width / 2) < door / 2) return 's';
+    if (entity.x < exitDepth && doors.w && Math.abs(entity.y - height / 2) < door / 2) return 'w';
+    if (entity.x > width - exitDepth && doors.e && Math.abs(entity.y - height / 2) < door / 2) return 'e';
+    return null;
   }
 
   function circleIntersectsRoomObstacle(x, y, radius, obstacle) {
@@ -41,7 +94,8 @@
   function getRoomObstacles(room) {
     return [
       ...(room?.structures || []),
-      ...(room?.destructibles || []).filter(prop => !prop.broken && !prop.hidden),
+      ...(room?.destructibles || []).filter(prop => !prop.broken && !prop.hidden
+        && !(prop.kind === 'secret_wall' && prop.disguised)),
     ];
   }
 
@@ -61,6 +115,46 @@
       blockedY = true;
     }
     return { x, y, blockedX, blockedY };
+  }
+
+  // Campaign moveCircle's motion policy. Callers supply their room blockers
+  // and bounds; bounce, sliding, slow, airborne and overlap recovery stay shared.
+  function moveCampaignCircle(entity, dt, options = {}) {
+    const radius = Number(entity.radius || entity.r || 14);
+    const bounds = options.bounds || { minX: 42, maxX: 858, minY: 42, maxY: 658 };
+    const blocked = options.isBlocked || (() => false);
+    const constrain = () => {
+      entity.x = clamp(entity.x, bounds.minX, bounds.maxX);
+      entity.y = clamp(entity.y, bounds.minY, bounds.maxY);
+    };
+    if (entity.airborne) { constrain(); return entity; }
+    if (blocked(entity.x, entity.y, radius)) {
+      const escapeBounds = options.escapeBounds || bounds;
+      for (const ring of [8, 16, 26, 38, 52, 70]) {
+        for (let index = 0; index < 12; index += 1) {
+          const angle = index / 12 * Math.PI * 2;
+          const x = clamp(entity.x + Math.cos(angle) * ring, escapeBounds.minX, escapeBounds.maxX);
+          const y = clamp(entity.y + Math.sin(angle) * ring, escapeBounds.minY, escapeBounds.maxY);
+          if (blocked(x, y, radius)) continue;
+          const distance = Math.hypot(x - entity.x, y - entity.y) || 1;
+          const step = Math.min(distance, Math.max(220 * dt, 6));
+          entity.x += (x - entity.x) / distance * step;
+          entity.y += (y - entity.y) / distance * step;
+          entity.vx = 0;
+          entity.vy = 0;
+          return entity;
+        }
+      }
+    }
+    const slow = Number(options.slowMultiplier ?? 1);
+    const nextX = entity.x + Number(entity.vx || 0) * dt * slow;
+    const nextY = entity.y + Number(entity.vy || 0) * dt * slow;
+    if (!blocked(nextX, entity.y, radius)) entity.x = nextX;
+    else entity.vx *= -0.4;
+    if (!blocked(entity.x, nextY, radius)) entity.y = nextY;
+    else entity.vy *= -0.4;
+    constrain();
+    return entity;
   }
 
   function createContext(options = {}) {
@@ -189,5 +283,10 @@
     return room;
   }
 
-  return { decorateSharedRoomInterior, createRoomInteriorContext: createContext, circleIntersectsRoomObstacle, getRoomObstacles, resolveRoomObstacleMovement };
+  return {
+    decorateSharedRoomInterior, createRoomInteriorContext: createContext,
+    circleIntersectsRoomObstacle, getRoomObstacles, resolveRoomObstacleMovement, moveCampaignCircle,
+    getCampaignStructureCollisionRect: structureRect, getCampaignRoomWallRects,
+    getCampaignRoomMoveBounds, getCampaignRoomExitDirection,
+  };
 });

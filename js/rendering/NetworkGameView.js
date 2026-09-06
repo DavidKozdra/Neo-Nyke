@@ -389,6 +389,52 @@
     return PLAYER_COLORS[((index % PLAYER_COLORS.length) + PLAYER_COLORS.length) % PLAYER_COLORS.length];
   }
 
+  function deriveFloorExitStatus(state, localPlayerId, stairsId) {
+    if (state?.status !== 'running') return null;
+    const localPlayer = state.players?.[localPlayerId];
+    if (!localPlayer || localPlayer.disconnected) return null;
+    const stairs = Object.values(state.interactables || {}).find(item => item.kind === 'stairs'
+      && (stairsId ? item.id === stairsId : true));
+    if (!stairs) return null;
+    const firstPlayerWins = state.matchRules?.floorAdvance === 'first';
+    const players = Object.values(state.players || {})
+      .filter(player => player && !player.disconnected && (!firstPlayerWins || !player.downed))
+      .sort((a, b) => Number(a.slotIndex || 0) - Number(b.slotIndex || 0))
+      .map(player => {
+        const ready = !player.downed && player.roomId === stairs.roomId
+          && Number(stairs.dwellByPlayer?.[player.id] || 0) > 0;
+        return {
+          id: player.id,
+          name: `${player.displayName || player.id}${player.id === localPlayerId ? ' (YOU)' : ''}`,
+          color: derivePlayerColor(player),
+          ready,
+          status: player.downed ? 'Needs revive' : ready ? 'Ready'
+            : player.roomId === stairs.roomId ? 'Move onto ladder' : 'In another room',
+        };
+      });
+    const readyCount = players.filter(player => player.ready).length;
+    const requiredCount = firstPlayerWins ? 1 : players.length;
+    const allReady = requiredCount > 0 && readyCount >= requiredCount;
+    const localReady = !!players.find(player => player.id === localPlayerId)?.ready;
+    const progress = allReady ? clamp(Number(stairs.dwellProgress || 0), 0, 1) : 0;
+    const remainingSeconds = Math.ceil((1 - progress) * (combatSystem.STAIRS_DWELL_TICKS || 30) / 20 * 10) / 10;
+    const prompt = localPlayer.downed ? 'You need a revive before you can leave'
+      : localReady ? allReady ? 'Stay on the ladder — leaving soon' : 'You’re ready — stay on the ladder'
+        : 'Stand on the ladder to ready up';
+    return {
+      id: stairs.id,
+      visible: localPlayer.roomId === stairs.roomId || readyCount > 0,
+      title: stairs.final ? 'FINISH RUN' : `NEXT FLOOR · ${Number(state.floorNumber || 1) + 1}`,
+      count: `${firstPlayerWins ? Math.min(1, readyCount) : readyCount} / ${requiredCount} READY`,
+      players, progress, allReady, prompt,
+      hint: firstPlayerWins ? 'First player to stay on the ladder advances.'
+        : 'Everyone must stay on the ladder. Step off to cancel.',
+      departure: allReady ? `Leaving in ${remainingSeconds.toFixed(1)}s`
+        : firstPlayerWins ? 'Stay on the ladder to start'
+          : `Waiting for ${requiredCount - readyCount} player${requiredCount - readyCount === 1 ? '' : 's'}`,
+    };
+  }
+
   function deriveEnemyProjectileColor(behavior) {
     if (behavior === 'beam') return '#c77bff';
     if (behavior === 'burst') return '#ff9f68';
@@ -486,40 +532,10 @@
     }));
   }
 
-  function predictPosition(player, input, fixedDelta, floorState = {}, currentTick = floorState.tick) {
-    const stunned = Number(currentTick || 0) < Number(player.stunnedUntilTick || 0);
-    const movement = stunned ? { moveX: 0, moveY: 0 } : normalizeMovement(input.moveX, input.moveY);
-    const speed = movementRules.getCampaignPlayerMovementSpeed?.(player, currentTick)
-      ?? Math.max(0, Number(player.moveSpeed) || 228);
-    const radius = Math.max(1, Number(player.radius) || CAMPAIGN_PLAYER_RADIUS);
-    const wall = Math.max(0, Number(floorState.wallThickness) || 28);
-    const width = Math.max(1, Number(floorState.width) || 900);
-    const height = Math.max(1, Number(floorState.height) || 700);
-    const minimum = wall + radius;
-    // A dashing hero glides at its locked dash velocity and ignores input,
-    // matching the authority's movement resolution so prediction doesn't fight
-    // the dash and snap the hero back mid-glide. Stun cancels that branch on
-    // authority, so prediction must stop it on the same pre-step tick.
-    const dashing = !stunned && movementRules.isCampaignPlayerDashing?.(player, currentTick);
-    const vx = dashing
-      ? Number(player.dashVx || 0)
-      : (movementRules.applyResponsiveVelocity?.(player.vx, movement.moveX * speed, fixedDelta) ?? movement.moveX * speed);
-    const vy = dashing
-      ? Number(player.dashVy || 0)
-      : (movementRules.applyResponsiveVelocity?.(player.vy, movement.moveY * speed, fixedDelta) ?? movement.moveY * speed);
-    const desiredX = clamp(Number(player.x || 0) + vx * fixedDelta, minimum, width - minimum);
-    const desiredY = clamp(Number(player.y || 0) + vy * fixedDelta, minimum, height - minimum);
-    const room = floorState.layout?.rooms?.find(candidate => candidate.id === player.roomId);
-    const collision = roomInterior.resolveRoomObstacleMovement?.(room, player, desiredX, desiredY)
-      || { x: desiredX, y: desiredY, blockedX: false, blockedY: false };
-    return {
-      ...player,
-      x: collision.x,
-      y: collision.y,
-      vx: collision.blockedX ? 0 : vx,
-      vy: collision.blockedY ? 0 : vy,
-      aimDirection: Number(input.aimDirection) || 0,
-    };
+  function predictPosition(player, input, fixedDelta, floorState = {}, currentTick = floorState.tick, options = {}) {
+    const predicted = { ...player };
+    movementRules.advanceCampaignPlayerMovement(predicted, input, fixedDelta, floorState, currentTick, options);
+    return predicted;
   }
 
   class NetworkGameView {
@@ -564,6 +580,7 @@
       this.seenGameplayEvents = new Set();
       this.combatEffects = [];
       this.pendingCombatPredictions = [];
+      this.pendingMovementPrediction = null;
       this.predictedProjectiles = [];
       this.pendingHeldCharge = null;
       this.pendingBeamPresentation = null;
@@ -605,8 +622,9 @@
       // recent input sequence. Snapshot acknowledgement lets us rebuild the
       // local hero from authority state instead of repeatedly blending drift.
       this.pendingInputHistory = [];
+      this.pendingMovementPrediction = null;
       this.localPredictionTick = 0;
-      this.lastLocalPredictionAt = 0;
+      this.lastLocalPredictionAt = null;
       this.lastLocalPredictionInput = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.lastMovementInputSequence = -1;
       this.localPredictionAccumulatorMs = 0;
@@ -674,10 +692,10 @@
       };
       this.boundRenderFrame = () => {
         if (!this.active) return;
-        const frameStartedAt = root.performance?.now?.() || Date.now();
+        const frameStartedAt = root.performance?.now?.() ?? Date.now();
         this.syncPresentation();
         this.neo.draw?.();
-        this._recordFrameDiagnostic((root.performance?.now?.() || Date.now()) - frameStartedAt);
+        this._recordFrameDiagnostic((root.performance?.now?.() ?? Date.now()) - frameStartedAt);
         this.animationFrame = root.requestAnimationFrame?.(this.boundRenderFrame) ?? null;
       };
     }
@@ -752,7 +770,7 @@
 
     _renderDiagnostics(force = false) {
       if (!this.diagnosticsVisible || !this.diagnosticsElement) return;
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       if (!force && now - this.lastDiagnosticsRenderAt < 250) return;
       this.lastDiagnosticsRenderAt = now;
       const metrics = this.session.client?.diagnostics || {};
@@ -886,6 +904,8 @@
       this.document?.getElementById('multiplayerChat')?.classList.add('hidden');
       this.document?.getElementById('multiplayerSpectator')?.classList.add('hidden');
       this.document?.getElementById('multiplayerPauseVote')?.classList.add('hidden');
+      this.document?.getElementById('multiplayerFloorExit')?.classList.add('hidden');
+      this.floorExitRosterSignature = '';
       this._clearHeldInputSources();
       this.lastTransmittedInput = null;
       this.lastInputSentAt = 0;
@@ -965,6 +985,7 @@
       this._clearPresentationEntityCaches();
       this.combatEffects = [];
       this.pendingCombatPredictions = [];
+      this.pendingMovementPrediction = null;
       this.predictedProjectiles = [];
       this.pendingHeldCharge = null;
       this.pendingBeamPresentation = null;
@@ -976,7 +997,7 @@
       this.currentSample = null;
       this.localPredictedPlayer = null;
       this.localPredictedPlayerId = null;
-      this.lastLocalPredictionAt = 0;
+      this.lastLocalPredictionAt = null;
       this.lastLocalPredictionInput = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.lastMovementInputSequence = -1;
       this.localPredictionAccumulatorMs = 0;
@@ -1162,6 +1183,7 @@
     }
 
     _resetWorldEpoch(epoch) {
+      this.pendingMovementPrediction = null;
       this.stateEpoch = epoch;
       this.previousSample = null;
       this.currentSample = null;
@@ -1169,7 +1191,7 @@
       this.localPredictedPlayerId = null;
       this.pendingInputHistory = [];
       this.localPredictionTick = 0;
-      this.lastLocalPredictionAt = 0;
+      this.lastLocalPredictionAt = null;
       this.localPredictionAccumulatorMs = 0;
       this.lastLocalPredictionInput = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.lastMovementInputSequence = -1;
@@ -1181,16 +1203,52 @@
       this.seenGameplayEvents.clear();
     }
 
+    _predictMovementDuration(player, input, durationMs, tick, floorState = this.currentSample?.state?.floorState) {
+      // Preview the fixed campaign step linearly, just like single-player's
+      // render interpolation. Running Euler acceleration with the remainder as
+      // dt changes the curve three times per tick and causes visible surging.
+      const pendingBeam = !player.beamChannel && this.pendingBeamPresentation && !this.localBeamReleaseRequested;
+      const movementPlayer = pendingBeam ? { ...player, beamChannel: { moveKey: this.pendingBeamPresentation.moveKey } } : player;
+      const next = predictPosition(movementPlayer, input, INPUT_INTERVAL_MS / 1000, floorState, tick, {
+        roomLocked: this.currentSample?.state
+          ? combatSystem.isNetworkRoomLocked(this.currentSample.state, player.roomId) : false,
+      });
+      if (pendingBeam) delete next.beamChannel;
+      const fraction = clamp(durationMs / INPUT_INTERVAL_MS, 0, 1);
+      if (fraction >= 1) return next;
+      return {
+        ...next,
+        x: Number(player.x) + (next.x - Number(player.x)) * fraction,
+        y: Number(player.y) + (next.y - Number(player.y)) * fraction,
+        vx: Number(player.vx || 0) + (next.vx - Number(player.vx || 0)) * fraction,
+        vy: Number(player.vy || 0) + (next.vy - Number(player.vy || 0)) * fraction,
+      };
+    }
+
     _localPredictionPreview() {
       if (!this.localPredictedPlayer) return null;
       if (this.localPredictionAccumulatorMs <= 0) return { ...this.localPredictedPlayer };
-      return predictPosition(
-        this.localPredictedPlayer,
-        this.lastLocalPredictionInput,
-        this.localPredictionAccumulatorMs / 1000,
-        this.currentSample?.state?.floorState,
-        this.localPredictionTick,
+      return this._predictMovementDuration(
+        this.localPredictedPlayer, this.lastLocalPredictionInput,
+        this.localPredictionAccumulatorMs, this.localPredictionTick,
       );
+    }
+
+    _commitLocalPrediction(durationMs) {
+      if (!(durationMs > 1e-7) || !this.localPredictedPlayer) return;
+      const input = { ...this.lastLocalPredictionInput };
+      this.localPredictedPlayer = this._predictMovementDuration(
+        this.localPredictedPlayer, input, durationMs, this.localPredictionTick,
+      );
+      this.localPredictionTick += durationMs / INPUT_INTERVAL_MS;
+      this.pendingInputHistory.push({
+        sequence: this.lastMovementInputSequence,
+        predictionTick: this.localPredictionTick,
+        endedAt: this.lastLocalPredictionAt - this.localPredictionAccumulatorMs + durationMs,
+        durationMs,
+        input,
+      });
+      if (this.pendingInputHistory.length > 192) this.pendingInputHistory.splice(0, this.pendingInputHistory.length - 192);
     }
 
     _onSnapshot(snapshot = {}) {
@@ -1230,7 +1288,7 @@
       // transform merely because metadata changed.
       if (!newerWorldState) return;
       if (hasSnapshotSequence) this.lastProcessedSnapshotSequence = incomingSequence;
-      const receivedAt = root.performance?.now?.() || Date.now();
+      const receivedAt = root.performance?.now?.() ?? Date.now();
       const receivedFloorNumber = Math.max(1, Number(state.floorNumber || state.floorState?.layout?.floorNumber || 1));
       if (this.lastFloorNumber > 0 && receivedFloorNumber !== this.lastFloorNumber) {
         this.floorTransitionStartedAt = receivedAt;
@@ -1243,14 +1301,17 @@
         if (this.lastTransitionSequence > 0 || this.currentSample) this.transitionFlashUntil = receivedAt + 260;
         this.lastTransitionSequence = transitionSequence;
       }
+      this._advanceLocalPrediction(receivedAt);
       this.previousSample = this.currentSample || { tick: state.tick, receivedAt, state };
       this.currentSample = { tick: state.tick, receivedAt, state };
+      this._syncFloorExitHud(state);
       const authorityPlayer = state.players[snapshot.playerId];
       if (!authorityPlayer) return;
       if (authorityPlayer.beamChannel?.moveKey === this.pendingBeamPresentation?.moveKey) {
         this.pendingBeamPresentation = null;
       }
       if (transitionChanged || receivedFloorNumber !== Number(this.localPredictedPlayer?.floorNumber || receivedFloorNumber)) {
+        this.pendingMovementPrediction = null;
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer, floorNumber: receivedFloorNumber };
         this.pendingInputHistory = [];
@@ -1264,6 +1325,7 @@
       // view remains mounted. Never carry prediction from the previous
       // identity into the new authoritative entity.
       if (this.localPredictedPlayerId !== snapshot.playerId) {
+        this.pendingMovementPrediction = null;
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer };
         this.pendingInputHistory = [];
@@ -1280,6 +1342,33 @@
         this.localPredictionAccumulatorMs = 0;
         return;
       }
+      const pendingMovement = this.pendingMovementPrediction;
+      if (pendingMovement) {
+        const resolved = pendingMovement.confirmedTick != null && Number(state.tick) > pendingMovement.confirmedTick;
+        const interrupted = authorityPlayer.downed || authorityPlayer.disconnected
+          || Number(state.tick) < Number(authorityPlayer.stunnedUntilTick || 0)
+          || authorityPlayer.roomId !== pendingMovement.roomId;
+        if (resolved || interrupted || receivedAt - pendingMovement.startedAt >= PREDICTED_COMBAT_CONFIRMATION_MS) {
+          this.pendingMovementPrediction = null;
+        } else {
+          // A world sample from before our cast cannot cancel a dash or undo a
+          // blink that is already on screen. Retain only movement prediction;
+          // health, inventory and every other field still come from authority.
+          const local = this.localPredictedPlayer;
+          this.localPredictedPlayer = {
+            ...authorityPlayer,
+            x: local.x, y: local.y, vx: local.vx, vy: local.vy,
+            dashUntilTick: local.dashUntilTick, dashVx: local.dashVx, dashVy: local.dashVy,
+            ...(pendingMovement.statusKey ? {
+              statusUntilTick: { ...authorityPlayer.statusUntilTick, [pendingMovement.statusKey]: local.statusUntilTick?.[pendingMovement.statusKey] },
+            } : {}),
+            ...(pendingMovement.powerUp ? {
+              turtlePowerUpUntilTick: local.turtlePowerUpUntilTick, turtlePowerUpPower: local.turtlePowerUpPower,
+            } : {}),
+          };
+          return;
+        }
+      }
       const acknowledgedInputForPrediction = Number(snapshot.lastAcknowledgedInput ?? -1);
       // A snapshot can arrive between presentation frames. Commit every complete
       // fixed prediction slice before comparing the currently displayed point.
@@ -1293,19 +1382,33 @@
         previousPresentedX += this.reconciliationOffset.x * remaining;
         previousPresentedY += this.reconciliationOffset.y * remaining;
       }
-      this.pendingInputHistory = this.pendingInputHistory
-        .filter(entry => entry.predictionTick > Number(state.tick || 0))
-        .slice(-64);
-      const reconciled = this.pendingInputHistory.reduce((predicted, entry) => predictPosition(
-        predicted,
-        entry.input,
-        INPUT_INTERVAL_MS / 1000,
-        state.floorState,
-        Math.max(0, Number(entry.predictionTick || 1) - 1),
-      ), { ...authorityPlayer });
+      // Server ticks alone cannot acknowledge input: a delayed snapshot may
+      // have advanced past our tick while our direction change is still on the
+      // wire. Keep that intent until its sequence is acknowledged, then replay
+      // the remaining history on the new authority timeline.
+      const snapshotAgeMs = clamp(Number(snapshot.snapshotAgeMs
+        ?? this.session.client?.latestSnapshotAgeMs ?? 0), 0, 1000);
+      const authorityAt = receivedAt - snapshotAgeMs;
+      this.pendingInputHistory = this.pendingInputHistory.flatMap(entry => {
+        if (entry.sequence > acknowledgedInputForPrediction) return [entry];
+        if (!Number.isFinite(entry.endedAt)) return entry.predictionTick > Number(state.tick || 0) ? [entry] : [];
+        const durationMs = Math.min(entry.durationMs, entry.endedAt - authorityAt);
+        return durationMs > 1e-7 ? [{ ...entry, durationMs }] : [];
+      }).slice(-192);
+      let replayTick = Number(state.tick || 0);
+      const reconciled = this.pendingInputHistory.reduce((predicted, entry) => {
+        const durationMs = entry.durationMs ?? INPUT_INTERVAL_MS;
+        const next = this._predictMovementDuration(predicted, entry.input, durationMs, replayTick, state.floorState);
+        replayTick += durationMs / INPUT_INTERVAL_MS;
+        return next;
+      }, { ...authorityPlayer });
+      const reconciledPreview = this.localPredictionAccumulatorMs > 0
+        ? this._predictMovementDuration(reconciled, this.lastLocalPredictionInput,
+          this.localPredictionAccumulatorMs, replayTick, state.floorState)
+        : reconciled;
       const correctionDistance = previousPredicted
-        ? Math.hypot(previousPresentedX - Number(reconciled.x || 0),
-          previousPresentedY - Number(reconciled.y || 0))
+        ? Math.hypot(previousPresentedX - Number(reconciledPreview.x || 0),
+          previousPresentedY - Number(reconciledPreview.y || 0))
         : 0;
       if (correctionDistance > 0.01) {
         const diagnostics = this.session.client?.diagnostics;
@@ -1328,8 +1431,8 @@
               - Number(this.previousSample?.receivedAt || receivedAt),
           );
           this.reconciliationOffset = {
-            x: previousPresentedX - Number(reconciled.x || 0),
-            y: previousPresentedY - Number(reconciled.y || 0),
+            x: previousPresentedX - Number(reconciledPreview.x || 0),
+            y: previousPresentedY - Number(reconciledPreview.y || 0),
             startedAt: receivedAt,
             durationMs: clamp(
               Math.min(correctionDistance * 3, snapshotIntervalMs * 0.9),
@@ -1344,10 +1447,7 @@
         this.reconciliationOffset = null;
       }
       this.localPredictedPlayer = reconciled;
-      this.localPredictionTick = Math.max(
-        Number(state.tick || 0),
-        ...this.pendingInputHistory.map(entry => Number(entry.predictionTick || 0)),
-      );
+      this.localPredictionTick = replayTick;
       this.lastLocalPredictionAt = receivedAt;
       this.lastAcknowledgedInput = Math.max(
         Number(this.lastAcknowledgedInput ?? -1),
@@ -1396,6 +1496,7 @@
         const token = `action:${resolvedMovementAction}`;
         if (pressed) this.keys.add(token); else this.keys.delete(token);
         root.NeoSettings?.noteInputMode?.('keyboard');
+        if (!event.repeat) this._sendInput({ immediate: true });
         return;
       }
       if (key === String(bindings.laser).toLowerCase() && !['lmb', 'rmb'].includes(key)) {
@@ -1485,7 +1586,7 @@
       return activated;
     }
 
-    _estimatedAuthorityTick(now = root.performance?.now?.() || Date.now()) {
+    _estimatedAuthorityTick(now = root.performance?.now?.() ?? Date.now()) {
       const stateTick = Math.max(0, Number(this.currentSample?.state?.tick || this.currentSample?.tick || 0));
       const receivedAt = Number(this.currentSample?.receivedAt || now);
       return stateTick + Math.max(0, Number(now) - receivedAt) / INPUT_INTERVAL_MS;
@@ -1797,7 +1898,7 @@
     }
 
     _consumeGameplayEvents(events, authorityTick = this.latestAuthorityTick) {
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const localPlayerId = this._sessionPlayerId();
       events.forEach(event => {
         if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
@@ -1839,6 +1940,11 @@
           return;
         }
         const predicted = this._acknowledgePredictedCombatEvent(event, now);
+        if (event.eventType === 'PLAYER_ABILITY_USED' && this.pendingMovementPrediction
+          && (event.data?.predictionId === this.pendingMovementPrediction.eventId
+            || predicted?.event.eventId === this.pendingMovementPrediction.eventId)) {
+          this.pendingMovementPrediction.confirmedTick = Number(event.tick ?? event.data?.tick ?? authorityTick ?? 0);
+        }
         if (event.eventType === 'PLAYER_ABILITY_USED'
           && event.data?.playerId === localPlayerId
           && event.data?.abilityId === this.pendingHeldCharge?.abilityId) {
@@ -1907,9 +2013,7 @@
         // its clock when the authority confirms it, rather than drawing/sounding
         // the same action a second time one network round trip later. Server
         // state still wins for movement, hits, projectiles and every outcome.
-        if (predicted) {
-          if (event.eventType === 'PLAYER_ABILITY_USED') this._applyAuthoritativeAbilityMovement(event.data);
-        } else {
+        if (!predicted) {
           this._spawnGameplayEventEffect(event);
         }
         if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
@@ -1958,6 +2062,24 @@
 
     _rejectPredictedCombatEvent(predictionId) {
       if (!predictionId) return;
+      if (this.pendingMovementPrediction?.eventId === predictionId) {
+        const movement = this.pendingMovementPrediction;
+        const authority = this.currentSample?.state?.players?.[this._sessionPlayerId()];
+        if (this.localPredictedPlayer && movement.statusKey) {
+          this.localPredictedPlayer.statusUntilTick = { ...this.localPredictedPlayer.statusUntilTick,
+            [movement.statusKey]: Number(authority?.statusUntilTick?.[movement.statusKey] || 0),
+          };
+        }
+        if (this.localPredictedPlayer && movement.powerUp) {
+          this.localPredictedPlayer.turtlePowerUpUntilTick = Number(authority?.turtlePowerUpUntilTick || 0);
+        }
+        this.pendingMovementPrediction = null;
+        if (this.localPredictedPlayer) {
+          this.localPredictedPlayer.dashUntilTick = 0;
+          this.localPredictedPlayer.dashVx = 0;
+          this.localPredictedPlayer.dashVy = 0;
+        }
+      }
       if (this.pendingHeldCharge?.predictionId === predictionId) this.pendingHeldCharge = null;
       const predictionIndex = this.pendingCombatPredictions.findIndex(prediction => prediction.event.eventId === predictionId);
       if (predictionIndex < 0) return;
@@ -1967,7 +2089,7 @@
     }
 
     _predictCombatEvent(eventType, data, eventId = null) {
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const event = {
         eventId: eventId || `predicted:${++this.predictedCombatSequence}`,
         eventType,
@@ -2011,6 +2133,12 @@
     }
 
     _predictLocalAbility(abilityId, slot, options = {}) {
+      const now = root.performance?.now?.() ?? Date.now();
+      this._advanceLocalPrediction(now);
+      if (this.localPredictionAccumulatorMs > 0) {
+        this._commitLocalPrediction(this.localPredictionAccumulatorMs);
+        this.localPredictionAccumulatorMs = 0;
+      }
       const player = this.localPredictedPlayer;
       if (!player) return;
       const stats = MOVE_BASE_STATS[abilityId] || {};
@@ -2066,6 +2194,23 @@
         }
       }
       const prediction = this._predictCombatEvent('PLAYER_ABILITY_USED', data);
+      const statusKey = ['flying_unhitable', 'mooggy_zoomies'].includes(abilityId) ? abilityId : null;
+      if (statusKey) {
+        player.statusUntilTick = { ...player.statusUntilTick,
+          [statusKey]: this.localPredictionTick + Math.ceil(Number(stats.duration) * 20),
+        };
+      }
+      const powerUp = abilityId === 'turtle_powerup' ? moveEffects.resolveCampaignTurtlePowerUp({ chargeRatio }) : null;
+      if (powerUp) {
+        player.turtlePowerUpUntilTick = this.localPredictionTick + Math.ceil(powerUp.durationSeconds * 20);
+        player.turtlePowerUpPower = powerUp.power;
+      }
+      if (dash || statusKey || powerUp) {
+        this.pendingMovementPrediction = {
+          eventId: prediction.event.eventId, startedAt: prediction.startedAt,
+          roomId: player.roomId, confirmedTick: null, statusKey, powerUp: !!powerUp,
+        };
+      }
       if (presentation.kind === 'projectile') this._predictAbilityProjectile(prediction, data, chargeRatio);
       if (CONTINUOUS_BEAM_MOVES.has(abilityId)) this._startPredictedBeamPresentation(abilityId);
       return prediction;
@@ -2077,7 +2222,7 @@
       const player = this.localPredictedPlayer;
       if (!player || !profile) return;
       this.pendingHeldCharge = {
-        abilityId, moveKey: abilityId, slot, button, startAt: root.performance?.now?.() || Date.now(),
+        abilityId, moveKey: abilityId, slot, button, startAt: root.performance?.now?.() ?? Date.now(),
         maxChargeTicks: profile.maxChargeTicks, predictionId,
       };
     }
@@ -2086,7 +2231,7 @@
       const charge = this.pendingHeldCharge;
       if (!charge) return;
       this.pendingHeldCharge = null;
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const ratio = clamp((now - charge.startAt) / (charge.maxChargeTicks * INPUT_INTERVAL_MS), 0, 1);
       if (charge.slot === 'melee' && charge.abilityId === 'mooggy_swipe') {
         this._predictLocalMooggySwipe(charge, ratio);
@@ -2122,7 +2267,7 @@
     }
 
     _startPredictedBeamPresentation(moveKey) {
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const durationMs = Math.max(100, Number(MOVE_BASE_STATS[moveKey]?.duration || 1.2) * 1000);
       this.localBeamReleaseRequested = false;
       this.pendingBeamPresentation = { moveKey, startAt: now, untilAt: now + durationMs, angle: this.aimDirection };
@@ -2134,7 +2279,7 @@
       const descriptor = planChargedProjectilePreview(moveKey, this.localPredictedPlayer, data, chargeRatio);
       const radius = descriptor?.radius ?? 7;
       const speed = descriptor?.speed ?? 520;
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const lifetimeMs = Number.isFinite(Number(descriptor?.lifeSeconds))
         ? Number(descriptor.lifeSeconds) * 1000
         // Ghost Ball's actual expiry is contact-dependent. This only caps the
@@ -2195,8 +2340,8 @@
       // Snapping to destination here would freeze it at its start point, so we
       // start the glide locally and let predictPosition carry it instead.
       if (data.abilityId === 'dash') {
-        const serverTick = Number(this.currentSample?.state?.tick || 0);
-        this.localPredictedPlayer.dashUntilTick = serverTick + Math.round(0.16 * 20);
+        const startTick = Math.max(this.localPredictionTick, Number(this.currentSample?.state?.tick || 0));
+        this.localPredictedPlayer.dashUntilTick = startTick + Math.ceil(0.16 * 20);
         this.localPredictedPlayer.dashVx = Number(data.dashVx || 0);
         this.localPredictedPlayer.dashVy = Number(data.dashVy || 0);
       } else if (['dash', 'warp', 'dash_aoe'].includes(kind)) {
@@ -2579,6 +2724,7 @@
     }
 
     _sendInput({
+      immediate = false,
       additionalButton = 0,
       forceNeutral = false,
       syncHeldSources = true,
@@ -2588,7 +2734,7 @@
       // authoritative GameState on every 20 Hz input sampling pass.
       const sessionStatus = this._sessionStatus();
       if (!this.active || sessionStatus !== 'running') return;
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const hidden = this.document?.hidden === true || this.document?.visibilityState === 'hidden';
       const suspended = hidden || this.inputSuspended;
       const neutralRetryPending = this.pendingNeutralInputSequence != null;
@@ -2641,31 +2787,36 @@
       // 20 Hz fallback for throttled/minimal presentation hosts.
       this._advanceLocalPrediction(now);
       const previous = this.lastTransmittedInput;
-      const movementOrButtonChanged = !previous
+      const transmittedMovementChanged = !previous
         || Math.abs(input.moveX - previous.moveX) > INPUT_VECTOR_EPSILON
-        || Math.abs(input.moveY - previous.moveY) > INPUT_VECTOR_EPSILON
-        || input.buttons !== previous.buttons;
+        || Math.abs(input.moveY - previous.moveY) > INPUT_VECTOR_EPSILON;
+      const buttonChanged = !previous || input.buttons !== previous.buttons;
+      const movingChanged = !previous || (!!(input.moveX || input.moveY) !== !!(previous.moveX || previous.moveY));
       const aimChanged = !previous || angularDistance(input.aimDirection, previous.aimDirection) > INPUT_AIM_EPSILON;
       const targetChanged = !previous
         || Math.hypot(Number(input.targetX || 0) - Number(previous.targetX || 0), Number(input.targetY || 0) - Number(previous.targetY || 0)) > 4;
       const sinceLastSend = Math.max(0, now - this.lastInputSentAt);
       const shouldTransmit = trackNeutralAcknowledgement
-        || movementOrButtonChanged
+        || buttonChanged
+        || movingChanged
+        || (transmittedMovementChanged && (immediate || sinceLastSend >= INPUT_INTERVAL_MS))
         || (aimChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || (targetChanged && sinceLastSend >= INPUT_AIM_SEND_INTERVAL_MS)
         || sinceLastSend >= INPUT_HEARTBEAT_MS;
+      const movementChanged = !this.lastLocalPredictionInput
+        || input.moveX !== Number(this.lastLocalPredictionInput.moveX || 0)
+        || input.moveY !== Number(this.lastLocalPredictionInput.moveY || 0);
+      if (movementChanged && this.localPredictionAccumulatorMs > 0) {
+        this._commitLocalPrediction(this.localPredictionAccumulatorMs);
+        this.localPredictionAccumulatorMs = 0;
+      }
+      // Local controls keep responding even if a send fails during reconnect.
+      this.lastLocalPredictionInput = { ...input };
       if (shouldTransmit) {
         try {
           const inputSequence = this.session.sendInput(input);
-          const movementChanged = !this.lastLocalPredictionInput
-            || Math.abs(input.moveX - Number(this.lastLocalPredictionInput.moveX || 0)) > INPUT_VECTOR_EPSILON
-            || Math.abs(input.moveY - Number(this.lastLocalPredictionInput.moveY || 0)) > INPUT_VECTOR_EPSILON;
-          if (movementChanged) {
-            this.lastMovementInputSequence = inputSequence;
-            // The fractional remainder happened before this sampled transition;
-            // never reinterpret that elapsed time under the new direction.
-            this.localPredictionAccumulatorMs = 0;
-          }
+          if (transmittedMovementChanged) this.lastMovementInputSequence = inputSequence;
+
           if (trackNeutralAcknowledgement) {
             const numericInputSequence = Number(inputSequence);
             if (Number.isInteger(numericInputSequence) && numericInputSequence >= 0) {
@@ -2676,7 +2827,6 @@
               this.lastNeutralInputSentAt = now;
             }
           }
-          this.lastLocalPredictionInput = { ...input };
           this.lastTransmittedInput = { ...input };
           this.lastInputSentAt = now;
         } catch {
@@ -2697,6 +2847,7 @@
       if (this.paused) this.neo.pauseGame?.();
       else this.neo.resumeGame?.();
       this._renderPauseState();
+      this._syncFloorExitHud(this.currentSample?.state);
     }
 
     togglePause(visible = !this.paused) {
@@ -2788,8 +2939,12 @@
 
     _advanceLocalPrediction(now) {
       if (!this.localPredictedPlayer) return;
+      if (this.paused || this.authorityPaused) {
+        this.lastLocalPredictionAt = now;
+        return;
+      }
       const frameAt = Number(now || 0);
-      if (!this.lastLocalPredictionAt) {
+      if (this.lastLocalPredictionAt == null) {
         this.lastLocalPredictionAt = frameAt;
         return;
       }
@@ -2799,30 +2954,9 @@
       );
       this.lastLocalPredictionAt = frameAt;
       this.localPredictionAccumulatorMs += elapsedMs;
-      while (this.localPredictionAccumulatorMs >= INPUT_INTERVAL_MS) {
-        const preStepTick = Math.max(
-          Number(this.currentSample?.tick || 0),
-          Number(this.localPredictionTick || 0),
-        );
-        const postStepTick = preStepTick + 1;
-        const input = { ...this.lastLocalPredictionInput };
-        this.localPredictedPlayer = predictPosition(
-          this.localPredictedPlayer,
-          input,
-          INPUT_INTERVAL_MS / 1000,
-          this.currentSample?.state?.floorState,
-          preStepTick,
-        );
-        this.localPredictionTick = postStepTick;
-        this.pendingInputHistory.push({
-          sequence: this.lastMovementInputSequence,
-          predictionTick: postStepTick,
-          input,
-        });
-        if (this.pendingInputHistory.length > 96) {
-          this.pendingInputHistory.splice(0, this.pendingInputHistory.length - 96);
-        }
-        this.localPredictionAccumulatorMs -= INPUT_INTERVAL_MS;
+      while (this.localPredictionAccumulatorMs + 1e-7 >= INPUT_INTERVAL_MS) {
+        this._commitLocalPrediction(INPUT_INTERVAL_MS);
+        this.localPredictionAccumulatorMs = Math.max(0, this.localPredictionAccumulatorMs - INPUT_INTERVAL_MS);
       }
     }
 
@@ -2992,7 +3126,7 @@
 
     _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state, frameDelta = 0, visibleRoomId = null) {
       const serverTick = Number(state?.tick || 0);
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const livePlayerIds = new Set(Object.keys(players || {}));
       this.presentationPlayerActors.forEach((actor, playerId) => {
         if (!livePlayerIds.has(playerId)) this.presentationPlayerActors.delete(playerId);
@@ -3257,7 +3391,7 @@
       });
     }
 
-    _syncSpecialMovePresentation(now = root.performance?.now?.() || Date.now()) {
+    _syncSpecialMovePresentation(now = root.performance?.now?.() ?? Date.now()) {
       const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
       const abilityEffects = this.combatEffects.filter(effect => effect.eventType === 'PLAYER_ABILITY_USED');
       const liveJusticeBlades = Object.values(this.currentSample?.state?.abilityEntities || {})
@@ -3456,10 +3590,13 @@
     // came from.
     syncPresentation() {
       if (!this.active || !this.ctx || !this.canvas) return;
-      const now = root.performance?.now?.() || Date.now();
+      const now = root.performance?.now?.() ?? Date.now();
       const state = this.currentSample?.state;
       const authorityFloorState = state?.floorState || CAMPAIGN_ROOM_GEOMETRY;
       const visibleBounds = this._visibleCanvasBounds();
+      // Sample sticks and camera-relative movement at presentation cadence.
+      // Transmission remains change-driven with the existing heartbeat.
+      this._sendInput();
       const players = this._renderedPlayers(now);
       const localPlayerId = this._sessionPlayerId();
       const viewpointPlayerId = this._viewpointPlayerId(state, localPlayerId);
@@ -3527,7 +3664,7 @@
       this.neo.showFloorTransition = floorTransitionAge <= 1.25;
       this.neo.floorTransitionTime = floorTransitionAge;
       this._updateHud(state, players);
-      this._recordFrameDiagnostic((root.performance?.now?.() || Date.now()) - now);
+      this._recordFrameDiagnostic((root.performance?.now?.() ?? Date.now()) - now);
       this._renderDiagnostics();
       return true;
     }
@@ -3784,6 +3921,48 @@
       this.neo.environmentBackgroundCache = this.neo.environmentBackgroundCache || { key: '', canvas: null };
     }
 
+    getFloorExitStatus(stairsId) {
+      return this.active ? deriveFloorExitStatus(this.currentSample?.state, this._sessionPlayerId(), stairsId) : null;
+    }
+
+    _syncFloorExitHud(state) {
+      const panel = this.document?.getElementById('multiplayerFloorExit');
+      if (!panel) return;
+      const status = this.active && !this.paused ? deriveFloorExitStatus(state, this._sessionPlayerId()) : null;
+      panel.classList.toggle('hidden', !status?.visible);
+      if (!status?.visible) return;
+      panel.classList.toggle('is-ready', status.allReady);
+      const setText = (id, text) => {
+        const element = this.document.getElementById(id);
+        if (element && element.textContent !== text) element.textContent = text;
+      };
+      setText('multiplayerFloorExitTitle', status.title);
+      setText('multiplayerFloorExitCount', status.count);
+      setText('multiplayerFloorExitPrompt', status.prompt);
+      setText('multiplayerFloorExitHint', status.hint);
+      setText('multiplayerFloorExitDeparture', status.departure);
+      const progress = this.document.getElementById('multiplayerFloorExitProgress');
+      if (progress) progress.value = status.progress;
+      const signature = JSON.stringify(status.players);
+      if (signature === this.floorExitRosterSignature) return;
+      const roster = this.document.getElementById('multiplayerFloorExitPlayers');
+      if (!roster) return;
+      this.floorExitRosterSignature = signature;
+      roster.replaceChildren(...status.players.map(player => {
+        const row = this.document.createElement('li');
+        row.className = `multiplayer-floor-exit__player${player.ready ? ' is-ready' : ''}`;
+        row.style.setProperty('--player-color', player.color);
+        const name = this.document.createElement('span');
+        name.className = 'multiplayer-floor-exit__name';
+        name.textContent = player.name;
+        const readiness = this.document.createElement('span');
+        readiness.className = 'multiplayer-floor-exit__readiness';
+        readiness.textContent = `${player.ready ? '✓' : '○'} ${player.status}`;
+        row.append(name, readiness);
+        return row;
+      }));
+    }
+
     _updateHud(state, players) {
       const localPlayer = players[this._sessionPlayerId()];
       if (!localPlayer || !state) return;
@@ -3815,6 +3994,7 @@
     predictPosition,
     PLAYER_COLORS,
     derivePlayerColor,
+    deriveFloorExitStatus,
     deriveEnemyProjectileColor,
     deriveProjectileColor,
     ABILITY_PRESENTATIONS,

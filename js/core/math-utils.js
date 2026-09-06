@@ -226,19 +226,7 @@ export function destructibleIntersectsCircle(prop, x, y, r) {
 // front of and behind the column without colliding with empty floor beside the
 // tall sprite.
 export function getStructureCollisionRect(structure) {
-  const w = Math.max(0, Number(structure?.w || 0));
-  const h = Math.max(0, Number(structure?.h || 0));
-  if (structure?.kind !== 'pillar') {
-    return { x: Number(structure?.x || 0) - w / 2, y: Number(structure?.y || 0) - h / 2, w, h };
-  }
-  const footprintH = Math.max(6, h * 0.28);
-  const groundY = Number(structure?.y || 0) + h / 2;
-  return {
-    x: Number(structure?.x || 0) - w / 2,
-    y: groundY - footprintH,
-    w,
-    h: footprintH,
-  };
+  return globalThis.NeoNyke.simulation.getCampaignStructureCollisionRect(structure);
 }
 
 export function getClosedDoorBlockerRects(room = Neo.currentRoom) {

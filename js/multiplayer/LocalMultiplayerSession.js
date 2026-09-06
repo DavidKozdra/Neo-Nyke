@@ -41,7 +41,7 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v39';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v40';
   const LOCAL_GENERATION_VERSION = 1;
   const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
   const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v30';
@@ -335,6 +335,7 @@
       this.pendingInputs = {};
       this.pendingActions = {};
       this.lastProcessedInput = {};
+      this.lastSimulatedInput = {};
       this.lastProcessedAction = {};
       this.pendingGameplayEvents = [];
       this.recentStateByTick = new Map();
@@ -394,6 +395,7 @@
         pendingInputs: this.pendingInputs,
         pendingActions: this.pendingActions,
         lastProcessedInput: this.lastProcessedInput,
+        lastSimulatedInput: this.lastSimulatedInput,
         lastProcessedAction: this.lastProcessedAction,
         pendingGameplayEvents: this.pendingGameplayEvents,
         pendingFloorTransition: this.pendingFloorTransition,
@@ -434,6 +436,7 @@
       this.pendingInputs = cloneSerializable(runtime.pendingInputs || {});
       this.pendingActions = cloneSerializable(runtime.pendingActions || {});
       this.lastProcessedInput = cloneSerializable(runtime.lastProcessedInput || {});
+      this.lastSimulatedInput = cloneSerializable(runtime.lastSimulatedInput || {});
       this.lastProcessedAction = cloneSerializable(runtime.lastProcessedAction || {});
       this.pendingGameplayEvents = cloneSerializable(runtime.pendingGameplayEvents || []);
       this.pendingFloorTransition = cloneSerializable(runtime.pendingFloorTransition || null);
@@ -650,7 +653,7 @@
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
           serverTick: this.simulation.state.tick,
-          serverTime: Date.now(),
+          serverTime: this.transport.network?.clock?.now?.() ?? Date.now(),
         }); break;
         case 'LEAVE_MATCH': this.transport.disconnectPeer?.(peerId, message.payload.reason || 'left'); break;
         default: this._rejectInvalidMessage(peerId, [`${message.type} is not implemented by the local test authority`]);
@@ -735,7 +738,7 @@
           this._send(peerId, 'INITIAL_STATE', {
             serverTick: this.simulation.state.tick,
             state: this.simulation.state.snapshot(),
-            lastProcessedInput: { ...this.lastProcessedInput },
+            lastProcessedInput: { ...this.lastSimulatedInput },
           });
           this._sendPauseState(peerId);
         }
@@ -770,7 +773,7 @@
         this._send(peerId, 'INITIAL_STATE', {
           serverTick: this.simulation.state.tick,
           state: this.simulation.state.snapshot(),
-          lastProcessedInput: { ...this.lastProcessedInput },
+          lastProcessedInput: { ...this.lastSimulatedInput },
         });
         this._sendPauseState(peerId);
         this._broadcastLobbyState();
@@ -1145,6 +1148,7 @@
       this.pendingInputs = {};
       this.pendingActions = {};
       this.lastProcessedInput = {};
+      this.lastSimulatedInput = {};
       this.lastProcessedAction = {};
       this.pendingGameplayEvents = [];
       this.pendingFloorTransition = null;
@@ -1231,7 +1235,7 @@
       this._broadcast('INITIAL_STATE', {
         serverTick: this.simulation.state.tick,
         state: this.simulation.state.snapshot(),
-        lastProcessedInput: { ...this.lastProcessedInput },
+        lastProcessedInput: { ...this.lastSimulatedInput },
       });
       this._primeSnapshotSignatures();
       this._rememberStateForValidation();
@@ -1333,6 +1337,7 @@
       delete this.pendingInputs[playerId];
       delete this.pendingActions[playerId];
       delete this.lastProcessedInput[playerId];
+      delete this.lastSimulatedInput[playerId];
       delete this.lastProcessedAction[playerId];
       this.lastChatAtByPlayer.delete(playerId);
       const player = this.simulation.state.players[playerId];
@@ -1389,6 +1394,9 @@
           },
         ]));
         this.simulation.updateGame(tickInputs, FIXED_DELTA_SECONDS);
+        // A receipt acknowledgement is too early for prediction: resyncs and
+        // joins can publish between receipt and the first simulated input tick.
+        this.lastSimulatedInput = { ...this.lastProcessedInput };
         this._rememberStateForValidation();
         this._expireReconnectReservations();
         const floorTransition = this.pendingFloorTransition;
@@ -1569,9 +1577,9 @@
             ? -1
             : Number(this.lastSnapshotAckByPeer.get(peerId) ?? -1),
           serverTick: this.simulation.state.tick,
-          serverSentAt: Date.now(),
+          serverSentAt: this.transport.network?.clock?.now?.() ?? Date.now(),
           full: clientFull,
-          lastProcessedInput: { [playerId]: this.lastProcessedInput[playerId] ?? -1 },
+          lastProcessedInput: { [playerId]: this.lastSimulatedInput[playerId] ?? -1 },
           entities: scoped,
           ...(packedDynamic ? { packedDynamic } : {}),
           removedEntityIds: Array.from(scopedRemovedEntityIds),
@@ -1834,7 +1842,7 @@
     }
 
     ping(nonce = `ping-${this.outgoingSequence}`) {
-      this._send('PING', { nonce, clientTime: Math.max(0, this.transport.network?.clock?.now?.() || Date.now()) });
+      this._send('PING', { nonce, clientTime: Math.max(0, this.transport.network?.clock?.now?.() ?? Date.now()) });
     }
 
     setDiagnostics(enabled, diagnosticSessionId) {
@@ -1903,6 +1911,7 @@
         case 'INITIAL_STATE':
           this.state = new GameState(message.payload.state);
           this.stateEpoch += 1;
+          this.latestSnapshotAgeMs = 0;
           this.lastAcknowledgedInput = message.payload.lastProcessedInput[this.playerId] ?? -1;
           this.pendingSnapshotResync = false;
           this.snapshotStateHistory.clear();
@@ -1910,8 +1919,8 @@
           break;
         case 'WORLD_SNAPSHOT': this._applySnapshot(message.payload); break;
         case 'PONG': {
-          const now = Math.max(0, this.transport.network?.clock?.now?.() || Date.now());
-          const rtt = Math.max(0, now - Number(message.payload.clientTime || now));
+          const now = Math.max(0, this.transport.network?.clock?.now?.() ?? Date.now());
+          const rtt = Math.max(0, now - Number(message.payload.clientTime ?? now));
           const previousRtt = Number(this.diagnostics.rttMs || rtt);
           this.diagnostics.rttMs = rtt;
           this.diagnostics.jitterMs = this.diagnostics.jitterMs * 0.8 + Math.abs(rtt - previousRtt) * 0.2;
@@ -2025,7 +2034,11 @@
       // then reverted to its baseline value, because that reversion is omitted
       // from the delta by design.
       if (rebasedSnapshot) this.state = new GameState(cloneSerializable(baselineState));
-      const receivedAt = Date.now();
+      const receivedAt = this.transport.network?.clock?.now?.() ?? Date.now();
+      const hasClockEstimate = this.diagnostics.clockOffsetSamples > 0 || !!this.transport.network?.clock;
+      this.latestSnapshotAgeMs = Math.max(0, Math.min(1000, hasClockEstimate
+        ? receivedAt - (Number(snapshot.serverSentAt ?? receivedAt) - Number(this.diagnostics.clockOffsetMs || 0))
+        : Number(this.diagnostics.rttMs || 0) / 2));
       const snapshotBytes = typeof Buffer !== 'undefined'
         ? Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
         : new TextEncoder().encode(JSON.stringify(snapshot)).byteLength;

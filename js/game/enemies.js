@@ -5572,75 +5572,25 @@
     if (Neo.gameMode === 'survival' && Neo.currentRoom?.survivalSurface) {
       return { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity };
     }
-    let minX = Neo.WALL + entity.r;
-    let maxX = Neo.ROOM_W - Neo.WALL - entity.r;
-    let minY = Neo.WALL + entity.r;
-    let maxY = Neo.ROOM_H - Neo.WALL - entity.r;
-    if (entity !== Neo.player || !Neo.currentRoom) return { minX, maxX, minY, maxY };
-    const hasExit = dir => typeof Neo.hasRoomExit === 'function'
-      ? Neo.hasRoomExit(Neo.currentRoom, dir)
-      : !!Neo.currentRoom?.doors?.[dir];
-    const alignedV = Math.abs(entity.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 - entity.r;
-    const alignedH = Math.abs(entity.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 - entity.r;
-    if (alignedV && hasExit('n')) minY = entity.r;
-    if (alignedV && hasExit('s')) maxY = Neo.ROOM_H - entity.r;
-    if (alignedH && hasExit('w')) minX = entity.r;
-    if (alignedH && hasExit('e')) maxX = Neo.ROOM_W - entity.r;
-    return { minX, maxX, minY, maxY };
+    const doors = entity === Neo.player && Neo.currentRoom
+      ? Object.fromEntries(['n', 's', 'e', 'w'].map(dir => [dir,
+        typeof Neo.hasRoomExit === 'function' ? Neo.hasRoomExit(Neo.currentRoom, dir) : !!Neo.currentRoom.doors?.[dir],
+      ])) : {};
+    return globalThis.NeoNyke.simulation.getCampaignRoomMoveBounds(entity, {
+      width: Neo.ROOM_W, height: Neo.ROOM_H, wallThickness: Neo.WALL, doorWidth: Neo.DOOR,
+    }, doors);
   }
 
   function moveCircle(entity, dt) {
-    if (entity.airborne) {
-      const b = getRoomMoveBounds(entity);
-      entity.x = Neo.clamp(entity.x, b.minX, b.maxX);
-      entity.y = Neo.clamp(entity.y, b.minY, b.maxY);
-      return;
-    }
-    const slowMultiplier = Neo.getSlowMultiplier?.(entity) || 1;
-    // If the entity is already overlapping a wall (e.g. teleported there by a
-    // cutscene), axis-separated movement would block on both axes and trap it
-    // forever. Push it toward the nearest free spot instead of freezing.
-    if (Neo.isBlocked(entity.x, entity.y, entity.r)) {
-      const escape = unstickCircle(entity);
-      if (escape) {
-        // Ease toward freedom rather than snapping, but always make progress so
-        // the entity never stays wedged.
-        const ex = escape.x - entity.x;
-        const ey = escape.y - entity.y;
-        const dist = Math.hypot(ex, ey) || 1;
-        const stepDist = Math.min(dist, Math.max(220 * dt, 6));
-        entity.x += (ex / dist) * stepDist;
-        entity.y += (ey / dist) * stepDist;
-        entity.vx = 0;
-        entity.vy = 0;
-        return;
-      }
-    }
-    const nextX = entity.x + entity.vx * dt * slowMultiplier;
-    const nextY = entity.y + entity.vy * dt * slowMultiplier;
-    if (!Neo.isBlocked(nextX, entity.y, entity.r)) entity.x = nextX;
-    else entity.vx *= -0.4;
-    if (!Neo.isBlocked(entity.x, nextY, entity.r)) entity.y = nextY;
-    else entity.vy *= -0.4;
-    const bounds = getRoomMoveBounds(entity);
-    entity.x = Neo.clamp(entity.x, bounds.minX, bounds.maxX);
-    entity.y = Neo.clamp(entity.y, bounds.minY, bounds.maxY);
-  }
-
-  // Spiral outward from a stuck position to find the closest unblocked spot so a
-  // wedged entity can climb back into open floor over a few frames.
-  function unstickCircle(entity) {
-    const rings = [8, 16, 26, 38, 52, 70];
-    const steps = 12;
-    for (const ring of rings) {
-      for (let step = 0; step < steps; step += 1) {
-        const angle = (step / steps) * Math.PI * 2;
-        const x = Neo.clamp(entity.x + Math.cos(angle) * ring, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
-        const y = Neo.clamp(entity.y + Math.sin(angle) * ring, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
-        if (!Neo.isBlocked(x, y, entity.r)) return { x, y };
-      }
-    }
-    return null;
+    return globalThis.NeoNyke.simulation.moveCampaignCircle(entity, dt, {
+      bounds: getRoomMoveBounds(entity),
+      escapeBounds: {
+        minX: Neo.WALL + entity.r, maxX: Neo.ROOM_W - Neo.WALL - entity.r,
+        minY: Neo.WALL + entity.r, maxY: Neo.ROOM_H - Neo.WALL - entity.r,
+      },
+      isBlocked: Neo.isBlocked,
+      slowMultiplier: Neo.getSlowMultiplier?.(entity) || 1,
+    });
   }
 
   // Expose on Neo

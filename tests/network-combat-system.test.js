@@ -1539,7 +1539,9 @@ describe('authoritative network combat system', () => {
       action: 'DASH', abilityId: 'warp', aimDirection: 0, targetX: 620, targetY: 350,
     }] } }, 0.05);
 
-    expect(Math.hypot(player.x - 620, player.y - 350)).toBeGreaterThan(42);
+    const { circleIntersectsRoomObstacle } = require('../js/simulation/SharedRoomInteriorSystem');
+    expect(circleIntersectsRoomObstacle(620, 350, player.radius, room.structures[0])).toBe(true);
+    expect(circleIntersectsRoomObstacle(player.x, player.y, player.radius, room.structures[0])).toBe(false);
     expect(player.x).toBeGreaterThan(400);
     expect(player.invulnerableUntilTick).toBeGreaterThan(state.tick);
   });

@@ -17,7 +17,7 @@ describe('shared room interior system', () => {
     expect(room.decorations.length + room.structures.length + room.destructibles.length).toBeGreaterThan(0);
   });
 
-  test('authority movement collides with room-state structures', () => {
+  test('authority movement recovers from an overlapping room-state structure', () => {
     const player = { id: 'p1', x: 100, y: 100, vx: 0, vy: 0, radius: 18, moveSpeed: 180, roomId: 'room-a' };
     const state = {
       tick: 1,
@@ -28,7 +28,8 @@ describe('shared room interior system', () => {
       },
     };
     createCampaignMovementSystem()({ state, inputs: { p1: { moveX: 1, moveY: 0 } }, fixedDelta: 0.1 });
-    expect(player.x).toBe(100);
+    expect(player.x).toBeLessThan(100);
+    expect(Math.hypot(player.x - 100, player.y - 100)).toBeGreaterThan(0);
     expect(player.vx).toBe(0);
   });
 });

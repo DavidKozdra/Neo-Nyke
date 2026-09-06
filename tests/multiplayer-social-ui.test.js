@@ -43,14 +43,15 @@ describe('multiplayer social and death UI', () => {
     expect(background).toContain("document.getElementById('multiplayerBg')");
   });
 
-  test('uses a vertical party rail and exposes live lobby connection activity', () => {
+  test('keeps party, hero selection and loadout visible beside each other with a separate action row', () => {
     const html = read('index.html');
     const styles = read('css/style.css');
     const controller = read('js/ui/controller.js');
 
     expect(html).toMatch(/class="coop-lobby__workspace"[\s\S]*class="coop-lobby__party-panel"[\s\S]*id="coopLobbySlots"[\s\S]*id="coopLobbyActivity"[\s\S]*class="charselect-main coop-lobby__main"/);
-    expect(styles).toMatch(/\.coop-lobby__workspace\s*\{[\s\S]*grid-template-columns:\s*310px minmax\(0, 1fr\)/);
-    expect(styles).toMatch(/\.coop-lobby__slots\s*\{[\s\S]*flex-direction:\s*column/);
+    expect(/\.coop-lobby__workspace\s*\{[^}]*grid-template-columns:\s*clamp\(220px, 20vw, 290px\) minmax\(0, 1fr\)/.test(styles)).toBe(true);
+    expect(/\.coop-lobby__main\s*\{[^}]*grid-template-columns:\s*minmax\(240px, \.8fr\) minmax\(340px, 1\.2fr\)/.test(styles)).toBe(true);
+    expect(/id="coopLobbyPicker"[\s\S]*class="coop-lobby__loadout-panel"[\s\S]*id="coopLobbyHeroDetail"[\s\S]*<\/main>[\s\S]*<footer class="coop-lobby__actions">/.test(html)).toBe(true);
     expect(controller).toContain('renderCoopActivity(connectionNotices)');
     expect(controller).toContain('membersBySlot');
   });
@@ -74,17 +75,17 @@ describe('multiplayer social and death UI', () => {
     const view = read('js/rendering/NetworkGameView.js');
     const styles = read('css/style.css');
 
-    expect(html).toMatch(/id="multiplayerPauseModeToggle"[^>]*data-pause-mode="shared"/);
-    expect(html).toMatch(/<button id="coopLobbyPauseMode"[^>]*data-pause-mode="shared"/);
+    expect(html).not.toContain('id="multiplayerPauseModeToggle"');
+    expect(html).toMatch(/id="coopLobby"[\s\S]*<button id="coopLobbyPauseMode"[^>]*role="switch"[^>]*data-pause-mode="shared"[^>]*aria-checked="false"/);
     expect(html).toMatch(/id="multiplayerPauseVote"[^>]*role="status"/);
     expect(html).toMatch(/id="multiplayerPauseStatus"[^>]*role="status"/);
-    expect(controller).toContain('function setMultiplayerPauseModeChoice(pauseMode)');
-    expect(controller).toContain("pauseMode: view.multiplayerPauseModeToggle?.dataset.pauseMode === 'vote' ? 'vote' : 'shared'");
+    expect(controller).toContain("pauseMode: 'shared'");
+    expect(controller).toContain("view.coopLobbyPauseMode.setAttribute('aria-checked', pauseMode === 'vote' ? 'true' : 'false')");
     expect(controller).toContain("browserMultiplayerSession.setPauseMode(current === 'vote' ? 'shared' : 'vote')");
     expect(view).toContain('this.session.requestPause(wantsPaused)');
     expect(view).toContain('_syncPauseState(snapshot.pauseState, snapshot.lobbyState)');
     expect(styles).toContain('.multiplayer-pause-vote');
-    expect(styles).toContain('grid-template-rows: auto minmax(112px, 1fr) auto auto');
+    expect(styles.includes('grid-template-rows: auto minmax(70px, 1fr) auto auto')).toBe(true);
     expect(styles).toContain('width: 64px');
   });
 });

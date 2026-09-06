@@ -5,7 +5,9 @@ function loadStructureCollisionRect() {
   const source = fs.readFileSync(path.join(__dirname, '../js/core/math-utils.js'), 'utf8');
   const match = source.match(/export function getStructureCollisionRect\(structure\) \{[\s\S]*?\n\}/);
   if (!match) throw new Error('Could not find getStructureCollisionRect');
-  return new Function(`${match[0].replace('export function', 'function')}; return getStructureCollisionRect;`)();
+  return new Function('globalThis', `${match[0].replace('export function', 'function')}; return getStructureCollisionRect;`)({
+    NeoNyke: { simulation: require('../js/simulation/SharedRoomInteriorSystem') },
+  });
 }
 
 describe('pillar collision footprint', () => {

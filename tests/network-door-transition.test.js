@@ -22,11 +22,12 @@ function offsetTransitions(offsetFromCenter) {
   return false;
 }
 
-test('player can transition from anywhere inside the visible door gap (±68px)', () => {
-  // Visible gap is ±70 from center; check offsets that were in the old dead zone.
+test('door travel uses the same body clearance as single player', () => {
   expect(offsetTransitions(0)).toBe(true);
-  expect(offsetTransitions(55)).toBe(true);   // was dead zone (52..70)
-  expect(offsetTransitions(-60)).toBe(true);  // was dead zone
-  // Well outside the door (near the corner) must NOT transition.
+  expect(offsetTransitions(50)).toBe(true);
+  expect(offsetTransitions(-50)).toBe(true);
+  // The whole 18px-radius body must clear the 140px opening.
+  expect(offsetTransitions(55)).toBe(false);
+  expect(offsetTransitions(-60)).toBe(false);
   expect(offsetTransitions(200)).toBe(false);
 });

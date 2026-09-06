@@ -76,6 +76,9 @@
       this.diagnosticPingTimer = null;
       this.notifyQueued = false;
       this.unsubscribeMessage = this.transport.onMessage((_peerId, message) => {
+        // Establish clock offset as play begins; prediction needs snapshot age
+        // even when the optional diagnostics overlay has never been opened.
+        if (message?.type === 'INITIAL_STATE') this._sendHeartbeat();
         if (message?.type === 'JOIN_ACCEPTED') this._persistResumeDescriptor(message.payload);
         if (message?.type === 'JOIN_REJECTED'
           && ['INVALID_SESSION', 'VERSION_MISMATCH'].includes(message.payload?.code)) {
@@ -239,6 +242,7 @@
         status: this.client.status,
         playerId: this.client.playerId,
         lastAcknowledgedInput: this.client.lastAcknowledgedInput,
+        snapshotAgeMs: this.client.latestSnapshotAgeMs,
       };
     }
 
@@ -300,6 +304,7 @@
         status: this.client.status,
         playerId: this.client.playerId,
         lastAcknowledgedInput: this.client.lastAcknowledgedInput,
+        snapshotAgeMs: this.client.latestSnapshotAgeMs,
         stateEpoch: this.client.stateEpoch,
         snapshotSequence: this.client.latestSnapshotSequence,
         lobbyState: this.client.lobbyState,

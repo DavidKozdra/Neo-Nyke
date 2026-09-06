@@ -76,7 +76,7 @@ describe('public and private multiplayer lobbies', () => {
     expect(html).toMatch(/id="multiplayerVisibilityIcon"[^>]*>🌐</);
     expect(html).toMatch(/id="multiplayerPublicLobbyList"[^>]*role="list"/);
     expect(html).toMatch(/id="coopLobbyVisibility"[^>]*data-visibility="private"/);
-    expect(html).toMatch(/id="multiplayerPauseModeToggle"[^>]*data-pause-mode="shared"/);
+    expect(html).toMatch(/id="coopLobbyPauseMode"[^>]*role="switch"/);
     expect(controller).toContain('function setMultiplayerVisibilityChoice(visibility)');
     expect(controller).toContain('async function refreshPublicLobbies()');
     expect(controller).toContain("session.joinRoom(room.roomCode)");

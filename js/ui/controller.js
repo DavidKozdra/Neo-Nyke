@@ -121,7 +121,6 @@ export function createUIController(view) {
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerMode) view.multiplayerMode.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerVisibilityToggle) view.multiplayerVisibilityToggle.disabled = !available || multiplayerRequestBusy;
-      if (view.multiplayerPauseModeToggle) view.multiplayerPauseModeToggle.disabled = !available || multiplayerRequestBusy;
       if (view.multiplayerPublicLobbyRefresh) {
         view.multiplayerPublicLobbyRefresh.disabled = !available || multiplayerRequestBusy || multiplayerPublicLobbyLoading;
       }
@@ -209,22 +208,6 @@ export function createUIController(view) {
       }
       if (view.multiplayerVisibilityIcon) view.multiplayerVisibilityIcon.textContent = isPublic ? '🌐' : '🔒';
       if (view.multiplayerVisibilityLabel) view.multiplayerVisibilityLabel.textContent = isPublic ? 'PUBLIC' : 'PRIVATE';
-    }
-
-    function setMultiplayerPauseModeChoice(pauseMode) {
-      const next = pauseMode === 'vote' ? 'vote' : 'shared';
-      const isVote = next === 'vote';
-      if (view.multiplayerPauseModeToggle) {
-        view.multiplayerPauseModeToggle.dataset.pauseMode = next;
-        view.multiplayerPauseModeToggle.setAttribute('aria-pressed', isVote ? 'true' : 'false');
-        view.multiplayerPauseModeToggle.setAttribute('aria-label', isVote
-          ? 'Pause rule: Vote. Activate to allow shared pausing.'
-          : 'Pause rule: Shared. Activate to require a vote.');
-        const hint = view.multiplayerPauseModeToggle.querySelector('small');
-        if (hint) hint.textContent = isVote ? 'Majority vote to pause or resume' : 'Anyone can pause the party';
-      }
-      if (view.multiplayerPauseModeIcon) view.multiplayerPauseModeIcon.textContent = isVote ? '✓' : '⏸';
-      if (view.multiplayerPauseModeLabel) view.multiplayerPauseModeLabel.textContent = isVote ? 'VOTE' : 'SHARED';
     }
 
     function renderPublicLobbyList(rooms = []) {
@@ -390,13 +373,13 @@ export function createUIController(view) {
       if (view.coopLobbyVisibilityLabel) view.coopLobbyVisibilityLabel.textContent = visibility.toUpperCase();
       const pauseMode = snapshot.lobbyState?.pauseMode === 'vote' ? 'vote' : 'shared';
       if (view.coopLobbyPauseMode) view.coopLobbyPauseMode.dataset.pauseMode = pauseMode;
-      if (view.coopLobbyPauseModeLabel) view.coopLobbyPauseModeLabel.textContent = pauseMode === 'vote' ? 'VOTE PAUSE' : 'SHARED PAUSE';
+      if (view.coopLobbyPauseModeState) view.coopLobbyPauseModeState.textContent = pauseMode === 'vote' ? 'ON' : 'OFF';
+      if (view.coopLobbyPauseModeHint) view.coopLobbyPauseModeHint.textContent = pauseMode === 'vote'
+        ? 'Majority vote required to pause or resume'
+        : 'Anyone can pause or resume the party';
       if (view.coopLobbyPauseMode) {
         view.coopLobbyPauseMode.disabled = snapshot.status !== 'waiting' || !localMember;
-        view.coopLobbyPauseMode.setAttribute('aria-pressed', pauseMode === 'vote' ? 'true' : 'false');
-        view.coopLobbyPauseMode.setAttribute('aria-label', pauseMode === 'vote'
-          ? 'Party pause rule: Vote. Activate to use shared pausing.'
-          : 'Party pause rule: Shared. Activate to require a vote.');
+        view.coopLobbyPauseMode.setAttribute('aria-checked', pauseMode === 'vote' ? 'true' : 'false');
       }
 
       const readyCount = members.filter(member => member.ready).length;
@@ -1216,7 +1199,7 @@ export function createUIController(view) {
         mode,
         maxPlayers: 4,
         visibility: view.multiplayerVisibilityToggle?.dataset.visibility === 'private' ? 'private' : 'public',
-        pauseMode: view.multiplayerPauseModeToggle?.dataset.pauseMode === 'vote' ? 'vote' : 'shared',
+        pauseMode: 'shared',
         difficultyKey,
         ...(difficulty ? { difficulty } : {}),
         ...extra,
@@ -4346,10 +4329,6 @@ export function createUIController(view) {
           setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle.dataset.visibility === 'public' ? 'private' : 'public');
         });
         setMultiplayerVisibilityChoice(view.multiplayerVisibilityToggle?.dataset.visibility || 'public');
-        view.multiplayerPauseModeToggle?.addEventListener('click', () => {
-          setMultiplayerPauseModeChoice(view.multiplayerPauseModeToggle.dataset.pauseMode === 'shared' ? 'vote' : 'shared');
-        });
-        setMultiplayerPauseModeChoice(view.multiplayerPauseModeToggle?.dataset.pauseMode || 'shared');
         view.coopLobbyPauseMode?.addEventListener('click', () => {
           if (!browserMultiplayerSession || browserMultiplayerSession.status !== 'waiting') return;
           const current = browserMultiplayerSession.snapshot()?.lobbyState?.pauseMode;

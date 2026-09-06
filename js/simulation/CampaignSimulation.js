@@ -23,13 +23,10 @@
   const { GameState } = gameStateApi;
   const { generateFloorLayout } = floorApi;
   const {
-    applyResponsiveVelocity,
-    getCampaignPlayerMovementSpeed,
-    isCampaignPlayerDashing,
-    applyCampaignDashVelocity,
+    advanceCampaignPlayerMovement,
   } = movementRulesApi;
   const { createCampaignCombatSystem, createCampaignProgressionSystem, applyCampaignHeroProfile } = combatApi;
-  const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
+  const { decorateSharedRoomInterior } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
   const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi.CAMPAIGN_PLAYER_RADIUS || 14);
 
@@ -156,64 +153,17 @@
     const isRoomLocked = typeof options.isRoomLocked === 'function' ? options.isRoomLocked : () => false;
     return ({ state, inputs, fixedDelta }) => {
       const floorState = state.floorState || CAMPAIGN_ROOM;
-      const width = Number(floorState.width) || CAMPAIGN_ROOM.width;
-      const height = Number(floorState.height) || CAMPAIGN_ROOM.height;
-      const wall = Number(floorState.wallThickness) || CAMPAIGN_ROOM.wallThickness;
-      const doorWidth = Number(floorState.doorWidth) || CAMPAIGN_ROOM.doorWidth;
       for (const player of Object.values(state.players || {})) {
         if (!player || player.disconnected || player.downed) {
           if (player) { player.vx = 0; player.vy = 0; }
           continue;
         }
         const input = inputs[player.id] || {};
-        let moveX = Number(input.moveX) || 0;
-        let moveY = Number(input.moveY) || 0;
-        const stunned = state.tick < Number(player.stunnedUntilTick || 0);
-        if (stunned) { moveX = 0; moveY = 0; }
-        const magnitude = Math.hypot(moveX, moveY);
-        if (magnitude > 1) { moveX /= magnitude; moveY /= magnitude; }
-        const speed = getCampaignPlayerMovementSpeed(player, state.tick);
-        const radius = Math.max(1, Number(player.radius) || 18);
-        const minimum = wall + radius;
-        const maximumX = width - minimum;
-        const maximumY = height - minimum;
-        const dashing = !stunned && isCampaignPlayerDashing?.(player, state.tick);
-        if (dashing) {
-          // A dashing hero glides at its locked dash velocity and ignores input
-          // steering, exactly like the campaign's dashTime branch. Movement
-          // moves are the ones that reach here (warp/shield resolve instantly in
-          // the combat system); this covers the plain dash-burst glides.
-          applyCampaignDashVelocity(player);
-        } else {
-          if (Number(player.dashUntilTick || 0) && state.tick >= Number(player.dashUntilTick)) {
-            player.dashUntilTick = 0;
-            player.dashVx = 0;
-            player.dashVy = 0;
-          }
-          // Match the campaign's acceleration/deceleration rather than snapping
-          // an online player directly to an input-derived velocity.
-          player.vx = applyResponsiveVelocity(player.vx, moveX * speed, fixedDelta);
-          player.vy = applyResponsiveVelocity(player.vy, moveY * speed, fixedDelta);
-        }
-        const desiredX = player.x + player.vx * fixedDelta;
-        const desiredY = player.y + player.vy * fixedDelta;
-        const halfDoor = Math.max(radius * 1.5, doorWidth / 2 + radius);
-        const insideHorizontalDoor = Math.abs(desiredX - width / 2) <= halfDoor;
-        const insideVerticalDoor = Math.abs(desiredY - height / 2) <= halfDoor;
-        let direction = null;
-        if (desiredY < minimum && insideHorizontalDoor) direction = 'n';
-        else if (desiredY > maximumY && insideHorizontalDoor) direction = 's';
-        else if (desiredX > maximumX && insideVerticalDoor) direction = 'e';
-        else if (desiredX < minimum && insideVerticalDoor) direction = 'w';
-        if (direction && transitionCampaignRoom(state, player, direction, isRoomLocked)) continue;
-        let nextX = Math.max(minimum, Math.min(maximumX, desiredX));
-        let nextY = Math.max(minimum, Math.min(maximumY, desiredY));
-        const collision = resolveRoomObstacleMovement(getCampaignRoom(floorState, player.roomId), player, nextX, nextY);
-        if (collision.blockedX) player.vx = 0;
-        if (collision.blockedY) player.vy = 0;
-        player.x = collision.x;
-        player.y = collision.y;
-        player.aimDirection = Number(input.aimDirection) || 0;
+        const { exitDirection } = advanceCampaignPlayerMovement(player, input, fixedDelta, floorState, state.tick, {
+          roomLocked: isRoomLocked(state, player.roomId),
+        });
+        if (exitDirection) transitionCampaignRoom(state, player, exitDirection, isRoomLocked);
+
       }
     };
   }

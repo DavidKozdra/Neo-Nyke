@@ -22,7 +22,7 @@ describe('network multiplayer game view', () => {
   });
 
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v39');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v40');
     expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v30');
   });
 
@@ -221,8 +221,9 @@ describe('network multiplayer game view', () => {
     const stunned = predictPosition(player, { moveX: 1, moveY: 0 }, 0.05, floorState, 10);
     const recovered = predictPosition(stunned, { moveX: 1, moveY: 0 }, 0.05, floorState, 11);
 
-    expect(stunned.x).toBe(450);
-    expect(stunned.vx).toBe(0);
+    expect(stunned.vx).toBeCloseTo(100 * Math.pow(0.84, 3));
+    expect(stunned.x).toBeCloseTo(450 + stunned.vx * 0.05);
+    expect(stunned.dashUntilTick).toBe(0);
     expect(recovered.x).toBeGreaterThan(stunned.x);
   });
 
@@ -246,7 +247,7 @@ describe('network multiplayer game view', () => {
     const predicted = predictPosition(base, { moveX: 1, moveY: 0 }, 0.05, { width: 900, height: 700 }, 10);
     expect(predicted.vx).toBeGreaterThan(0);
     expect(predicted.vx).toBeLessThan(200);
-    expect(predicted.x).toBeCloseTo(450 + predicted.vx * 0.05);
+    expect(predicted.x).toBeCloseTo(450 + predicted.vx * 0.05 * 0.8);
   });
 
   test('maps network movement and aim to the first-person camera direction', () => {

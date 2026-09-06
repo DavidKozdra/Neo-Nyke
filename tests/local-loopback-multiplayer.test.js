@@ -358,8 +358,14 @@ describe('protocol-driven local multiplayer session', () => {
     if (direction === 'e') { player.x = TEST_ROOM.width - minimum; inputs.p1.moveX = 1; }
     if (direction === 'w') { player.x = minimum; inputs.p1.moveX = -1; }
 
-    createPlayerMovementSystem(TEST_ROOM)({ state, inputs, fixedDelta: 0.05 });
-
+    const movement = createPlayerMovementSystem(TEST_ROOM);
+    movement({ state, inputs, fixedDelta: 0.05 });
+    expect(player.roomId).toBe(currentRoom.id);
+    // Touching the inner wall starts the tunnel walk; exiting happens at its back.
+    for (let tick = 0; tick < 4 && player.roomId === currentRoom.id; tick += 1) {
+      state.tick += 1;
+      movement({ state, inputs, fixedDelta: 0.05 });
+    }
     expect(state.floorState.currentRoomId).toBe(currentRoom.id);
     expect(state.floorState.visitedRoomIds).toEqual(expect.arrayContaining([currentRoom.id, nextRoom.id]));
     expect(state.floorState.roomTransition).toEqual(expect.objectContaining({
@@ -414,6 +420,25 @@ describe('protocol-driven local multiplayer session', () => {
     // to the network command's top speed (500 * 0.7 = 350 on this first tick).
     expect(state.players.p1.x).toBeCloseTo(317.5);
     expect(state.players.p1.vx).toBeCloseTo(350);
+  });
+
+  test('acknowledges movement only after it has affected a simulated tick', async () => {
+    const { authority, clientA, clock } = await createRunningHarness({
+      latencyMs: 0, jitterMs: 0, unreliablePacketLoss: 0, duplicateMessageRate: 0,
+    });
+    clientA.sendInput({ moveX: 1 });
+    clock.runAll();
+    expect(authority.lastProcessedInput[clientA.playerId]).toBe(0);
+    authority._publishSnapshot(true);
+    clock.runAll();
+    expect(clientA.lastAcknowledgedInput).toBe(-1);
+    const checkpoint = authority.exportRuntimeCheckpoint();
+    expect(checkpoint.lastSimulatedInput[clientA.playerId] ?? -1).toBe(-1);
+    authority.step();
+    authority._publishSnapshot(true);
+    clock.runAll();
+    expect(clientA.lastAcknowledgedInput).toBe(0);
+    expect(authority.exportRuntimeCheckpoint().lastSimulatedInput[clientA.playerId]).toBe(0);
   });
 
   test('runs one authority and two clients to compatible shared movement state', async () => {
@@ -1390,7 +1415,7 @@ describe('protocol-driven local multiplayer session', () => {
   });
 
   test('rejects a client from the snapshot schema before the required beam-struggle field', async () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v39');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v40');
     const clock = new VirtualNetworkClock();
     const network = new LocalLoopbackNetwork({ clock });
     const authority = new LocalMultiplayerAuthority({ transport: transport(network, 'authority', 'Authority') });

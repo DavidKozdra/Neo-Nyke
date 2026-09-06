@@ -10369,16 +10369,6 @@ button.alt.danger {
   color: #dce6ec;
 }
 
-.multiplayer-pause-mode-toggle[data-pause-mode="vote"] {
-  border-color: #f4cc6a;
-  background: rgba(174, 123, 31, .18);
-  color: #fff1bd;
-}
-
-.multiplayer-pause-mode-toggle[data-pause-mode="vote"] small {
-  color: #dbc58f;
-}
-
 .multiplayer-visibility-toggle:hover:not(:disabled),
 .multiplayer-visibility-toggle:focus-visible:not(:disabled) {
   border-color: #b5e9ff;
@@ -10698,1059 +10688,302 @@ button.alt.danger {
   font-size: calc(18px * var(--font-scale, 1));
 }
 
-/* ── Networked co-op lobby — standalone overlay (separate from #charSelect) ── */
-.coop-lobby {
+/* ── Networked co-op lobby: party, roster and loadout share the screen. ── */
+#coopLobby {
   z-index: 60;
-  align-items: flex-start;
-  justify-content: center;
-  overflow: auto;
+  padding: 12px;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
 }
-.coop-lobby.hidden { display: none; }
+#coopLobby.hidden { display: none; }
 
 #coopLobby .coop-lobby__layout {
   position: relative;
   inset: auto;
-  width: min(1180px, calc(100vw - 56px));
-  max-width: 1180px;
-  min-height: 0;
-  margin: 48px auto 24px;
-  padding: 20px;
-  box-sizing: border-box;
-  transform: none;
-  align-items: stretch;
-}
-
-.coop-lobby__header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin: 0 0 14px;
-  text-align: left;
-}
-
-.coop-lobby__header .charselect-titlewrap {
-  align-items: flex-start;
-  gap: 8px;
-  text-align: left;
-}
-
-.coop-lobby__header .screen-title {
-  margin: 0;
-  font-size: calc(clamp(26px, 3.8vw, 42px) * var(--font-scale, 1));
-  line-height: 1;
-  letter-spacing: .08em;
-}
-
-/* The lobby code is the whole point of this screen -- it is the thing players
-   read aloud to each other -- but it used to render at 18px, smaller than the
-   LEAVE button, inside a cramped 172px box. Make it the hero element. */
-.coop-lobby__share {
   display: grid;
-  gap: 6px;
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.coop-lobby__code {
-  display: flex;
-  align-items: center;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 14px;
-  padding: 10px 12px 10px 18px;
-  box-sizing: border-box;
-  border: 1px solid var(--menu-border);
-  border-top-color: color-mix(in srgb, var(--menu-accent) 54%, var(--menu-border));
-  border-radius: var(--ui-frame-radius);
-  background: rgba(10, 13, 16, .96);
-}
-
-.coop-lobby__code-label {
-  color: var(--menu-text-soft);
-  /* Was 9px -- the smallest text on the panel. */
-  font-size: calc(13px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .16em;
-}
-
-.coop-lobby__roomcode,
-.coop-lobby__roomcode-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--font-pixel, ui-monospace, monospace);
-  font-weight: 950;
-  /* Wide tracking so characters are unambiguous when read out loud. */
-  letter-spacing: .3em;
-  color: var(--menu-accent-strong, #9de9ff);
-  font-size: calc(42px * var(--font-scale, 1));
-  line-height: 1.1;
-}
-
-.coop-lobby__roomcode-input {
   width: 100%;
-  padding: 0;
-  border: 0;
-  border-bottom: 2px solid var(--menu-accent-strong, #9de9ff);
-  border-radius: 0;
-  background: transparent;
-  text-transform: uppercase;
-  outline: none;
-}
-
-.coop-lobby__code-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-
-/* Square icon buttons: a 44px hit target, which is also the touch minimum. */
-.coop-lobby__icon-btn {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--menu-border);
-  border-radius: var(--ui-control-radius);
-  background: rgba(255, 255, 255, .04);
-  color: var(--menu-text-soft, #dfe9ff);
-  cursor: pointer;
-  transition: border-color .18s ease, color .18s ease, background .18s ease;
-}
-
-.coop-lobby__icon-btn svg {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.coop-lobby__icon-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--menu-accent) 62%, var(--menu-border));
-  color: var(--menu-accent-strong, #9de9ff);
-  background: rgba(120, 200, 255, .1);
-}
-
-.coop-lobby__icon-btn:focus-visible {
-  outline: 2px solid var(--menu-accent-strong, #9de9ff);
-  outline-offset: 2px;
-}
-
-.coop-lobby__icon-btn:disabled {
-  opacity: .4;
-  cursor: not-allowed;
-}
-
-.coop-lobby__icon-btn--confirm:hover:not(:disabled) {
-  border-color: rgba(125, 255, 158, .7);
-  color: #7dff9e;
-  background: rgba(125, 255, 158, .1);
-}
-
-.coop-lobby__code-error {
-  margin: 0;
-  color: #ff8a98;
-  font-size: calc(13px * var(--font-scale, 1));
-  font-weight: 700;
-  letter-spacing: .04em;
-}
-
-.coop-lobby__code-error[hidden] {
-  display: none;
-}
-
-.coop-lobby__status {
-  display: block;
-  max-width: 680px;
-  min-height: 1.2em;
-  margin: 0;
-  color: var(--menu-text-soft, #dfe9ff);
-  font-size: calc(14px * var(--font-scale, 1));
-  line-height: 1.4;
-}
-
-.coop-lobby__demo-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 14px;
-  padding: 9px 12px;
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, #ffb648 52%, var(--menu-border));
-  border-radius: var(--ui-frame-radius);
-  background: rgba(10, 13, 16, .96);
-  box-shadow: 0 7px 0 rgba(0, 0, 0, .32);
-  color: var(--menu-text-soft, #dfe9ff);
-  font-size: calc(13px * var(--font-scale, 1));
-  line-height: 1.4;
-}
-
-.coop-lobby__demo-tag {
-  flex: 0 0 auto;
-  padding: 3px 8px;
-  border-radius: var(--ui-control-radius);
-  background: #ffb648;
-  color: #16110a;
-  font-size: calc(12px * var(--font-scale, 1));
-  font-weight: 950;
-  letter-spacing: .16em;
-}
-
-.coop-lobby__room-strip {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
-  margin-bottom: 14px;
-  padding: 10px;
-  box-sizing: border-box;
-  border: 1px solid var(--menu-border);
-  border-radius: var(--ui-frame-radius);
-  border-top-color: color-mix(in srgb, var(--menu-accent) 54%, var(--menu-border));
-  background: rgba(10, 13, 16, .96);
-  box-shadow: 0 7px 0 rgba(0, 0, 0, .32);
-}
-
-.coop-lobby__main {
-  display: block;
-}
-
-.coop-lobby__hero-panel {
+  max-width: 1880px;
   min-width: 0;
   min-height: 0;
-  padding: 14px;
-  box-sizing: border-box;
-  border: 1px solid var(--menu-border);
-  border-radius: var(--ui-frame-radius);
-  border-top-color: color-mix(in srgb, var(--menu-accent) 54%, var(--menu-border));
-  background: rgba(10, 13, 16, .96);
-  box-shadow: 0 7px 0 rgba(0, 0, 0, .32);
-}
-
-.coop-lobby__hero-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.coop-lobby__hero-panel .char-roster-head {
-  min-height: 25px;
-}
-
-.coop-lobby__hero-panel .char-roster-kicker {
-  color: var(--menu-accent);
-  font-size: calc(15px * var(--font-scale, 1));
-  font-weight: 950;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.coop-lobby__slots {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-}
-
-.coop-slot {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; min-width: 0;
-  /* An occupied slot carries a 42px portrait while an empty one is text only,
-     so without a floor the empty cards collapse shorter than their filled
-     neighbours and the strip reads as ragged. 42px art + 8px padding each
-     side matches the tallest state exactly. */
-  min-height: 58px;
-  box-sizing: border-box;
-  border: 2px solid color-mix(in srgb, var(--slot-color, #9de9ff) 45%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--slot-color, #9de9ff) 8%, rgba(6, 10, 24, .82));
-  transition: border-color .18s ease, box-shadow .18s ease;
-}
-
-.coop-slot--local {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--slot-color, #9de9ff) 70%, transparent) inset;
-}
-
-.coop-slot--ready {
-  border-color: var(--slot-color, #9de9ff);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--slot-color, #9de9ff) 40%, transparent);
-}
-
-.coop-slot--empty {
-  border-style: dashed; border-color: rgba(160, 180, 220, .28);
-  background: rgba(10, 14, 28, .5); justify-content: center;
-}
-
-.coop-slot__badge {
-  font-weight: 900; letter-spacing: .06em; flex: 0 0 auto;
-  color: var(--slot-color, #9de9ff); font-size: calc(14px * var(--font-scale, 1));
-}
-
-.coop-slot__art { width: 42px; height: 42px; image-rendering: pixelated; flex: 0 0 auto; }
-
-.coop-slot__meta { display: grid; gap: 1px; min-width: 0; text-align: left; }
-
-.coop-slot__name {
-  font-weight: 800; font-size: calc(15px * var(--font-scale, 1));
-  color: var(--menu-text, #eaf1ff);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-.coop-slot__hero {
-  font-size: calc(13px * var(--font-scale, 1)); letter-spacing: .06em;
-  color: color-mix(in srgb, var(--slot-color, #9de9ff) 80%, #ffffff);
-}
-
-.coop-slot__status {
-  font-size: calc(13px * var(--font-scale, 1)); font-weight: 800; letter-spacing: .08em;
-  color: var(--menu-text, #cfe0ff); opacity: .7;
-}
-
-.coop-slot--ready .coop-slot__status { color: #8effb2; opacity: 1; }
-
-.coop-slot__empty-label {
-  font-size: calc(14px * var(--font-scale, 1)); letter-spacing: .16em;
-  color: rgba(180, 195, 225, .55);
-}
-
-.coop-lobby__picker {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-}
-
-#coopLobby .coop-lobby__picker > .char-card {
-  grid-column: span 3;
-}
-
-#coopLobby .coop-lobby__picker > .char-card:nth-child(n + 5) {
-  grid-column: span 4;
-}
-.coop-lobby__picker--locked { opacity: .6; pointer-events: none; }
-
-/* Selected-hero dossier: reuses the champion-select .hero-detail-* styles;
-   only the framing is lobby-specific. */
-#coopLobby .coop-lobby__hero-detail {
-  border: 1px solid var(--menu-border);
-}
-
-.hero-detail-kit-option:disabled {
-  opacity: .55;
-  cursor: default;
-}
-
-/* Use the same compact dossier cards as the champion-select roster. */
-#coopLobby .char-card {
-  min-width: 0;
-  min-height: 110px;
-  width: 100%;
-  padding: 8px;
-  display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  align-items: center;
-  gap: 7px 9px;
-  border-width: 1px;
-  border-radius: var(--ui-control-radius);
-  transform: none;
-  opacity: .88;
-  overflow: hidden;
-}
-
-#coopLobby .char-card:hover:not(:disabled) {
-  transform: none;
-  border-color: var(--menu-accent);
-}
-
-#coopLobby .char-card.sel {
-  opacity: 1;
-  transform: none;
-  border-color: var(--menu-accent) !important;
-  outline: 0;
-  box-shadow: inset 4px 0 0 var(--menu-accent), 0 0 0 1px rgba(101,217,232,.18);
-}
-
-#coopLobby .char-card.sel::after {
-  content: 'SELECTED';
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 3;
-  padding: 3px 5px;
-  border: 1px solid var(--menu-accent);
-  border-radius: 1px;
-  background: #10262a;
-  color: var(--menu-accent-strong);
-  font-size: calc(8px * var(--font-scale, 1));
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: .08em;
-}
-
-#coopLobby .char-card-art-wrap,
-#coopLobby .char-card.sel .char-card-art-wrap {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  min-height: 82px;
   height: 100%;
-  border-radius: 2px;
-}
-
-#coopLobby .char-card-art,
-#coopLobby .char-card.sel .char-card-art {
-  width: 56px;
-  height: 56px;
-}
-
-#coopLobby .char-card-header {
-  grid-column: 2;
-  grid-row: 1;
-  align-items: flex-start;
-  text-align: left;
-}
-
-#coopLobby .char-card-name,
-#coopLobby .char-card.sel .char-card-name {
-  min-height: 0;
-  justify-content: flex-start;
-  font-size: calc(13px * var(--font-scale, 1));
-  line-height: 1.18;
-  letter-spacing: .035em;
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-
-#coopLobby .char-card-tag {
-  max-width: 100%;
-  padding: 2px 5px 2px 3px;
-  gap: 3px;
-  font-size: calc(8px * var(--font-scale, 1));
-  letter-spacing: .04em;
-}
-
-#coopLobby .char-card-tag-icon {
-  width: 13px !important;
-  height: 13px !important;
-  flex-basis: 13px;
-}
-
-#coopLobby .char-card-hint {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: start;
-  display: block;
-  min-height: 0;
-  margin: 0;
-  color: #b8c5d7;
-  font-size: calc(12px * var(--font-scale, 1));
-  line-height: 1.3;
-  text-align: left;
-}
-
-.coop-lobby__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  align-items: center;
-  width: 100%;
-  margin: 14px 0 0 auto;
-}
-
-.coop-lobby__actions > .nav-btn {
+  margin: 0 auto;
+  padding: 18px;
   box-sizing: border-box;
-  min-height: 55px;
-  padding: 14px 16px;
-  font-size: calc(16px * var(--font-scale, 1));
-}
-
-#coopLobbyLeave {
-  width: 150px;
-  min-width: 150px;
-}
-
-#coopLobbyReady {
-  width: 290px;
-  min-width: 290px;
-}
-
-.coop-lobby__ready--armed {
-  background: color-mix(in srgb, #8effb2 22%, transparent);
-  border-color: #8effb2; color: #d6ffe4;
-}
-
-@media (max-width: 940px) {
-  #coopLobby .coop-lobby__layout {
-    width: min(760px, calc(100vw - 24px));
-    margin-top: 32px;
-  }
-
-  .coop-lobby__room-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .coop-lobby__hero-panel {
-    min-height: 0;
-  }
-
-  .coop-lobby__picker {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  #coopLobby .coop-lobby__picker > .char-card {
-    grid-column: auto;
-  }
-
-  .coop-lobby__slots {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 700px) {
-  .coop-lobby {
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  #coopLobby .coop-lobby__layout {
-    width: 100%;
-    max-width: none;
-    min-height: 100dvh;
-    margin: 0;
-    padding: calc(16px + env(safe-area-inset-top, 0px)) 10px calc(18px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .coop-lobby__header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .coop-lobby__share {
-    width: 100%;
-  }
-
-  .coop-lobby__demo-banner {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 7px;
-  }
-
-  .coop-lobby__code {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .coop-lobby__picker,
-  .coop-lobby__slots {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #coopLobby .coop-lobby__picker > .char-card {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 430px) {
-  .coop-lobby__picker {
-    grid-template-columns: 1fr;
-  }
-
-  .coop-lobby__actions {
-    flex-direction: column;
-  }
-
-  #coopLobbyLeave,
-  #coopLobbyReady {
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-/* ── Co-op lobby command-center layout ───────────────────────────────────
-   The party roster is a stable vertical rail; hero/loadout work owns the
-   larger stage. This removes the old full-width strip and makes the eye travel
-   party → hero → ready instead of bouncing between unrelated blocks. */
-#coopLobby .coop-lobby__layout {
-  width: min(1320px, calc(100vw - 48px));
-  max-width: 1320px;
-  margin-top: 28px;
-  padding: 22px;
-  border: 1px solid rgba(132, 199, 235, .24);
-  border-top: 2px solid rgba(160, 220, 251, .48);
-  background: linear-gradient(145deg, rgba(12, 18, 23, .985), rgba(7, 11, 15, .99));
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .72), inset 0 1px 0 rgba(255, 255, 255, .05);
+  transform: none;
+  border: 1px solid rgba(132, 199, 235, .3);
+  border-top: 2px solid rgba(160, 220, 251, .55);
+  border-radius: 10px;
+  background: linear-gradient(145deg, #0c1218, #080c10);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .5);
+  text-align: left;
 }
 
 .coop-lobby__header {
-  align-items: center;
-  margin-bottom: 18px;
-  padding: 0 2px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, .075);
-}
-
-.coop-lobby__kicker,
-.coop-lobby__section-kicker {
-  display: block;
-  color: #6fa9c8;
-  font-size: calc(9px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .22em;
-  line-height: 1.25;
-  text-transform: uppercase;
-}
-
-.coop-lobby__authority-state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #8bb0c5;
-  font-size: calc(10px * var(--font-scale, 1));
-  font-weight: 800;
-  letter-spacing: .12em;
-}
-
-.coop-lobby__header-meta {
   display: grid;
-  justify-items: end;
-  gap: 8px;
-}
-
-.coop-lobby__visibility {
-  display: flex;
+  grid-template-columns: minmax(200px, 1fr) minmax(260px, .9fr) auto;
   align-items: center;
-  gap: 7px;
-  color: #8fdcff;
-  font-size: calc(10px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .12em;
+  gap: 24px;
+  margin: 0;
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
 }
-
+.coop-lobby__header .screen-title { margin: 0; font-size: calc(32px * var(--font-scale, 1)); line-height: 1.1; letter-spacing: .07em; }
+.coop-lobby__kicker,
+.coop-lobby__section-kicker { display: block; color: #82aabd; font-size: calc(12px * var(--font-scale, 1)); font-weight: 700; letter-spacing: .14em; }
+.coop-lobby__status { margin: 0; color: #b4c8d6; font-size: calc(15px * var(--font-scale, 1)); line-height: 1.25; }
+.coop-lobby__header-meta { display: grid; grid-template-columns: auto auto; align-items: center; justify-items: end; gap: 6px 12px; }
+.coop-lobby__visibility { display: flex; align-items: center; gap: 6px; color: #9de9ff; font-size: calc(12px * var(--font-scale, 1)); letter-spacing: .08em; }
 .coop-lobby__visibility[data-visibility="private"] { color: #c8d2d8; }
+.coop-lobby__authority-state { display: flex; align-items: center; gap: 5px; color: #8bb0c5; font-size: calc(11px * var(--font-scale, 1)); }
+.coop-lobby__authority-state > span { width: 6px; height: 6px; border-radius: 50%; background: #69e49d; }
 
 .coop-lobby__pause-mode {
+  grid-column: 1 / -1;
+  grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  border: 1px solid rgba(157, 233, 255, .22);
-  border-radius: 4px;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid rgba(157, 233, 255, .28);
+  border-radius: 5px;
   background: rgba(7, 16, 28, .68);
   color: #a8e7ff;
   cursor: pointer;
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
+  text-align: left;
 }
-
-.coop-lobby__pause-mode[data-pause-mode="vote"] { color: #f4d782; }
-.coop-lobby__pause-mode:hover:not(:disabled),
-.coop-lobby__pause-mode:focus-visible { border-color: currentColor; }
+.coop-lobby__pause-copy { display: grid; gap: 3px; }
+.coop-lobby__pause-copy small { color: #b5c7d2; font-size: calc(12px * var(--font-scale, 1)); font-weight: 400; letter-spacing: normal; line-height: 1.2; }
+.coop-lobby__pause-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.coop-lobby__pause-track { position: relative; width: 38px; height: 22px; border-radius: 12px; background: #3c505c; }
+.coop-lobby__pause-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #edf7ff; }
+.coop-lobby__pause-mode[aria-checked="true"] { color: #f4d782; border-color: rgba(244, 215, 130, .55); }
+.coop-lobby__pause-mode[aria-checked="true"] .coop-lobby__pause-track { background: #aa8228; }
+.coop-lobby__pause-mode[aria-checked="true"] .coop-lobby__pause-track::after { transform: translateX(16px); }
+.coop-lobby__pause-mode:hover:not(:disabled) { border-color: currentColor; }
+.coop-lobby__pause-mode:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .coop-lobby__pause-mode:disabled { cursor: default; opacity: .7; }
 
-.coop-lobby__authority-state > span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #69e49d;
-  box-shadow: 0 0 10px rgba(105, 228, 157, .7);
-}
-
-.coop-lobby__workspace {
-  display: grid;
-  grid-template-columns: 310px minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-  min-height: 0;
-}
-
-.coop-lobby__party-panel,
-.coop-lobby__hero-panel {
-  min-width: 0;
-  border: 1px solid rgba(255, 255, 255, .1);
-  border-top-color: rgba(134, 204, 243, .35);
-  border-radius: var(--ui-frame-radius);
-  background: rgba(14, 21, 27, .9);
-  box-shadow: 0 8px 0 rgba(0, 0, 0, .25);
-}
-
-.coop-lobby__party-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-}
-
-.coop-lobby__party-head {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 2px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
-}
-
-.coop-lobby__party-head h3 {
-  margin: 3px 0 0;
-  color: #edf8ff;
-  font-size: calc(20px * var(--font-scale, 1));
-  letter-spacing: .12em;
-}
-
-.coop-lobby__party-count {
-  color: #9de9ff;
-  font-size: calc(12px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .12em;
-}
-
-.coop-lobby__slots {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.coop-slot {
-  position: relative;
-  min-height: 76px;
-  padding: 9px 10px;
-  border-width: 1px;
-  border-radius: var(--ui-control-radius);
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--slot-color, #9de9ff) 11%, rgba(8, 13, 18, .96)),
-    rgba(8, 13, 18, .96));
-}
-
-.coop-slot::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: color-mix(in srgb, var(--slot-color, #9de9ff) 80%, transparent);
-}
-
-.coop-slot--empty {
-  min-height: 58px;
-  justify-content: flex-start;
-  background: rgba(7, 11, 15, .62);
-}
-
-.coop-slot--empty::before { opacity: .25; }
-.coop-slot__art { width: 52px; height: 52px; }
-.coop-slot__badge { width: 25px; font-size: calc(11px * var(--font-scale, 1)); }
-.coop-slot__name { font-size: calc(13px * var(--font-scale, 1)); }
-.coop-slot__hero,
-.coop-slot__status { font-size: calc(10px * var(--font-scale, 1)); }
-.coop-slot__empty-label { font-size: calc(11px * var(--font-scale, 1)); }
-
-.coop-slot--disconnected {
-  border-color: rgba(255, 170, 89, .6);
-  filter: saturate(.5);
-}
-
-.coop-slot--disconnected .coop-slot__status {
-  color: #ffbd7a;
-  opacity: 1;
-}
-
-.coop-lobby__activity {
-  display: grid;
-  gap: 6px;
-  min-height: 48px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, .07);
-  background: rgba(0, 0, 0, .18);
-}
-
-.coop-lobby__activity-label {
-  color: #7191a4;
-  font-size: calc(8px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .16em;
-}
-
-.coop-lobby__activity-empty,
-.coop-lobby__activity-item {
-  color: #8296a3;
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.35;
-}
-
-.coop-lobby__activity-item {
-  position: relative;
-  padding-left: 12px;
-  color: #bed0da;
-}
-
-.coop-lobby__activity-item::before {
-  content: '';
-  position: absolute;
-  top: .42em;
-  left: 0;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #ffb66d;
-}
-
-.coop-lobby__activity-item[data-kind="left"]::before { background: #8fa5b1; }
-.coop-lobby__activity-item[data-kind="reconnected"]::before { background: #69e49d; }
-
-.coop-lobby__chat {
-  display: grid;
-  grid-template-rows: auto minmax(112px, 1fr) auto auto;
-  flex: 1 1 220px;
-  gap: 8px;
-  min-width: 0;
-  min-height: 220px;
-  padding: 10px;
-  border: 1px solid rgba(157, 233, 255, .16);
-  border-top-color: rgba(157, 233, 255, .38);
-  border-radius: var(--ui-control-radius);
-  background: rgba(3, 8, 14, .38);
-}
-
-.coop-lobby__chat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #8bc6e5;
-  font-size: calc(9px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .14em;
-}
-
-.coop-lobby__chat-shortcut {
-  color: #718895;
-  font-size: calc(8px * var(--font-scale, 1));
-  letter-spacing: .08em;
-}
-
-.coop-lobby__chat-shortcut kbd {
-  padding: 1px 4px;
-  border: 1px solid rgba(157, 233, 255, .28);
-  border-radius: 3px;
-  background: rgba(5, 11, 22, .72);
-  color: #9de9ff;
-  font: inherit;
-}
-
-.coop-lobby__chat-log {
-  display: grid;
-  align-content: end;
-  gap: 4px;
-  min-height: 112px;
-  max-height: 220px;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.coop-lobby__chat-empty {
-  align-self: center;
-  color: #718895;
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.35;
-  text-align: center;
-}
-
-.coop-lobby__chat-message {
-  padding: 5px 7px;
-  border-left: 2px solid var(--chat-color, #9de9ff);
-  background: rgba(0, 0, 0, .26);
-  color: #c7d7e0;
-  overflow-wrap: anywhere;
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.35;
-}
-
-.coop-lobby__chat-message--local { background: rgba(52, 122, 155, .14); }
-
-.coop-lobby__chat-name {
-  color: var(--chat-color, #9de9ff);
-  font-weight: 900;
-}
-
-.coop-lobby__chat-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-}
-
-.coop-lobby__chat-form input {
-  min-width: 0;
-  height: 36px;
-  padding: 7px 8px;
-  box-sizing: border-box;
-  border: 1px solid var(--menu-border);
-  border-radius: 4px;
-  background: #07101c;
-  color: #eef8ff;
-  font: inherit;
-  font-size: calc(11px * var(--font-scale, 1));
-}
-
-.coop-lobby__chat-form input:focus-visible {
-  border-color: #9de9ff;
-  outline: 2px solid rgba(157, 233, 255, .14);
-}
-
-.coop-lobby__chat-form .nav-btn {
-  box-sizing: border-box;
-  width: 64px;
-  min-width: 64px;
-  min-height: 36px;
-  padding: 7px 8px;
-  font-size: calc(9px * var(--font-scale, 1));
-}
-
-.coop-lobby__chat-status {
-  min-height: 1em;
-  margin: -3px 0 0;
-  color: #ffadad;
-  font-size: calc(9px * var(--font-scale, 1));
-  line-height: 1.2;
-}
-
-.coop-lobby__share {
-  gap: 7px;
-  margin-top: auto;
-  padding-top: 2px;
-}
-
-.coop-lobby__code {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 10px;
-}
-
+.coop-lobby__share { display: grid; gap: 5px; min-width: 0; }
+.coop-lobby__code-label { color: #a9c0cf; font-size: calc(12px * var(--font-scale, 1)); letter-spacing: .14em; }
+.coop-lobby__code { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px 6px 12px; border: 1px solid var(--menu-border); border-radius: 5px; background: #080f16; }
 .coop-lobby__roomcode,
-.coop-lobby__roomcode-input {
-  font-size: calc(26px * var(--font-scale, 1));
-  letter-spacing: .2em;
+.coop-lobby__roomcode-input { flex: 1 1 auto; min-width: 0; width: 100%; color: #c1f1ff; font: 900 calc(27px * var(--font-scale, 1))/1.1 var(--font-pixel); letter-spacing: .16em; }
+.coop-lobby__roomcode-input { padding: 0; border: 0; border-bottom: 2px solid #9de9ff; border-radius: 0; background: transparent; text-transform: uppercase; outline: none; }
+.coop-lobby__code-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.coop-lobby__icon-btn { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--menu-border); border-radius: 4px; background: rgba(255, 255, 255, .04); color: #c4d8e4; cursor: pointer; }
+.coop-lobby__code-actions .coop-lobby__icon-btn { width: 36px; min-width: 36px; flex: 0 0 36px; }
+.coop-lobby__icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.coop-lobby__icon-btn:hover:not(:disabled) { color: #9de9ff; border-color: #9de9ff; }
+.coop-lobby__icon-btn:focus-visible { outline: 2px solid #9de9ff; outline-offset: 2px; }
+.coop-lobby__icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.coop-lobby__icon-btn[hidden], .coop-lobby__code-error[hidden] { display: none; }
+.coop-lobby__code-error { margin: 0; color: #ff8a98; font-size: calc(13px * var(--font-scale, 1)); }
+
+.coop-lobby__workspace { display: grid; grid-template-columns: clamp(220px, 20vw, 290px) minmax(0, 1fr); gap: 14px; min-height: 0; }
+#coopLobby .coop-lobby__main { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(340px, 1.2fr); align-items: stretch; gap: 14px; min-width: 0; min-height: 0; }
+.coop-lobby__party-panel,
+.coop-lobby__hero-panel,
+.coop-lobby__loadout-panel { min-width: 0; min-height: 0; padding: 14px; box-sizing: border-box; border: 1px solid rgba(156, 202, 227, .2); border-radius: 6px; background: rgba(16, 25, 33, .65); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #344d5c transparent; }
+.coop-lobby__party-panel { display: flex; flex-direction: column; gap: 10px; }
+.coop-lobby__party-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coop-lobby__party-head h3,
+.coop-lobby__hero-head h3 { margin: 2px 0 0; color: #eef8ff; font-size: calc(22px * var(--font-scale, 1)); letter-spacing: .05em; line-height: 1.1; }
+.coop-lobby__party-count { color: #9de9ff; font-size: calc(17px * var(--font-scale, 1)); letter-spacing: .08em; }
+.coop-lobby__slots { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.coop-slot { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 62px; padding: 6px 8px; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--slot-color, #9de9ff) 40%, transparent); border-left: 3px solid var(--slot-color, #9de9ff); border-radius: 4px; background: color-mix(in srgb, var(--slot-color, #9de9ff) 7%, #0a1017); }
+.coop-slot--local { box-shadow: inset 0 0 0 1px var(--slot-color); }
+.coop-slot--ready { border-color: var(--slot-color); }
+.coop-slot--empty { min-height: 52px; border-style: dashed; border-color: rgba(156, 202, 227, .25); background: #0b1118; }
+.coop-slot__badge { flex-shrink: 0; color: var(--slot-color); font-size: calc(13px * var(--font-scale, 1)); }
+.coop-slot__art { flex-shrink: 0; width: 40px; height: 40px; image-rendering: pixelated; }
+.coop-slot__meta { display: grid; gap: 1px; min-width: 0; }
+.coop-slot__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #eaf4fb; font-weight: 700; font-size: calc(16px * var(--font-scale, 1)); }
+.coop-slot__hero { color: var(--slot-color); font-size: calc(12px * var(--font-scale, 1)); }
+.coop-slot__status { color: #a8bdcc; font-size: calc(12px * var(--font-scale, 1)); }
+.coop-slot--ready .coop-slot__status { color: #8effb2; }
+.coop-slot__empty-label { color: #8299ad; font-size: calc(13px * var(--font-scale, 1)); letter-spacing: .1em; }
+
+.coop-lobby__activity { display: grid; gap: 4px; padding: 8px 0; border-block: 1px solid rgba(255, 255, 255, .08); }
+.coop-lobby__activity-label { color: #90acbe; font-size: calc(11px * var(--font-scale, 1)); letter-spacing: .12em; }
+.coop-lobby__activity-empty,
+.coop-lobby__activity-item { color: #a5bac9; font-size: calc(13px * var(--font-scale, 1)); line-height: 1.25; }
+.coop-lobby__activity-item[data-kind="disconnected"] { color: #ffc08c; }
+.coop-lobby__activity-item[data-kind="reconnected"] { color: #8effb2; }
+.coop-lobby__chat { display: grid; grid-template-rows: auto minmax(70px, 1fr) auto auto; flex: 1 0 160px; gap: 8px; min-width: 0; padding: 10px; border: 1px solid rgba(157, 233, 255, .2); border-radius: 4px; background: #081018; }
+.coop-lobby__chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #9cd3eb; font-size: calc(13px * var(--font-scale, 1)); letter-spacing: .08em; }
+.coop-lobby__chat-shortcut { color: #8ca5b5; font-size: calc(11px * var(--font-scale, 1)); white-space: nowrap; }
+.coop-lobby__chat-shortcut kbd { padding: 1px 4px; border: 1px solid #344c5c; border-radius: 3px; font: inherit; }
+.coop-lobby__chat-log { display: grid; align-content: end; gap: 5px; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.coop-lobby__chat-empty { align-self: center; color: #8ba4b5; font-size: calc(14px * var(--font-scale, 1)); text-align: center; }
+.coop-lobby__chat-message { padding: 5px 7px; border-left: 2px solid var(--chat-color, #9de9ff); color: #d7e6ee; overflow-wrap: anywhere; font-size: calc(14px * var(--font-scale, 1)); line-height: 1.3; background: rgba(255, 255, 255, .03); }
+.coop-lobby__chat-message--local { background: rgba(52, 122, 155, .14); }
+.coop-lobby__chat-name { color: var(--chat-color); font-weight: 700; }
+.coop-lobby__chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.coop-lobby__chat-form input { min-width: 0; width: 100%; height: 40px; padding: 8px; box-sizing: border-box; border: 1px solid var(--menu-border); border-radius: 4px; background: #0d1923; color: #eef8ff; font: inherit; font-size: calc(14px * var(--font-scale, 1)); }
+.coop-lobby__chat-form input:focus-visible { outline: 2px solid #9de9ff; outline-offset: 1px; }
+.coop-lobby__chat-form .nav-btn { width: 64px; min-width: 64px; min-height: 40px; padding: 6px; font-size: calc(13px * var(--font-scale, 1)); }
+.coop-lobby__chat-status { margin: 0; color: #ffadad; font-size: calc(12px * var(--font-scale, 1)); }
+.coop-lobby__chat-status:empty { display: none; }
+
+.coop-lobby__hero-panel,
+.coop-lobby__loadout-panel { display: flex; flex-direction: column; gap: 14px; }
+.coop-lobby__hero-head { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 0; margin: 0; padding: 0 0 10px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.coop-lobby__hero-head .char-roster-kicker { display: block; margin-top: 2px; color: #eef8ff; font-size: calc(22px * var(--font-scale, 1)); line-height: 1.1; letter-spacing: .05em; }
+.coop-lobby__hero-hint { color: #a6bdcc; font-size: calc(14px * var(--font-scale, 1)); line-height: 1.25; }
+.coop-lobby__picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.coop-lobby__picker--locked { opacity: .65; }
+#coopLobby .char-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; justify-items: stretch; gap: 5px 8px; box-sizing: border-box; min-width: 0; min-height: 110px; width: 100%; padding: 8px; border-radius: 5px; transform: none; opacity: .95; }
+#coopLobby .char-card.sel { border-color: #9de9ff !important; box-shadow: inset 0 0 0 1px #9de9ff; transform: none; outline: 0; background: linear-gradient(160deg, #183440, #102029); }
+#coopLobby .char-card.sel::after { content: '✓'; position: absolute; top: 5px; right: 7px; color: #9de9ff; font: bold 15px system-ui; }
+#coopLobby .char-card:hover:not(:disabled) { border-color: #9de9ff; transform: none; }
+#coopLobby .char-card:focus-visible { outline: 2px solid #9de9ff; outline-offset: 2px; }
+#coopLobby .char-card-art-wrap { grid-row: 1 / span 2; width: 100%; min-height: 0; height: 60px; border: 0; border-radius: 3px; background: none; box-shadow: none; }
+#coopLobby .char-card-art { width: 52px; height: 52px; }
+#coopLobby .char-card-header { align-items: flex-start; gap: 3px; }
+#coopLobby .char-card-name { min-height: 0; color: #f1f7fb; font-size: calc(17px * var(--font-scale, 1)); line-height: 1.05; letter-spacing: .015em; text-align: left; }
+#coopLobby .char-card-tag { padding: 2px 5px; gap: 3px; font-size: calc(10px * var(--font-scale, 1)); letter-spacing: .03em; }
+#coopLobby .char-card-tag-icon { width: 12px !important; height: 12px !important; flex-basis: 12px; }
+#coopLobby .char-card-hint { display: block; min-height: 0; margin: 0; color: #b8cbd6; font-size: calc(14px * var(--font-scale, 1)); line-height: 1.15; text-align: left; }
+
+/* The loadout owns a full column, so its portrait, kit and preview can stay open. */
+#coopLobby .coop-lobby__hero-detail { display: grid; flex: 0 0 auto; grid-template-rows: auto; grid-template-columns: 100px minmax(0, 1fr); align-content: start; gap: 14px 12px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+#coopLobby .hero-detail-portrait { display: flex; grid-column: 1; grid-row: 1 / span 2; min-height: 100px; }
+#coopLobby .hero-detail-portrait canvas { width: 92px; height: 92px; }
+#coopLobby .hero-detail-head { grid-column: 2; grid-row: 1; align-items: flex-start; flex-direction: column; gap: 4px; }
+#coopLobby .hero-detail-name { font-size: calc(24px * var(--font-scale, 1)); line-height: 1.1; }
+#coopLobby .hero-detail-archetype { color: #acc3d1; font-size: calc(15px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-stats { grid-column: 2; grid-row: 2; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+#coopLobby .char-stat-row { min-width: 0; }
+#coopLobby .hero-detail-inventory { grid-column: 1 / -1; padding: 10px 0; border-block: 1px solid rgba(255, 255, 255, .08); }
+#coopLobby .hero-detail-inventory-label { width: 100%; font-size: calc(13px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-item-pip { font-size: calc(14px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-item-pip[data-tooltip]::before { max-width: 180px; }
+#coopLobby .hero-detail-skills { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#coopLobby .hero-detail-section-label { display: block; grid-column: 1 / -1; margin: 0; font-size: calc(12px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-stats .hero-detail-section-label { display: none; }
+#coopLobby .hero-detail-skill-pip { padding: 8px; font-size: calc(14px * var(--font-scale, 1)); white-space: normal; }
+#coopLobby .hero-detail-skill-text { white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.2; }
+#coopLobby .hero-detail-skill-slot-label { font-size: calc(12px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-kit-options { flex-direction: row; }
+#coopLobby .hero-detail-kit-option { min-height: 36px; padding: 6px; font-size: calc(14px * var(--font-scale, 1)); }
+.hero-detail-kit-option:disabled { opacity: .55; cursor: default; }
+#coopLobby .hero-detail-skill-readout { grid-column: 1 / -1; grid-template-columns: 140px minmax(0, 1fr); grid-template-rows: auto; gap: 10px; padding: 10px; margin: 0; }
+#coopLobby .hero-detail-skill-preview { grid-row: 1; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+#coopLobby .hero-detail-skill-readout-name { font-size: calc(16px * var(--font-scale, 1)); }
+#coopLobby .hero-detail-skill-readout-desc { font-size: calc(15px * var(--font-scale, 1)); line-height: 1.25; }
+
+.coop-lobby__actions { display: flex; align-items: center; gap: 16px; margin: 0; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .1); }
+.coop-lobby__actions > .nav-btn { box-sizing: border-box; min-height: 50px; padding: 12px 18px; font-size: calc(19px * var(--font-scale, 1)); }
+#coopLobbyLeave { width: 170px; min-width: 170px; white-space: nowrap; letter-spacing: .08em; }
+#coopLobbyReady { width: 220px; min-width: 220px; margin-left: auto; background: #163b45; border-color: #9de9ff; color: #eaffff; }
+#coopLobbyReady.coop-lobby__ready--armed { background: #163b2c; border-color: #8effb2; color: #d6ffe4; }
+.coop-lobby__ready-hint { margin-left: auto; color: #abc2d0; font-size: calc(15px * var(--font-scale, 1)); }
+.coop-lobby__demo-banner { display: flex; align-items: center; gap: 8px; max-width: 320px; margin: 0; color: #9bafbb; font-size: calc(12px * var(--font-scale, 1)); line-height: 1.2; }
+.coop-lobby__demo-tag { padding: 3px 5px; border: 1px solid #9e7a32; border-radius: 3px; color: #f1cc79; font-size: calc(11px * var(--font-scale, 1)); }
+
+@media (min-width: 1550px) {
+  #coopLobby .coop-lobby__main { grid-template-columns: minmax(380px, .9fr) minmax(480px, 1.1fr); }
+  #coopLobby .char-card { grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; justify-items: stretch; gap: 8px; min-height: 114px; padding: 12px; }
+  #coopLobby .char-card-art-wrap { grid-row: 1 / span 2; }
+  #coopLobby .char-card-header { align-items: flex-start; }
+  #coopLobby .char-card-name, #coopLobby .char-card-hint { text-align: left; }
+  #coopLobby .hero-detail-kit-options { flex-direction: row; }
 }
 
-.coop-lobby__code-actions { gap: 4px; }
-.coop-lobby__icon-btn { width: 34px; height: 34px; }
-.coop-lobby__icon-btn[hidden] { display: none; }
-.coop-lobby__code-actions .coop-lobby__icon-btn {
-  flex: 0 0 34px;
-  min-width: 34px;
-}
-.coop-lobby__icon-btn svg { width: 17px; height: 17px; }
-
-.coop-lobby__demo-banner {
-  gap: 7px;
-  margin: 0;
-  padding: 8px 9px;
-  box-shadow: none;
-  font-size: calc(9px * var(--font-scale, 1));
-}
-
-.coop-lobby__demo-tag {
-  padding: 2px 5px;
-  font-size: calc(8px * var(--font-scale, 1));
-}
-
-.coop-lobby__main { min-width: 0; }
-
-.coop-lobby__hero-panel {
-  min-height: 100%;
-  padding: 18px;
-  gap: 12px;
+@media (max-height: 780px) and (min-width: 1000px) {
+  #coopLobby { padding: 8px; }
+  #coopLobby .coop-lobby__layout { padding: 12px; gap: 10px; }
+  .coop-lobby__header { padding-bottom: 10px; }
+  .coop-lobby__party-panel, .coop-lobby__hero-panel, .coop-lobby__loadout-panel { padding: 10px; gap: 8px; }
+  .coop-lobby__hero-head { min-height: 0; gap: 4px; padding-bottom: 8px; }
+  .coop-slot { min-height: 50px; padding: 4px 6px; gap: 6px; }
+  .coop-slot--empty { min-height: 44px; }
+  .coop-slot__art { width: 34px; height: 34px; }
+  .coop-lobby__activity { padding: 5px 0; }
+  .coop-lobby__chat { flex-basis: 130px; grid-template-rows: auto minmax(48px, 1fr) auto auto; padding: 7px; gap: 5px; }
+  #coopLobby .char-card { min-height: 92px; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px; padding: 7px 5px; }
+  #coopLobby .char-card-art-wrap, #coopLobby .char-card-art { height: 44px; }
+  #coopLobby .char-card-art { width: 44px; }
+  #coopLobby .coop-lobby__hero-detail { gap: 5px; }
+  #coopLobby .hero-detail-inventory { padding: 6px 0; }
+  #coopLobby .hero-detail-inventory-label { width: auto; font-size: calc(12px * var(--font-scale, 1)); }
+  #coopLobby .hero-detail-skill-readout { grid-template-columns: 110px minmax(0, 1fr); padding: 6px; }
+  .coop-lobby__actions { padding-top: 8px; }
 }
 
-.coop-lobby__hero-head {
-  display: flex;
-  min-height: 0;
-  align-items: end;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
+@media (max-width: 1100px) {
+  .coop-lobby__header { grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr); gap: 12px; }
+  .coop-lobby__header-meta { grid-column: 1 / -1; grid-template-columns: minmax(240px, 1fr) auto auto; justify-items: start; }
+  .coop-lobby__pause-mode { grid-column: 1; width: auto; min-height: 44px; }
+  .coop-lobby__pause-copy { grid-template-columns: auto auto; align-items: center; gap: 12px; }
+  .coop-lobby__workspace { grid-template-columns: 210px minmax(0, 1fr); gap: 10px; }
+  #coopLobby .coop-lobby__main { grid-template-columns: minmax(210px, .7fr) minmax(300px, 1fr); gap: 10px; }
+  .coop-lobby__ready-hint { max-width: 180px; }
 }
 
-.coop-lobby__hero-head .char-roster-kicker {
-  display: block;
-  margin-top: 3px;
-  color: #eef8ff;
-  font-size: calc(18px * var(--font-scale, 1));
-  letter-spacing: .1em;
+/* Narrow windows keep every section on the page, with the actions fixed below. */
+@media (max-width: 999px) {
+  #coopLobby { padding: 0; }
+  #coopLobby .coop-lobby__layout { grid-template-rows: auto minmax(0, 1fr) auto; border-radius: 0; padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); gap: 10px; }
+  .coop-lobby__header { gap: 8px 16px; padding-bottom: 8px; }
+  .coop-lobby__header .screen-title { font-size: calc(27px * var(--font-scale, 1)); }
+  .coop-lobby__workspace { grid-template-columns: minmax(210px, .6fr) minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; align-items: start; overflow-y: auto; }
+  #coopLobby .coop-lobby__main { grid-template-columns: 1fr; }
+  .coop-lobby__party-panel, .coop-lobby__hero-panel, .coop-lobby__loadout-panel { overflow: visible; }
+  .coop-lobby__picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .coop-lobby__chat { min-height: 180px; max-height: 300px; }
+  .coop-lobby__actions { flex-wrap: wrap; gap: 8px 12px; }
+  .coop-lobby__demo-banner { flex: 1; }
+  .coop-lobby__ready-hint { flex-basis: calc(100% - 240px); max-width: none; margin: 0; }
+  #coopLobbyReady { min-width: 200px; width: 200px; }
 }
 
-.coop-lobby__hero-hint {
-  max-width: 280px;
-  color: #7892a2;
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.35;
-  text-align: right;
-}
-
-.coop-lobby__actions {
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, .08);
-}
-
-#coopLobbyLeave { width: 170px; min-width: 170px; }
-#coopLobbyReady { width: 310px; min-width: 310px; }
-
-@media (max-width: 1040px) {
-  #coopLobby .coop-lobby__layout {
-    width: min(920px, calc(100vw - 24px));
-  }
-
-  .coop-lobby__workspace {
-    grid-template-columns: 270px minmax(0, 1fr);
-  }
-
-  #coopLobby .char-card {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  #coopLobby .char-card-art,
-  #coopLobby .char-card.sel .char-card-art { width: 46px; height: 46px; }
-}
-
-@media (max-width: 780px) {
-  #coopLobby .coop-lobby__layout {
-    width: 100%;
-    min-height: 100dvh;
-    margin: 0;
-    padding: calc(14px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .coop-lobby__authority-state { display: none; }
-  .coop-lobby__workspace { grid-template-columns: 1fr; }
-
-  .coop-lobby__party-panel { padding: 12px; }
+@media (max-width: 600px) {
+  .coop-lobby__header { grid-template-columns: 1fr; gap: 8px; }
+  .coop-lobby__header .charselect-titlewrap { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; }
+  .coop-lobby__header .screen-title { grid-column: 1; grid-row: 1; font-size: calc(26px * var(--font-scale, 1)); }
+  .coop-lobby__kicker { grid-column: 2; grid-row: 1; align-self: center; font-size: calc(10px * var(--font-scale, 1)); }
+  .coop-lobby__status { grid-column: 1 / -1; font-size: calc(13px * var(--font-scale, 1)); }
+  .coop-lobby__share { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+  .coop-lobby__code-label { max-width: 40px; font-size: calc(11px * var(--font-scale, 1)); }
+  .coop-lobby__code { padding: 4px 6px; }
+  .coop-lobby__roomcode, .coop-lobby__roomcode-input { font-size: calc(23px * var(--font-scale, 1)); letter-spacing: .1em; }
+  .coop-lobby__icon-btn { width: 36px; height: 36px; }
+  .coop-lobby__code-error { grid-column: 1 / -1; }
+  .coop-lobby__header-meta { grid-template-columns: auto 1fr; gap: 4px 8px; }
+  .coop-lobby__pause-mode { grid-row: 1 / span 2; padding: 6px 8px; gap: 8px; }
+  .coop-lobby__pause-copy { display: grid; grid-template-columns: 1fr; gap: 2px; }
+  .coop-lobby__pause-copy small { max-width: 170px; font-size: calc(11px * var(--font-scale, 1)); }
+  .coop-lobby__visibility, .coop-lobby__authority-state { justify-self: end; font-size: calc(10px * var(--font-scale, 1)); }
+  .coop-lobby__workspace { grid-template-columns: 1fr; gap: 10px; }
   .coop-lobby__slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .coop-slot { min-height: 68px; }
-  .coop-slot__art { width: 42px; height: 42px; }
-  .coop-lobby__share { margin-top: 0; }
-  .coop-lobby__chat {
-    flex: none;
-    min-height: 230px;
-  }
-  .coop-lobby__chat-log {
-    min-height: 128px;
-    max-height: 200px;
-  }
-  .coop-lobby__hero-hint { display: none; }
-}
-
-@media (max-width: 480px) {
-  .coop-lobby__slots { grid-template-columns: 1fr; }
-  .coop-lobby__code { grid-template-columns: 1fr; }
-  .coop-lobby__code-actions {
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-  .coop-lobby__actions { flex-direction: column-reverse; }
-  #coopLobbyLeave,
+  .coop-slot { gap: 5px; padding: 6px; }
+  .coop-slot__art { width: 32px; height: 32px; }
+  .coop-slot__badge { font-size: calc(11px * var(--font-scale, 1)); }
+  .coop-slot__name { font-size: calc(14px * var(--font-scale, 1)); }
+  .coop-lobby__chat { height: 180px; flex-basis: auto; }
+  .coop-lobby__picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #coopLobby .hero-detail-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #coopLobby .hero-detail-kit-options { flex-direction: column; }
+  #coopLobby .hero-detail-skill-readout { grid-template-columns: 100px minmax(0, 1fr); }
+  .coop-lobby__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+  .coop-lobby__demo-banner { grid-column: 2; font-size: calc(11px * var(--font-scale, 1)); }
+  .coop-lobby__ready-hint { grid-column: 1; font-size: calc(12px * var(--font-scale, 1)); max-width: 120px; }
+  .coop-lobby__actions > .nav-btn { font-size: calc(16px * var(--font-scale, 1)); min-height: 44px; padding: 8px 10px; }
+  #coopLobbyLeave { width: 100%; min-width: 0; }
   #coopLobbyReady { width: 100%; min-width: 0; }
 }
+
 body.network-multiplayer-active #c {
   cursor: crosshair;
 }
@@ -11811,11 +11044,67 @@ body.network-multiplayer-active #c {
 }
 
 .multiplayer-chat.hidden,
+.multiplayer-floor-exit.hidden,
 .multiplayer-pause-vote.hidden,
 .multiplayer-spectator.hidden,
 .multiplayer-end-screen.hidden,
 .multiplayer-chat__composer.hidden {
   display: none;
+}
+
+.multiplayer-floor-exit {
+  position: fixed;
+  top: max(100px, calc(80px + env(safe-area-inset-top)));
+  left: 50%;
+  z-index: 47;
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid rgba(244, 204, 106, .65);
+  border-radius: 8px;
+  background: rgba(16, 19, 25, .95);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .4);
+  transform: translateX(-50%);
+  color: #eef5ff;
+  font-family: var(--ui-font, monospace);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.multiplayer-floor-exit.is-ready { border-color: #8fffaf; }
+.multiplayer-floor-exit__heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: #f4d782;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.multiplayer-floor-exit__heading strong { color: #fff; }
+.multiplayer-floor-exit.is-ready .multiplayer-floor-exit__heading strong { color: #8fffaf; }
+#multiplayerFloorExitPrompt { margin: 7px 0 10px; font-weight: 700; }
+.multiplayer-floor-exit__players { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.multiplayer-floor-exit__player { display: flex; justify-content: space-between; gap: 12px; }
+.multiplayer-floor-exit__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--player-color, #fff); }
+.multiplayer-floor-exit__readiness { flex-shrink: 0; color: #c3cad5; }
+.multiplayer-floor-exit__player.is-ready .multiplayer-floor-exit__readiness { color: #8fffaf; }
+.multiplayer-floor-exit__departure { display: grid; gap: 5px; margin-top: 10px; }
+#multiplayerFloorExitDeparture { color: #e7d8ad; }
+#multiplayerFloorExitProgress { appearance: none; width: 100%; height: 5px; border: 0; border-radius: 3px; overflow: hidden; background: #303641; color: #8fffaf; }
+#multiplayerFloorExitProgress::-webkit-progress-bar { background: #303641; }
+#multiplayerFloorExitProgress::-webkit-progress-value { background: #8fffaf; }
+#multiplayerFloorExitProgress::-moz-progress-bar { background: #8fffaf; }
+#multiplayerFloorExitHint { margin: 8px 0 0; color: #aeb9c9; font-size: calc(10px * var(--font-scale, 1)); }
+
+@media (max-height: 540px) {
+  .multiplayer-floor-exit { top: max(40px, calc(28px + env(safe-area-inset-top))); width: min(460px, calc(100vw - 32px)); padding: 8px 12px; font-size: calc(11px * var(--font-scale, 1)); }
+  #multiplayerFloorExitPrompt { margin: 4px 0 6px; }
+  .multiplayer-floor-exit__players { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+  .multiplayer-floor-exit__player { gap: 6px; }
+  .multiplayer-floor-exit__departure { margin-top: 6px; }
+  #multiplayerFloorExitHint { margin-top: 5px; }
 }
 
 .multiplayer-pause-vote {

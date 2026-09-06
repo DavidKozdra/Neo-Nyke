@@ -105,6 +105,29 @@ describe('control configuration', () => {
     expect(getHudHint('gamepad')).toBe('L3');
   });
 
+  test.each(['keyboard', 'touch', 'gamepad'])('network ladders explain readiness instead of a misleading %s button', mode => {
+    const fillText = jest.fn();
+    const neo = {
+      gameState: 'play', currentRoom: { cleared: true }, player: { x: 0, y: 0 },
+      pickups: [{ id: 'stairs', type: 'ladder', networkExit: true, x: 0, y: 0 }],
+      LADDER_TRIGGER_RADIUS: 64, dist: () => 0, getLadderControlHint: () => 'SPACE',
+      multiplayerGameView: { active: true, getFloorExitStatus: () => ({ prompt: 'You’re ready — stay on the ladder' }) },
+      ctx: new Proxy({ fillText, measureText: () => ({ width: 200 }) }, {
+        get: (target, key) => target[key] || (() => {}),
+      }),
+    };
+    const draw = extractFunction(read('js/draw/environment.js'), 'drawLadderPrompt', {
+      Neo: neo, window: { NeoSettings: { getEffectiveInputMode: () => mode } },
+    });
+    draw();
+    expect(fillText).toHaveBeenLastCalledWith('You’re ready — stay on the ladder', 0, -36);
+    // Single-player still advertises its configured climb control.
+    neo.pickups[0].networkExit = false;
+    draw();
+    expect(fillText).toHaveBeenLastCalledWith(mode === 'touch'
+      ? 'Tap the ladder to go to next floor' : 'Press [SPACE] to go to next floor', 0, -36);
+  });
+
   test('mobile tutorial highlights the controls players actually touch', () => {
     const tutorial = read('js/ui/tutorial-controller.js');
     const mobileCss = read('css/mobile.css');

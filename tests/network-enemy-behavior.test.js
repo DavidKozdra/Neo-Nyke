@@ -1312,7 +1312,9 @@ describe('authored campaign enemy behaviors on the authority', () => {
     });
 
     tick(simulation, 6);
-    expect(Math.hypot(rival.x - (player.x + 72), rival.y - player.y)).toBeGreaterThan(42);
+    const { circleIntersectsRoomObstacle } = require('../js/simulation/SharedRoomInteriorSystem');
+    expect(circleIntersectsRoomObstacle(player.x + 72, player.y, rival.radius, room.structures[0])).toBe(true);
+    expect(circleIntersectsRoomObstacle(rival.x, rival.y, rival.radius, room.structures[0])).toBe(false);
     expect(rival.invulnerableUntilTick).toBeGreaterThan(state.tick);
   });
 

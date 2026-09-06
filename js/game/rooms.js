@@ -1490,17 +1490,9 @@
     Neo.currentRoom = room;
     // Surface chunks are one continuous world.  They intentionally have no
     // room-wall collision; dungeon interiors restore the normal wall set.
-    const buildRoomWalls = () => {
-      const hw = (Neo.ROOM_W - Neo.DOOR) / 2;
-      const hh = (Neo.ROOM_H - Neo.DOOR) / 2;
-      return [
-        { x: 0, y: 0, w: hw, h: Neo.WALL }, { x: Neo.ROOM_W - hw, y: 0, w: hw, h: Neo.WALL },
-        { x: 0, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL }, { x: Neo.ROOM_W - hw, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL },
-        { x: 0, y: 0, w: Neo.WALL, h: hh }, { x: 0, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
-        { x: Neo.ROOM_W - Neo.WALL, y: 0, w: Neo.WALL, h: hh }, { x: Neo.ROOM_W - Neo.WALL, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
-      ];
-    };
-    Neo.baseRoomWalls = buildRoomWalls();
+    Neo.baseRoomWalls = globalThis.NeoNyke.simulation.getCampaignRoomWallRects({
+      width: Neo.ROOM_W, height: Neo.ROOM_H, wallThickness: Neo.WALL, doorWidth: Neo.DOOR,
+    }, { n: true, s: true, e: true, w: true });
     Neo.walls = room.survivalSurface ? [] : Neo.baseRoomWalls.slice();
     Neo.prepareSpecialRoom?.(room);
     normalizeChallengeLifecycleState(room);

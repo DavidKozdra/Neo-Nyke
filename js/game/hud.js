@@ -75,7 +75,10 @@
       if (Neo.currentRoom.type === 'ladder') {
         const ladderHint = Neo.getLadderControlHint ? Neo.getLadderControlHint() : Neo.getControlHint('interact', 'e');
         entries.push({
-          text: Neo.currentRoom.cleared ? `Ladder room cleared - press ${ladderHint} at ladder to continue` : 'Clear the ladder room',
+          text: Neo.currentRoom.cleared
+            ? Neo.multiplayerGameView?.active ? 'Stand on the ladder to ready up for the next floor'
+              : `Ladder room cleared - press ${ladderHint} at ladder to continue`
+            : 'Clear the ladder room',
           state: Neo.currentRoom.cleared ? 'done' : 'warn',
         });
       }
@@ -860,6 +863,9 @@
           ? `${promptHint}  ${specialChoiceAction}`
           : 'Approach a pictured choice';
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
+      } else if (isLadder && Neo.multiplayerGameView?.active) {
+        // The party readiness panel owns network ladder instructions.
+        Neo.ui.interactPrompt.classList.add('hidden');
       } else if (isLadder) {
         const ladderHint = Neo.getLadderControlHint?.() || shopHint;
         Neo.ui.interactPrompt.textContent = inputMode === 'touch'

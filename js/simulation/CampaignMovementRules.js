@@ -4,13 +4,14 @@
     ? require('koz-engine-lib/Rendering3D/cameraRig.js')
     : root.KozEngine?.Rendering3D?.cameraRig;
   const moveEffect = typeof require === 'function' ? require('./SharedMoveEffectSystem.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(status, cameraRig, moveEffect);
+  const roomInterior = typeof require === 'function' ? require('./SharedRoomInteriorSystem.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(status, cameraRig, moveEffect, roomInterior);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status, cameraRig, moveEffect) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status, cameraRig, moveEffect, roomInterior) {
   'use strict';
 
   // Extracted verbatim from the campaign's former local-only movement path.
@@ -27,6 +28,11 @@
     return Math.abs(next) < 4 ? 0 : next;
   }
 
+  function advanceCampaignMovementTimer(seconds, dt) {
+    const remaining = Math.max(0, Number(seconds || 0) - Math.max(0, Number(dt) || 0));
+    return remaining < 1e-9 ? 0 : remaining;
+  }
+
   // Canonical movement adapter for both the offline campaign and every online
   // player slot. Raw controls use screen-style axes (W/up is negative Y). In
   // first-person 3D, forward follows the camera yaw and A/D strafe across it.
@@ -34,6 +40,7 @@
     let x = Number(moveX) || 0;
     let y = Number(moveY) || 0;
     const magnitude = Math.hypot(x, y);
+    if (magnitude < 0.1) return { moveX: 0, moveY: 0 };
     if (magnitude > 1) {
       x /= magnitude;
       y /= magnitude;
@@ -64,10 +71,68 @@
     return { ok: true, angle: direction, magnitude: resistedForce, vx: entity.vx, vy: entity.vy };
   }
 
+  // The campaign controller, authority and predictor all use this operation.
+  // In particular, stun damps existing knockback; it does not use the ordinary
+  // stop response (which would erase the impulse in a single 20 Hz tick).
+  function applyCampaignPlayerVelocity(player, input, dt, options = {}) {
+    if (options.stunned) {
+      const friction = Math.pow(0.84, Math.max(0, Number(dt) || 0) * 60);
+      player.vx = Number(player.vx || 0) * friction;
+      player.vy = Number(player.vy || 0) * friction;
+    } else if (options.dashing) {
+      player.vx = Number(options.dashVx || 0);
+      player.vy = Number(options.dashVy || 0);
+    } else {
+      player.vx = applyResponsiveVelocity(player.vx, Number(input.moveX || 0) * options.speed, dt);
+      player.vy = applyResponsiveVelocity(player.vy, Number(input.moveY || 0) * options.speed, dt);
+    }
+    return player;
+  }
+
+  function getCampaignPlayerSlowMultiplier(player) {
+    return status.getCampaignSlowMultiplier?.(
+      status.getCampaignStatusStacks?.(player, 'slow') || 0,
+      Number(player?.itemStats?.negativeStatusMultiplier ?? 1),
+    ) ?? 1;
+  }
+
+  function advanceCampaignPlayerMovement(player, input, dt, floorState = {}, currentTick = 0, options = {}) {
+    if (player.downed || player.disconnected) {
+      player.vx = 0;
+      player.vy = 0;
+      return { desiredX: player.x, desiredY: player.y };
+    }
+    const stunned = Number(currentTick) < Number(player.stunnedUntilTick || 0);
+    const dashing = !stunned && isCampaignPlayerDashing(player, currentTick);
+    applyCampaignPlayerVelocity(player, resolveCampaignMovementInput(input.moveX, input.moveY), dt, {
+      stunned, dashing, dashVx: player.dashVx, dashVy: player.dashVy,
+      speed: getCampaignPlayerMovementSpeed(player, currentTick),
+    });
+    if (stunned || (!dashing && Number(player.dashUntilTick || 0))) {
+      player.dashUntilTick = 0;
+      player.dashVx = 0;
+      player.dashVy = 0;
+    }
+    const room = floorState.layout?.rooms?.find(candidate => candidate.id === player.roomId);
+    const doors = options.roomLocked ? {} : (room?.doors || {});
+    const obstacles = roomInterior.getRoomObstacles(room);
+    const walls = roomInterior.getCampaignRoomWallRects(floorState, doors);
+    roomInterior.moveCampaignCircle(player, dt, {
+      bounds: roomInterior.getCampaignRoomMoveBounds(player, floorState, doors),
+      escapeBounds: roomInterior.getCampaignRoomMoveBounds(player, floorState),
+      slowMultiplier: getCampaignPlayerSlowMultiplier(player),
+      isBlocked: (x, y, radius) => walls.some(wall => roomInterior.circleIntersectsRoomObstacle(x, y, radius, {
+        ...wall, x: wall.x + wall.w / 2, y: wall.y + wall.h / 2,
+      })) || obstacles.some(obstacle => roomInterior.circleIntersectsRoomObstacle(x, y, radius, obstacle)),
+    });
+    player.aimDirection = Number(input.aimDirection) || 0;
+    return { exitDirection: roomInterior.getCampaignRoomExitDirection(player, floorState, doors) };
+  }
+
   function getCampaignPlayerMovementSpeed(player, currentTick = 0) {
     const statusUntil = player?.statusUntilTick || {};
-    const timedMultiplier = Number(currentTick) < Number(statusUntil.mooggy_zoomies || 0) ? 5
-      : (moveEffect.getCampaignTurtlePowerUpMultiplier?.(player, currentTick)
+    const timedMultiplier = (Number(currentTick) < Number(statusUntil.mooggy_zoomies || 0) ? 5 : 1)
+      * (moveEffect.getCampaignTurtlePowerUpMultiplier?.(player, currentTick)
         ?? (Number(currentTick) < Number(statusUntil.turtle_powerup || 0) ? 1.3 : 1));
     const flightBoost = Number(currentTick) < Number(statusUntil.flying_unhitable || 0) ? 2 : 1;
     // God mode (all relics collected) boosts move speed 1.25x for its window.
@@ -79,11 +144,7 @@
       * flightBoost
       * godBoost
       * laserSlow
-      * Math.max(0.1, Number(player?.itemStats?.moveSpeedMultiplier || 1))
-      * (status.getCampaignSlowMultiplier?.(
-        status.getCampaignStatusStacks?.(player, 'slow') || 0,
-        Number(player?.itemStats?.negativeStatusMultiplier || 1),
-      ) ?? 1);
+      * Math.max(0, Number(player?.itemStats?.moveSpeedMultiplier ?? 1));
   }
 
   // A dashing player glides at its locked dash velocity (dashVx/dashVy) instead
@@ -171,8 +232,12 @@
 
   return {
     applyResponsiveVelocity,
+    advanceCampaignMovementTimer,
     resolveCampaignMovementInput,
     applyCampaignImpulse,
+    applyCampaignPlayerVelocity,
+    getCampaignPlayerSlowMultiplier,
+    advanceCampaignPlayerMovement,
     getCampaignPlayerMovementSpeed,
     isCampaignPlayerDashing,
     applyCampaignDashVelocity,

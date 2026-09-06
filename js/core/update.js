@@ -491,13 +491,12 @@ export function loop(timestamp) {
       Neo.player.dashTime = 0;
       Neo.player.dashX = 0;
       Neo.player.dashY = 0;
-      const friction = Math.pow(0.84, dt * 60);
-      Neo.player.vx *= friction;
-      Neo.player.vy *= friction;
+      simulationApi.applyCampaignPlayerVelocity(Neo.player, {}, dt, { stunned: true });
     } else if (Neo.player.dashTime > 0) {
-      Neo.player.dashTime = Math.max(0, Neo.player.dashTime - dt);
-      Neo.player.vx = Neo.player.dashX;
-      Neo.player.vy = Neo.player.dashY;
+      Neo.player.dashTime = simulationApi.advanceCampaignMovementTimer(Neo.player.dashTime, dt);
+      simulationApi.applyCampaignPlayerVelocity(Neo.player, {}, dt, {
+        dashing: true, dashVx: Neo.player.dashX, dashVy: Neo.player.dashY,
+      });
       Neo.player.inv = Math.max(Neo.player.inv, 0.12);
       if (Neo.player.dashTime <= 0) {
         Neo.player.dashX = 0;
@@ -510,8 +509,7 @@ export function loop(timestamp) {
       const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
       const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
       const targetSpeed = (Neo.PLAYER_BASE_MOVE_SPEED || 228) * flightBoost * zoomiesBoost * powerUpBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
-      Neo.player.vx = Neo.applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
-      Neo.player.vy = Neo.applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
+      simulationApi.applyCampaignPlayerVelocity(Neo.player, { moveX, moveY }, dt, { speed: targetSpeed });
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(12, -12, 'fx'), y: Neo.player.y + Neo.rand(10, -10, 'fx'), life: 0.2, c: '#ffd1ea' });
       }
@@ -533,7 +531,7 @@ export function loop(timestamp) {
     Neo.updateFirstRunTutorialProgress(dt);
 
     if (Neo.player.cowardsWayTime > 0) {
-      Neo.player.cowardsWayTime = Math.max(0, Neo.player.cowardsWayTime - dt);
+      Neo.player.cowardsWayTime = simulationApi.advanceCampaignMovementTimer(Neo.player.cowardsWayTime, dt);
       Neo.player.inv = Math.max(Neo.player.inv, 0.2);
       if (Neo.nextRandom('fx') < 0.4) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(16, -16, 'fx'), y: Neo.player.y + Neo.rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
@@ -541,13 +539,13 @@ export function loop(timestamp) {
     }
     advancePrincessFlightState(Neo.player, dt);
     if (Neo.player.mooggyZoomiesTime > 0) {
-      Neo.player.mooggyZoomiesTime = Math.max(0, Neo.player.mooggyZoomiesTime - dt);
+      Neo.player.mooggyZoomiesTime = simulationApi.advanceCampaignMovementTimer(Neo.player.mooggyZoomiesTime, dt);
       if (Neo.nextRandom('fx') < 0.45) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(18, -18, 'fx'), y: Neo.player.y + Neo.rand(18, -18, 'fx'), life: 0.16, c: '#a0ffcc' });
       }
     }
     if (Neo.player.deathBallBuffTime > 0) {
-      Neo.player.deathBallBuffTime = Math.max(0, Neo.player.deathBallBuffTime - dt);
+      Neo.player.deathBallBuffTime = simulationApi.advanceCampaignMovementTimer(Neo.player.deathBallBuffTime, dt);
       if (Neo.nextRandom('fx') < 0.4) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(18, -18, 'fx'), y: Neo.player.y + Neo.rand(18, -18, 'fx'), life: 0.16, c: '#7dffb0' });
       }
@@ -555,7 +553,7 @@ export function loop(timestamp) {
 
     Neo.player.inv = Math.max(0, Neo.player.inv - dt);
     Neo.player.warpHideTime = Math.max(0, Number(Neo.player.warpHideTime || 0) - dt);
-    Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
+    Neo.player.stun = simulationApi.advanceCampaignMovementTimer(Neo.player.stun, dt);
     if (Neo.player.swing > 0) {
       Neo.player.swing = Math.max(0, Neo.player.swing - dt);
       if (Neo.player.swing === 0) {

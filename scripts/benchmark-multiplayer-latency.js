@@ -22,6 +22,8 @@ const {
   predictPosition,
 } = require('../js/rendering/NetworkGameView');
 
+const { createCampaignMovementSystem } = require('../js/simulation/CampaignSimulation');
+const benchmarkMovementSystem = createCampaignMovementSystem({ isRoomLocked: () => true });
 const FIXED_DELTA_SECONDS = 1 / 20;
 const SNAPSHOT_INTERVAL_TICKS = 2;
 
@@ -183,9 +185,9 @@ function addBusyRoomState(authority, roomIds) {
 
 function advanceBusyState(authority, playerId, input) {
   const state = authority.simulation.state;
+  benchmarkMovementSystem({ state, inputs: { [playerId]: input }, fixedDelta: FIXED_DELTA_SECONDS });
   state.tick += 1;
-  const player = state.players[playerId];
-  state.players[playerId] = predictPosition(player, input, FIXED_DELTA_SECONDS, state.floorState, state.tick);
+  authority.lastSimulatedInput = { ...authority.lastProcessedInput };
   for (const collection of ['enemies', 'projectiles']) {
     Object.values(state[collection]).forEach(entity => {
       entity.x += entity.vx * FIXED_DELTA_SECONDS;
@@ -222,6 +224,7 @@ async function createHarness(options) {
   clock.runAll();
 
   const session = {
+    client,
     get status() { return client.status; },
     snapshot: () => ({
       status: client.status,

@@ -20,6 +20,25 @@ function dashRun() {
 }
 
 describe('dash is a velocity glide, not a teleport', () => {
+  test('casting a dash gives the same four movement steps as the campaign', () => {
+    const simulation = dashRun();
+    const player = simulation.state.players.p1;
+    const room = simulation.state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.structures = [];
+    room.destructibles = [];
+    simulation.updateGame({ p1: { actions: [{ action: 'DASH', abilityId: 'dash', aimDirection: 0 }] } }, FIXED_DELTA_SECONDS);
+    const startX = player.x;
+    const dashSpeed = player.dashVx;
+    expect(dashSpeed).toBeGreaterThan(500);
+    for (let index = 0; index < 4; index += 1) {
+      simulation.updateGame({ p1: {} }, FIXED_DELTA_SECONDS);
+      expect(player.x).toBeCloseTo(startX + (index + 1) * dashSpeed * FIXED_DELTA_SECONDS);
+    }
+    simulation.updateGame({ p1: {} }, FIXED_DELTA_SECONDS);
+    expect(player.x).toBeCloseTo(startX + 4 * dashSpeed * FIXED_DELTA_SECONDS);
+    expect(player.dashUntilTick).toBe(0);
+  });
+
   test('a dashing player glides at its locked velocity and ignores input', () => {
     const simulation = dashRun();
     const player = simulation.state.players.p1;
