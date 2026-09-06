@@ -122,6 +122,32 @@ describe('local movement presentation under snapshots', () => {
     expect(view._renderedPlayers(now).p1.x).toBeCloseTo(stopped.x, 10);
   });
 
+  test('a small correction cannot move the hero after movement is released', () => {
+    const view = setup({ moveSpeed: 1e-9 });
+    const event = { code: 'KeyD', key: 'd', preventDefault() {} };
+    view._onKey(event, true);
+    view.reconciliationOffset = { x: 12, y: 0, startedAt: now, durationMs: 50 };
+
+    view._onKey(event, false);
+    const releasedX = view._renderedPlayers(now).p1.x;
+    now += 500;
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(releasedX, 10);
+
+    view._onSnapshot({
+      playerId: 'p1', snapshotSequence: 1, lastAcknowledgedInput: 0,
+      gameState: { tick: 21, floorNumber: 1, floorState: geometry, players: { p1: player({ x: 455, moveSpeed: 1e-9 }) } },
+    });
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(releasedX, 10);
+
+    view._onKey(event, true);
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(releasedX, 10);
+    now += 80;
+    expect(view._renderedPlayers(now).p1.x).toBeLessThan(releasedX);
+    now += 100;
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(455, 8);
+    expect(view.reconciliationOffset).toBeNull();
+  });
+
   test.each([30, 60, 120, 144])('renders a linear campaign step at %s fps', fps => {
     const view = setup({ vx: 228 });
     view.keys.add('KeyD');
@@ -227,7 +253,7 @@ describe('local movement presentation under snapshots', () => {
     // cause the old latency-sized slide or reverse a held direction.
     expect(maxBackwardStep).toBeLessThan(0.1);
     expect(maxTravelAfterRelease).toBeLessThan(4);
-    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(state.players.p1.x, 8);
+    expect(view.localPredictedPlayer.x).toBeCloseTo(state.players.p1.x, 8);
   });
 
   test('an acknowledged release retires older movement even when the clock estimate trails it', () => {

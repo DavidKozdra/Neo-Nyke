@@ -61,6 +61,36 @@
     };
   }
 
+  function resolveCampaignControlAim(player, enemies = [], options = {}) {
+    if (!player) return null;
+    const control = options.inputMode === 'touch' ? options.touch
+      : options.inputMode === 'gamepad' ? options.gamepad : null;
+    if (!control?.active) return null;
+    const explicitAim = options.inputMode === 'gamepad' && control.hasAim;
+    let nearest = null;
+    let bestDistanceSquared = Infinity;
+    if (!explicitAim) {
+      for (const enemy of enemies) {
+        if (!enemy || enemy.dead
+          || (player.roomId && enemy.roomId && player.roomId !== enemy.roomId)) continue;
+        const distanceSquared = (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2;
+        if (distanceSquared < bestDistanceSquared) {
+          nearest = enemy;
+          bestDistanceSquared = distanceSquared;
+        }
+      }
+    }
+    const aimX = explicitAim ? Number(control.aimX || 0) * 200
+      : nearest ? nearest.x - player.x : Number(control.lastAimX || 0) * 200;
+    const aimY = explicitAim ? Number(control.aimY || 0) * 200
+      : nearest ? nearest.y - player.y : Number(control.lastAimY || 0) * 200;
+    return {
+      x: Number(player.x || 0) + aimX,
+      y: Number(player.y || 0) + aimY,
+      aimDirection: Math.atan2(aimY, aimX),
+    };
+  }
+
   function applyCampaignImpulse(entity, angle, magnitude, resistance = 0) {
     const direction = Number(angle);
     const force = Number(magnitude);
@@ -234,6 +264,7 @@
     applyResponsiveVelocity,
     advanceCampaignMovementTimer,
     resolveCampaignMovementInput,
+    resolveCampaignControlAim,
     applyCampaignImpulse,
     applyCampaignPlayerVelocity,
     getCampaignPlayerSlowMultiplier,

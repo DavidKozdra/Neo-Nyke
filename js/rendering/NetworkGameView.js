@@ -60,6 +60,13 @@
   // continuous across that entire interval instead of freezing and jumping.
   const MAX_REMOTE_EXTRAPOLATION_MS = 300;
   const MAX_SMOOTH_RECONCILIATION_PX = 128;
+  // A key release can land on opposite sides of an authority tick when link
+  // jitter differs between keydown and keyup. Letting that one-tick correction
+  // decay while input is neutral looks like fresh movement after release.
+  // Preserve only small release offsets; larger corrections still restore the
+  // authoritative location immediately through the normal reconciliation path.
+  const MAX_IDLE_RELEASE_CORRECTION_PX = 24;
+  const MIN_RESUMED_RECONCILIATION_MS = 160;
   const MAX_LOCAL_PREDICTION_CATCH_UP_MS = 250;
   const CAMPAIGN_HUD_LAYER_IDS = Object.freeze([
     'hud', 'hudLower', 'actionBar', 'equipmentSlots', 'playerStats',
@@ -101,6 +108,17 @@
     ['KeyA', [-1, 0]], ['ArrowLeft', [-1, 0]],
     ['KeyD', [1, 0]], ['ArrowRight', [1, 0]],
   ]);
+  const CAMPAIGN_SWING_ATTACK_MODES = new Set([
+    'sweep', 'double_sweep', 'charged_sweep', 'campaign_slash',
+    'divine_combo', 'sweep_projectile', 'smite', 'antony_bite',
+  ]);
+
+  function isCampaignSwingAttack(data = {}, player = {}) {
+    const weaponKey = data.weaponKey || data.attackKind || player.actionKind || player.equippedWeapon;
+    const mode = data.attackMode || player.actionMode
+      || combatSystem.getCampaignWeaponAttack?.(weaponKey, player.characterKey)?.mode;
+    return CAMPAIGN_SWING_ATTACK_MODES.has(mode);
+  }
 
   function configuredKeyboardBindings() {
     return { ...DEFAULT_KEYBOARD_BINDINGS, ...(root.NeoSettings?.getBindings?.() || {}) };
@@ -631,6 +649,8 @@
       this.lastProcessedSnapshotSequence = -1;
       this.stateEpoch = -1;
       this.reconciliationOffset = null;
+      this.preserveIdleReconciliation = false;
+      this.idleReconciliationAnchor = null;
       this.diagnosticsVisible = false;
       this.diagnosticsElement = null;
       this.lastDiagnosticsRenderAt = 0;
@@ -1006,6 +1026,8 @@
       this.pendingInputHistory = [];
       this.localPredictionTick = 0;
       this.reconciliationOffset = null;
+      this.preserveIdleReconciliation = false;
+      this.idleReconciliationAnchor = null;
       this.lastFloorNumber = 0;
       this.floorTransitionStartedAt = 0;
       this.lastTransitionSequence = 0;
@@ -1198,6 +1220,8 @@
       this.lastProcessedSnapshotSequence = -1;
       this.presentationElapsedSeconds = null;
       this.reconciliationOffset = null;
+      this.preserveIdleReconciliation = false;
+      this.idleReconciliationAnchor = null;
       this.lastFloorNumber = 0;
       this.lastTransitionSequence = 0;
       this.seenGameplayEvents.clear();
@@ -1223,6 +1247,56 @@
         vx: Number(player.vx || 0) + (next.vx - Number(player.vx || 0)) * fraction,
         vy: Number(player.vy || 0) + (next.vy - Number(player.vy || 0)) * fraction,
       };
+    }
+
+    _reconciliationRemaining(now, baseX, baseY) {
+      const offset = this.reconciliationOffset;
+      if (!offset) return 0;
+      const durationMs = Math.max(1, Number(offset.durationMs) || INPUT_INTERVAL_MS);
+      if (offset.holdWhileIdle) {
+        if (this.preserveIdleReconciliation) {
+          // A relative offset would still drift whenever snapshot replay moves
+          // the prediction beneath it. Rebase to the exact release point.
+          const anchorX = Number(offset.anchorX ?? this.idleReconciliationAnchor?.x ?? baseX ?? 0);
+          const anchorY = Number(offset.anchorY ?? this.idleReconciliationAnchor?.y ?? baseY ?? 0);
+          offset.x = anchorX - Number(baseX || 0);
+          offset.y = anchorY - Number(baseY || 0);
+          return 1;
+        }
+        // Movement resumed. Retire the held presentation difference gradually
+        // while ordinary movement provides visual context for the correction.
+        offset.x = Number(offset.anchorX ?? baseX ?? 0) - Number(baseX || 0);
+        offset.y = Number(offset.anchorY ?? baseY ?? 0) - Number(baseY || 0);
+        offset.holdWhileIdle = false;
+        delete offset.anchorX;
+        delete offset.anchorY;
+        offset.startedAt = Number(now || 0);
+        offset.durationMs = Math.max(durationMs, MIN_RESUMED_RECONCILIATION_MS);
+        return 1;
+      }
+
+      const elapsed = Math.max(0, Number(now || 0) - Number(offset.startedAt || 0));
+      const remaining = clamp(1 - elapsed / durationMs, 0, 1);
+      if (remaining <= 0) return 0;
+
+      if (this.preserveIdleReconciliation) {
+        const remainingDistance = Math.hypot(Number(offset.x || 0), Number(offset.y || 0)) * remaining;
+        if (remainingDistance <= MAX_IDLE_RELEASE_CORRECTION_PX) {
+          // Freeze the offset at the exact point visible on release. Incoming
+          // snapshots may rebuild it, but the local hero remains stationary.
+          offset.x = Number(offset.x || 0) * remaining;
+          offset.y = Number(offset.y || 0) * remaining;
+          offset.anchorX = Number(this.idleReconciliationAnchor?.x ?? (Number(baseX || 0) + offset.x));
+          offset.anchorY = Number(this.idleReconciliationAnchor?.y ?? (Number(baseY || 0) + offset.y));
+          offset.startedAt = Number(now || 0);
+          offset.durationMs = Math.max(durationMs, MIN_RESUMED_RECONCILIATION_MS);
+          offset.holdWhileIdle = true;
+          return 1;
+        }
+        this.preserveIdleReconciliation = false;
+        this.idleReconciliationAnchor = null;
+      }
+      return remaining;
     }
 
     _localPredictionPreview() {
@@ -1323,6 +1397,8 @@
         this.lastLocalPredictionAt = receivedAt;
         this.localPredictionAccumulatorMs = 0;
         this.reconciliationOffset = null;
+        this.preserveIdleReconciliation = false;
+        this.idleReconciliationAnchor = null;
         return;
       }
       // A reconnect (or a session handoff) can change playerId while this
@@ -1337,6 +1413,8 @@
         this.lastLocalPredictionAt = receivedAt;
         this.localPredictionAccumulatorMs = 0;
         this.reconciliationOffset = null;
+        this.preserveIdleReconciliation = false;
+        this.idleReconciliationAnchor = null;
         return;
       }
       if (!this.localPredictedPlayer) {
@@ -1381,10 +1459,13 @@
       let previousPresentedX = Number(previousPredicted?.x || 0);
       let previousPresentedY = Number(previousPredicted?.y || 0);
       if (this.reconciliationOffset) {
-        const elapsed = Math.max(0, receivedAt - this.reconciliationOffset.startedAt);
-        const remaining = clamp(1 - elapsed / this.reconciliationOffset.durationMs, 0, 1);
+        const remaining = this._reconciliationRemaining(receivedAt, previousPresentedX, previousPresentedY);
         previousPresentedX += this.reconciliationOffset.x * remaining;
         previousPresentedY += this.reconciliationOffset.y * remaining;
+      }
+      if (this.preserveIdleReconciliation && this.idleReconciliationAnchor) {
+        previousPresentedX = this.idleReconciliationAnchor.x;
+        previousPresentedY = this.idleReconciliationAnchor.y;
       }
       // Server ticks alone cannot acknowledge input: a delayed snapshot may
       // have advanced past our tick while our direction change is still on the
@@ -1459,9 +1540,13 @@
           };
         } else {
           this.reconciliationOffset = null;
+          this.preserveIdleReconciliation = false;
+          this.idleReconciliationAnchor = null;
         }
       } else {
         this.reconciliationOffset = null;
+        this.preserveIdleReconciliation = false;
+        this.idleReconciliationAnchor = null;
       }
       this.localPredictedPlayer = reconciled;
       this.localPredictionTick = replayTick;
@@ -1510,7 +1595,7 @@
       const resolvedMovementAction = movementAction || arrowAction;
       if (resolvedMovementAction) {
         event.preventDefault();
-        const token = `action:${resolvedMovementAction}`;
+        const token = `action:${resolvedMovementAction}:${event.code || key}`;
         if (pressed) this.keys.add(token); else this.keys.delete(token);
         root.NeoSettings?.noteInputMode?.('keyboard');
         if (!event.repeat) this._sendInput({ immediate: true });
@@ -1693,7 +1778,7 @@
 
     _attack() {
       if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
-      this._syncPointerAim();
+      this._syncLocalAim();
       if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       if (!this._localAttackReady()) return;
       try {
@@ -1725,7 +1810,7 @@
 
     _useSlot(slot) {
       if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
-      this._syncPointerAim();
+      this._syncLocalAim();
       if (slot === 'laser' && this.neo.beamStruggle?.active) {
         this.session.sendAction('BEAM_MASH', this.aimDirection);
         return;
@@ -2140,11 +2225,15 @@
     _predictLocalAttack() {
       const player = this.localPredictedPlayer;
       if (!player) return;
+      const weaponKey = player.weaponKey || player.equippedWeapon || player.actionKind || 'melee';
+      const attack = combatSystem.getCampaignWeaponAttack?.(weaponKey, player.characterKey);
       return this._predictCombatEvent('PLAYER_ATTACKED', {
         playerId: player.id,
         roomId: player.roomId,
-        weaponKey: player.weaponKey || player.equippedWeapon || player.actionKind || 'melee',
-        attackKind: player.weaponKey || player.equippedWeapon || player.actionKind || 'melee',
+        characterKey: player.characterKey,
+        weaponKey,
+        attackKind: weaponKey,
+        attackMode: attack?.mode || player.actionMode,
         aimDirection: this.aimDirection,
         originX: Number(player.x || 0),
         originY: Number(player.y || 0),
@@ -2483,11 +2572,25 @@
       }
     }
 
-    _syncPointerAim(player = this._localPredictionPreview()) {
-      if (!player || !this.canvas) return;
+    _syncLocalAim(player = this._localPredictionPreview()) {
+      if (!player) return;
       const inputMode = root.NeoSettings?.getEffectiveInputMode?.()
         || (root.NeoTouch?.active ? 'touch' : root.NeoGamepad?.[0]?.active ? 'gamepad' : 'keyboard');
-      if (inputMode !== 'keyboard') return;
+      if (inputMode !== 'keyboard' && this.neo.getFirstPersonYaw?.() == null) {
+        const target = movementRules.resolveCampaignControlAim(player, Object.values(this.currentSample?.state?.enemies || {}), {
+          inputMode, touch: root.NeoTouch, gamepad: root.NeoGamepad?.[0],
+        });
+        if (target) {
+          this.aimDirection = target.aimDirection;
+          this.neo.mouse = this.neo.mouse || {};
+          Object.assign(this.neo.mouse, {
+            worldX: target.x, worldY: target.y,
+            x: target.x - this.camera.x, y: target.y - this.camera.y,
+          });
+        }
+        return;
+      }
+      if (!this.canvas) return;
       this.aimDirection = this.neo.updatePointerAimWorld?.({
         canvas: this.canvas, camera: this.camera, player, splitScreen: false,
       }) ?? this.aimDirection;
@@ -2520,13 +2623,17 @@
         'action:up': [0, -1], 'action:down': [0, 1],
         'action:left': [-1, 0], 'action:right': [1, 0],
       };
+      const heldDirections = new Set();
       this.keys.forEach(code => {
-        const direction = actionDirections[code] || MOVEMENT_KEYS.get(code);
-        if (direction) {
-          moveX += direction[0];
-          moveY += direction[1];
-        }
+        const action = code.split(':').slice(0, 2).join(':');
+        const direction = actionDirections[action] || MOVEMENT_KEYS.get(code);
+        if (direction) heldDirections.add(`${direction[0]},${direction[1]}`);
       });
+      // The campaign treats each direction as held if either of its keys is
+      // down. Distinct physical keys must release independently and must not
+      // double a direction's strength when WASD and arrows overlap.
+      moveX = Number(heldDirections.has('1,0')) - Number(heldDirections.has('-1,0'));
+      moveY = Number(heldDirections.has('0,1')) - Number(heldDirections.has('0,-1'));
       const normalizedPad = root.NeoGamepad?.[0];
       const gamepads = root.navigator?.getGamepads?.();
       const gamepad = normalizedPad?.connected || normalizedPad?.active
@@ -2637,9 +2744,7 @@
       this.touchDashHeld = current.dash;
       this.touchMeleeHeld = current.slash;
       if (touch) touch.queuedActions = {};
-      if (touch?.active && Math.hypot(Number(touch.lastAimX || 0), Number(touch.lastAimY || 0)) > 0.2) {
-        this.aimDirection = Math.atan2(Number(touch.lastAimY || 0), Number(touch.lastAimX || 0));
-      }
+      if (touch?.active) this._syncLocalAim();
       if (!this._isInputBlocked() && !this.localPredictedPlayer?.downed) {
         if (queued.slash || current.slash && !this.previousTouchActions.slash) this._attack();
         if (queued.laser || current.laser && !this.previousTouchActions.laser) this._useSlot('laser');
@@ -2803,7 +2908,7 @@
       // Input timers and action edges can fall between render frames. Refresh
       // prediction and pointer aim before either actions or input are sampled.
       this._advanceLocalPrediction(now);
-      this._syncPointerAim();
+      this._syncLocalAim();
       if (syncHeldSources && !forceNeutral) {
         this._syncGamepadActions();
         this._syncTouchActions();
@@ -2840,6 +2945,9 @@
       const movementChanged = !this.lastLocalPredictionInput
         || input.moveX !== Number(this.lastLocalPredictionInput.moveX || 0)
         || input.moveY !== Number(this.lastLocalPredictionInput.moveY || 0);
+      const wasMovingLocally = !!(Number(this.lastLocalPredictionInput?.moveX || 0)
+        || Number(this.lastLocalPredictionInput?.moveY || 0));
+      const isMovingLocally = !!(Number(input.moveX || 0) || Number(input.moveY || 0));
       const reversesDirection = input.moveX * Number(this.lastLocalPredictionInput.moveX || 0) < 0
         || input.moveY * Number(this.lastLocalPredictionInput.moveY || 0) < 0;
       // Preserve a displayed partial step at discrete edges. Ordinary analog
@@ -2849,6 +2957,42 @@
         && this.localPredictionAccumulatorMs > 0) {
         this._commitLocalPrediction(this.localPredictionAccumulatorMs);
         this.localPredictionAccumulatorMs = 0;
+      }
+      if (wasMovingLocally && !isMovingLocally) {
+        this.preserveIdleReconciliation = true;
+        const preview = this._localPredictionPreview();
+        if (preview) {
+          let presentedX = Number(preview.x || 0);
+          let presentedY = Number(preview.y || 0);
+          if (this.reconciliationOffset) {
+            const remaining = this._reconciliationRemaining(now, presentedX, presentedY);
+            presentedX += Number(this.reconciliationOffset.x || 0) * remaining;
+            presentedY += Number(this.reconciliationOffset.y || 0) * remaining;
+          }
+          if (this.preserveIdleReconciliation) {
+            this.idleReconciliationAnchor = { x: presentedX, y: presentedY };
+            if (this.reconciliationOffset?.holdWhileIdle) {
+              this.reconciliationOffset.anchorX = presentedX;
+              this.reconciliationOffset.anchorY = presentedY;
+            }
+          }
+        }
+      } else if (isMovingLocally) {
+        if (this.preserveIdleReconciliation && this.idleReconciliationAnchor && !this.reconciliationOffset) {
+          const preview = this._localPredictionPreview();
+          const offsetX = Number(this.idleReconciliationAnchor.x) - Number(preview?.x || 0);
+          const offsetY = Number(this.idleReconciliationAnchor.y) - Number(preview?.y || 0);
+          const distance = Math.hypot(offsetX, offsetY);
+          if (distance > 0.01 && distance <= MAX_IDLE_RELEASE_CORRECTION_PX) {
+            this.reconciliationOffset = {
+              x: offsetX, y: offsetY, anchorX: this.idleReconciliationAnchor.x,
+              anchorY: this.idleReconciliationAnchor.y, holdWhileIdle: true,
+              startedAt: now, durationMs: MIN_RESUMED_RECONCILIATION_MS,
+            };
+          }
+        }
+        this.preserveIdleReconciliation = false;
+        this.idleReconciliationAnchor = null;
       }
       // Local controls keep responding even if a send fails during reconnect.
       this.lastLocalPredictionInput = { ...input };
@@ -3020,11 +3164,23 @@
         this._advanceLocalPrediction(now);
         const local = this._localPredictionPreview();
         if (this.reconciliationOffset) {
-          const elapsed = Math.max(0, now - this.reconciliationOffset.startedAt);
-          const remaining = clamp(1 - elapsed / this.reconciliationOffset.durationMs, 0, 1);
+          const remaining = this._reconciliationRemaining(now, local.x, local.y);
           local.x += this.reconciliationOffset.x * remaining;
           local.y += this.reconciliationOffset.y * remaining;
           if (remaining <= 0) this.reconciliationOffset = null;
+        }
+        if (this.preserveIdleReconciliation && this.idleReconciliationAnchor) {
+          const distance = Math.hypot(
+            Number(local.x || 0) - this.idleReconciliationAnchor.x,
+            Number(local.y || 0) - this.idleReconciliationAnchor.y,
+          );
+          if (distance <= MAX_IDLE_RELEASE_CORRECTION_PX) {
+            local.x = this.idleReconciliationAnchor.x;
+            local.y = this.idleReconciliationAnchor.y;
+          } else {
+            this.preserveIdleReconciliation = false;
+            this.idleReconciliationAnchor = null;
+          }
         }
         if (this.pendingBeamPresentation && now >= this.pendingBeamPresentation.untilAt) this.pendingBeamPresentation = null;
         // The release latch only suppresses the *predicted* beam after the
@@ -3172,31 +3328,48 @@
         if (!livePlayerIds.has(playerId)) this.presentationPlayerActors.delete(playerId);
       });
       const projectedPlayerSlots = Object.values(players || {}).map(player => {
+        const authoritativeAttackEvent = this.combatEffects.find(effect => (
+          effect.data?.playerId === player.id
+          && effect.eventType === 'PLAYER_ATTACKED'
+          && now - Number(effect.startedAt || 0) <= 220
+        ));
         const authoritativeMeleeEvent = this.combatEffects.find(effect => (
           effect.data?.playerId === player.id
           && ['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP'].includes(effect.eventType)
           && now - Number(effect.startedAt || 0) <= 220
+          && isCampaignSwingAttack(effect.data, player)
         ));
         // Ability and dash events have their own presentation. Routing every
         // ability through the shared melee swing made a dash look like an M1.
-        const attacking = !!authoritativeMeleeEvent
-          || (player.action === 'attack' && serverTick - Number(player.actionTick || 0) <= 4);
+        const stateAttackActive = player.action === 'attack' && serverTick - Number(player.actionTick || 0) <= 4;
+        const swinging = !!authoritativeMeleeEvent
+          || (stateAttackActive && isCampaignSwingAttack({}, player));
+        const recoiling = !!authoritativeAttackEvent || stateAttackActive;
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
         const actor = this.presentationPlayerActors.get(player.id) || {};
         const presentationClock = Number(this.neo.gameElapsedTime || 0);
         const meleeActionKey = authoritativeMeleeEvent?.eventId
-          || (attacking ? `${Number(player.actionTick || 0)}:${player.actionKind || player.actionMode || 'attack'}` : '');
-        if (attacking && actor._networkMeleeActionKey !== meleeActionKey) {
+          || (swinging ? `${Number(player.actionTick || 0)}:${player.actionKind || player.actionMode || 'attack'}` : '');
+        if (swinging && actor._networkMeleeActionKey !== meleeActionKey) {
           const observedAge = authoritativeMeleeEvent
             ? Math.max(0, now - Number(authoritativeMeleeEvent.startedAt || now)) / 1000
             : elapsed;
           actor._networkMeleeActionKey = meleeActionKey;
           actor._networkMeleeStartedAt = presentationClock - Math.min(activeSeconds, observedAge);
         }
-        const swingRemaining = attacking && Number.isFinite(actor._networkMeleeStartedAt)
+        const swingRemaining = swinging && Number.isFinite(actor._networkMeleeStartedAt)
           ? Math.max(0, activeSeconds - (presentationClock - actor._networkMeleeStartedAt))
           : 0;
+        const recoilActionKey = authoritativeAttackEvent?.eventId
+          || (recoiling ? `${Number(player.actionTick || 0)}:${player.actionKind || player.actionMode || 'attack'}` : '');
+        if (recoiling && actor._networkAttackActionKey !== recoilActionKey) {
+          const observedAge = authoritativeAttackEvent
+            ? Math.max(0, now - Number(authoritativeAttackEvent.startedAt || now)) / 1000
+            : elapsed;
+          actor._networkAttackActionKey = recoilActionKey;
+          actor._networkAttackStartedAt = presentationClock - Math.min(ARM_RECOIL_DURATION, observedAge);
+        }
         const spriteAction = player.action === 'attack' && player.actionKind === 'antony_bite'
           ? 'bite'
           : player.action === 'dash'
@@ -3264,8 +3437,8 @@
           // locally on fire. Nothing writes it here, so network heroes shot with
           // stiff arms. Derive the same countdown from the authority's action
           // tick so the shared renderer animates it exactly as in single player.
-          ...(attacking ? {
-            armRecoilUntil: actor._networkMeleeStartedAt + ARM_RECOIL_DURATION,
+          ...(recoiling ? {
+            armRecoilUntil: actor._networkAttackStartedAt + ARM_RECOIL_DURATION,
             armRecoilDuration: ARM_RECOIL_DURATION,
             armRecoilA: Number(player.aimDirection || 0),
             armRecoilFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
@@ -3324,6 +3497,11 @@
         Object.values(projectiles || {}),
         projectile => ({
           ...projectile,
+          // The compact authority record calls this field `type`; campaign's
+          // projectile renderer consumes `kind`. Preserve the authored visual
+          // identity for boss and rival projectiles at the adapter boundary.
+          kind: projectile.kind || projectile.type,
+          fromRival: !!projectile.fromRival || state?.enemies?.[projectile.ownerId]?.type === 'rival',
           r: Number(projectile.radius || 7),
           enemy: !!projectile.hostile,
           life: Math.max(0, Number(projectile.expiresTick || 0) - serverTick) / 20,
@@ -3676,7 +3854,7 @@
       // The campaign refreshes pointer-to-world aim after camera follow on
       // every frame. Keep the cursor, body/arm and transmitted aim aligned here
       // too; a stationary mouse must not leave an old world-space target behind.
-      this._syncPointerAim(localPlayer);
+      this._syncLocalAim(localPlayer);
       const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
       this.lastWorldTransform = transform;
       this.lastRenderedPlayerCount = Object.values(players).filter(player => player.roomId === visibleRoomId).length;

@@ -7525,6 +7525,7 @@
       state.projectiles[projectileId] = {
         id: projectileId,
         type: descriptor.kind || 'enemy_shot',
+        kind: descriptor.kind || 'enemy_shot',
         ownerId: enemy.id,
         hostile: true,
         roomId: enemy.roomId,
@@ -7804,6 +7805,7 @@
     };
     state.projectiles[projectileId] = {
       id: projectileId, type: options.type || 'mirror_shot', kind: options.kind || options.type || 'mirror_shot', ownerId: enemy.id, hostile: true, roomId: enemy.roomId,
+      fromRival: enemy.type === 'rival',
       x: Number.isFinite(Number(options.originX)) ? Number(options.originX) : Number(enemy.x) + Math.cos(angle) * (Number(enemy.radius || 16) + 7),
       y: Number.isFinite(Number(options.originY)) ? Number(options.originY) : Number(enemy.y) + Math.sin(angle) * (Number(enemy.radius || 16) + 7),
       vx: Math.cos(angle) * speed * difficultySpeedMultiplier, vy: Math.sin(angle) * speed * difficultySpeedMultiplier, radius: Number(options.radius || 6),

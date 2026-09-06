@@ -345,40 +345,19 @@ export function loop(timestamp) {
     const _left  = _b ? _b.left  : 'a';
     const _down  = _b ? _b.down  : 's';
     const _up    = _b ? _b.up    : 'w';
-    const _getNearestEnemyForAim = (() => {
-      let cached = false;
-      let nearest = null;
-      return () => {
-        if (cached && nearest && !nearest.dead && Neo.enemies.includes(nearest)) return nearest;
-        cached = true;
-        nearest = null;
-        let bestDistSq = Infinity;
-        for (const en of Neo.enemies) {
-          if (!en || en.dead) continue;
-          const dx = en.x - Neo.player.x;
-          const dy = en.y - Neo.player.y;
-          const distSq = dx * dx + dy * dy;
-          if (distSq < bestDistSq) {
-            bestDistSq = distSq;
-            nearest = en;
-          }
-        }
-        return nearest;
-      };
-    })();
     if (Neo.p1DeadInCoop) { Neo.keys[_right] = false; Neo.keys[_left] = false; Neo.keys[_down] = false; Neo.keys[_up] = false; }
     const _nt = window.NeoTouch;
+    const _gp0 = window.NeoGamepad?.[0];
+    const controlAim = simulationApi.resolveCampaignControlAim?.(Neo.player, Neo.enemies, {
+      inputMode: window.NeoSettings?.getEffectiveInputMode?.(), touch: _nt, gamepad: _gp0,
+    });
+    if (controlAim) {
+      Neo.mouse.worldX = controlAim.x;
+      Neo.mouse.worldY = controlAim.y;
+      Neo.mouse.x = controlAim.x - Neo.camera.x;
+      Neo.mouse.y = controlAim.y - Neo.camera.y;
+    }
     if (_nt?.active) {
-      if (window.NeoSettings?.getEffectiveInputMode?.() === 'touch') {
-        // Auto-aim toward nearest enemy, fallback to last joystick direction.
-        const _aimTarget = _getNearestEnemyForAim();
-        const _aimDX = _aimTarget ? (_aimTarget.x - Neo.player.x) : (_nt.lastAimX * 200);
-        const _aimDY = _aimTarget ? (_aimTarget.y - Neo.player.y) : (_nt.lastAimY * 200);
-        Neo.mouse.worldX = Neo.player.x + _aimDX;
-        Neo.mouse.worldY = Neo.player.y + _aimDY;
-        Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
-        Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
-      }
       // Touch smash: NT.smash stays true while the button is held (cleared on
       // touchend), so use it directly for hold-to-charge. Edge-latch the cast.
       Neo.smashHeld = !!_nt.smash;
@@ -386,17 +365,7 @@ export function loop(timestamp) {
       else { _nt.smashLatch = false; }
     }
     // Gamepad 0 → P1
-    const _gp0 = window.NeoGamepad?.[0];
     if (_gp0?.active) {
-      if (window.NeoSettings?.getEffectiveInputMode?.() === 'gamepad') {
-        const _gpAimTarget = _gp0.hasAim ? null : _getNearestEnemyForAim();
-        const _gpAimX = _gp0.hasAim ? _gp0.aimX * 200 : (_gpAimTarget ? _gpAimTarget.x - Neo.player.x : _gp0.lastAimX * 200);
-        const _gpAimY = _gp0.hasAim ? _gp0.aimY * 200 : (_gpAimTarget ? _gpAimTarget.y - Neo.player.y : _gp0.lastAimY * 200);
-        Neo.mouse.worldX = Neo.player.x + _gpAimX;
-        Neo.mouse.worldY = Neo.player.y + _gpAimY;
-        Neo.mouse.x = Neo.mouse.worldX - Neo.camera.x;
-        Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
-      }
       // Gamepad smash button is re-polled each frame from its held state, so use
       // it for hold-to-charge. Edge-latch so the cast only fires once per press.
       Neo.smashHeld = !!_gp0.smash;

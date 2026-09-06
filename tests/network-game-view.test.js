@@ -1194,6 +1194,7 @@ describe('network multiplayer game view', () => {
 
     player.action = 'attack';
     player.actionKind = 'slash';
+    player.actionMode = 'campaign_slash';
     neo.gameElapsedTime = 20;
     view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', state, 1 / 60);
     const recoilUntil = actor.armRecoilUntil;
@@ -1203,6 +1204,29 @@ describe('network multiplayer game view', () => {
     expect(actor.swing).toBeLessThan(firstSwing);
     expect(actor.swing).toBeCloseTo(0.09);
     expect(actor.armRecoilUntil).toBe(recoilUntil);
+  });
+
+  test('renders Metao fireball volleys with recoil and without a melee swing', () => {
+    const neo = { gameElapsedTime: 10, ATTACKS: { melee: { active: 0.17 } } };
+    const view = new NetworkGameView({ session: {}, neo });
+    const player = {
+      id: 'p1', x: 10, y: 10, characterKey: 'metao', equippedWeapon: 'metao_fire_staff',
+      action: 'attack', actionMode: 'volley', actionKind: 'metao_fire_staff', actionTick: 100,
+      aimDirection: 0,
+    };
+
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', { tick: 100 }, 1 / 60);
+    const actor = view.presentationPlayerSlots[0].getEntity();
+    expect(actor.swing).toBe(0);
+    expect(actor.armRecoilUntil).toBeCloseTo(10.16);
+
+    neo.gameElapsedTime = 11;
+    Object.assign(player, {
+      characterKey: 'thorn_knight', equippedWeapon: 'thorns_bleed_blade',
+      actionMode: 'sweep', actionKind: 'thorns_bleed_blade', actionTick: 101,
+    });
+    view._syncCampaignPresentationEntities({ p1: player }, {}, 'p1', { tick: 101 }, 1 / 60);
+    expect(actor.swing).toBeCloseTo(0.17);
   });
 
   // These render fields used to be derived only for the local player, so
@@ -1505,6 +1529,32 @@ describe('network multiplayer game view', () => {
     expect(firstEnemy.x).toBe(25);
     expect(neo.projectiles[0]).toBe(firstProjectile);
     expect(firstProjectile.x).toBe(3);
+  });
+
+  test('passes boss and rival projectile identities to the campaign renderer', () => {
+    const neo = {};
+    const view = new NetworkGameView({ session: {}, neo });
+    view._syncCampaignPresentationEntities({}, {
+      fireball: {
+        id: 'fireball', type: 'fireball', ownerId: 'metao-rival', hostile: true,
+        x: 100, y: 200, vx: 560, vy: 0, radius: 8, expiresTick: 40,
+      },
+      sword: {
+        id: 'sword', type: 'god_sword', ownerId: 'god', hostile: true,
+        x: 300, y: 200, vx: -300, vy: 0, radius: 8, expiresTick: 40,
+      },
+    }, '', {
+      tick: 20,
+      enemies: {
+        'metao-rival': { id: 'metao-rival', type: 'rival' },
+        god: { id: 'god', type: 'god', boss: true },
+      },
+    });
+
+    expect(neo.projectiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fireball', kind: 'fireball', fromRival: true, enemy: true }),
+      expect.objectContaining({ id: 'sword', kind: 'god_sword', fromRival: false, enemy: true }),
+    ]));
   });
 
   test('uses packed enemy hp/maxHp for the shared health-bar renderer after a full bootstrap', () => {

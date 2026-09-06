@@ -91,7 +91,77 @@ describe('multiplayer input matches campaign presentation', () => {
     const { view } = setup();
     globalThis.NeoSettings = { getEffectiveInputMode: () => mode };
     view.aimDirection = -Math.PI / 2;
-    view._syncPointerAim();
+    view._syncLocalAim();
     expect(view.aimDirection).toBe(-Math.PI / 2);
+  });
+
+  test.each(['touch', 'gamepad'])('%s uses campaign aim assist and keeps the transmitted target aligned', mode => {
+    const { view, neo, session } = setup();
+    globalThis.NeoSettings = { getEffectiveInputMode: () => mode };
+    const controls = { active: true, connected: true, hasAim: false, lastAimX: -1, lastAimY: 0 };
+    if (mode === 'touch') globalThis.NeoTouch = controls;
+    else globalThis.NeoGamepad = { 0: controls };
+    view.currentSample.state.enemies = {
+      dead: { id: 'dead', x: 450, y: 349, dead: true, roomId: 'r1' },
+      otherRoom: { id: 'otherRoom', x: 450, y: 345, roomId: 'r2' },
+      near: { id: 'near', x: 450, y: 250, roomId: 'r1' },
+      far: { id: 'far', x: 700, y: 350, roomId: 'r1' },
+    };
+    view._sendInput();
+    expect(session.sendInput).toHaveBeenLastCalledWith(expect.objectContaining({
+      aimDirection: -Math.PI / 2, targetX: 450, targetY: 250,
+    }));
+    view._attack();
+    expect(session.sendAction.mock.calls[0][1]).toBe(-Math.PI / 2);
+    now += 100;
+    view.syncPresentation();
+    expect(neo.mouse.worldX - neo.camera.x).toBeCloseTo(neo.mouse.x, 8);
+    expect(neo.mouse.worldY - neo.camera.y).toBeCloseTo(neo.mouse.y, 8);
+
+    view.currentSample.state.enemies = {};
+    now += 100;
+    view._sendInput();
+    expect(session.sendInput).toHaveBeenLastCalledWith(expect.objectContaining({
+      aimDirection: Math.PI, targetX: 250, targetY: 350,
+    }));
+  });
+
+  test('explicit gamepad aim overrides the nearest enemy and supplies a matching target', () => {
+    const { view, session } = setup();
+    globalThis.NeoSettings = { getEffectiveInputMode: () => 'gamepad' };
+    globalThis.NeoGamepad = { 0: {
+      active: true, connected: true, hasAim: true, aimX: 1, aimY: 0, lastAimX: 1, lastAimY: 0,
+    } };
+    view.currentSample.state.enemies = { near: { x: 450, y: 250, roomId: 'r1' } };
+    view._sendInput();
+    expect(session.sendInput).toHaveBeenLastCalledWith(expect.objectContaining({
+      aimDirection: 0, targetX: 650, targetY: 350,
+    }));
+  });
+
+  test('an enabled touch overlay does not override keyboard mouse aiming', () => {
+    const { view, neo, session } = setup();
+    globalThis.NeoSettings = { getEffectiveInputMode: () => 'keyboard' };
+    globalThis.NeoTouch = { active: true, lastAimX: -1, lastAimY: 0 };
+    view._sendInput();
+    expect(session.sendInput.mock.calls[0][0].aimDirection).toBeCloseTo(Math.atan2(0, 230), 8);
+    expect(neo.mouse.worldX).toBe(680);
+  });
+
+  test('releasing D does not release ArrowRight when both keys are held', () => {
+    const { view } = setup();
+    const key = (code, value) => ({ code, key: value, preventDefault() {} });
+    const right = key('KeyD', 'd');
+    const arrow = key('ArrowRight', 'ArrowRight');
+    view._onKey(right, true);
+    view._onKey(arrow, true);
+    expect(view._readMovement()).toEqual({ moveX: 1, moveY: 0 });
+    view._onKey(key('KeyA', 'a'), true);
+    expect(view._readMovement()).toEqual({ moveX: 0, moveY: 0 });
+    view._onKey(key('KeyA', 'a'), false);
+    view._onKey(right, false);
+    expect(view._readMovement()).toEqual({ moveX: 1, moveY: 0 });
+    view._onKey(arrow, false);
+    expect(view._readMovement()).toEqual({ moveX: 0, moveY: 0 });
   });
 });
