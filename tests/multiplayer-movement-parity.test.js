@@ -148,6 +148,105 @@ describe('local movement presentation under snapshots', () => {
     expect(view._renderedPlayers(now).p1.x).toBeCloseTo(before.x, 8);
   });
 
+  test.each([
+    ['right', 1, 30, 50],
+    ['left', -1, 60, 100],
+    ['right', 1, 120, 150],
+    ['left', -1, 144, 50],
+    ['right then left', 1, 60, 100, true],
+    ['left then right', -1, 144, 100, true],
+  ])('%s stops without delayed travel (axis %s, %s fps, %s ms one-way latency)', (
+    _name, direction, fps, latencyMs, reverse = false,
+  ) => {
+    const view = setup();
+    view.session.client = { diagnostics: { rttMs: latencyMs * 2 } };
+    const state = { tick: 20, floorState: geometry, players: { p1: player() } };
+    const movement = createCampaignMovementSystem();
+    const inputs = [];
+    const snapshots = [];
+    let sequence = 0;
+    let snapshotSequence = 0;
+    let acknowledged = -1;
+    let serverInput = { moveX: 0, moveY: 0 };
+    let nextFrame = now;
+    let releasedX;
+    let maxTravelAfterRelease = 0;
+    let previousX = 450;
+    let maxBackwardStep = 0;
+    view.session.sendInput = input => {
+      inputs.push({ at: now + latencyMs, input, sequence });
+      return sequence++;
+    };
+    const key = value => ({
+      code: value > 0 ? 'KeyD' : 'KeyA', key: value > 0 ? 'd' : 'a', preventDefault() {},
+    });
+
+    // Run the real authority controller on its own 20 Hz clock. Commands and
+    // 10 Hz snapshots each cross a delayed link; rendering uses a separate clock.
+    // Both keyboard edges fall between server ticks and presentation frames.
+    for (now = 1001; now <= 2500; now += 1) {
+      if (now === 1111) view._onKey(key(direction), true);
+      if (reverse && now === 1411) {
+        view._onKey(key(direction), false);
+        view._onKey(key(-direction), true);
+      }
+      if (now === 1711) {
+        view._onKey(key(reverse ? -direction : direction), false);
+        releasedX = view._renderedPlayers(now).p1.x;
+      }
+      while (inputs.length && inputs[0].at <= now) {
+        const received = inputs.shift();
+        serverInput = received.input;
+        acknowledged = received.sequence;
+      }
+      if (now % 50 === 0) {
+        movement({ state, inputs: { p1: serverInput }, fixedDelta: dt });
+        state.tick += 1;
+      }
+      if (now % 100 === 0) {
+        snapshots.push({
+          at: now + latencyMs, playerId: 'p1', snapshotSequence: ++snapshotSequence,
+          lastAcknowledgedInput: acknowledged, snapshotAgeMs: latencyMs,
+          gameState: structuredClone(state),
+        });
+      }
+      while (snapshots.length && snapshots[0].at <= now) view._onSnapshot(snapshots.shift());
+      if (now >= nextFrame) {
+        nextFrame += 1000 / fps;
+        view._sendInput();
+        const x = view._renderedPlayers(now).p1.x;
+        if (!reverse && now > 1200 && now < 1711) {
+          maxBackwardStep = Math.max(maxBackwardStep, (previousX - x) * direction);
+        }
+        if (releasedX != null) maxTravelAfterRelease = Math.max(maxTravelAfterRelease, Math.abs(x - releasedX));
+        previousX = x;
+      }
+    }
+
+    // Tick sampling can leave a small fractional-step correction. It must not
+    // cause the old latency-sized slide or reverse a held direction.
+    expect(maxBackwardStep).toBeLessThan(0.1);
+    expect(maxTravelAfterRelease).toBeLessThan(4);
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(state.players.p1.x, 8);
+  });
+
+  test('an acknowledged release retires older movement even when the clock estimate trails it', () => {
+    const view = setup({ vx: 228 });
+    view.session.client = { diagnostics: { rttMs: 200 } };
+    const key = { code: 'KeyD', key: 'd', preventDefault() {} };
+    view._onKey(key, true);
+    now = 1100;
+    view._onKey(key, false);
+    now = 1150;
+    view._onSnapshot({
+      playerId: 'p1', snapshotSequence: 1, lastAcknowledgedInput: 1, snapshotAgeMs: 100,
+      gameState: { tick: 23, floorState: geometry, players: { p1: player({ x: 472.8 }) } },
+    });
+    expect(view.pendingInputHistory.every(entry => entry.input.moveX === 0)).toBe(true);
+    now = 1500;
+    expect(view._renderedPlayers(now).p1.x).toBeCloseTo(472.8, 8);
+  });
+
   test('a newer server tick cannot erase a direction change still in transit', () => {
     const view = setup();
     view.keys.add('KeyD');

@@ -1392,8 +1392,21 @@
       // the remaining history on the new authority timeline.
       const snapshotAgeMs = clamp(Number(snapshot.snapshotAgeMs
         ?? this.session.client?.latestSnapshotAgeMs ?? 0), 0, 1000);
-      const authorityAt = receivedAt - snapshotAgeMs;
+      // History is timestamped when controls change locally. The authority sees
+      // those controls one outbound trip later, so its input timeline trails
+      // ours by that trip as well as the snapshot's return trip. Trimming only
+      // by snapshot age drops still-pending travel and makes the hero slide
+      // again when the server finally acknowledges a turn or release.
+      const inputTransitMs = clamp(Number(this.session.client?.diagnostics?.rttMs || 0) / 2, 0, 1000);
+      const authorityAt = receivedAt - snapshotAgeMs - inputTransitMs;
+      const acknowledgedMovementSequence = this.pendingInputHistory.reduce((sequence, entry) => (
+        entry.sequence <= acknowledgedInputForPrediction ? Math.max(sequence, entry.sequence) : sequence
+      ), this.lastMovementInputSequence <= acknowledgedInputForPrediction ? this.lastMovementInputSequence : -1);
       this.pendingInputHistory = this.pendingInputHistory.flatMap(entry => {
+        // Once a newer direction (including neutral) has been simulated, older
+        // directions cannot be pending. Clock estimates must never replay them
+        // over an acknowledged stop. Heartbeats keep the movement-edge sequence.
+        if (entry.sequence < acknowledgedMovementSequence) return [];
         if (entry.sequence > acknowledgedInputForPrediction) return [entry];
         if (!Number.isFinite(entry.endedAt)) return entry.predictionTick > Number(state.tick || 0) ? [entry] : [];
         const durationMs = Math.min(entry.durationMs, entry.endedAt - authorityAt);
@@ -1680,6 +1693,7 @@
 
     _attack() {
       if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
+      this._syncPointerAim();
       if (this._hasPendingCombatPrediction('PLAYER_ATTACKED')) return;
       if (!this._localAttackReady()) return;
       try {
@@ -1711,6 +1725,7 @@
 
     _useSlot(slot) {
       if (!this.active || this._isInputBlocked() || this._sessionStatus() !== 'running') return;
+      this._syncPointerAim();
       if (slot === 'laser' && this.neo.beamStruggle?.active) {
         this.session.sendAction('BEAM_MASH', this.aimDirection);
         return;
@@ -2468,11 +2483,26 @@
       }
     }
 
+    _syncPointerAim(player = this._localPredictionPreview()) {
+      if (!player || !this.canvas) return;
+      const inputMode = root.NeoSettings?.getEffectiveInputMode?.()
+        || (root.NeoTouch?.active ? 'touch' : root.NeoGamepad?.[0]?.active ? 'gamepad' : 'keyboard');
+      if (inputMode !== 'keyboard') return;
+      this.aimDirection = this.neo.updatePointerAimWorld?.({
+        canvas: this.canvas, camera: this.camera, player, splitScreen: false,
+      }) ?? this.aimDirection;
+    }
+
     _onPointerMove(event) {
       if (!this.active || !this.localPredictedPlayer || !this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
       const canvasX = (event.clientX - rect.left) * (this.canvas.width / Math.max(1, rect.width));
       const canvasY = (event.clientY - rect.top) * (this.canvas.height / Math.max(1, rect.height));
+      // Retain canvas coordinates so camera follow can refresh the same aim
+      // point without waiting for another physical mouse movement.
+      this.neo.mouse = this.neo.mouse || {};
+      this.neo.mouse.x = canvasX;
+      this.neo.mouse.y = canvasY;
       this.aimDirection = this.neo.updatePointerAimWorld?.({
         canvasX,
         canvasY,
@@ -2770,6 +2800,10 @@
       if (trackNeutralAcknowledgement && neutralRetryPending && !neutralRetryDue) return;
       if (trackNeutralAcknowledgement
         && this.neutralInputSendAttempts >= MAX_NEUTRAL_INPUT_SEND_ATTEMPTS) return;
+      // Input timers and action edges can fall between render frames. Refresh
+      // prediction and pointer aim before either actions or input are sampled.
+      this._advanceLocalPrediction(now);
+      this._syncPointerAim();
       if (syncHeldSources && !forceNeutral) {
         this._syncGamepadActions();
         this._syncTouchActions();
@@ -2786,10 +2820,6 @@
       if (this.pendingHeldCharge && !(input.buttons & this.pendingHeldCharge.button)) {
         this._releasePredictedHeldCharge();
       }
-      // Keep prediction current even if a frame was delayed. In normal play
-      // requestAnimationFrame advances it more frequently; this is the bounded
-      // 20 Hz fallback for throttled/minimal presentation hosts.
-      this._advanceLocalPrediction(now);
       const previous = this.lastTransmittedInput;
       const transmittedMovementChanged = !previous
         || Math.abs(input.moveX - previous.moveX) > INPUT_VECTOR_EPSILON
@@ -3192,9 +3222,17 @@
         const derived = player.id === localPlayerId
           ? { vx: Number(player.vx || 0), vy: Number(player.vy || 0) }
           : this._deriveActorVelocity(actor, player, frameDelta);
+        // Retain the last horizontal movement direction when idle. Aim can
+        // remain on the opposite side after key-up, and interpolated position
+        // corrections are not an intentional turn by a remote player.
+        const movementVx = Number.isFinite(player.vx) ? player.vx : derived.vx;
+        const movementFacing = Math.abs(movementVx) > 6
+          ? (movementVx < 0 ? -1 : 1)
+          : actor.movementFacing || (Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1);
         Object.assign(actor, {
           ...player,
           ...derived,
+          movementFacing,
           character: player.characterKey || 'thorn_knight',
           r: Number(player.radius || CAMPAIGN_PLAYER_RADIUS),
           hp: Number(player.hp || 0),
@@ -3635,6 +3673,10 @@
       this.neo.camera = this.neo.camera || { x: 0, y: 0 };
       this.neo.camera.x = this.camera.x;
       this.neo.camera.y = this.camera.y;
+      // The campaign refreshes pointer-to-world aim after camera follow on
+      // every frame. Keep the cursor, body/arm and transmitted aim aligned here
+      // too; a stationary mouse must not leave an old world-space target behind.
+      this._syncPointerAim(localPlayer);
       const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
       this.lastWorldTransform = transform;
       this.lastRenderedPlayerCount = Object.values(players).filter(player => player.roomId === visibleRoomId).length;

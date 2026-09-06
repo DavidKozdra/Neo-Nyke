@@ -238,6 +238,10 @@
     // opposite direction. Movement remains the facing source for locomotion
     // and non-directional actions.
     if (action === 'beam') return Math.cos(aimAngle) < 0 ? -1 : 1;
+    // Network actors retain their locomotion facing across neutral snapshots.
+    // Releasing a movement key must not turn the body toward a stale cursor.
+    if (!action && !(Number(actor?.swing || 0) > 0)
+      && (actor?.movementFacing === -1 || actor?.movementFacing === 1)) return actor.movementFacing;
     return getFacingDirection(actor, aimAngle);
   }
 

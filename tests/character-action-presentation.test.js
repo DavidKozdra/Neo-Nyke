@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { NetworkGameView } = require('../js/rendering/NetworkGameView');
 
 const read = relativePath => fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
 
@@ -122,6 +123,81 @@ describe('character action presentation', () => {
     expect(entities).toContain('getActorActionFacingDirection(pn, slotActionState.action, beamFacingAngle)');
     expect(threeRenderer).toContain('Neo.getActorActionFacingDirection?.(p, spriteActionState.action, beamFacingAngle)');
     expect(threeRenderer).toContain('Neo.getActorActionFacingDirection?.(actor, spriteActionState.action, beamFacingAngle)');
+  });
+
+  test.each([
+    ['D', 'd', 1, Math.PI],
+    ['A', 'a', -1, 0],
+  ])('multiplayer keeps its facing after releasing %s with the cursor on the opposite side', (
+    code, key, direction, aimDirection,
+  ) => {
+    const Neo = loadEntityPresentationApi();
+    const originalPerformance = globalThis.performance;
+    let now = 1000;
+    let sequence = 0;
+    globalThis.performance = { now: () => now };
+    try {
+      const view = new NetworkGameView({
+        session: { playerId: 'p1', status: 'running', sendInput: () => sequence++ }, neo: Neo,
+      });
+      view.active = true;
+      view.aimDirection = aimDirection;
+      const gameState = {
+        tick: 20, floorNumber: 1,
+        floorState: { width: 900, height: 700, wallThickness: 28 },
+        players: { p1: {
+          id: 'p1', roomId: 'r1', x: 450, y: 350, vx: 0, vy: 0,
+          radius: 14, moveSpeed: 228, aimDirection,
+        } },
+      };
+      view._onSnapshot({ playerId: 'p1', snapshotSequence: 0, gameState });
+      const present = () => {
+        view._syncCampaignPresentationEntities(view._renderedPlayers(now), {}, 'p1', gameState, 0.05);
+        return Neo.getActorActionFacingDirection(Neo.player, null, aimDirection);
+      };
+      const event = { code: `Key${code}`, key, preventDefault() {} };
+      view._onKey(event, true);
+      now += 100;
+      expect(present()).toBe(direction);
+      view._onKey(event, false);
+      now += 100;
+      expect(present()).toBe(direction);
+      expect(Neo.player.vx).toBe(0);
+
+      // A later server correction may change position while the player is idle.
+      const stopped = { ...view.localPredictedPlayer, vx: 0 };
+      view._onSnapshot({
+        playerId: 'p1', snapshotSequence: 1, lastAcknowledgedInput: sequence - 1,
+        gameState: { ...gameState, tick: 24, players: { p1: { ...stopped, x: stopped.x - direction * 2 } } },
+      });
+      now += 100;
+      expect(present()).toBe(direction);
+      expect(Neo.getActorActionFacingDirection(Neo.player, 'beam', aimDirection)).toBe(-direction);
+      expect(Neo.getActorActionFacingDirection({ ...Neo.player, swing: 0.1 }, null, aimDirection)).toBe(-direction);
+
+      const reverse = { code: code === 'D' ? 'KeyA' : 'KeyD', key: code === 'D' ? 'a' : 'd', preventDefault() {} };
+      view._onKey(reverse, true);
+      now += 100;
+      expect(present()).toBe(-direction);
+      view._onKey(reverse, false);
+      now += 100;
+      expect(present()).toBe(-direction);
+    } finally {
+      globalThis.performance = originalPerformance;
+    }
+  });
+
+  test('remote idle facing ignores backward interpolation corrections', () => {
+    const Neo = loadEntityPresentationApi();
+    const view = new NetworkGameView({ session: {}, neo: Neo });
+    const player = { id: 'p2', roomId: 'r1', x: 450, y: 350, vx: 228, vy: 0, aimDirection: Math.PI };
+    view._syncCampaignPresentationEntities({ p2: player }, {}, 'p1', { tick: 20 }, 1 / 60);
+    const actor = view.presentationPlayerActors.get('p2');
+    expect(Neo.getActorActionFacingDirection(actor, null, player.aimDirection)).toBe(1);
+    for (let frame = 0; frame < 10; frame += 1) {
+      view._syncCampaignPresentationEntities({ p2: { ...player, x: 450 - frame, vx: 0 } }, {}, 'p1', { tick: 21 }, 1 / 60);
+      expect(Neo.getActorActionFacingDirection(actor, null, player.aimDirection)).toBe(1);
+    }
   });
 
   test('Sarge hammer smash plays its authored frames at twice the standard speed', () => {

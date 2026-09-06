@@ -221,6 +221,10 @@ async function createHarness(options) {
   clock.runAll();
   client.sendReady();
   clock.runAll();
+  // BrowserMultiplayerSession pings as play starts. Exercise the same measured
+  // round trip here so reconciliation includes the outbound input delay.
+  client.ping();
+  clock.runAll();
 
   const session = {
     client,
