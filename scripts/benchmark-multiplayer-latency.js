@@ -19,7 +19,6 @@ const {
 const {
   MAX_SMOOTH_RECONCILIATION_PX,
   NetworkGameView,
-  predictPosition,
 } = require('../js/rendering/NetworkGameView');
 
 const { createCampaignMovementSystem } = require('../js/simulation/CampaignSimulation');

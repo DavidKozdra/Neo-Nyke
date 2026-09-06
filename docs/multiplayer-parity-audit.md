@@ -11,7 +11,7 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 - Player laser commands use the same canonical pointer/FPS-yaw conversion.
 - Room dimensions are the shared 900×700 geometry.
 - Authored templates, pillars, chambers, decorations, destructibles and static hazards are generated into authoritative room state. Client-side room fabrication was deleted.
-- Authority movement and client prediction use the same obstacle collision operation.
+- The rendered campaign, authority and client prediction share velocity response, stun friction, axis collision and bounce, overlap recovery, pillar footprints and doorway clearance/exit depth. Slow affects displacement (including dashes) in every runtime. Plain dash casts retain all four campaign movement steps. Browser prediction samples controls at render cadence, preserves fractional travel on direction changes, and reconciles acknowledged movement using measured snapshot age; provisional movement casts survive older snapshots without restarting on confirmation. Movement parity and 30/60/120/144 Hz presentation are covered by `tests/multiplayer-movement-parity.test.js`, with delayed two-client keyboard/dash/joystick checks in the browser.
 - Lava and explosive-trap state/damage are authority-owned.
 - Move and weapon catalogs are complete in shared content (47 campaign moves and 15 campaign weapons in the browser audit).
 - Forge commits, inventory equip/reorder commands, shop purchases and special-room choices have shared command resolvers.

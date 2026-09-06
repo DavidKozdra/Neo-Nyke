@@ -1290,7 +1290,8 @@
       if (hasSnapshotSequence) this.lastProcessedSnapshotSequence = incomingSequence;
       const receivedAt = root.performance?.now?.() ?? Date.now();
       const receivedFloorNumber = Math.max(1, Number(state.floorNumber || state.floorState?.layout?.floorNumber || 1));
-      if (this.lastFloorNumber > 0 && receivedFloorNumber !== this.lastFloorNumber) {
+      const changedFloor = this.lastFloorNumber > 0 && receivedFloorNumber !== this.lastFloorNumber;
+      if (changedFloor) {
         this.floorTransitionStartedAt = receivedAt;
       }
       this.lastFloorNumber = receivedFloorNumber;
@@ -1310,8 +1311,11 @@
       if (authorityPlayer.beamChannel?.moveKey === this.pendingBeamPresentation?.moveKey) {
         this.pendingBeamPresentation = null;
       }
-      if (transitionChanged || receivedFloorNumber !== Number(this.localPredictedPlayer?.floorNumber || receivedFloorNumber)) {
+      const changedLocation = this.localPredictedPlayer && this.localPredictedPlayer.roomId !== authorityPlayer.roomId;
+      const changedLifeState = this.localPredictedPlayer && !!this.localPredictedPlayer.downed !== !!authorityPlayer.downed;
+      if (transitionChanged || changedFloor || changedLocation || changedLifeState) {
         this.pendingMovementPrediction = null;
+        this.pendingBeamPresentation = null;
         this.localPredictedPlayerId = snapshot.playerId;
         this.localPredictedPlayer = { ...authorityPlayer, floorNumber: receivedFloorNumber };
         this.pendingInputHistory = [];
@@ -2806,7 +2810,13 @@
       const movementChanged = !this.lastLocalPredictionInput
         || input.moveX !== Number(this.lastLocalPredictionInput.moveX || 0)
         || input.moveY !== Number(this.lastLocalPredictionInput.moveY || 0);
-      if (movementChanged && this.localPredictionAccumulatorMs > 0) {
+      const reversesDirection = input.moveX * Number(this.lastLocalPredictionInput.moveX || 0) < 0
+        || input.moveY * Number(this.lastLocalPredictionInput.moveY || 0) < 0;
+      // Preserve a displayed partial step at discrete edges. Ordinary analog
+      // drift must not restart the physics clock every frame: that would turn
+      // the campaign's 20 Hz acceleration into a slower render-rate response.
+      if (movementChanged && (immediate || movingChanged || reversesDirection)
+        && this.localPredictionAccumulatorMs > 0) {
         this._commitLocalPrediction(this.localPredictionAccumulatorMs);
         this.localPredictionAccumulatorMs = 0;
       }
@@ -3176,8 +3186,12 @@
           actor._networkSpriteActionKey = spriteActionKey;
           actor._networkSpriteActionStartedAt = presentationClock - Math.min(spriteActionDuration, elapsed);
         }
-        // Read the previous position before Object.assign overwrites it.
-        const derived = this._deriveActorVelocity(actor, player, frameDelta);
+        // The local controller already has its velocity. Deriving it from the
+        // corrected display position makes idle heroes shuffle and delays the
+        // run/stop animation. Remote actors still follow their interpolated path.
+        const derived = player.id === localPlayerId
+          ? { vx: Number(player.vx || 0), vy: Number(player.vy || 0) }
+          : this._deriveActorVelocity(actor, player, frameDelta);
         Object.assign(actor, {
           ...player,
           ...derived,

@@ -175,6 +175,8 @@ Cost controls deliberately separate hot simulation from persistence and delivery
 - Static geometry may be regenerated locally only after compatibility validation. Dynamic outcomes always come from authority.
 - Named RNG streams prevent a loot draw from changing floor topology or boss patterns.
 - Snapshot acknowledgements drive local prediction reconciliation and a bounded client baseline history safely rebases concurrent deltas.
+- Keyboard edges and render-cadence stick samples update local intent immediately; continuous network movement stays capped at 20 Hz, with immediate start/stop/button edges and the existing heartbeat. Prediction interpolates the campaign's fixed movement step instead of recalculating acceleration at each fractional render time. Direction changes retain the travel already displayed.
+- Snapshot input acknowledgements represent completed simulation, not receipt. Reconciliation uses clock-adjusted snapshot transit age and bounded local input history; a first-run ping establishes the clock without enabling diagnostics. Pending movement abilities retain their local timeline until an accepted world sample arrives, while rejection, stun, down/revive, room/floor changes and reconnect clear invalid prediction.
 - Remote players and enemies render from a 100 ms buffered interpolation window, followed by at most 300 ms of authority-velocity dead reckoning so sparse snapshots do not freeze and jump.
 - Floor entry, respawn, spawn, movement-mode change, and corrections beyond the bounded smoothing threshold teleport rather than interpolate.
 

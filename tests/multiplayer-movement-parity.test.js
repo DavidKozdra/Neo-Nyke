@@ -174,6 +174,7 @@ describe('local movement presentation under snapshots', () => {
     }
     expect(view.localPredictedPlayer.x).toBeGreaterThan(500);
     expect(view.session.sendInput.mock.calls.length).toBeLessThanOrEqual(22);
+    expect(view.pendingInputHistory.filter(entry => entry.durationMs === 50)).toHaveLength(20);
   });
 
   test('touch has the same final movement deadzone as the campaign', () => {
@@ -239,5 +240,28 @@ describe('local movement presentation under snapshots', () => {
     now = 5000;
     expect(view._renderedPlayers(now).p1.x).toBe(450);
     expect(view.localPredictionTick).toBe(tick);
+  });
+
+  test('floor changes discard old movement even when room ids are reused', () => {
+    const view = setup();
+    view.keys.add('KeyD');
+    view._sendInput();
+    now = 1100;
+    view._renderedPlayers(now);
+    view._onSnapshot({ playerId: 'p1', snapshotSequence: 1, lastAcknowledgedInput: -1,
+      gameState: { tick: 23, floorNumber: 2, floorState: geometry, players: { p1: player({ x: 100 }) } },
+    });
+    expect(view.pendingInputHistory).toHaveLength(0);
+    expect(view.reconciliationOffset).toBeNull();
+    expect(view._renderedPlayers(now).p1.x).toBe(100);
+  });
+
+  test('snapshot correction does not animate an idle local hero as running', () => {
+    const view = setup();
+    const state = view.currentSample.state;
+    view._syncCampaignPresentationEntities({ p1: player({ vx: 228 }) }, {}, 'p1', state, 1 / 60);
+    expect(view.presentationPlayerActors.get('p1').vx).toBe(228);
+    view._syncCampaignPresentationEntities({ p1: player({ x: 455, vx: 0 }) }, {}, 'p1', state, 1 / 60);
+    expect(view.presentationPlayerActors.get('p1').vx).toBe(0);
   });
 });
