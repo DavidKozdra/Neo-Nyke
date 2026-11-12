@@ -2,302 +2,1184 @@
 const KOZ_PWA_CONFIG = {
   "cachePrefix": "neonyke",
   "critical": [
-    "/",
-    "/assets/fonts/PressStart2P-Latin.woff2",
-    "/assets/fonts/PressStart2P.ttf",
-    "/assets/fonts/VT323-LatinExt.woff2",
-    "/assets/fonts/VT323-Regular.woff2",
-    "/assets/i18n/ar.json",
-    "/assets/i18n/de.json",
-    "/assets/i18n/en.json",
-    "/assets/i18n/es.json",
-    "/assets/i18n/fr.json",
-    "/assets/i18n/hi.json",
-    "/assets/i18n/id.json",
-    "/assets/i18n/ja.json",
-    "/assets/i18n/ko.json",
-    "/assets/i18n/pt.json",
-    "/assets/i18n/ru.json",
-    "/assets/i18n/tr.json",
-    "/assets/i18n/zh.json",
-    "/assets/icons/icon-128x128.png",
-    "/assets/icons/icon-144x144.png",
-    "/assets/icons/icon-152x152.png",
-    "/assets/icons/icon-192x192.png",
-    "/assets/icons/icon-384x384.png",
-    "/assets/icons/icon-512x512.png",
-    "/assets/icons/icon-72x72.png",
-    "/assets/icons/icon-96x96.png",
-    "/assets/icons/icon-maskable-512x512.png",
-    "/assets/icons/neo-nyke_Icon.png",
-    "/assets/icons/NeoNykeTitle.png",
-    "/assets/itch/neo-nyke-itch-background.png",
-    "/assets/itch/neo-nyke-itch-cover-630x500.png",
-    "/assets/sprites/chars/Anthony1.png",
-    "/assets/sprites/chars/Anthony10.png",
-    "/assets/sprites/chars/Anthony11.png",
-    "/assets/sprites/chars/Anthony12.png",
-    "/assets/sprites/chars/Anthony13.png",
-    "/assets/sprites/chars/Anthony14.png",
-    "/assets/sprites/chars/Anthony15.png",
-    "/assets/sprites/chars/Anthony16.png",
-    "/assets/sprites/chars/Anthony17.png",
-    "/assets/sprites/chars/Anthony18.png",
-    "/assets/sprites/chars/Anthony19.png",
-    "/assets/sprites/chars/Anthony2.png",
-    "/assets/sprites/chars/Anthony3.png",
-    "/assets/sprites/chars/Anthony4.png",
-    "/assets/sprites/chars/Anthony5.png",
-    "/assets/sprites/chars/Anthony6.png",
-    "/assets/sprites/chars/Anthony7.png",
-    "/assets/sprites/chars/Anthony8.png",
-    "/assets/sprites/chars/Anthony9.png",
-    "/assets/sprites/chars/bowman.png",
-    "/assets/sprites/chars/charger.png",
-    "/assets/sprites/chars/cultMage.png",
-    "/assets/sprites/chars/ent_boss.png",
-    "/assets/sprites/chars/follower.png",
-    "/assets/sprites/chars/Gelleh.png",
-    "/assets/sprites/chars/God.png",
-    "/assets/sprites/chars/HandsomeDevil.png",
-    "/assets/sprites/chars/healer.png",
-    "/assets/sprites/chars/hunter.png",
-    "/assets/sprites/chars/knave.png",
-    "/assets/sprites/chars/large-golem.png",
-    "/assets/sprites/chars/machine_gunner.png",
-    "/assets/sprites/chars/Metao.png",
-    "/assets/sprites/chars/mini-golem.png",
-    "/assets/sprites/chars/Mooggy.png",
-    "/assets/sprites/chars/princess.png",
-    "/assets/sprites/chars/PrincessCredits.jpg",
-    "/assets/sprites/chars/PXL_20260820_142621256.MP.jpg",
-    "/assets/sprites/chars/queen_1.png",
-    "/assets/sprites/chars/Sarge.png",
-    "/assets/sprites/chars/SeaSnake.png",
-    "/assets/sprites/chars/shield_unit.png",
-    "/assets/sprites/chars/sniper.png",
-    "/assets/sprites/chars/summoner.png",
-    "/assets/sprites/chars/Thorn Knight.png",
-    "/assets/sprites/chars/turtle_boy.png",
-    "/assets/sprites/chars/TurtleBoy.png",
-    "/assets/sprites/combatants.js",
-    "/assets/sprites/env/anvil_0.png",
-    "/assets/sprites/env/barrel_0.png",
-    "/assets/sprites/env/chair_0.png",
-    "/assets/sprites/env/chair_1.png",
-    "/assets/sprites/env/chest_0.png",
-    "/assets/sprites/env/chest_a_b.png",
-    "/assets/sprites/env/forge_0.png",
-    "/assets/sprites/env/ground_0.png",
-    "/assets/sprites/env/ladder_0.png",
-    "/assets/sprites/env/pillar_0.png",
-    "/assets/sprites/env/pillar_1.png",
-    "/assets/sprites/env/pillar_2.png",
-    "/assets/sprites/env/pillar_3.png",
-    "/assets/sprites/env/pillar.png",
-    "/assets/sprites/env/table_0.png",
-    "/assets/sprites/env/table_1.png",
-    "/assets/sprites/env/tree.png",
-    "/assets/sprites/environment.js",
-    "/assets/sprites/icons.js",
-    "/assets/sprites/ui/mobile-menu.png",
-    "/css/character-select.css",
-    "/css/mobile.css",
-    "/css/panel-borders.css",
-    "/css/style.css",
-    "/css/theme-princess.css",
-    "/css/touch-controls.css",
-    "/css/tutorial.css",
-    "/game.html",
-    "/index.html",
-    "/js/achievementManager.js",
-    "/js/achievements.js",
-    "/js/config/FeatureFlags.js",
-    "/js/core/canvas-recovery.js",
-    "/js/core/first-person-look.js",
-    "/js/core/game-core.js",
-    "/js/core/game-state.js",
-    "/js/core/math-utils.js",
-    "/js/core/music.js",
-    "/js/core/neo.js",
-    "/js/core/perf.js",
-    "/js/core/save-store.js",
-    "/js/core/sfx.js",
-    "/js/core/status.js",
-    "/js/core/update.js",
-    "/js/dataAdapter.js",
-    "/js/draw/atlas.js",
-    "/js/draw/character-sheets.js",
-    "/js/draw/entities.js",
-    "/js/draw/environment.js",
-    "/js/draw/hud.js",
-    "/js/draw/image-assets.js",
-    "/js/draw/lighting.js",
-    "/js/draw/pillar-renderer.js",
-    "/js/draw/props.js",
-    "/js/draw/three-loader.js",
-    "/js/draw/three-renderer.js",
-    "/js/draw/viewport.js",
-    "/js/game/allies.js",
-    "/js/game/combat.js",
-    "/js/game/enemies.js",
-    "/js/game/hud.js",
-    "/js/game/player.js",
-    "/js/game/projectile-types.js",
-    "/js/game/rooms.js",
-    "/js/game/roomTemplates.js",
-    "/js/game/specialRooms.js",
-    "/js/game/world.js",
-    "/js/gamepadControls.js",
-    "/js/i18n.js",
-    "/js/main.js",
-    "/js/multiplayer/BrowserMultiplayerSession.js",
-    "/js/multiplayer/CloudflareWebSocketTransport.js",
-    "/js/multiplayer/LocalLoopbackTransport.js",
-    "/js/multiplayer/LocalMultiplayerSession.js",
-    "/js/multiplayer/MultiplayerInviteLink.js",
-    "/js/multiplayer/NetworkTransport.js",
-    "/js/multiplayer/OfflineGameSession.js",
-    "/js/multiplayer/OfflineTransport.js",
-    "/js/protocol/ProtocolV1.js",
-    "/js/rendering/NetworkGameView.js",
-    "/js/simulation/CampaignMovementRules.js",
-    "/js/simulation/CampaignSimulation.js",
-    "/js/simulation/DeterministicFloorGenerator.js",
-    "/js/simulation/FixedTickRunner.js",
-    "/js/simulation/GameSimulation.js",
-    "/js/simulation/GameState.js",
-    "/js/simulation/LoopContentSystem.js",
-    "/js/simulation/NetworkCombatSystem.js",
-    "/js/simulation/RandomService.js",
-    "/js/simulation/SharedAcquisitionSystem.js",
-    "/js/simulation/SharedAllySystem.js",
-    "/js/simulation/SharedBeamPathSystem.js",
-    "/js/simulation/SharedBossIntroSystem.js",
-    "/js/simulation/SharedChaosSystem.js",
-    "/js/simulation/SharedChestSystem.js",
-    "/js/simulation/SharedCombatContent.js",
-    "/js/simulation/SharedDamageSystem.js",
-    "/js/simulation/SharedDashSystem.js",
-    "/js/simulation/SharedEliteSystem.js",
-    "/js/simulation/SharedEncounterSystem.js",
-    "/js/simulation/SharedEndgameSystem.js",
-    "/js/simulation/SharedEndlessIntermissionSystem.js",
-    "/js/simulation/SharedEnemyAISystem.js",
-    "/js/simulation/SharedEnemyBehaviorSystem.js",
-    "/js/simulation/SharedEnemyContent.js",
-    "/js/simulation/SharedEnemyDropSystem.js",
-    "/js/simulation/SharedEnemyScalingSystem.js",
-    "/js/simulation/SharedEventItemSystem.js",
-    "/js/simulation/SharedForgeSystem.js",
-    "/js/simulation/SharedHazardSystem.js",
-    "/js/simulation/SharedHitResolutionSystem.js",
-    "/js/simulation/SharedInventorySystem.js",
-    "/js/simulation/SharedItemContent.js",
-    "/js/simulation/SharedItemDefinitions.js",
-    "/js/simulation/SharedItemEffectSystem.js",
-    "/js/simulation/SharedMirrorCombatSystem.js",
-    "/js/simulation/SharedMoveContent.js",
-    "/js/simulation/SharedMoveEffectSystem.js",
-    "/js/simulation/SharedPlayerDamageSystem.js",
-    "/js/simulation/SharedPotionSystem.js",
-    "/js/simulation/SharedProgressionSystem.js",
-    "/js/simulation/SharedProjectileSystem.js",
-    "/js/simulation/SharedRivalSystem.js",
-    "/js/simulation/SharedRoomInteriorSystem.js",
-    "/js/simulation/SharedRoomLifecycleSystem.js",
-    "/js/simulation/SharedRunServiceSystem.js",
-    "/js/simulation/SharedShopSystem.js",
-    "/js/simulation/SharedSpecialRoomSystem.js",
-    "/js/simulation/SharedStatusSystem.js",
-    "/js/simulation/SharedWorldContent.js",
-    "/js/simulation/SharedWorldMutationSystem.js",
-    "/js/story/campaigns.js",
-    "/js/story/cutscene-manager.js",
-    "/js/touchControls.js",
-    "/js/tutorial/scenes.js",
-    "/js/ui/controller.js",
-    "/js/ui/credits.js",
-    "/js/ui/custom-sprite-editor.js",
-    "/js/ui/input.js",
-    "/js/ui/item-picker.js",
-    "/js/ui/lazy-panels.js",
-    "/js/ui/menu-background.js",
-    "/js/ui/move-preview.js",
-    "/js/ui/notifications.js",
-    "/js/ui/panels.js",
-    "/js/ui/pwa-update-prompt.js",
-    "/js/ui/settings-ui.js",
-    "/js/ui/sprite-editor.js",
-    "/js/ui/tutorial-controller.js",
-    "/js/ui/unlock-banner.js",
-    "/js/vendor/koz-engine.browser-bundle.js",
-    "/js/vendor/koz-pwa-service-worker-runtime.js",
-    "/js/vendor/three.core.js",
-    "/js/vendor/three.module.js",
-    "/manifest.json"
+    {
+      "url": "/",
+      "revision": "49112d3072360bda403c63d29801805e1ab2268b34492b4ae9142ee19c0da023"
+    },
+    {
+      "url": "/assets/fonts/PressStart2P-Latin.woff2",
+      "revision": "afec86997fdaf54af1f59358fa2c1e2a0f1d04146edad18e5cd141d0384a7548"
+    },
+    {
+      "url": "/assets/fonts/PressStart2P.ttf",
+      "revision": "6b6cae09a59ee52e4abaa3aa2b10fefcabf680a22b9b4c77517380b3da794adc"
+    },
+    {
+      "url": "/assets/fonts/VT323-LatinExt.woff2",
+      "revision": "4435f062ebe744d097d0d618ac5ad6b8ea25ee3bd6004c5369c24518e70af1f0"
+    },
+    {
+      "url": "/assets/fonts/VT323-Regular.woff2",
+      "revision": "8ddbebcc1048154132e1d78eb9b1f7850bca1b7d857035ccf1cb4318ebc615b6"
+    },
+    {
+      "url": "/assets/i18n/ar.json",
+      "revision": "5f36f480d33d3d3bf3e052592d64b68d138353b3d1120ef806164ddaad9084df"
+    },
+    {
+      "url": "/assets/i18n/de.json",
+      "revision": "4f309522a021de8a634f013dfcb256cd58c86e919b2e30ecfece9587e26f7af2"
+    },
+    {
+      "url": "/assets/i18n/en.json",
+      "revision": "bb95a5c95f644adb1c548def284696578780724861aca876cc4da3f912462781"
+    },
+    {
+      "url": "/assets/i18n/es.json",
+      "revision": "6fa4801f34514e0dc09442e06d4753397122623886a9303ec12f9b73ccebee7e"
+    },
+    {
+      "url": "/assets/i18n/fr.json",
+      "revision": "a9410f31e0ff4425cee8fa93b2b81b4cf6f804a6e4559f3c356ae575b78934b4"
+    },
+    {
+      "url": "/assets/i18n/hi.json",
+      "revision": "23b1dc2907914a5e07bfa1cc2f61d68c203cf8ccb4ccef1d58f22fba40cb4ef2"
+    },
+    {
+      "url": "/assets/i18n/id.json",
+      "revision": "3d8600fa287a39077b7fee4023dc590576e98b76927e7d756426dcacf73d4cbf"
+    },
+    {
+      "url": "/assets/i18n/ja.json",
+      "revision": "33278ff38cec1bf6687a79bf08f1509411fcedafed9a1acddb717fb61f94b90c"
+    },
+    {
+      "url": "/assets/i18n/ko.json",
+      "revision": "a5b19289cacb2d5980984eeb443cf2507df5a7d251fd4f955dd11762a5082053"
+    },
+    {
+      "url": "/assets/i18n/pt.json",
+      "revision": "4dc0b5a8582eed34fb15cd79f60ec6385b8f2e1d685281065cd6bc3680e95118"
+    },
+    {
+      "url": "/assets/i18n/ru.json",
+      "revision": "ca93f3351067f5a5ce47bb2124a70bee112d4c894fd8e414ec743ba2a4ba6451"
+    },
+    {
+      "url": "/assets/i18n/tr.json",
+      "revision": "49fd2017bc02d5f09d75cd426d46d6722c20d64b1f3bce9f49dc1afe3fe60782"
+    },
+    {
+      "url": "/assets/i18n/zh.json",
+      "revision": "b671482c1ad8a249821ca9a5ca21bd18d1e1584a9e5f6058eef8b436b8f43d82"
+    },
+    {
+      "url": "/assets/icons/icon-128x128.png",
+      "revision": "0d8aee136e39aafc8c7dd0823981b6d16e4f9841e23802b474a6fc34fdc55124"
+    },
+    {
+      "url": "/assets/icons/icon-144x144.png",
+      "revision": "6439002451f2a3673ed0af498b3a06f4f1f95fdea92255489b1dc197479bd870"
+    },
+    {
+      "url": "/assets/icons/icon-152x152.png",
+      "revision": "50b2fd608f6ce8b986001cca69b506086e13a9d0339e316fddb6ad76e61442f1"
+    },
+    {
+      "url": "/assets/icons/icon-192x192.png",
+      "revision": "b1c1fe88cf84e50be910357aedf36b71b8231371e4930bd555500665931a9b03"
+    },
+    {
+      "url": "/assets/icons/icon-384x384.png",
+      "revision": "dcdb9e1e12b0f95073b7b8c5795b1db4cf66f6c851a8bf875beb5d096dfdd2c5"
+    },
+    {
+      "url": "/assets/icons/icon-512x512.png",
+      "revision": "421c93b3d51f4543541f310565fab708ef226951708cbbb67c153603490ff4a6"
+    },
+    {
+      "url": "/assets/icons/icon-72x72.png",
+      "revision": "15a34d7920147c3b5c4c5ea721684b3e5371cf0af09400704d840fe73b1fcc2b"
+    },
+    {
+      "url": "/assets/icons/icon-96x96.png",
+      "revision": "5b21629f920edecf57a630ce222444a864999f83b7c51d1818333819379d8de1"
+    },
+    {
+      "url": "/assets/icons/icon-maskable-512x512.png",
+      "revision": "8916e64c8ebb5d002471f8af933a2e57ae9b32244e0bcbdf9db075987d9deed1"
+    },
+    {
+      "url": "/assets/icons/neo-nyke_Icon.png",
+      "revision": "79ac31379f536e4240573131bd815ef255bce4dc0a2036cafc4b46601847a6a0"
+    },
+    {
+      "url": "/assets/icons/NeoNykeTitle.png",
+      "revision": "31ae55705493cac5512d16f3003f817e28a2fb46c0d624b960ed1a71042c7eff"
+    },
+    {
+      "url": "/assets/itch/neo-nyke-itch-background.png",
+      "revision": "00613959bce2687cb8e40cb1a5b7447c25b56e7f155a67e299d6030934c45994"
+    },
+    {
+      "url": "/assets/itch/neo-nyke-itch-cover-630x500.png",
+      "revision": "0361812408e6897333cd128ac8809e9574e1f19401b97d6b4e468ae75291799e"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony1.png",
+      "revision": "743cf5ab1d305aeab3937bf3f76314d10977527f3444bf448698c04d26965f18"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony10.png",
+      "revision": "5a66827512a5c3932b77792eb920e2d8ab4d71265a00037ef0e3cf8126c37d6d"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony11.png",
+      "revision": "af0dbe4b522689e0e57b930b5ee022eb71e02cdb0cd13016a4eedc646cd24387"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony12.png",
+      "revision": "32256b9753498f7d028e8d443f193eebcfa319396412f5b9557f7a53253bd308"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony13.png",
+      "revision": "3cbcb2839410c64199df6c0c7168a377370d8d3ba48887fb709c54f6bce54d89"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony14.png",
+      "revision": "07cb698567f7f08c397cf718ce3c73bc4ec3930cadb80f90796c21861876c070"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony15.png",
+      "revision": "6a69e61eccb6eb6316f96a63dc57c633469b080b6a88ac73c57634962effa6fb"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony16.png",
+      "revision": "d47d3179104831fb814d3a435bc8c00b1ad02edff239decf3904bcab70be9529"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony17.png",
+      "revision": "18c08a38693ade90ecfd5c85c42bec03a216bd957cf7019ec15765cdaf506c75"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony18.png",
+      "revision": "6ea2d580123112461289d6afe72bdfb7846c19ce41059279528abcf896df9e18"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony19.png",
+      "revision": "18e72a4edef33b3b9f0002308e1bba78954cbbff4d818cba30c582ac3f82b1a0"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony2.png",
+      "revision": "ef01c68a2316cbe49515b471c2a8b9df55efcd9b776693a231d18de59005c97d"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony3.png",
+      "revision": "6d32bb9887f2ae4c3ad90b340889ab41d47cb1a84af5c4fad99a47631546c3d9"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony4.png",
+      "revision": "cf5ab42d9801a49b6fe5bb2f9f195bc94b0c2f02f09c91b83786b0418704f361"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony5.png",
+      "revision": "834cfd2aa38e6f5af79d7304b467b0ff09619a399cefa5187b840265c1f7798e"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony6.png",
+      "revision": "3c29aaebde11e0c6db0aae5a23fdf0dbbb051837a7924046c3c58711882ed82a"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony7.png",
+      "revision": "1a1a2a7557ace1508bb5017f6751db200cc3aa18672996678f040087063b87e2"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony8.png",
+      "revision": "4c56c783678f4d903d46753299d5fc2e482415df49af6c72fc3e2bade505f32c"
+    },
+    {
+      "url": "/assets/sprites/chars/Anthony9.png",
+      "revision": "0c7178dd114e7402e74d19457c0b82167d20a169209e90ad1afcadd499075e4c"
+    },
+    {
+      "url": "/assets/sprites/chars/bowman.png",
+      "revision": "dd51c8d2c7054ec3641ce6c25e90cdf8630a4aad06d78bb22c8c03730b7e2a84"
+    },
+    {
+      "url": "/assets/sprites/chars/charger.png",
+      "revision": "c24b7b2f1bdb8c6d6c02c5b03acbc130d58178b7a35463c5123164e49770425d"
+    },
+    {
+      "url": "/assets/sprites/chars/cultMage.png",
+      "revision": "c62275189de71ec1d70d65475a75641bdd01da3706ddb53f5f81b306448df4ff"
+    },
+    {
+      "url": "/assets/sprites/chars/ent_boss.png",
+      "revision": "7887b7d6dcf7cf66fcd16798f21c54052407dab36b619a057ab9d9ade25aad69"
+    },
+    {
+      "url": "/assets/sprites/chars/follower.png",
+      "revision": "5325477a82f0e34b1cf7448d68d3248724f0499ae95c4289c1444aa2c41aaeb3"
+    },
+    {
+      "url": "/assets/sprites/chars/Gelleh.png",
+      "revision": "c9d32c2c9fc1e67eaf6dca5342c4bc2d1db44a6e3800bfb531f5fd1b1daec724"
+    },
+    {
+      "url": "/assets/sprites/chars/God.png",
+      "revision": "ddc10857a52fc1275548be127a8d00099791d725d15b69e3421c54c9dbe5701d"
+    },
+    {
+      "url": "/assets/sprites/chars/HandsomeDevil.png",
+      "revision": "6eae5fccd4bebba558c1b16e5be7c3bb0b3ac6108c37d86da3df5062b5441d4a"
+    },
+    {
+      "url": "/assets/sprites/chars/healer.png",
+      "revision": "2745201131cfc5ea19d4f77d78623a669c325dfb5bf9e26dae7b252e1592cf0b"
+    },
+    {
+      "url": "/assets/sprites/chars/hunter.png",
+      "revision": "80745d11fdf8a4aef53cd069d121fae5b759d63999067b4a7349eebd923c1094"
+    },
+    {
+      "url": "/assets/sprites/chars/knave.png",
+      "revision": "b50e78e686c0a87e0cee5e6ab9129f7b80f2c66c5ddbe27382aeeb9a17f6f66c"
+    },
+    {
+      "url": "/assets/sprites/chars/large-golem.png",
+      "revision": "95f28f01d383fac222b354752a926c98957b0e578e3c10d8458de3608d72b347"
+    },
+    {
+      "url": "/assets/sprites/chars/machine_gunner.png",
+      "revision": "d7ea360d5e490ac5d22259759c52b9d2bc79e77d4d7702ad4b041de14f5197db"
+    },
+    {
+      "url": "/assets/sprites/chars/Metao.png",
+      "revision": "3e7ae4b7a4a26b651ad106df8a2dc7df47f02fa7ab949518b9101327c09bba89"
+    },
+    {
+      "url": "/assets/sprites/chars/mini-golem.png",
+      "revision": "4e6cb26d2b8b54bf46fa91ecdf15cc82db723a20b1c93066631cb239f512035b"
+    },
+    {
+      "url": "/assets/sprites/chars/Mooggy.png",
+      "revision": "d0c7059402eb55dc3e81192e64fe8eead91887e4809ec999b2ca08afa056628c"
+    },
+    {
+      "url": "/assets/sprites/chars/princess.png",
+      "revision": "7692a26db00acc7d28386d8700961ce1d8b2067e75a13515debc0699bdcbbb57"
+    },
+    {
+      "url": "/assets/sprites/chars/PrincessCredits.jpg",
+      "revision": "0e4ef38c3e634fdee9df0a6a3dc67719e5f0bcbaf2848371837797e228f15703"
+    },
+    {
+      "url": "/assets/sprites/chars/PXL_20260820_142621256.MP.jpg",
+      "revision": "888393761cbd172df4f671dbc340ccd7f1e26988f30ca40b28555fc1bfb9fb8e"
+    },
+    {
+      "url": "/assets/sprites/chars/queen_1.png",
+      "revision": "1c86e985462fa6edbe34488830f21a64628a099d3be4202027469d7adee869a2"
+    },
+    {
+      "url": "/assets/sprites/chars/Sarge.png",
+      "revision": "49acd58175123740d20ba8e7daf44fea9a84c0c6ff1ea029ddb211d4cc559113"
+    },
+    {
+      "url": "/assets/sprites/chars/SeaSnake.png",
+      "revision": "34ccc329c054d78551b991d670503c35a4f04d21d79571052802fd2cc35d02d4"
+    },
+    {
+      "url": "/assets/sprites/chars/shield_unit.png",
+      "revision": "5b2398a288dc1f358c9c40f0f0773e4ee95b678260bf4b5c65f0252227b16e37"
+    },
+    {
+      "url": "/assets/sprites/chars/sniper.png",
+      "revision": "4aaeb94bfaf9f19cd0bb9b4407b561beb77108126eebac986d464b9e674b5633"
+    },
+    {
+      "url": "/assets/sprites/chars/summoner.png",
+      "revision": "ea491dd7451d9e70ec1a94c7aa8cccede0c7976724a38e6bead1e80c699f7520"
+    },
+    {
+      "url": "/assets/sprites/chars/Thorn Knight.png",
+      "revision": "544998ccd9acbbf9a0095af6e6994fd33108589a9b4432e433365daaffe47106"
+    },
+    {
+      "url": "/assets/sprites/chars/turtle_boy.png",
+      "revision": "6dc99c04069e74c17ddee2ad50250a10e185d5c28d15812ee28fe74ddc08a09e"
+    },
+    {
+      "url": "/assets/sprites/chars/TurtleBoy.png",
+      "revision": "6580e4e1a5556615a72617389ab0b21909f1548b76f1ff197a430d4272bf6b84"
+    },
+    {
+      "url": "/assets/sprites/combatants.js",
+      "revision": "f46bc26381ebcee55ba60526d004ad1d70422b93486a3d6fdc72bbdb11c8cd53"
+    },
+    {
+      "url": "/assets/sprites/env/anvil_0.png",
+      "revision": "10c23a93b9a4b4e6e8af01e8e45cdb5c37b7c47acac438912d76dd5d92dbd603"
+    },
+    {
+      "url": "/assets/sprites/env/barrel_0.png",
+      "revision": "73cc197d80aaabd5e91a121b3da2d92365c91bee05419eb92fc735ee2b715b2a"
+    },
+    {
+      "url": "/assets/sprites/env/chair_0.png",
+      "revision": "d8c2df9ad60424fd5b2a9cb41ecd5bba8d6b9ad2a94cb35a9815b4c6d090e574"
+    },
+    {
+      "url": "/assets/sprites/env/chair_1.png",
+      "revision": "d971681c2d805e45920462f510f3a739a702703265e4ac4197752315943d6a70"
+    },
+    {
+      "url": "/assets/sprites/env/chest_0.png",
+      "revision": "60d29b08a062ab1b9dd661e8c651c4bc5646f329c3177ee93f7000ab5ea098dc"
+    },
+    {
+      "url": "/assets/sprites/env/chest_a_b.png",
+      "revision": "8dab79263c3812f264d6ab56c9250ea2eff4a69c44d6d7e9daaf98494f9cfaad"
+    },
+    {
+      "url": "/assets/sprites/env/forge_0.png",
+      "revision": "99820f119e34edc5cae9625c5d862b0f793aaac604bc6b24329dc1f1d242f6bd"
+    },
+    {
+      "url": "/assets/sprites/env/ground_0.png",
+      "revision": "679439f8716269e9b57ad36010c6fb3b8500cb69c5538282fa273175008b574d"
+    },
+    {
+      "url": "/assets/sprites/env/ladder_0.png",
+      "revision": "62d15e29d8ec6ec673479cc0d2cdc603766464f90b7e5fd20d0e7ce332bd4c57"
+    },
+    {
+      "url": "/assets/sprites/env/pillar_0.png",
+      "revision": "0ba44897d039b392b41476122eb4cdf3ac34c8cff8e5376643e6416f1c23f76d"
+    },
+    {
+      "url": "/assets/sprites/env/pillar_1.png",
+      "revision": "4f4a0a0720b1281d3fb5a5de753dd096e90c2a0ad2308526eab24eea3f09420b"
+    },
+    {
+      "url": "/assets/sprites/env/pillar_2.png",
+      "revision": "052b3c6711ad17501588a3d55acedaa3e1655c78b9a1939ab7de5dd8b1af0099"
+    },
+    {
+      "url": "/assets/sprites/env/pillar_3.png",
+      "revision": "20a7771ba2696ea7fea80d914ed30569a67bdea88cc317641020857aaceafd21"
+    },
+    {
+      "url": "/assets/sprites/env/pillar.png",
+      "revision": "61e7b12c66ce0d5c005d0fb69fcf27a461c881b393bcd74bb57ad1cbe5738318"
+    },
+    {
+      "url": "/assets/sprites/env/table_0.png",
+      "revision": "dbce3e2197e6af260ff5616b2b68f935df6d9675da43f63df570b75c43723f55"
+    },
+    {
+      "url": "/assets/sprites/env/table_1.png",
+      "revision": "70768d319cc0bdb2ab2828812af5ff9ca9d9e6234a45f0a59e2c6298e026801e"
+    },
+    {
+      "url": "/assets/sprites/env/tree.png",
+      "revision": "67f7ceb0dfa6bdfbad11ff677a4ef8317a631874f874e02c2c09e9f5b54c2c70"
+    },
+    {
+      "url": "/assets/sprites/environment.js",
+      "revision": "28b086c2a523cd372f1f40d9fdd37dc5c5f02a1ad3346c0430c43f50f2836d68"
+    },
+    {
+      "url": "/assets/sprites/icons.js",
+      "revision": "dbfbca9af200f16ec2d799f7959edab6ee0a3d43c98a6eefb8cb921a099a3646"
+    },
+    {
+      "url": "/assets/sprites/ui/mobile-menu.png",
+      "revision": "90cc7d28653e74802f155a145915193a7d5727bc2eae188d01e166d6426ff9ae"
+    },
+    {
+      "url": "/css/character-select.css",
+      "revision": "de8069b223e5b241b0897bc19e20f306bf115352fc7a574865fd8b20f9152922"
+    },
+    {
+      "url": "/css/mobile.css",
+      "revision": "92011e41edcd1108da2ebcaa0ebf66a150325170d241dcaf98bd61301b9ea7f8"
+    },
+    {
+      "url": "/css/panel-borders.css",
+      "revision": "02d1c9edd3fdf07e5696fbd420c2bfa5bc88349448002ba8752418e5bf5d9dc8"
+    },
+    {
+      "url": "/css/style.css",
+      "revision": "db0308fc1eb43d07d6eb55fed00d984413d9612300ad3487a4b053b1db900bbe"
+    },
+    {
+      "url": "/css/theme-princess.css",
+      "revision": "1a8e8b43351a1bbcd39c294c85317d322402b3c3554e72bbef5092dda774f3da"
+    },
+    {
+      "url": "/css/touch-controls.css",
+      "revision": "d78eaf716b6596e864b98dfa23fa2d82114b103f804cda1468377206e9bf022e"
+    },
+    {
+      "url": "/css/tutorial.css",
+      "revision": "c9909b1a7f69a25ed046347fc26d8dc3a559b2df93c4bdc653130e1ba8f4f21a"
+    },
+    {
+      "url": "/game.html",
+      "revision": "d8d8e26f73aedcc2affb3ade536564bb30edd149b3ec8eab912f10eff4d09fda"
+    },
+    {
+      "url": "/index.html",
+      "revision": "49112d3072360bda403c63d29801805e1ab2268b34492b4ae9142ee19c0da023"
+    },
+    {
+      "url": "/js/achievementManager.js",
+      "revision": "5bc120e07e7b846acdc23bd217e6094c9f560d8440f35d5a1e70c9e7bf1ddd8d"
+    },
+    {
+      "url": "/js/achievements.js",
+      "revision": "6b8dc1606c788578cbc701c2e68b5c537cd5e0d68f992474a021372d6f46afe1"
+    },
+    {
+      "url": "/js/config/FeatureFlags.js",
+      "revision": "55b588cc7aa0bac603fd92eefce19cb3144a2a38c078adca9eaacda630580043"
+    },
+    {
+      "url": "/js/core/canvas-recovery.js",
+      "revision": "d961641d618b0b1802e7bb29f3e202d7610b4a9f2d955988c484d04616296b27"
+    },
+    {
+      "url": "/js/core/first-person-look.js",
+      "revision": "5b5312f4282fdd7ac0846e1c0168b2d35bce3c399d54aa68811269d1670bb6cc"
+    },
+    {
+      "url": "/js/core/game-core.js",
+      "revision": "7a72e0923de561db80a16deb33c55950c12a5046f84dbcbd0a1e5fa2ba4be198"
+    },
+    {
+      "url": "/js/core/game-state.js",
+      "revision": "8a493b451a5f19e57fe4e6857a7ef0df0c1cdf7946f7634091d7fc4933084223"
+    },
+    {
+      "url": "/js/core/math-utils.js",
+      "revision": "0e9a7764f5fc9f843ce16ed03d118fb6fa37279cddb411bd6e75881071c8bf69"
+    },
+    {
+      "url": "/js/core/music.js",
+      "revision": "cae1ece92543b2292af9045ac483fcb66bce34789a3f9efe4f39a90b26d07780"
+    },
+    {
+      "url": "/js/core/neo.js",
+      "revision": "dd7078da5d505ecb61944af010189783fc219d713036e3192b8df5b54fd9a51a"
+    },
+    {
+      "url": "/js/core/perf.js",
+      "revision": "dd6589cac6087860d175a4091952c44b68bd6c685745f5d9c3ed652edeead537"
+    },
+    {
+      "url": "/js/core/save-store.js",
+      "revision": "170ed09023cd839c4e0cb7186fd7a2741846091ee69b051670f6f95231ff7699"
+    },
+    {
+      "url": "/js/core/sfx.js",
+      "revision": "258bd2b96af590333bb7ef5d8be2d08d4169d4ad3d4f8f1b348f960c3a1b935d"
+    },
+    {
+      "url": "/js/core/status.js",
+      "revision": "b978f3becb8f62ece0c2d9ef031dcb8b0f6bbf01b721bf2df2857449bb53aa34"
+    },
+    {
+      "url": "/js/core/update.js",
+      "revision": "81e03c5d2ca597a9d99dfa2561df5382d1e18a6867a2fa6413a96572b718c8ad"
+    },
+    {
+      "url": "/js/dataAdapter.js",
+      "revision": "225800cbf550a9061c3a015412db1ab26720b8a4deb013f147490f5f1b1a3259"
+    },
+    {
+      "url": "/js/draw/atlas.js",
+      "revision": "03b69917434c14fdf03a50a0590b0d9fad71bd2a70fd57f5b4b18f5e58a758f1"
+    },
+    {
+      "url": "/js/draw/character-sheets.js",
+      "revision": "9bc1fd1edf1b079c644d8f6e11c04f70c78ee57b21354d42fefa863996017359"
+    },
+    {
+      "url": "/js/draw/entities.js",
+      "revision": "25aeefdf4f6632a5cf9227d6cd6ea2940be13edc8a0b31c00d5c6faa8f826bb8"
+    },
+    {
+      "url": "/js/draw/environment.js",
+      "revision": "d8ffcc9b21c3b14ce62bfd5a201d25800be3d68cc21470b6aa800483fdbc2098"
+    },
+    {
+      "url": "/js/draw/hud.js",
+      "revision": "4c28f471ed485f06d6fb81e1dc493eb7387bb07297ce780d1f400b879431ac8b"
+    },
+    {
+      "url": "/js/draw/image-assets.js",
+      "revision": "8a8e7087ed03a79fa3a39513ccb2906b3dd63e61eeb6a3eff52b945270df7a21"
+    },
+    {
+      "url": "/js/draw/lighting.js",
+      "revision": "6485cda82bfde10b3c596c66d85fd71903600c3d40af148a11a5e7f8f3706c04"
+    },
+    {
+      "url": "/js/draw/pillar-renderer.js",
+      "revision": "f8cc183798d737961ef30b39ad9ec6c49116ef60f72ffc41faa2252cb108cf26"
+    },
+    {
+      "url": "/js/draw/props.js",
+      "revision": "d280e6eaea8b17369ba6507093e5a7529e388de90b28c112ec65d2996e6c42a1"
+    },
+    {
+      "url": "/js/draw/three-loader.js",
+      "revision": "4b97161fe3800afed6c74c24396a110405a9657c3049154ea42f33e102f50c20"
+    },
+    {
+      "url": "/js/draw/three-renderer.js",
+      "revision": "f18513e1a80c961fdf6c3bbfe617799706f175cfbdb19e960555909dfd07192c"
+    },
+    {
+      "url": "/js/draw/viewport.js",
+      "revision": "11fd9a628d45a17b2bcf260cee0d7dee0f1b92ee3f1af94fd8ddff2e79ce0c72"
+    },
+    {
+      "url": "/js/game/allies.js",
+      "revision": "04c21c1ac0198c1c5055eb49f30de38568ae7af88f73905f7c964d432eeebefa"
+    },
+    {
+      "url": "/js/game/combat.js",
+      "revision": "7c023180b8c2d67c93df9f9711d2d55b1f18b8e4b3a072737218e17bef6448c4"
+    },
+    {
+      "url": "/js/game/enemies.js",
+      "revision": "a0465dee409327091430ba860198b242bc65b9b7857793c124edceca9cce46c7"
+    },
+    {
+      "url": "/js/game/hud.js",
+      "revision": "5b003542dc7d1c628657e5856c92810c9c018a63fe40167db53642d8674a85d4"
+    },
+    {
+      "url": "/js/game/player.js",
+      "revision": "8cc8c6dfe809c22a04455da410c44360b83d504b33fe80dd829a62914e726f63"
+    },
+    {
+      "url": "/js/game/projectile-types.js",
+      "revision": "d91bb7f5fcecd89a4191cec4ac2a0efe5ce0b1cffb6e4005732fbe3f75cea5b7"
+    },
+    {
+      "url": "/js/game/rooms.js",
+      "revision": "9803f2d00450127476bdcd18343cea4dac76aa9c89b965d8fbdf06a4938c6657"
+    },
+    {
+      "url": "/js/game/roomTemplates.js",
+      "revision": "a07a29e28f40af96591b7d7ea3c4908521c64c844b3a4421da16f7d450753cb9"
+    },
+    {
+      "url": "/js/game/specialRooms.js",
+      "revision": "9decc40042d559546a2d682441600397e261268b8e235076ca980f3857992b65"
+    },
+    {
+      "url": "/js/game/world.js",
+      "revision": "02cc895312fd314313dfcaf8c6a6960467b47c0784135d06071f84e72aecca47"
+    },
+    {
+      "url": "/js/gamepadControls.js",
+      "revision": "b3e29138116704d745b5bbff25e0d323554fbc67927f5d0d52572c7dd8e660cf"
+    },
+    {
+      "url": "/js/i18n.js",
+      "revision": "7b635982278fe912fce4445f804362014fff7ce00eaace932064175b64ebb681"
+    },
+    {
+      "url": "/js/main.js",
+      "revision": "2eb0320522d17d4892a5f37a149459fbda7b37e36d6bccb9c7277d85f4188625"
+    },
+    {
+      "url": "/js/multiplayer/BrowserMultiplayerSession.js",
+      "revision": "9a204c4648843407464b1b4f8c79bdb205428b01756f2a8a187243e18534d6c2"
+    },
+    {
+      "url": "/js/multiplayer/CloudflareWebSocketTransport.js",
+      "revision": "9df2f4217d43453e7e26b5b82fd04c9c6f21bb833c14aae28970db4ae3069e03"
+    },
+    {
+      "url": "/js/multiplayer/LocalLoopbackTransport.js",
+      "revision": "b53a2a1c5156a0f32ab2085ec2c1bb33dc5de41bbec310d12c12da9e5368655b"
+    },
+    {
+      "url": "/js/multiplayer/LocalMultiplayerSession.js",
+      "revision": "37f5ac51d11fa2af370abef1835a264cac52c579412da67b7235455afd37b7b6"
+    },
+    {
+      "url": "/js/multiplayer/MultiplayerInviteLink.js",
+      "revision": "94bd80a8856e7a2a943dcf5941e9fe806aa50c62ca32f8ca8be187ca9a416888"
+    },
+    {
+      "url": "/js/multiplayer/NetworkTransport.js",
+      "revision": "d8cf0bd1e3b0a6e5b7c92710dee50fe39a093b9c4e390c7c3d55304c0720ee49"
+    },
+    {
+      "url": "/js/multiplayer/OfflineGameSession.js",
+      "revision": "a68aed78274c99be4e75dfce3ee7adf902248d13a90b5428024a678296d4da5d"
+    },
+    {
+      "url": "/js/multiplayer/OfflineTransport.js",
+      "revision": "1941eee4a5dcd0b4c8ac76ae5cc33ef0332bbdf4e73aeaa8000db2cde2cf8737"
+    },
+    {
+      "url": "/js/protocol/ProtocolV1.js",
+      "revision": "027bef4bdd9b160a832bc27d1aa65d21024c2e326a31b5749e1fd56d1d45f304"
+    },
+    {
+      "url": "/js/rendering/NetworkGameView.js",
+      "revision": "230ee05c94f578cd1185885e1fd743a7630462ea88335549d28568489e464a7e"
+    },
+    {
+      "url": "/js/simulation/CampaignMovementRules.js",
+      "revision": "50c92034e09c07c5ea8f3da0c028ccff2516cabc31ad7cd8f4cdf8e358a0848d"
+    },
+    {
+      "url": "/js/simulation/CampaignSimulation.js",
+      "revision": "005985249c9653cca087d52b713a3625f4f8941c5de08b2a58308abd2383231f"
+    },
+    {
+      "url": "/js/simulation/DeterministicFloorGenerator.js",
+      "revision": "ebd0e6e141164e181eb42be69861bd8e7577b3c09834bc92879d3f85ee6fb196"
+    },
+    {
+      "url": "/js/simulation/FixedTickRunner.js",
+      "revision": "7cf6ee5d7d098336fdf85b231679ce2c199aa5f508e849e3712a37e1a7bcf50c"
+    },
+    {
+      "url": "/js/simulation/GameSimulation.js",
+      "revision": "7df0fc332fbd9895be454ab9f5b1ba8ee18da1d32b31cb10acea1eddd8a42e20"
+    },
+    {
+      "url": "/js/simulation/GameState.js",
+      "revision": "8bde415a5be77a8f53e0a8019bd7264baf0469b94d3565ecb7765954c7d6b8ed"
+    },
+    {
+      "url": "/js/simulation/LoopContentSystem.js",
+      "revision": "5c6a47ca15848da6402e5eca0d8d1936f70c863e0b5aef26ff9342e350d1936a"
+    },
+    {
+      "url": "/js/simulation/NetworkCombatSystem.js",
+      "revision": "0a12abc82c32d13e7d342485d31a1ceb17b2b49b37ea3929baf6a2c1d1f45328"
+    },
+    {
+      "url": "/js/simulation/RandomService.js",
+      "revision": "75eebcb2f8ab4395f668109a7711d4c45bf8fb6a89c933a986fa892921633eeb"
+    },
+    {
+      "url": "/js/simulation/SharedAcquisitionSystem.js",
+      "revision": "4baa49ddb102f92d7470118325935cd5a92add13b2d7edd1a6d6cdc66f515c43"
+    },
+    {
+      "url": "/js/simulation/SharedAllySystem.js",
+      "revision": "8883f9649cb0cced96ece234ee55601d51620b5471d57b1d755770570a0db556"
+    },
+    {
+      "url": "/js/simulation/SharedBeamPathSystem.js",
+      "revision": "9fee707d7a1a38bd1722af5bc744d350ed81d2f968807e5febf8a7399f524bb6"
+    },
+    {
+      "url": "/js/simulation/SharedBossIntroSystem.js",
+      "revision": "d2a5cd6d8c78b1754ba0300158414efde3bc7309c09602433eeb0d791f6fc168"
+    },
+    {
+      "url": "/js/simulation/SharedChaosSystem.js",
+      "revision": "622733ad0bd858cdf6da52afe38514d848045c2d691322d0ecaa41b2f915992e"
+    },
+    {
+      "url": "/js/simulation/SharedChestSystem.js",
+      "revision": "e56a237385b512896347cd2d702b1b815ef2b52387b02e51af003031e43177ec"
+    },
+    {
+      "url": "/js/simulation/SharedCombatContent.js",
+      "revision": "0ea0e8f527358e17b805c8e494cf05bf2c4daf9c309304313594c160c282e605"
+    },
+    {
+      "url": "/js/simulation/SharedDamageSystem.js",
+      "revision": "a27cb432eb46b5bed2bb9036f6a7a1456e98091754682db7186608326854e3e2"
+    },
+    {
+      "url": "/js/simulation/SharedDashSystem.js",
+      "revision": "5a27bfe61769b53971557d2cf59d89cd49c4c0cde6fe929834892f31a08829d3"
+    },
+    {
+      "url": "/js/simulation/SharedEliteSystem.js",
+      "revision": "d85311b17db558d538f51e4b8dcbed1e4b90c3d17f66a42674c78b2534e516f0"
+    },
+    {
+      "url": "/js/simulation/SharedEncounterSystem.js",
+      "revision": "9fb6b84061da596b746ebddddebdf5e240dc630f5d1dcc13556954bc97952aec"
+    },
+    {
+      "url": "/js/simulation/SharedEndgameSystem.js",
+      "revision": "912fe901939bb65d979f882e7e2888ed4ccbdf54f1c41ea3078f180b3050feaf"
+    },
+    {
+      "url": "/js/simulation/SharedEndlessIntermissionSystem.js",
+      "revision": "e5ebf0ff3846a5c00e614003e7f217edab1f499d38d0ddc7424ba5b8bcd8f07a"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyAISystem.js",
+      "revision": "11db8b8013fd8b382a800ba5366aa28528419ed6ee6e35bdb8f69e4cbd3396fc"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyBehaviorSystem.js",
+      "revision": "fbf02d32f8719e8872895d8cf0adacca93749fa790a7442efbfd6f11730295ff"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyContent.js",
+      "revision": "3419ea864781f00c0695101f7041f51f02c9a80712fd8be542b47af7093ede8b"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyDropSystem.js",
+      "revision": "1184b24f4bf2571915298e52b1fbd964174451cc8554bd82f3c8b56e1a6a759b"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyScalingSystem.js",
+      "revision": "8b861c5923126e3680f580cf98afaec37689b7b6658ec27975c3da01d8ae8bb2"
+    },
+    {
+      "url": "/js/simulation/SharedEventItemSystem.js",
+      "revision": "410392deea3fe8e4839226d1fb801c345c45ef19040593ae42166cf50aefcecd"
+    },
+    {
+      "url": "/js/simulation/SharedForgeSystem.js",
+      "revision": "60e4e0691da51665023b1403530380383c3b5005962c7cbb7afef73289c93717"
+    },
+    {
+      "url": "/js/simulation/SharedHazardSystem.js",
+      "revision": "5eec0756babcdaea304101d9bd5ef8afa59b8f91caadef8a69985a0f8132cc1d"
+    },
+    {
+      "url": "/js/simulation/SharedHitResolutionSystem.js",
+      "revision": "40b4d70b5c4098afefd7fef6c22d9521bfed599f6464fc4f34fcdc5deacc8db6"
+    },
+    {
+      "url": "/js/simulation/SharedInventorySystem.js",
+      "revision": "38736f6e82a35154e5d0454f64ab90eeab933c291d7a4b6a18a7ed400e43b08a"
+    },
+    {
+      "url": "/js/simulation/SharedItemContent.js",
+      "revision": "c56d938bee1fd24d5399574bc66fe4926e7d739ae40fa2efee3ae6ef697204ee"
+    },
+    {
+      "url": "/js/simulation/SharedItemDefinitions.js",
+      "revision": "ef8f0e02786ff9668607a920815c45f8bd11f493e34f68a5a6c271de0dd397b4"
+    },
+    {
+      "url": "/js/simulation/SharedItemEffectSystem.js",
+      "revision": "4207a4774e73d3c80b1c556b418858174807bcd7cd0faf32d429e2387d51e00a"
+    },
+    {
+      "url": "/js/simulation/SharedMirrorCombatSystem.js",
+      "revision": "2d4d98cb9dd548eb16ddb652bc0e8ac074488e003d6a9f99493f7469bacaf673"
+    },
+    {
+      "url": "/js/simulation/SharedMoveContent.js",
+      "revision": "e7a04b5d854960bdb37ae3ab1999e1b36aac27032c49bf05d5ff4ab8b17696c7"
+    },
+    {
+      "url": "/js/simulation/SharedMoveEffectSystem.js",
+      "revision": "dcd0e194de8645e190b51638eab5c18e5072653b67ca5a3d8803f91500a90e09"
+    },
+    {
+      "url": "/js/simulation/SharedPlayerDamageSystem.js",
+      "revision": "e3a5d3666e3c29b858b7e3abb97894d9fff843a394cf37e9c4489b10e4d36aa6"
+    },
+    {
+      "url": "/js/simulation/SharedPotionSystem.js",
+      "revision": "ef3a92e353e855c3b86cf678ef8657efbb9529a4f8a7782c3e2e4abcf6aaef98"
+    },
+    {
+      "url": "/js/simulation/SharedProgressionSystem.js",
+      "revision": "961c4574d8bfca693eee9e4ce199cae3a88e1b9f850b44c2d1364c6a11554160"
+    },
+    {
+      "url": "/js/simulation/SharedProjectileSystem.js",
+      "revision": "8325833972cdf51f4f8959990903b49e27e585afe7e87a220ccb3728b1d9233b"
+    },
+    {
+      "url": "/js/simulation/SharedRivalSystem.js",
+      "revision": "b9cbdb6800f8992f2bdcf0148c537a3bd94eed6550457d2ca4dea7de00ddfd75"
+    },
+    {
+      "url": "/js/simulation/SharedRoomInteriorSystem.js",
+      "revision": "a90885151d6e5e8a7983c4ba2f461c63b99edb828825e9aaa343bb847cd980ce"
+    },
+    {
+      "url": "/js/simulation/SharedRoomLifecycleSystem.js",
+      "revision": "50217d8e9151013f40c2f7c32514aaca1c3666d63aad2398fc9cdb53162e366b"
+    },
+    {
+      "url": "/js/simulation/SharedRunServiceSystem.js",
+      "revision": "345f90550a9f322504e2c6751d2427648c09d6481df78adbf5eea8954014097f"
+    },
+    {
+      "url": "/js/simulation/SharedShopSystem.js",
+      "revision": "07634973dbe76184c76ef0d95c55e7fdb864719b263939650286dfab43985873"
+    },
+    {
+      "url": "/js/simulation/SharedSpecialRoomSystem.js",
+      "revision": "5a5449c42633e3ce09753578342e3f06242b06d1892f96ca3969582d88423ac5"
+    },
+    {
+      "url": "/js/simulation/SharedStatusSystem.js",
+      "revision": "9326610a4ad19853fe613dc3168722411f158dd3a78fe156604be36b343ee06f"
+    },
+    {
+      "url": "/js/simulation/SharedWorldContent.js",
+      "revision": "edf20479a76a0988b0719a12a124d06e1266bd2602bbc8ac4b13e466bec38866"
+    },
+    {
+      "url": "/js/simulation/SharedWorldMutationSystem.js",
+      "revision": "6945cd6c7ccd317098eddf6030dafa180a1cc58d8555c5bbebe037dd5d4aa818"
+    },
+    {
+      "url": "/js/story/campaigns.js",
+      "revision": "1cf08fd1d3da033875392ca2d8cff95a81e054f5b0bc0292dec515dc18ee80dc"
+    },
+    {
+      "url": "/js/story/cutscene-manager.js",
+      "revision": "786a9daa2fa798703d3794925499d44967f8f5edd438450f6c29ef0952094e51"
+    },
+    {
+      "url": "/js/touchControls.js",
+      "revision": "5542e22b8e52f4b529b1d10b4662df4bc6d8b859b83309b958aec0cd46cd219e"
+    },
+    {
+      "url": "/js/tutorial/scenes.js",
+      "revision": "ef7d7f6df74d15bc82ae16eaeeadf219e6a6494c264b7f21be99964e7f0a7e81"
+    },
+    {
+      "url": "/js/ui/controller.js",
+      "revision": "75c8651c1271b3f25d1c7e819601f8088c22794efb1e5425fcd3dfe71661b62f"
+    },
+    {
+      "url": "/js/ui/credits.js",
+      "revision": "f8902fd760e0ffe6c1285f45bad0b763d7a2b491b05c25292bff90dfa3ace6fb"
+    },
+    {
+      "url": "/js/ui/custom-sprite-editor.js",
+      "revision": "efb55eb0adaff95c58528c395752c5d0e9e219e54f01d5fc64344f4aca77a7c7"
+    },
+    {
+      "url": "/js/ui/input.js",
+      "revision": "44eaee8e8771db0b29ff579fd043e20153eca3a445f98c355d245d31e2fb29be"
+    },
+    {
+      "url": "/js/ui/item-picker.js",
+      "revision": "dc92333f1c4a1ec803c8343f730e4c0c90db00f28b248e5eeb267c8040f3b15b"
+    },
+    {
+      "url": "/js/ui/lazy-panels.js",
+      "revision": "27dded29a23a8c171309f5859fd6ec9cd378ea119d8a00ed56fd6a522da4bba4"
+    },
+    {
+      "url": "/js/ui/menu-background.js",
+      "revision": "a74212fd1fcb78fcdeddaf67728a3cbe640e57ef52d752f76fd960ef0cc3f7f8"
+    },
+    {
+      "url": "/js/ui/move-preview.js",
+      "revision": "4ca7832bb73ee035769afdeacbffe10fb4e1790ff6214acdbe4e0030df11f0da"
+    },
+    {
+      "url": "/js/ui/notifications.js",
+      "revision": "47c289aa4451a85b1671372f82635a8f4c5509364110b8d9f82ac831c311c88d"
+    },
+    {
+      "url": "/js/ui/panels.js",
+      "revision": "b373b3d9d108e90ed0722b231450ed6bc3a7dae38c8712402feb7bd717b419e3"
+    },
+    {
+      "url": "/js/ui/pwa-update-prompt.js",
+      "revision": "8ef43e9692fc07ec3abd5f2e88c754955eac1af8c5bf129307fa2cd0266d5cea"
+    },
+    {
+      "url": "/js/ui/settings-ui.js",
+      "revision": "6b7dd0028bb7096f75e02d28868acb1db1c69f26f32022ad9a1fd27908e22cab"
+    },
+    {
+      "url": "/js/ui/sprite-editor.js",
+      "revision": "7bf3f29f5028aa4a569e0b06349b16de0e844b762a86761f9e32cc2e325d5e0f"
+    },
+    {
+      "url": "/js/ui/tutorial-controller.js",
+      "revision": "2a4e847d894fb24750b7f58dbd89126a8b575e7ed70c3e7b47cdfd75d9cf6710"
+    },
+    {
+      "url": "/js/ui/unlock-banner.js",
+      "revision": "92d317d68925f6e5149e43deb095090f7eef1bb8cdcc5a46187d7aaeb1b2e29d"
+    },
+    {
+      "url": "/js/vendor/koz-engine.browser-bundle.js",
+      "revision": "ba23c5bb3a182b5bbc5af9dd5217dfd1b4be32e69d97504855c410213a5b0c1a"
+    },
+    {
+      "url": "/js/vendor/koz-pwa-service-worker-runtime.js",
+      "revision": "0d1d741b3f636008153e06f95db612005614a2885bf93a2872761a63ae99ce4d"
+    },
+    {
+      "url": "/js/vendor/three.core.js",
+      "revision": "3718df126d69c125362a03340913204470d8c50238605150e57f808840fb7759"
+    },
+    {
+      "url": "/js/vendor/three.module.js",
+      "revision": "bbf5ed13fe4373f5bd38b14ea8e62e9f157327da5638edc6d3863e08b167c9c7"
+    },
+    {
+      "url": "/manifest.json",
+      "revision": "17ed884b6678657b402d0934423ea9730b0c727c835fa0d93976b4149cf8d0ba"
+    }
   ],
   "optional": [
-    "/assets/credits-images/bug.png",
-    "/assets/credits-images/digits.png",
-    "/assets/credits-images/Explorer2000.webp",
-    "/assets/credits-images/forrest.gif",
-    "/assets/credits-images/ihave13digits.webp",
-    "/assets/credits-images/pixelDavid.png",
-    "/assets/credits-images/PrincessCredits.jpg",
-    "/assets/credits-images/smudge.jpg",
-    "/assets/sounds/Coin.wav",
-    "/assets/sounds/Heal_player.wav",
-    "/assets/sounds/Item Collect.wav",
-    "/assets/sounds/music/Neo Nyke - Gameplay (Loop).wav",
-    "/assets/sounds/music/Neo Nyke - main theme.mp3",
-    "/assets/sounds/music/Neo Nyke - Title Intro.mp3",
-    "/assets/sounds/music/Neo Nyke - Title Loop.mp3",
-    "/assets/sounds/Player Death.wav",
-    "/assets/sounds/sf_Lightning Charge_looped.wav",
-    "/assets/sounds/sf_Lightning Charge.wav",
-    "/assets/sounds/sf_menu_click 1.wav",
-    "/assets/sounds/sf_menu_click 2.wav",
-    "/assets/sounds/sf_new_fire.wav",
-    "/assets/sounds/sfx_achievement 1.mp3",
-    "/assets/sounds/sfx_achievement 2.mp3",
-    "/assets/sounds/sfx_achievement 3.mp3",
-    "/assets/sounds/sfx_AOE 4.wav",
-    "/assets/sounds/sfx_bomb explosion.wav",
-    "/assets/sounds/sfx_break vase 2.wav",
-    "/assets/sounds/sfx_break vase 3.wav",
-    "/assets/sounds/sfx_break_funiture.wav",
-    "/assets/sounds/sfx_Buy-Sell 1.wav",
-    "/assets/sounds/sfx_Buy-Sell 2.wav",
-    "/assets/sounds/sfx_Buy-Sell 3.wav",
-    "/assets/sounds/sfx_dash 1.mp3",
-    "/assets/sounds/sfx_Dialogue 1.wav",
-    "/assets/sounds/sfx_Dialogue 2.wav",
-    "/assets/sounds/sfx_Dialogue 3.wav",
-    "/assets/sounds/sfx_enemy hit_ uuearh_long.wav",
-    "/assets/sounds/sfx_enemy hit_ uuearh.wav",
-    "/assets/sounds/sfx_enemy hit_aahh_boss.wav",
-    "/assets/sounds/sfx_enemy hit_arrgh.wav",
-    "/assets/sounds/sfx_enemy hit_ooah_deep.wav",
-    "/assets/sounds/sfx_enemy hit_uiiiiee_short.wav",
-    "/assets/sounds/sfx_enemy hit_uuaa_deep.wav",
-    "/assets/sounds/sfx_enemy hit_uuua_deep.wav",
-    "/assets/sounds/sfx_enemy hit_wueea.wav",
-    "/assets/sounds/sfx_Enemy Hit.wav",
-    "/assets/sounds/sfx_Fire.wav",
-    "/assets/sounds/sfx_Forge Upgrade.wav",
-    "/assets/sounds/sfx_hud_confirm 6.wav",
-    "/assets/sounds/sfx_ladder.wav",
-    "/assets/sounds/sfx_lazer_blast.mp3",
-    "/assets/sounds/sfx_room transition.wav",
-    "/assets/sounds/sfx_secret reveal 3.mp3",
-    "/assets/sounds/sfx_secret reveal 4.mp3",
-    "/assets/sounds/sfx_secret reveal.mp3",
-    "/assets/sounds/sfx_Sword Swing 1.wav",
-    "/assets/sounds/sfx_Sword Swing 2.wav",
-    "/assets/sounds/sfx_victory 1.mp3",
-    "/assets/sounds/sfx_victory 2.mp3",
-    "/assets/sounds/sfx_victory 3.mp3"
+    {
+      "url": "/assets/credits-images/bug.png",
+      "revision": "2b52e522d028d5d254b0b43706ee1d205a07c106bf3c63b4185df7dcadaf794f"
+    },
+    {
+      "url": "/assets/credits-images/digits.png",
+      "revision": "7a51441236339b07f0a061a420697cbff06633ba78363ca46f63954181e3a2a7"
+    },
+    {
+      "url": "/assets/credits-images/Explorer2000.webp",
+      "revision": "abd08ba85584b3d12340486de5356e4ededcb9199f3c2e56b95fbc13eab794b1"
+    },
+    {
+      "url": "/assets/credits-images/forrest.gif",
+      "revision": "7b7824067af2402c55d078284117b6194898fb912bdbaf2f49a4d57bc44ed231"
+    },
+    {
+      "url": "/assets/credits-images/ihave13digits.webp",
+      "revision": "ebbc4e781ce957381543ba57b945d1226c52c8ac6e72670acf790e5896f760da"
+    },
+    {
+      "url": "/assets/credits-images/pixelDavid.png",
+      "revision": "75649e007281864520014a19d65c360d7193b752ce25483936af568684a6ab09"
+    },
+    {
+      "url": "/assets/credits-images/PrincessCredits.jpg",
+      "revision": "0e4ef38c3e634fdee9df0a6a3dc67719e5f0bcbaf2848371837797e228f15703"
+    },
+    {
+      "url": "/assets/credits-images/smudge.jpg",
+      "revision": "105e7d14c9c3ff3d4dbdf0aa2b603ad3077010dc7557c07622b51914a47b05ec"
+    },
+    {
+      "url": "/assets/sounds/Coin.wav",
+      "revision": "c8a40f0f022a28227608f2afb607604369c57a3f13f21fac0bc25540bb7adb12"
+    },
+    {
+      "url": "/assets/sounds/Heal_player.wav",
+      "revision": "08b2971c46eb5b5e4a222d30ff5d745b342fac634a796178b3ef7445c3fa7d94"
+    },
+    {
+      "url": "/assets/sounds/Item Collect.wav",
+      "revision": "5169b9f5731ba716720e8fc752b7154432c1869cf4bee8315820c2c584f20c5b"
+    },
+    {
+      "url": "/assets/sounds/music/Neo Nyke - Gameplay (Loop).wav",
+      "revision": "69ce4775f62e94942de80cdaa5de970c792c4a29b1e87534005fa6e6998a6253"
+    },
+    {
+      "url": "/assets/sounds/music/Neo Nyke - main theme.mp3",
+      "revision": "e5eac3a9fa8e60ad7793913368f294cdf18898f47d396979bf35894464564a6b"
+    },
+    {
+      "url": "/assets/sounds/music/Neo Nyke - Title Intro.mp3",
+      "revision": "ae0f0b482d54548968eaad6252febe60d6120a31dbe6918bd0bcd01074d0ba2a"
+    },
+    {
+      "url": "/assets/sounds/music/Neo Nyke - Title Loop.mp3",
+      "revision": "55c309ab31577bb37012889fb31a428f01f9d98bb1f009da4f16998c6aeafb77"
+    },
+    {
+      "url": "/assets/sounds/Player Death.wav",
+      "revision": "db280f1f70e5a85becab6885db5edbcfc5f6656990104ea31f04ad55fd4bd2b9"
+    },
+    {
+      "url": "/assets/sounds/sf_Lightning Charge_looped.wav",
+      "revision": "87c3da99661e21b3ef02efc2b04ef600d7f06b21cf3a1cc19ded33b046e7be27"
+    },
+    {
+      "url": "/assets/sounds/sf_Lightning Charge.wav",
+      "revision": "32abcc03a56b4f36cb60333960f038bba2d555c464bb089cb51168f9c69ffdf8"
+    },
+    {
+      "url": "/assets/sounds/sf_menu_click 1.wav",
+      "revision": "8227d8aa63f7593ad517d1c04626cc2554fbb318ee9741ec40a800ed2ce00ca9"
+    },
+    {
+      "url": "/assets/sounds/sf_menu_click 2.wav",
+      "revision": "992426af8c73d5addbb46224bc1d9c1704c81ba5f7958ea0fc1701bc417daaa4"
+    },
+    {
+      "url": "/assets/sounds/sf_new_fire.wav",
+      "revision": "d3422975d1d3bd2a0ba50a7f4983fb02e8ac27bc62470e72823fa60e058562dd"
+    },
+    {
+      "url": "/assets/sounds/sfx_achievement 1.mp3",
+      "revision": "68355661f35a723feb3afb5a7401c82ed7745a61e67e866173c1c61c6ac3d7fe"
+    },
+    {
+      "url": "/assets/sounds/sfx_achievement 2.mp3",
+      "revision": "1e8bbf40c0683b6d8862f865644beb46fb7f8559972ec4e222229f6ec62d2721"
+    },
+    {
+      "url": "/assets/sounds/sfx_achievement 3.mp3",
+      "revision": "480828f2445c382bbcfc5965f398aab64cc86a85cc992bef3a8a091153cd9414"
+    },
+    {
+      "url": "/assets/sounds/sfx_AOE 4.wav",
+      "revision": "92fcea12926a02b1fe9bba7baee94b455a09203ac8dd8cd7794658d48d2a7de8"
+    },
+    {
+      "url": "/assets/sounds/sfx_bomb explosion.wav",
+      "revision": "9f48e30ea1bc2a30f5e79b7597ff2fc588bc99fa3be13675d77e375e56e38d37"
+    },
+    {
+      "url": "/assets/sounds/sfx_break vase 2.wav",
+      "revision": "cc0d72e0e3b0a4b7835e1eb3197be43d79cf90a6543de44d5fdbf83cbbb86fd1"
+    },
+    {
+      "url": "/assets/sounds/sfx_break vase 3.wav",
+      "revision": "d07406314f564ef52e8ca1a325f13da22d55599aa66b8661226cacfd69858214"
+    },
+    {
+      "url": "/assets/sounds/sfx_break_funiture.wav",
+      "revision": "d091783399a0543e56494e1f4a638c2b014b616d771429baf985947ffe023b92"
+    },
+    {
+      "url": "/assets/sounds/sfx_Buy-Sell 1.wav",
+      "revision": "6a6a7b74a74e9a92ccab5af200869a69dc652e850d056f0696858b930b49563b"
+    },
+    {
+      "url": "/assets/sounds/sfx_Buy-Sell 2.wav",
+      "revision": "cd76c5736542850e0fa120806dd25714d4257a35069a44f55bbb69c906a474a2"
+    },
+    {
+      "url": "/assets/sounds/sfx_Buy-Sell 3.wav",
+      "revision": "70fc7632fb5cc1e2d0c495a53e4dfddb2f64cf9b64b504ccb548dd4aba532a69"
+    },
+    {
+      "url": "/assets/sounds/sfx_dash 1.mp3",
+      "revision": "6487ce6d5842d6d2690293c55df89839b43b2c5ba563319851befdaca3ed89fa"
+    },
+    {
+      "url": "/assets/sounds/sfx_Dialogue 1.wav",
+      "revision": "6d39c646db509611861c0d73851e205ba45af1bf135367b65a0e25c1ca45ce9f"
+    },
+    {
+      "url": "/assets/sounds/sfx_Dialogue 2.wav",
+      "revision": "1a633805c50f5a9beb9c165ab7437da34f84aafff6cc5959e4c6431904465fa4"
+    },
+    {
+      "url": "/assets/sounds/sfx_Dialogue 3.wav",
+      "revision": "8bfff7ddbf6ff7c78e05ac9fb092014e01edffdcafad504f1e78019426d029b9"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_ uuearh_long.wav",
+      "revision": "1a0a0cee45bdcc9d5da73673dc79147fab6b2637c60a14bf63535d4a6b99cef0"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_ uuearh.wav",
+      "revision": "fe408b2a21a335930465b6fff79062402c6c0a0ae8300e78ef75c061920c5c67"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_aahh_boss.wav",
+      "revision": "baaa569b52f61611cb7a9874437e49fb6ac189cb1e31e97c8cb243c33f7e8dd5"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_arrgh.wav",
+      "revision": "db72b7ddf00b7cc2ed09299713f02905dcee1e335b5fb1f012542fd4ab427f99"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_ooah_deep.wav",
+      "revision": "e7b53f52cf175e5b0c98c8f053ad2ea28f1da935870bf1526e6ae9db18dab119"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_uiiiiee_short.wav",
+      "revision": "b0e0ea7a3d8ec7dd906cd83ca08a4e4cb50426205da65ead590518222ccc8dfe"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_uuaa_deep.wav",
+      "revision": "a95228fa80198d92774571c74f479fb7c7c0c1d9baa04aac8c3358c173e2265f"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_uuua_deep.wav",
+      "revision": "3181ef92b9741c6809e40564a39f0b6ac5e241a5ea2da96bc3ded6608b518c10"
+    },
+    {
+      "url": "/assets/sounds/sfx_enemy hit_wueea.wav",
+      "revision": "1bbb26b3af8e136f4d167295c5fa177e239c7a4c6a770380688a978b722d8c29"
+    },
+    {
+      "url": "/assets/sounds/sfx_Enemy Hit.wav",
+      "revision": "3b3cfedf7060bedc79e802a854a481130eeb59b4208767f158a8dbdeb36799d8"
+    },
+    {
+      "url": "/assets/sounds/sfx_Fire.wav",
+      "revision": "1f90be93286e31896fbe5e9e10206bf65034bf009327da5772f1d35338aea0dd"
+    },
+    {
+      "url": "/assets/sounds/sfx_Forge Upgrade.wav",
+      "revision": "331af385a2dca177e7ec500d06311aea02447a747a01ca8b7282003e927b6eb2"
+    },
+    {
+      "url": "/assets/sounds/sfx_hud_confirm 6.wav",
+      "revision": "7284d099452a115a5028d44cc99afb2dca504af64fb77cdfeb61e38ab1902dc7"
+    },
+    {
+      "url": "/assets/sounds/sfx_ladder.wav",
+      "revision": "82029a1f1a6fecfb787d02bd5f0a3e8ac70100a78d72e07b7583302415ec3af4"
+    },
+    {
+      "url": "/assets/sounds/sfx_lazer_blast.mp3",
+      "revision": "3cb3a4e5ff0b3b15919302d78db64438306a90cec8b8e0edc1c602d3b918c5f3"
+    },
+    {
+      "url": "/assets/sounds/sfx_room transition.wav",
+      "revision": "a8f8fbb48c353d388f4753b4186d0c49b4f16b98d49792d999cc6b9df852895b"
+    },
+    {
+      "url": "/assets/sounds/sfx_secret reveal 3.mp3",
+      "revision": "61b83085395d2fc2ab76d776a8554b8215cdf0dc8db136e584361aed335e340a"
+    },
+    {
+      "url": "/assets/sounds/sfx_secret reveal 4.mp3",
+      "revision": "c2c4897719591999aba9fdf90b14c22c6f93473af548f1fd7c90bc9d95759202"
+    },
+    {
+      "url": "/assets/sounds/sfx_secret reveal.mp3",
+      "revision": "5db7d9d14a20a640ee751ef88a5a7867c2e76e761cbadefc9945f8d2ed44d7f9"
+    },
+    {
+      "url": "/assets/sounds/sfx_Sword Swing 1.wav",
+      "revision": "7b2242906be60fd9c3b245ed42affe97f5ba476357b405d041f227fdd288d895"
+    },
+    {
+      "url": "/assets/sounds/sfx_Sword Swing 2.wav",
+      "revision": "fe428edd00d8f122c745c7b426416b3eee9bac0b7102403a12de6c5b89b1c97f"
+    },
+    {
+      "url": "/assets/sounds/sfx_victory 1.mp3",
+      "revision": "8843a1e890825c072dbac4ebf721e05026c5943539c129e4f9644127d7b1d453"
+    },
+    {
+      "url": "/assets/sounds/sfx_victory 2.mp3",
+      "revision": "ed79b39af88a30c89a8b817db5fcdef401438a6f7a1940c000f42ff34e850f49"
+    },
+    {
+      "url": "/assets/sounds/sfx_victory 3.mp3",
+      "revision": "d09134a678421f4de4d798d971717d947d98b4b734a397664206c05fa90dc0a7"
+    }
   ],
   "navigationFallback": "/index.html",
   "networkOnly": [
@@ -308,13 +1190,13 @@ const KOZ_PWA_CONFIG = {
   "warmOptionalOnInstall": false,
   "manifestSummary": {
     "entries": 294,
-    "bytes": 56776739,
+    "bytes": 56779455,
     "criticalEntries": 234,
-    "criticalBytes": 13810754,
+    "criticalBytes": 13813470,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "7583d842a20e5fe0"
+  "version": "fac5b234fbb1378b"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

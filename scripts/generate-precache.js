@@ -135,8 +135,10 @@ function createGeneratedConfig() {
 
   const config = {
     cachePrefix: "neonyke",
-    critical: manifest.critical.map(function toUrl(entry) { return entry.url; }),
-    optional: manifest.optional.map(function toUrl(entry) { return entry.url; }),
+    // The runtime reuses entries across caches by URL + revision. Dropping the
+    // revision would copy stale files into every subsequent release.
+    critical: manifest.critical.map(({ url, revision }) => ({ url, revision })),
+    optional: manifest.optional.map(({ url, revision }) => ({ url, revision })),
     navigationFallback: "/index.html",
     networkOnly: ["/api/"],
     concurrency: 4,
@@ -186,6 +188,7 @@ function readCurrentConfig() {
 function readCurrentPrecache() {
   const config = readCurrentConfig();
   return [...(config?.critical || []), ...(config?.optional || [])]
+    .map(entry => typeof entry === 'string' ? entry : entry.url)
     .sort(function byUrl(a, b) { return a.localeCompare(b); });
 }
 

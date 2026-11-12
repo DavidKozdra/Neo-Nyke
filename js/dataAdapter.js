@@ -145,29 +145,77 @@
     return records.find(record => record?.key === key)?.value ?? null;
   }
 
+  function isRecord(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function requireValidImport(condition) {
+    if (!condition) throw new TypeError('Invalid or unsupported NEO NYKE save file.');
+  }
+
+  function validateSaveValue(key, value) {
+    if (key === 'meta' || key === 'run') requireValidImport(value === null || isRecord(value));
+    if (key === 'runHistory') requireValidImport(value === null || (Array.isArray(value) && value.every(isRecord)));
+  }
+
+  function validateImportPayload(payload) {
+    requireValidImport(isRecord(payload.localStorage));
+    for (const [key, value] of Object.entries(payload.localStorage)) {
+      requireValidImport(key.startsWith(LOCAL_PREFIX) && typeof value === 'string');
+    }
+    for (const storeName of IDB_STORES) {
+      const records = payload.stores[storeName];
+      requireValidImport(Array.isArray(records));
+      for (const record of records) {
+        requireValidImport(isRecord(record) && typeof record.key === 'string' && record.key.length > 0
+          && Object.hasOwn(record, 'value'));
+        if (storeName === 'achievements') {
+          requireValidImport(isRecord(record.value) && record.value.id === record.key);
+        } else {
+          validateSaveValue(record.key, record.value);
+        }
+        const encoded = record.value?.blob;
+        if (encoded?.__neoSerializedBlob) {
+          requireValidImport(encoded.__neoSerializedBlob === true && typeof encoded.type === 'string'
+            && typeof encoded.dataUrl === 'string' && /^data:[^,]*,/i.test(encoded.dataUrl));
+        }
+      }
+    }
+    return payload;
+  }
+
   function normalizeImportPayload(data) {
-    const modernStores = data?.indexedDB?.[DB_NAME]?.stores;
-    if (modernStores && typeof modernStores === 'object') {
-      return {
-        localStorage: data.localStorage || {},
-        stores: modernStores,
-      };
+    requireValidImport(isRecord(data));
+    if (Object.hasOwn(data, 'format')) requireValidImport(data.format === 'neonyke-client-data' && Object.hasOwn(data, 'version'));
+    if (Object.hasOwn(data, 'version')) requireValidImport(Number.isInteger(data.version) && data.version >= 1 && data.version <= 3);
+    if (data.format === 'neonyke-client-data' && data.version === 3) requireValidImport(Object.hasOwn(data, 'indexedDB'));
+    if (Object.hasOwn(data, 'indexedDB')) {
+      const database = data.indexedDB?.[DB_NAME];
+      requireValidImport(isRecord(database) && isRecord(database.stores));
+      if (Object.hasOwn(database, 'version')) requireValidImport(Number.isInteger(database.version)
+        && database.version >= 1 && database.version <= DB_VERSION);
+      return validateImportPayload({
+        localStorage: data.localStorage ?? {},
+        stores: database.stores,
+      });
     }
 
+    // Older exports used top-level save values instead of IndexedDB records.
+    // An arbitrary JSON object must never become an empty replacement save.
+    requireValidImport(Object.hasOwn(data, 'meta') && Object.hasOwn(data, 'run'));
     const saves = [];
-    if (data && 'meta' in data) saves.push({ key: 'meta', value: data.meta });
-    if (data && 'run' in data) saves.push({ key: 'run', value: data.run });
-    if (data && 'runHistory' in data) saves.push({ key: 'runHistory', value: data.runHistory });
+    for (const key of ['meta', 'run', 'runHistory']) {
+      if (Object.hasOwn(data, key)) saves.push({ key, value: data[key] });
+    }
+    if (Object.hasOwn(data, 'achievements')) requireValidImport(Array.isArray(data.achievements));
 
-    return {
-      localStorage: data?.localStorage || {},
+    return validateImportPayload({
+      localStorage: data.localStorage ?? {},
       stores: {
         saves,
-        achievements: Array.isArray(data?.achievements)
-          ? data.achievements.map(value => ({ key: value?.id, value })).filter(record => record.key)
-          : [],
+        achievements: (data.achievements || []).map(value => ({ key: value?.id, value })),
       },
-    };
+    });
   }
 
   async function flushAchievementWrites() {
@@ -207,15 +255,21 @@
   }
 
   async function importAll(data) {
-    window.__neoDataResetting = true;
     const payload = normalizeImportPayload(data);
-    importLocalStorage(payload.localStorage);
+    // Decode every embedded sprite before clearing anything: malformed data
+    // URLs can fail asynchronously even after the record shapes pass validation.
+    const stores = Object.fromEntries(await Promise.all(IDB_STORES.map(async storeName => [
+      storeName, await deserializeStoreRecords(payload.stores[storeName]),
+    ])));
     const db = await openDB();
+    const wasResetting = window.__neoDataResetting;
+    window.__neoDataResetting = true;
     try {
-      await Promise.all(IDB_STORES.map(async storeName => {
-        const records = await deserializeStoreRecords(payload.stores?.[storeName] || []);
-        await importStore(db, storeName, records);
-      }));
+      importLocalStorage(payload.localStorage);
+      await Promise.all(IDB_STORES.map(storeName => importStore(db, storeName, stores[storeName])));
+    } catch (error) {
+      window.__neoDataResetting = wasResetting;
+      throw error;
     } finally {
       closeDB(db);
     }

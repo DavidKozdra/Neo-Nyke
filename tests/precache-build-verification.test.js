@@ -55,6 +55,21 @@ describe('precache build verification', () => {
     expect(result.critical).toEqual(['/js/main.js']);
   });
 
+  test('verifies revisioned entries and reports missing URLs in both cache groups', () => {
+    writeBuild(directory, {
+      critical: [{ url: '/', revision: 'shell' }, { url: '/js/main.js', revision: 'code' }],
+      optional: [{ url: '/assets/sounds/hit.wav', revision: 'audio' }],
+      navigationFallback: '/index.html',
+      version: 'revisioned',
+    }, ['index.html']);
+
+    const result = verifyPrecacheBuild(directory);
+
+    expect(result.ok).toBe(false);
+    expect(result.critical).toEqual(['/js/main.js']);
+    expect(result.optional).toEqual(['/assets/sounds/hit.wav']);
+  });
+
   test('separates optional misses so a shell-only build is still diagnosable', () => {
     writeBuild(directory, {
       critical: ['/index.html'],

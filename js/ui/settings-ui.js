@@ -2321,7 +2321,6 @@
       blogList.innerHTML = toShow.map(n => `
         <div class="rh-blog-card" style="--blog-accent:${n.accent || '#a8c8ff'}">
           <div class="rh-blog-card__head">
-            <span class="rh-blog-card__icon">${n.icon || '📌'}</span>
             <span class="rh-blog-card__title">${n.title}</span>
             ${n.date ? `<span class="rh-blog-card__date">${n.date}</span>` : ''}
           </div>

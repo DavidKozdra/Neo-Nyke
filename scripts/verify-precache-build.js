@@ -34,7 +34,7 @@ function toDiskPath(rootDir, url, navigationFallback) {
 }
 
 function findMissing(rootDir, urls, navigationFallback) {
-  return urls.filter(function isMissing(url) {
+  return urls.map(entry => typeof entry === 'string' ? entry : entry.url).filter(function isMissing(url) {
     const target = toDiskPath(rootDir, url, navigationFallback);
     return !fs.existsSync(target) || !fs.statSync(target).isFile();
   });

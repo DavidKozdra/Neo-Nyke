@@ -15330,10 +15330,6 @@ body.network-multiplayer-active #c {
   align-items: center;
   gap: 8px;
 }
-.rh-blog-card__icon {
-  font-size: 1rem;
-  line-height: 1;
-}
 .rh-blog-card__title {
   flex: 1;
   font-size: calc(13px * var(--font-scale, 1));

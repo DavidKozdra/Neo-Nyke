@@ -881,12 +881,19 @@ export class MultiplayerRoom {
 
 const NOTICES = [
   {
+    id: 'release-1-0',
+    type: 'update',
+    date: '2026-11-12',
+    title: "Release 1.0",
+    body: "NEO NYKE Release 1.0 is here. Take on the dungeon, explore Survival, face the bosses in Boss Rush, or play local Co-op and PvP. Alternate-mode icons have been refreshed for clearer mode selection.",
+    accent: '#7ff4c4',
+  },
+  {
     id: 'kiah-birthday',
     type: 'birthday',
     mmdd: '04-06',
     title: "Happy Birthday, Kiah!",
-    body: "Wishing you an amazing day from everyone in the dungeon. 🎂",
-    icon: '🎂',
+    body: "Wishing you an amazing day from everyone in the dungeon.",
     accent: '#f47ebd',
   },
   {
@@ -895,7 +902,6 @@ const NOTICES = [
     mmdd: '12-25',
     title: "Merry Christmas!",
     body: "The dungeon is decorated. May your runs be merry and your loot be plentiful.",
-    icon: '🎄',
     accent: '#4caf50',
   },
   {
@@ -905,7 +911,6 @@ const NOTICES = [
     mmddEnd: '12-08',
     title: "Festival of Lights",
     body: "The halls of the dungeon glow bright. Happy Hanukkah to all!",
-    icon: '🕎',
     accent: '#4fc3f7',
   },
   {
@@ -914,7 +919,6 @@ const NOTICES = [
     date: '2026-05-16',
     title: "GAMING Branch — What's New",
     body: "Birthday cards, inventory pause fix, shop affordability colours, and 2× health HUD. More to come.",
-    icon: '📋',
     accent: '#a8c8ff',
   },
 ];

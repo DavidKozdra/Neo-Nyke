@@ -7,6 +7,7 @@ const {
 } = require('koz-engine-lib/PWA/cacheManifest');
 const pwaWorker = require('../js/vendor/koz-pwa-service-worker-runtime');
 const { createPwaClient } = require('koz-engine-lib/PWA/clientRegistration');
+const { createGeneratedConfig } = require('../scripts/generate-precache');
 
 class FakeCache {
   constructor(origin) {
@@ -129,6 +130,46 @@ describe("Koz PWA cache manifest", () => {
 });
 
 describe("Koz PWA service worker runtime", () => {
+  test.each(['legacy URLs', 'revisioned entries'])("updates changed game code and art from %s while preserving unchanged assets", async previousFormat => {
+    const config = createGeneratedConfig();
+    const criticalUrls = ['/index.html', '/js/ui/notifications.js', '/assets/icons/icon-128x128.png'];
+    const critical = criticalUrls.map(url => {
+      const entry = config.critical.find(entry => entry.url === url);
+      expect(entry).toEqual({ url, revision: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      return entry;
+    });
+    const optional = [config.optional[0]];
+    expect(optional[0]).toEqual({ url: expect.any(String), revision: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    const changedUrls = [...criticalUrls.slice(1), optional[0].url];
+    const responses = Object.fromEntries([...critical, ...optional].map(entry => [entry.url, { body: `old:${entry.url}` }]));
+    const scope = createWorkerScope(responses);
+    function oldEntry(entry) {
+      if (previousFormat === 'legacy URLs') return entry.url;
+      return changedUrls.includes(entry.url) ? { ...entry, revision: `old-${entry.revision}` } : entry;
+    }
+    const old = pwaWorker.install(scope, {
+      ...config, version: 'old', critical: critical.map(oldEntry), optional: optional.map(oldEntry),
+    });
+    await old.cacheCritical();
+    await old.warmOptional();
+    changedUrls.forEach(url => { responses[url] = { body: `new:${url}` }; });
+    scope.fetch.mockClear();
+
+    const next = pwaWorker.install(scope, { ...config, version: 'next', critical, optional });
+    await next.cacheCritical();
+    await next.warmOptional();
+    const downloaded = scope.fetch.mock.calls.map(([request]) => new URL(request.url).pathname);
+    expect(downloaded.sort()).toEqual((previousFormat === 'legacy URLs'
+      ? [...criticalUrls, optional[0].url] : changedUrls).sort());
+    await next.cleanupOldCaches();
+    scope.fetch.mockRejectedValue(new Error('Offline'));
+    for (const url of changedUrls) {
+      const response = await next.handleFetch({ request: new Request(`https://game.test${url}`), waitUntil: jest.fn() });
+      expect(await response.text()).toBe(`new:${url}`);
+    }
+    expect(scope.caches.stores.has(old.cacheNames.precache)).toBe(false);
+  });
+
   test("does not promote a version when any critical file fails", async () => {
     const scope = createWorkerScope({ "/broken.js": { status: 500 } });
     const runtime = pwaWorker.install(scope, {
