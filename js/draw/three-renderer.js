@@ -34,6 +34,8 @@ let ready = false;
 let failed = false;
 let failedAt = 0;
 let contextLost = false;
+let renderBufferLimits = null;
+const renderSize = { dirty: true, observer: null, dpr: 0, width: 2, height: 2 };
 let lastRenderErrorAt = -Infinity;
 
 // Context creation can fail transiently on mobile when Safari/Chrome is under
@@ -472,6 +474,8 @@ function initRenderer() {
     });
     glCanvas.addEventListener('webglcontextrestored', () => {
       contextLost = false;
+      renderBufferLimits = null;
+      invalidateRenderSize();
       roomBuildKey = '';
     });
     renderer.setClearColor(0x05060d, 1);
@@ -485,7 +489,11 @@ function initRenderer() {
     scene.add(keyLight);
     playerLight = new THREE.PointLight(0xffd9a0, 46000, 640, 1.9);
     scene.add(playerLight);
-    window.addEventListener('resize', syncSize);
+    window.addEventListener('resize', invalidateRenderSize);
+    renderSize.observer?.disconnect();
+    renderSize.observer = typeof ResizeObserver === 'function' ? new ResizeObserver(invalidateRenderSize) : null;
+    renderSize.observer?.observe(mainCanvas);
+    invalidateRenderSize();
     syncSize();
     ready = true;
   } catch (err) {
@@ -515,8 +523,16 @@ function preferredPixelRatio(width, height) {
   let ratio = Math.min(window.devicePixelRatio || 1, coarsePointer ? 1 : 2);
   const gl = renderer?.getContext?.();
   if (gl) {
-    const maxBufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || Infinity;
-    const maxViewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS) || [Infinity, Infinity];
+    // Capabilities stay fixed for a live context. Querying the driver during
+    // every frame can stall behind queued uploads/draws, especially on mobile.
+    if (renderBufferLimits?.context !== gl) {
+      renderBufferLimits = {
+        context: gl,
+        maxBufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || Infinity,
+        maxViewport: gl.getParameter(gl.MAX_VIEWPORT_DIMS) || [Infinity, Infinity],
+      };
+    }
+    const { maxBufferSize, maxViewport } = renderBufferLimits;
     ratio = Math.min(
       ratio,
       maxBufferSize / width,
@@ -528,11 +544,24 @@ function preferredPixelRatio(width, height) {
   return Math.max(0.5, ratio);
 }
 
+function invalidateRenderSize() {
+  renderSize.dirty = true;
+}
+
 function syncSize() {
   if (!renderer || !Neo.canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  // ResizeObserver catches CSS/layout changes as well as window resizing.
+  // Retain the polling fallback on browsers without it, and detect DPR changes
+  // when moving the window between displays without changing its CSS size.
+  if (renderSize.observer && !renderSize.dirty && renderSize.dpr === dpr) return;
+  renderSize.dirty = false;
+  renderSize.dpr = dpr;
   const rect = Neo.canvas.getBoundingClientRect();
   const w = Math.max(2, Math.round(rect.width));
   const h = Math.max(2, Math.round(rect.height));
+  renderSize.width = w;
+  renderSize.height = h;
   const ratio = preferredPixelRatio(w, h);
   // WebGLRenderer.setSize() floors these values. Comparing with Math.round()
   // made fractional-DPR devices resize their drawing buffer every frame.
@@ -544,8 +573,10 @@ function syncSize() {
     // theme/media-query size overrides on #c can never desync the two layers.
     renderer.setSize(w, h, true);
   }
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  if (camera.aspect !== w / h) {
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1814,7 +1845,7 @@ function syncPlayer() {
   playerSprite.visible = !!Neo.storyCamera?.active || !isFirstPersonActive() || !!anim || networkDowned;
   const x = anim ? anim.x : p.x;
   const z = anim ? anim.y : p.y;
-  playerSprite.position.set(x, 0, z);
+  playerSprite.position.set(x, Math.max(0, Number(p.jumpZ || 0)), z);
   const currentAim = Neo.angleToMouse?.() ?? 0;
   const swingActive = !anim && Number(p.swing || 0) > 0;
   const armRecoilDuration = Math.max(0.01, Number(p.armRecoilDuration || 0.16));
@@ -1967,7 +1998,7 @@ function syncOtherPlayers() {
       const hitFlash = !downed && isActorDamageFlashActive(actor);
       const tint = downed ? 0x641b2a : 0xffffff;
       group.visible = true;
-      group.position.set(actor.x, 0, actor.y);
+      group.position.set(actor.x, Math.max(0, Number(actor.jumpZ || 0)), actor.y);
       const actorScale = Number(Neo.getActorSpriteScale?.(actor) || 1);
       const actorGodTime = Number(Neo.getActorGodTime?.(actor) || 0);
       updateActorSprite(group, frameKey, (actor.r || 14) * actorScale, flip, {
@@ -2672,6 +2703,7 @@ function syncChests() {
 }
 
 function syncDestructibles() {
+  const bakeTheme = Neo.getRoomArtTheme?.(Neo.currentRoom)?.wallEdge || '';
   syncPool(
     pools.destructibles,
     Neo.destructibles,
@@ -2745,7 +2777,7 @@ function syncDestructibles() {
       statePlate.visible = showStateArt;
       if (showStateArt) {
         const worldSize = Math.max(72, Number(prop.w || 52) * 1.5, Number(prop.h || 52) * 1.5);
-        rasterizeDestructible2D(ensureBakeSurface(statePlate, worldSize), prop, worldSize);
+        syncDestructibleBake(statePlate, prop, worldSize, bakeTheme);
         const furnitureScale = prop._furniture === 'table' ? 0.75 : 1;
         if (intact && !intact.isSprite && prop.kind === 'cover_wall' && !prop.reinforced) {
           const height = BLOCK_HEIGHT * furnitureScale;
@@ -2829,6 +2861,24 @@ function ensureBakeSurface(mesh, worldSize) {
   mesh.material.map.needsUpdate = true;
   mesh.scale.set(worldSize, worldSize, 1);
   return surface;
+}
+
+function syncDestructibleBake(mesh, prop, worldSize, theme) {
+  // Static walls/debris used to redraw a 256px canvas AND upload it every
+  // frame. Only damage, hit feedback, breakage, or an art change needs a bake.
+  const signature = JSON.stringify([
+    worldSize, theme, prop.kind, prop.w, prop.h, prop.r, prop.hp, prop.maxHp,
+    prop.reinforced, prop._furniture, prop.disguised, prop.hidden, prop.broken,
+    prop.hitFlash, prop.hitShake, prop.lastHitAngle, prop.breakAngle, prop.scorchRadius,
+    prop.broken && prop.kind === 'barrel' ? Math.min(12, Number(prop.breakAge || 0)) : 0,
+  ]);
+  if (mesh.userData.destructibleBakeSignature === signature
+    && mesh.userData.destructibleBakeDraw === Neo.drawWorldProps) return;
+  const surface = ensureBakeSurface(mesh, worldSize);
+  if (rasterizeDestructible2D(surface, prop, worldSize)) {
+    mesh.userData.destructibleBakeSignature = signature;
+    mesh.userData.destructibleBakeDraw = Neo.drawWorldProps;
+  }
 }
 
 // Rasterize part of a 2D world draw into an offscreen canvas, in world units
@@ -4133,11 +4183,12 @@ function restoreSceneryMaterials() {
 
 function getSceneryBounds(object, viewCamera) {
   const bounds = new THREE.Box3();
+  object.updateWorldMatrix(true, false);
   if (!object.isSprite) return bounds.setFromObject(object);
   // Box3's default sprite bounds ignore the foot anchor and camera-facing
   // plane. Use the actual billboard corners, including transparent padding.
-  object.getWorldPosition(readabilityOrigin);
-  object.getWorldScale(readabilityScale);
+  readabilityOrigin.setFromMatrixPosition(object.matrixWorld);
+  readabilityScale.setFromMatrixScale(object.matrixWorld);
   readabilityRight.setFromMatrixColumn(viewCamera.matrixWorld, 0);
   readabilityUp.setFromMatrixColumn(viewCamera.matrixWorld, 1);
   for (const x of [0, 1]) for (const y of [0, 1]) {
@@ -4163,7 +4214,8 @@ function prepareReadabilityFrame() {
   const now = performance.now();
   readabilityFrameDt = lastReadabilityFrameAt ? Math.min(0.05, Math.max(0, (now - lastReadabilityFrameAt) / 1000)) : 1 / 60;
   lastReadabilityFrameAt = now;
-  scene.updateMatrixWorld(true);
+  // Picking/bounds update only the object paths they actually read. The
+  // renderer updates the complete scene once, after per-view player sync.
 }
 
 function syncSceneryVisibility(viewCamera, actor) {
@@ -4663,10 +4715,9 @@ function projectToCanvas(x, y, height = 0, viewCamera = camera, viewport = null)
 function renderSceneViews() {
   if (!Neo.isSplitScreen?.()) {
     renderer.setScissorTest(false);
-    const rect = Neo.canvas.getBoundingClientRect();
-    renderer.setViewport(0, 0, Math.max(2, rect.width), Math.max(2, rect.height));
+    renderer.setViewport(0, 0, renderSize.width, renderSize.height);
     syncLocalReadability(camera, Neo.presentationViewpointPlayer || Neo.player, true);
-    scaleNameplatesToScreen(camera, Math.max(2, rect.height));
+    scaleNameplatesToScreen(camera, renderSize.height);
     renderer.render(scene, camera);
     return;
   }
@@ -4682,9 +4733,8 @@ function renderSceneViews() {
     renderer.render(scene, camera);
     return;
   }
-  const rect = Neo.canvas.getBoundingClientRect();
-  const fullW = Math.max(2, rect.width);
-  const fullH = Math.max(2, rect.height);
+  const fullW = renderSize.width;
+  const fullH = renderSize.height;
   const viewportLayout = worldMapping3d.createViewportLayout?.(
     fullW,
     fullH,
@@ -5118,6 +5168,7 @@ function setRender3D(on) {
     failedAt = 0;
   }
   Neo.render3D = !!on;
+  invalidateRenderSize();
   try { localStorage.setItem(RENDER3D_STORE_KEY, Neo.render3D ? '1' : '0'); } catch { /* private mode */ }
   document.body.classList.toggle('render3d', Neo.render3D);
   if (!Neo.render3D && glCanvas) glCanvas.style.display = 'none';

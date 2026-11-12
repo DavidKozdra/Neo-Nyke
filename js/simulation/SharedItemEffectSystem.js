@@ -1,11 +1,12 @@
 (function initializeSharedItemEffectSystem(root, factory) {
   const definitions = typeof require === 'function' ? require('./SharedItemDefinitions.js') : (root.NeoNyke?.content || {});
-  const api = factory(definitions);
+  const bodies = typeof require === 'function' ? require('./SharedEnemyBodySystem.js') : root.NeoNyke?.simulation;
+  const api = factory(definitions, bodies);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedItemEffectApi(definitions) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedItemEffectApi(definitions, bodies) {
   'use strict';
 
   const ITEM_DEFS = definitions.ITEM_DEFS || {};
@@ -134,7 +135,8 @@
       || Number(legacyGoldVac.time || 0) > 0
     ) ? Math.max(1, Math.floor(Number(legacyGoldVac.stacks || stacks('gold_vac') || 1))) : 0;
     const level = Math.max(1, Number(player?.level || 1));
-    const levelSpeedBonus = (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
+    const levelSpeedBonus = bodies.getPlayableEnemyBodyDefinition(player?.characterKey || player?.character)
+      ? 0 : (level >= 14 ? 0.03 : 0) + (level >= 28 ? 0.04 : 0);
     const genericHealthStacks = stacks('generic_health_item');
     const cloakStacks = stacks('cloak_of_naked_king');
     const bleedChance = (stacks('neo_knife') * 0.10 + stacks('tough_bandaid') * 0.02

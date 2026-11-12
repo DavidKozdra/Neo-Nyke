@@ -228,6 +228,11 @@
   }
 
   function getEquippedMove(slot) {
+    const content = globalThis.NeoNyke?.content;
+    const defaultMove = content?.isPlayableEnemyCharacterKey?.(Neo.player?.character)
+      && content.getPlayableEnemyDefinition(Neo.player.character)?.moveLoadout?.[slot];
+    if (defaultMove === null) return null;
+    if (globalThis.NeoNyke?.simulation?.getEnemyNativeAction?.(defaultMove)) return defaultMove;
     const moveKey = Neo.player?.equippedMoves?.[slot];
     if (Neo.MOVE_DEFS[moveKey]?.slot === slot) return moveKey;
     return Neo.getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
@@ -391,6 +396,23 @@
   // item deals no measurable single-hit damage (pure utility/mobility).
   function getDisplayDamage(key, kind) {
     if (!key) return null;
+    const native = kind !== 'weapon' && globalThis.NeoNyke?.simulation?.getEnemyNativeAction?.(key);
+    if (native) {
+      if (native.kind === 'support') return null;
+      const actor = getControlledEnemyAttackActor();
+      let amount = actor ? Math.round(actor.dmg * (native.damageScale || 1) + (native.damageBonus || 0)) : native.damage;
+      if (native.kind === 'beam') amount = Neo.scaleEnemyLaserDamage?.(amount) ?? amount;
+      const damage = { min: amount, max: amount, tick: native.kind === 'beam',
+        hits: key === 'enemy_antony_freeze_ball' ? (actor?.level >= 25 ? 3 : actor?.level >= 10 ? 2 : 1)
+          : native.type === 'machine_gunner' ? (Neo.getEnemyDifficultyTuning?.().supportPower >= 1.22 ? 6 : 5) : 1 };
+      return { ...damage, label: formatDisplayDamage(damage) };
+    }
+    const signature = kind !== 'weapon' ? getEnemySignatureAttackInfo(key) : null;
+    if (signature) {
+      if (!signature.damage) return null;
+      const damage = { min: signature.damage, max: signature.damage, tick: false, hits: signature.count };
+      return { ...damage, label: formatDisplayDamage(damage) };
+    }
     // The codex is reachable from the main menu with no active run, where
     // getItemStats() has no player to read. Fall back to neutral multipliers so
     // those screens show the build-independent base instead of throwing.
@@ -448,6 +470,7 @@
   }
 
   function getEquippedWeapon() {
+    if (globalThis.NeoNyke?.simulation?.getPlayableEnemyPrimary?.(Neo.player?.character)) return '';
     const key = Neo.player?.equippedWeapon || '';
     return Neo.WEAPON_DEFS[key] ? key : '';
   }
@@ -871,6 +894,7 @@
 
   function tryMelee(options = {}) {
     cancelCowardsWayOnAttack();
+    if (tryEnemyNativePrimary()) return;
     const itemStats = Neo.getItemStats();
     const useRobotArmCharge = !!options.useRobotArmCharge && itemStats.hasRobotArm && Neo.player?.robotArmReady;
     const move = getEquippedMove('melee');
@@ -1089,6 +1113,8 @@
     if (!hasSurvivalFood(12)) { spendSurvivalFood(12); return; }
     const attackSpeed = Neo.getAttackSpeedValue();
     const move = getEquippedMove('laser');
+    if (tryEnemyNativePrimary('laser')) return;
+    if (tryEnemyProjectileSignature('laser')) return;
     const rechargeTime = Neo.getLaserCooldownDuration(move, attackSpeed);
     // Love Bomb Laser is hold-to-charge like Death Ball/Nimrod Stomp: spend the
     // charge up front (deferred timer), then updateLoveBombCharge grows the
@@ -1246,6 +1272,313 @@
     Neo.laserAngle = Neo.angleToMouse();
   }
 
+  function getControlledEnemyAttackActor() {
+    return globalThis.NeoNyke.simulation.getPlayableEnemyAttackActor(Neo.player, Neo.getPlayableEnemyBodyContext?.() || {
+      progressionDepth: Neo.getProgressionDepth?.() || Neo.floor,
+      floorNumber: Neo.floor,
+      elapsedSeconds: Neo.gameElapsedTime, gameMode: Neo.gameMode,
+      endlessWave: Neo.endlessWave, maxFloor: Neo.MAX_FLOOR,
+      difficulty: Neo.getDifficultyDef(), scaling: Neo.ENEMY_SCALING,
+      sandbox: Neo.getActiveSandboxSettings?.(),
+    });
+  }
+
+  function getEnemySignatureAttackInfo(move) {
+    const api = globalThis.NeoNyke?.simulation;
+    if (!api?.ENEMY_NATIVE_SIGNATURES?.includes(move)) return null;
+    const actor = getControlledEnemyAttackActor();
+    if (!actor) return null;
+    const shots = api.planEnemySignatureProjectiles(actor, move, 0);
+    return { actor, damage: shots?.[0].damage ?? (move === 'hunter_trap' ? Math.round(actor.dmg * 1.15)
+      : move === 'charger_rush' ? Math.round(actor.dmg * 1.45) : 0), count: shots?.length || 1,
+      ...api.getEnemySignatureTiming(move, actor.level, Neo.getEnemyDifficultyTuning()) };
+  }
+
+  let controlledPrimaryBehaviors;
+  function getControlledPrimaryBehaviors() {
+    if (controlledPrimaryBehaviors) return controlledPrimaryBehaviors;
+    const api = globalThis.NeoNyke.simulation;
+    controlledPrimaryBehaviors = api.createCampaignEnemyBehaviors({
+      controlled: true,
+      getTuning: () => Neo.getEnemyDifficultyTuning(),
+      getFloor: () => Neo.floor,
+      bounds: () => ({ wall: Neo.WALL, width: Neo.ROOM_W, height: Neo.ROOM_H }),
+      isBlocked: (_actor, x, y, radius) => Neo.isBlocked(x, y, radius),
+      random: scope => Neo.nextRandom?.(scope) ?? Neo.rng?.() ?? 0.5,
+      getPlayer: actor => api.getEnemyPrimaryAimTarget(actor,
+        (Neo.enemies || []).filter(enemy => enemy.hp > 0), Neo.angleToMouse()),
+      getPlayers: () => (Neo.enemies || []).filter(enemy => enemy.hp > 0),
+      getAllies: () => {
+        const players = (Neo.getActivePlayerSlots?.() || []).map(slot => slot.getEntity?.()).filter(Boolean);
+        return [...new Set([...players, ...Object.values(Neo.allies || {})])]
+          .filter(entity => entity !== Neo.player && Number(entity.hp ?? entity.health) > 0)
+          .map(entity => ({ x: entity.x, y: entity.y, hp: entity.hp ?? entity.health,
+            max: entity.maxHp ?? entity.maxHealth, entity }));
+      },
+      healEnemy: (actor, target, amount) => {
+        const entity = target === actor ? Neo.player : target.entity;
+        const gain = Math.min(amount, Number(entity.maxHp ?? entity.maxHealth) - Number(entity.hp ?? entity.health));
+        if ('hp' in entity) entity.hp += gain;
+        else entity.health += gain;
+        if (gain > 0) Neo.spawnHealPopup?.(entity.x, entity.y - 22, gain);
+        return gain;
+      },
+      grantBarrier: (actor, target, amount) => {
+        const entity = target === actor ? Neo.player : target.entity;
+        const isPlayer = 'hp' in entity;
+        const key = isPlayer ? 'overhealBarrier' : 'barrier';
+        if (amount > Number(entity[key] || 0)) {
+          entity[key] = amount;
+          entity[isPlayer ? 'overhealBarrierAge' : 'barrierAge'] = 0;
+          if (isPlayer) { entity.overhealBarrierMax = amount; entity.overhealBarrierColor = '#9cefff'; }
+        }
+        if (actor.nativeMoveKey === 'shield_guard') entity[isPlayer ? 'overhealBarrierAge' : 'barrierAge'] = 0;
+      },
+      blastRadius: (actor, x, y, radius, damage, knockback, options = {}) => {
+        let targets = (Neo.enemies || []).filter(target => target.hp > 0);
+        if (options.singleTarget) targets = targets.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, 1);
+        for (const target of targets) {
+          const distance = Math.hypot(target.x - x, target.y - y);
+          if (options.strict ? distance >= radius + target.r : distance > radius + target.r) continue;
+          Neo.hitEnemy(target, damage, Math.atan2(target.y - y, target.x - x), knockback, '#c77bff', {
+            rawDamage: true, canCrit: false, nativeEnemyAttack: true,
+          });
+        }
+        if (!options.singleTarget) for (const prop of Neo.destructibles || []) {
+          if (!prop.broken && !prop.hidden && Math.hypot(prop.x - x, prop.y - y) <= radius + Number(prop.r || 0)) {
+            Neo.damageDestructible?.(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.6 });
+          }
+        }
+        Neo.ringBurst(x, y, radius, options.color || '#c77bff', 0.35);
+      },
+      scaleEnemyLaserDamage: damage => Neo.scaleEnemyLaserDamage(damage),
+      getBeamPath: (actor, range, angle) => Neo.buildRicochetBeamPath?.(actor.x, actor.y, angle, range, Neo.getEnemyBeamBounceCount?.(actor) ?? 1),
+      damagePlayer: (_actor, target, damage, angle, knockback) => {
+        if (!(Neo.enemies || []).includes(target)) return;
+        Neo.hitEnemy(target, damage, angle, knockback, '#d8a8ff', {
+          rawDamage: true, canCrit: false, nativeEnemyAttack: true,
+        });
+      },
+      applyPlayerStatus: (actor, target, key, stacks, duration) => {
+        if ((Neo.enemies || []).includes(target)) Neo.applyStatus(target, key, stacks, duration,
+          { sourceKey: actor.type, owner: Neo.player, nativeEnemyAttack: true });
+      },
+      presentShockwave: (actor, wave) => {
+        for (let index = 0; index < 7; index++) {
+          const angle = wave.angle + (index / 6 - 0.5) * 2 * wave.halfArc;
+          Neo.spawnParticle?.({ x: actor.x + Math.cos(angle) * wave.travelled,
+            y: actor.y + Math.sin(angle) * wave.travelled, life: 0.22, c: '#ffcf8a', size: 3.2 });
+        }
+      },
+      holdAttackCooldown: (actor, seconds) => {
+        Neo.player.enemyPrimaryCooldown = Math.max(Number(Neo.player.enemyPrimaryCooldown || 0), seconds);
+        for (const [slot, key] of Object.entries(Neo.player.equippedMoves || {})) {
+          const def = api.getEnemyNativeAction(key);
+          if (def && !def.independentCooldown && (slot === 'melee' || def.attackCooldown) && Neo.cooldowns) {
+            Neo.cooldowns[slot] = { charges: 0, maxCharges: 1, timers: [Neo.player.enemyPrimaryCooldown], holding: 0 };
+          }
+        }
+      },
+      presentTRexAttack: (actor, kind) => {
+        const crash = kind === 'wall_impact';
+        Neo.ringBurst(actor.x, actor.y, crash ? actor.r + 30 : 230, crash ? '#b99a72' : '#ffcf72', crash ? 0.45 : 0.55);
+        if (crash) Neo.spawnParticle({ x: actor.x, y: actor.y - actor.r, life: 0.65, text: 'CRASH!', c: '#d6b88a' });
+      },
+      setMoveCooldown: (_actor, key, seconds) => {
+        (Neo.player.enemyNativeCooldowns ||= {})[key] = seconds;
+        const slot = api.getEnemyNativeAction(key)?.slot;
+        if (slot && Neo.cooldowns) Neo.cooldowns[slot] = { charges: 0, maxCharges: 1, timers: [seconds], holding: 0 };
+      },
+      presentBulkAttack: (actor, kind, radius) => {
+        const warning = kind === 'warning';
+        const size = radius || (warning ? 76 : kind === 'takeoff' ? 64 : Math.min(225, 173 + Math.floor(actor.level / 5) * 9));
+        Neo.ringBurst(warning ? actor.bulkJumpTargetX : actor.x, warning ? actor.bulkJumpTargetY : actor.y,
+          size, kind === 'takeoff' ? '#ffb067' : '#ff8844', warning ? 0.32 : kind === 'takeoff' ? 0.35 : 0.55);
+        if (kind === 'landing' || kind === 'nova') { Neo.shake = Math.max(Number(Neo.shake || 0), kind === 'nova' ? 12 : 10); Neo.shakeT = Math.max(Number(Neo.shakeT || 0), 0.2); }
+      },
+      spawnHazard: (actor, hazard) => {
+        Neo.hazards.push({ ...hazard, enemy: false, nativeEnemyAttack: true, owner: Neo.player,
+          attackKind: actor.nativeMoveKey, source: hazard.source || actor.type });
+      },
+      spawnProjectile: (actor, projectile) => {
+        Neo.spawnProjectile({ ...projectile, enemy: false, owner: Neo.player, homingTarget: 'enemy',
+          homingRadius: projectile.homingRadius || Math.hypot(Neo.ROOM_W || 900, Neo.ROOM_H || 700),
+          nativeEnemyAttack: true, bossProjectile: actor.boss,
+          hitOptions: { rawDamage: true, canCrit: false, nativeEnemyAttack: true } });
+        Neo.playSfx?.('lazer_blast');
+      },
+      presentBeam: (actor, beam) => {
+        Neo.player.auxLaserFxTime = Math.max(0, beam.remaining);
+        Neo.player.auxLaserPath = beam.path || [{ x1: actor.x, y1: actor.y,
+          x2: actor.x + Math.cos(beam.angle) * beam.range,
+          y2: actor.y + Math.sin(beam.angle) * beam.range }];
+      },
+    });
+    return controlledPrimaryBehaviors;
+  }
+
+  function getEnemyNativeActionInfo(move) {
+    const api = globalThis.NeoNyke?.simulation;
+    const def = api?.getEnemyNativeAction?.(move);
+    if (!def) return null;
+    const actor = getControlledEnemyAttackActor();
+    if (!actor) return null;
+    return { def, actor, ...api.getEnemyNativeActionTiming(move, actor, Neo.getEnemyDifficultyTuning(), Neo.floor) };
+  }
+
+  function tryEnemyNativePrimary(slot = 'melee') {
+    const player = Neo.player;
+    const moveKey = getEquippedMove(slot);
+    if (moveKey === null) return true;
+    const info = getEnemyNativeActionInfo(moveKey);
+    if (!info) return false;
+    const { def, actor: freshActor, windup, cooldown } = info;
+    const previousActor = player.enemyNativePrimary?.actor;
+    const actor = previousActor?.type === freshActor.type && ['antony_blemmye', 't_rex', 'bulk_golem'].includes(previousActor.type) ? previousActor : freshActor;
+    const attack = !def.independentCooldown && (slot === 'melee' || def.attackCooldown);
+    if ((def.kind !== 'support' && (player.enemySignatureCast
+      || !globalThis.NeoNyke.simulation.canStartControlledEnemyAction(previousActor, def.key)))
+      || (attack ? Number(player.enemyPrimaryCooldown || 0) > 0 : Number(player.enemyNativeCooldowns?.[def.key] || 0) > 0)) return true;
+    if (def.key === 'enemy_shield_pulse' && Number(player.enemyShieldLockout || 0) > 0) return true;
+    if (!Neo.spendSkillCharge(slot, cooldown)) return true;
+    if (attack) player.enemyPrimaryCooldown = cooldown;
+    else (player.enemyNativeCooldowns ||= {})[def.key] = cooldown;
+    if (attack && Neo.cooldowns) {
+      for (const [otherSlot, key] of Object.entries(player.equippedMoves || {})) {
+        const other = globalThis.NeoNyke.simulation.getEnemyNativeAction(key);
+        if (other && (other.slot === 'melee' || other.attackCooldown)) {
+          Neo.cooldowns[otherSlot] = { charges: 0, maxCharges: 1, timers: [cooldown], holding: 0 };
+        }
+      }
+    }
+    if (def.kind !== 'support' && !(def.concurrent && player.enemyNativePrimary)) player.enemyNativePrimary = { actor, moveKey: def.key, slot, roomId: Neo.currentRoom?.id, floor: Neo.floor };
+    if (def.kind === 'leap' && Number.isFinite(Neo.mouse?.worldX) && Number.isFinite(Neo.mouse?.worldY)) {
+      actor.nativeAimPoint = { x: Neo.mouse.worldX, y: Neo.mouse.worldY };
+    }
+    getControlledPrimaryBehaviors().startControlledEnemyAction(actor, def.key, Neo.angleToMouse());
+    if (actor.bulkJumpTime > 0) player.airborne = true;
+    startPlayerSpriteAction(def.kind === 'leap' ? 'smash' : def.kind === 'bite' ? 'bite' : def.kind === 'blade' ? 'melee' : def.kind === 'beam' ? 'laser' : slot,
+      def.kind === 'leap' ? 0.82 : def.kind === 'bite' ? (def.type === 'antony_blemmye' ? 0.8 : 0.3) : windup + 0.3);
+    Neo.tutorialController?.signal?.('attack', { action: slot });
+    return true;
+  }
+
+  function updateEnemyNativePrimary(dt) {
+    const player = Neo.player;
+    if (!player) return;
+    player.enemyPrimaryCooldown = Math.max(0, Number(player.enemyPrimaryCooldown || 0) - dt);
+    player.enemyShieldLockout = Math.max(0, Number(player.enemyShieldLockout || 0) - dt);
+    for (const key of Object.keys(player.enemyNativeCooldowns || {})) player.enemyNativeCooldowns[key] = Math.max(0, player.enemyNativeCooldowns[key] - dt);
+    // The NPC holds its support cooldown at half a second while hit-locked.
+    if (player.enemyShieldLockout > 0) {
+      const key = 'enemy_shield_pulse';
+      (player.enemyNativeCooldowns ||= {})[key] = Math.max(0.5, Number(player.enemyNativeCooldowns?.[key] || 0));
+      const pool = Neo.cooldowns?.smash;
+      if (pool && getEquippedMove('smash') === key) {
+        pool.charges = 0;
+        pool.timers = [Math.max(0.5, Number(pool.timers?.[0] || 0))];
+      }
+    }
+    const cast = player.enemyNativePrimary;
+    if (!cast) return;
+    if (player.hp <= 0 || player.character !== `enemy_${cast.actor.type}`
+      || cast.roomId !== Neo.currentRoom?.id || cast.floor !== Neo.floor) {
+      player.enemyNativePrimary = null;
+      if (cast.actor.type === 'bulk_golem') { player.airborne = false; player.jumpZ = 0; }
+      player.auxLaserFxTime = 0;
+      return;
+    }
+    if (player.stun > 0) { player.auxLaserFxTime = 0; return; }
+    Object.assign(cast.actor, { x: player.x, y: player.y, vx: player.vx || 0, vy: player.vy || 0 });
+    const active = getControlledPrimaryBehaviors().updateControlledEnemyPrimary(cast.actor, dt);
+    if (cast.actor.type === 'bulk_golem') Object.assign(player, { x: cast.actor.x, y: cast.actor.y,
+      airborne: !!cast.actor.airborne, jumpZ: Number(cast.actor.jumpZ || 0) });
+    player.vx = cast.actor.vx; player.vy = cast.actor.vy;
+    if (!active) {
+      player.enemyNativePrimary = null;
+      player.auxLaserFxTime = 0;
+    }
+  }
+
+  function tryEnemyProjectileSignature(slot) {
+    const move = getEquippedMove(slot);
+    const api = globalThis.NeoNyke?.simulation;
+    if (!api?.ENEMY_NATIVE_SIGNATURES?.includes(move)) return false;
+    const player = Neo.player;
+    const actor = getControlledEnemyAttackActor();
+    if (!actor) return false;
+    // The NPC signatures share a cooldown. Separate player charges must not
+    // allow a volley/nova pair to bypass that cadence.
+    if (player.enemyNativePrimary || player.enemySignatureCast || Number(player.enemySignatureCooldown || 0) > 0) return true;
+    const timing = api.getEnemySignatureTiming(move, actor.level, Neo.getEnemyDifficultyTuning());
+    if (!Neo.spendSkillCharge(slot, timing.cooldown)) return true;
+    spendSurvivalFood(slot === 'laser' ? 12 : 18);
+    player.enemySignatureCooldown = timing.cooldown;
+    player.enemySignatureCast = { move, actor, remaining: timing.windup, roomId: Neo.currentRoom?.id, floor: Neo.floor };
+    if (move === 'hunter_trap') {
+      const target = api.getEnemySignatureAimTarget(actor, move, (Neo.enemies || []).filter(enemy => enemy.hp > 0),
+        Neo.angleToMouse(), { x: Neo.mouse?.worldX, y: Neo.mouse?.worldY });
+      Object.assign(player.enemySignatureCast, { targetId: target.id, aimPoint: { x: target.x, y: target.y } });
+    }
+    if (Neo.cooldowns) {
+      Object.entries(player.equippedMoves || {}).forEach(([otherSlot, key]) => {
+        if (api.ENEMY_NATIVE_SIGNATURES.includes(key)) {
+          Neo.cooldowns[otherSlot] = { charges: 0, maxCharges: 1, timers: [timing.cooldown], holding: 0 };
+        }
+      });
+      Neo.updateHud?.();
+    }
+    startPlayerSpriteAction(slot === 'laser' ? 'laser' : 'smash', timing.windup);
+    Neo.tutorialController?.signal?.('attack', { action: slot });
+    Neo.ringBurst(player.x, player.y, actor.r + 24, '#c68cff', timing.windup);
+    return true;
+  }
+
+  function updateEnemyProjectileSignature(dt) {
+    const player = Neo.player;
+    if (!player) return;
+    player.signatureGuardTime = Math.max(0, Number(player.signatureGuardTime || 0) - dt);
+    player.enemySignatureCooldown = Math.max(0, Number(player.enemySignatureCooldown || 0) - dt);
+    const cast = player.enemySignatureCast;
+    if (!cast) return;
+    if (player.hp <= 0 || player.character !== `enemy_${cast.actor.type}`
+      || cast.roomId !== Neo.currentRoom?.id || cast.floor !== Neo.floor) {
+      player.enemySignatureCast = null;
+      return;
+    }
+    // Stun pauses the same windup used by the NPC signature controller.
+    if (player.stun > 0) return;
+    player.vx = Number(player.vx || 0) * 0.76;
+    player.vy = Number(player.vy || 0) * 0.76;
+    cast.remaining -= dt;
+    if (cast.remaining > 0) return;
+    player.enemySignatureCast = null;
+    const actor = { ...cast.actor, x: player.x, y: player.y };
+    if (!globalThis.NeoNyke.simulation.ENEMY_PROJECTILE_SIGNATURES.includes(cast.move)) {
+      actor.nativeMoveKey = cast.move;
+      const targets = (Neo.enemies || []).filter(enemy => enemy.hp > 0);
+      const target = targets.find(enemy => cast.targetId != null && enemy.id === cast.targetId)
+        || globalThis.NeoNyke.simulation.getEnemySignatureAimTarget(actor, cast.move, targets, Neo.angleToMouse(), cast.aimPoint);
+      getControlledPrimaryBehaviors().executeNpcEnemySignatureMove(actor, target, cast.move);
+      if (cast.move === 'shield_guard') {
+        player.signatureGuardTime = actor.signatureGuardTime;
+        Neo.ringBurst(player.x, player.y, actor.r + 24, '#9cefff', 0.5);
+      }
+      if (actor.npcSignatureRush) {
+        Object.assign(actor, { vx: player.vx || 0, vy: player.vy || 0, nativeSignatureStarted: true });
+        player.enemyNativePrimary = { actor, moveKey: cast.move, slot: 'dash', roomId: cast.roomId, floor: cast.floor };
+      }
+      return;
+    }
+    const projectiles = globalThis.NeoNyke.simulation.planEnemySignatureProjectiles(actor, cast.move, Neo.angleToMouse());
+    projectiles.forEach(projectile => Neo.spawnProjectile({
+      ...projectile, enemy: false, owner: player,
+      nativeEnemyAttack: true, bossProjectile: actor.boss,
+      hitOptions: { rawDamage: true, canCrit: false, nativeEnemyAttack: true },
+    }));
+    Neo.playSfx?.('lazer_blast');
+  }
+
   function castEnemySignatureLaser(move) {
     const angle = Neo.angleToMouse();
     const stats = Neo.getItemStats();
@@ -1264,57 +1597,6 @@
       hitOptions: config.hitOptions || null,
     });
 
-    if (move === 'hunter_volley') {
-      [-0.34, -0.17, 0, 0.17, 0.34].forEach(offset => fire(offset, {
-        speed: 820, r: 4, life: 0.9, kind: 'hunters_bow', pierceCount: 1,
-        hitOptions: { critBonus: 0.1 },
-      }));
-      return;
-    }
-    if (move === 'sniper_round') {
-      fire(0, {
-        speed: 1450, r: 6, life: 0.85, color: '#fff0b5', knockback: 360,
-        pierceCount: 4, hitOptions: { critBonus: 0.35 },
-      });
-      Neo.player.vx -= Math.cos(angle) * 150;
-      Neo.player.vy -= Math.sin(angle) * 150;
-      return;
-    }
-    if (move === 'gunner_barrage') {
-      for (let shot = 0; shot < 12; shot += 1) {
-        const spread = (Neo.nextRandom('encounter') - 0.5) * 0.22;
-        fire(spread, { speed: 1220, r: 4, life: 0.75, color: '#ff9dd7', knockback: 70 });
-      }
-      Neo.player.vx -= Math.cos(angle) * 120;
-      Neo.player.vy -= Math.sin(angle) * 120;
-      return;
-    }
-    if (move === 'cult_bolt_volley') {
-      [-0.32, -0.16, 0, 0.16, 0.32].forEach(offset => fire(offset, {
-        speed: 610, r: 7, life: 1.25, color: '#b575ff', knockback: 110,
-        hitOptions: { fireChance: 1, fireStacks: 2, fireDuration: 3.2 },
-      }));
-      return;
-    }
-    if (move === 'shield_throw') {
-      Neo.spawnProjectile({
-        x: Neo.player.x,
-        y: Neo.player.y,
-        vx: Math.cos(angle) * 720,
-        vy: Math.sin(angle) * 720,
-        r: 12,
-        life: 1.7,
-        damage,
-        kind: 'shield_throw',
-        color: '#9cefff',
-        knockback: 360,
-        pierceCount: 3,
-        bouncesRemaining: 3,
-        trail: [],
-      });
-      Neo.playSfx?.('sword_swing');
-      return;
-    }
     if (move === 'antony_knife_throw') {
       const knife = globalThis.NeoNyke?.simulation?.planCampaignAntonyKnifeThrow?.({
         baseDamage,
@@ -1336,26 +1618,6 @@
       });
       Neo.playSfx?.('sword_swing');
       return;
-    }
-    if (move === 'dungeon_beam') {
-      const range = Number(Neo.MOVE_BASE_STATS?.dungeon_beam?.range || 560);
-      const endX = Neo.player.x + Math.cos(angle) * range;
-      const endY = Neo.player.y + Math.sin(angle) * range;
-      Neo.spawnParticle({
-        x: Neo.player.x,
-        y: Neo.player.y,
-        life: 0.24,
-        c: '#f45cff',
-        line: {
-          x1: Neo.player.x, y1: Neo.player.y, x2: endX, y2: endY,
-          w: 10, jag: 2, seg: 12, phase: Neo.nextRandom('fx') * Math.PI * 2,
-        },
-      });
-      forEachEnemyNearPlayer(range + 40, enemy => {
-        if (!enemy || Neo.distToSegment(enemy.x, enemy.y, Neo.player.x, Neo.player.y, endX, endY) > enemy.r + 13) return;
-        hitEnemy(enemy, damage, angle, 220, '#f45cff', { lightning: true });
-      });
-      Neo.addTrauma?.(0.45, angle + Math.PI, 10);
     }
   }
 
@@ -1920,6 +2182,8 @@
   function trySmash() {
     cancelCowardsWayOnAttack();
     if (!hasSurvivalFood(18)) { spendSurvivalFood(18); return; }
+    if (tryEnemyNativePrimary('smash')) return;
+    if (tryEnemyProjectileSignature('smash')) return;
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     // Healing Zone is hold-to-charge: attack speed controls how quickly it reaches
@@ -2178,27 +2442,6 @@
       Neo.ringBurst(Neo.player.x + Math.cos(angle) * distance, Neo.player.y + Math.sin(angle) * distance, 28, '#d9b279', 0.35);
       return;
     }
-    if (move === 'laser_nova' || move === 'bullet_nova') {
-      const count = move === 'bullet_nova' ? 24 : 12;
-      const speed = move === 'bullet_nova' ? 1050 : 720;
-      const color = move === 'bullet_nova' ? '#ff9dd7' : '#f45cff';
-      const kind = move === 'bullet_nova' ? 'magenta_p90' : 'laser_nova';
-      for (let index = 0; index < count; index += 1) {
-        const shotAngle = angle + index * (Math.PI * 2 / count);
-        spawnWeaponProjectile({
-          angle: shotAngle,
-          damage,
-          speed,
-          r: move === 'bullet_nova' ? 4 : 6,
-          life: move === 'bullet_nova' ? 0.82 : 1.05,
-          kind,
-          color,
-          knockback: move === 'bullet_nova' ? 80 : 160,
-        });
-      }
-      Neo.ringBurst(Neo.player.x, Neo.player.y, 58, color, 0.45);
-      return;
-    }
     if (move === 'cult_frenzy') {
       Neo.player.deathBallBuffTime = Math.max(Number(Neo.player.deathBallBuffTime || 0), 8);
       Neo.player.deathBallBuffPower = Math.max(Number(Neo.player.deathBallBuffPower || 0), 0.55);
@@ -2235,6 +2478,8 @@
 
   function tryDash(moveX, moveY) {
     if (Neo.player.dashTime > 0) return;
+    if (tryEnemyNativePrimary('dash')) return;
+    if (tryEnemyProjectileSignature('dash')) return;
     const move = getEquippedMove('dash');
     const attackSpeed = Neo.getAttackSpeedValue();
     const rechargeTime = Neo.getDashCooldownDuration(move, attackSpeed);
@@ -4710,17 +4955,17 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 22, life: 0.45, text: 'FRIEND', c: '#8dffbd' });
       return;
     }
-    const stats = Neo.getItemStats();
+    const stats = options.nativeEnemyAttack ? {} : Neo.getItemStats();
     const sandbox = Neo.getActiveSandboxSettings();
     // Hit-time crit bonuses (weapons, anvil moves) can push chance past 100%, so
     // run the roll-back here too: overflow becomes extra crit damage on top of the
     // already rolled-back multiplier from getItemStats.
-    const elBartoAmbush = !!Neo.player?.elBartoAmbushReady && Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
+    const elBartoAmbush = !options.nativeEnemyAttack && !!Neo.player?.elBartoAmbushReady && Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
     const sparkled = Number(enemy.critSparkle || 0) > 0;
     const critResolution = globalThis.NeoNyke.simulation.resolveCampaignCrit({
-      itemStats: stats,
+      itemStats: options.canCrit === false ? {} : stats,
       critBonus: options.critBonus,
-      forced: elBartoAmbush || sparkled,
+      forced: options.canCrit !== false && (elBartoAmbush || sparkled),
       random: () => Neo.nextRandom('encounter'),
     });
     const critMultiplier = critResolution.critMultiplier;
@@ -4736,7 +4981,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     if (Number(stats.coldDamageTakenMultiplier || 1) > 1 && Neo.getStatusStacks?.(enemy, 'slow') > 0) {
       dealt = Math.max(1, Math.round(dealt * Number(stats.coldDamageTakenMultiplier || 1)));
     }
-    if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
+    if (sandbox && !options.nativeEnemyAttack) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const isCrit = critResolution.isCrit;
     // Every level gained adds 2% to the attacker's outgoing knockback. This
@@ -4769,7 +5014,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
       }
     }
     enemy.hp -= dealt;
-    Neo.tryAwakenBlackBugAllies?.(enemy, dealt);
+    if (!options.nativeEnemyAttack) Neo.tryAwakenBlackBugAllies?.(enemy, dealt);
     Neo.applyImpulse(enemy, angle, appliedKnockback);
     if (Number.isFinite(angle)) {
       enemy._lastHitAngle = angle;
@@ -4807,14 +5052,14 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
     if (isCrit) Neo.tutorialController?.signal?.('crit-dealt');
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
-    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);
+    if (!options.skipDrainRoll && !options.nativeEnemyAttack) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);
     if (elBartoAmbush) {
       Neo.player.elBartoAmbushReady = false;
       applyBleed(enemy, 1, 4.5);
       applyPoison(enemy, 1, 4.5);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 22, life: 0.6, text: 'AMBUSH', c: '#ffb37a' });
     }
-    applyCampaignOnHitStatusProcs(enemy, stats, options, copperPennyStacks);
+    if (!options.nativeEnemyAttack) applyCampaignOnHitStatusProcs(enemy, stats, options, copperPennyStacks);
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
     if (options.chainLightningRadius > 0) {
       const chained = Neo.findNearestEnemy(enemy.x, enemy.y, options.chainLightningRadius, new Set([enemy]));
@@ -6737,6 +6982,7 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   Neo.getEnemyBleedResistance = getEnemyBleedResistance;
   Neo.scaleBleedDamageAgainstEnemy = scaleBleedDamageAgainstEnemy;
   Neo.getPlayerBaseDamage = getPlayerBaseDamage;
+  Neo.getEnemySignatureAttackInfo = getEnemySignatureAttackInfo;
   Neo.getDisplayDamage = getDisplayDamage;
   Neo.formatDisplayDamage = formatDisplayDamage;
   Neo.getEquippedMove = getEquippedMove;
@@ -6798,6 +7044,9 @@ const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
   Neo.castSmiteChain = castSmiteChain;
   Neo.findNearestSmiteTarget = findNearestSmiteTarget;
   Neo.castHealingZone = castHealingZone;
+  Neo.updateEnemyProjectileSignature = updateEnemyProjectileSignature;
+  Neo.updateEnemyNativePrimary = updateEnemyNativePrimary;
+  Neo.getEnemyNativeActionInfo = getEnemyNativeActionInfo;
   Neo.updateHealingZoneCharge = updateHealingZoneCharge;
   Neo.HEALING_ZONE_MAX_CHARGE = HEALING_ZONE_MAX_CHARGE;
   Neo.HEALING_ZONE_CHARGE_SPEED_MULTIPLIER = HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;

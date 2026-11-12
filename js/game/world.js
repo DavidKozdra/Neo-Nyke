@@ -670,7 +670,7 @@
       barrier: Neo.player.overhealBarrier,
       ironLungApplies,
       bossLike,
-      applyDamageCaps: applyHitstop,
+      applyDamageCaps: applyHitstop && !Neo.player.enemyBody,
       ...options,
     });
     // SharedPlayerDamageSystem is a required platform-neutral foundation. Keep
@@ -681,6 +681,7 @@
     let finalAmount = resolvedDamage.dealt;
     const absorbed = resolvedDamage.absorbed;
     Neo.player.overhealBarrier = resolvedDamage.barrier;
+    if (Neo.player.character === 'enemy_shield_unit') Neo.player.enemyShieldLockout = 1.1;
     const barrierBeforeHit = Math.max(0, Number(Neo.player.overhealBarrier || 0) + absorbed);
     if (barrierBeforeHit > 0 && absorbed > 0) {
       const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
@@ -741,7 +742,7 @@
     }
 
     if (applyHitstop) {
-      Neo.player.inv = 0.75;
+      if (!Neo.player.enemyBody) Neo.player.inv = 0.75;
       // Anchor Charm roots the player: reduce incoming knockback. The reduced value
       // also feeds the impact-stun check, so less shove = harder to heavy-knockback stun.
       const resistedKnockback = scaleKnockbackByAttackerLevel(knockback, source, options)
@@ -1187,7 +1188,14 @@
     const color = projectile.enemyBlast?.color || projectile.color || '#9fe8ff';
     spawnAoeShockwave(x, y, radius, color, 'explosion');
     Neo.spawnParticle({ x, y, life: 0.5, ring: radius, c: color });
-    if (damage > 0) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
+    if (damage > 0 && projectile.nativeEnemyAttack && !projectile.enemy) {
+      for (const target of Neo.enemies || []) {
+        if (target.hp <= 0 || !globalThis.NeoNyke.simulation.campaignCircleHazardHitsEntity({ x, y }, target, radius)) continue;
+        Neo.hitEnemy(target, damage, Math.atan2(target.y - y, target.x - x), blast.knockback, color,
+          { rawDamage: true, canCrit: false, nativeEnemyAttack: true, attacker: projectile.owner });
+        if (blast.statusKey && target.hp > 0) Neo.applyStatus?.(target, blast.statusKey, blast.statusStacks, blast.statusDuration, projectile.source);
+      }
+    } else if (damage > 0) getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
       const actor = slot.getEntity();
       if (!globalThis.NeoNyke.simulation.campaignCircleHazardHitsEntity({ x, y }, actor, radius)) return;
       damagePlayerSlot(slot, damage, Math.atan2(actor.y - y, actor.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe', {
@@ -1515,7 +1523,7 @@
     const difficultyKey = Neo.selectedDifficulty;
     const legacyPlayerMultiplier = difficultyKey === 'easy' ? 0.8 : difficultyKey === 'hard' ? 1.2 : 1;
     const itemMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
-    if (!enemyProjectile) return itemMultiplier * legacyPlayerMultiplier;
+    if (!enemyProjectile && !props.nativeEnemyAttack) return itemMultiplier * legacyPlayerMultiplier;
 
     const difficulty = Neo.getDifficultyDef?.() || {};
     const bossProjectile = props.bossProjectile === true || Neo.isBossType?.(props.owner?.type);
@@ -1531,7 +1539,7 @@
   function spawnProjectile(props) {
     const p = _acquireProjectile();
     const enemyProjectile = !!(props.enemy ?? false);
-    const itemStats = enemyProjectile ? {} : (Neo.getItemStats?.() || {});
+    const itemStats = enemyProjectile || props.nativeEnemyAttack ? {} : (Neo.getItemStats?.() || {});
     const projectileSpeedMultiplier = getProjectileSpeedMultiplier(props, enemyProjectile, itemStats);
     const legacyDifficultyMultiplier = Neo.selectedDifficulty === 'easy' ? 0.8 : Neo.selectedDifficulty === 'hard' ? 1.2 : 1;
     const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0)) * legacyDifficultyMultiplier;
@@ -1558,10 +1566,12 @@
     }
     p.color = props.color ?? null;
     p.enemy = enemyProjectile;
+    p.nativeEnemyAttack = !!props.nativeEnemyAttack;
     p.animSeed = Number.isFinite(props.animSeed) ? Number(props.animSeed) : Math.random() * Math.PI * 2;
-    p.knockback = props.knockback ?? 0;
+    p.knockback = props.knockback ?? (props.nativeEnemyAttack ? 120 : 0);
     p.pierceCount = Math.max(0, Math.floor(Number(props.pierceCount ?? 0) + (!enemyProjectile ? Number(itemStats.projectilePierceBonus || 0) : 0)));
     p.hitOptions = props.hitOptions ?? null;
+    p.hitEntityIds = [];
     p.trail = props.trail ?? [];
     p.splash = props.splash ?? 0;
     p.splashDamage = props.splashDamage ?? 0;
@@ -1626,7 +1636,7 @@
     // Heart of the Ocean turns every pair of player-created shots into a third
     // wave. Echoes carry the original projectile payload but do not count toward
     // the next pair, preventing recursive projectile growth.
-    if (!enemyProjectile && !props.heartOceanEcho && (Neo.getItemCount?.('heart_of_the_ocean') || 0) > 0) {
+    if (!enemyProjectile && !props.nativeEnemyAttack && !props.heartOceanEcho && (Neo.getItemCount?.('heart_of_the_ocean') || 0) > 0) {
       const requiredProjectiles = Math.max(1, Number(itemStats.heartOceanProjectileRequirement || 2));
       Neo.player.heartOceanProjectileCount = Math.max(0, Number(Neo.player.heartOceanProjectileCount || 0)) + 1;
       if (Neo.player.heartOceanProjectileCount >= requiredProjectiles) {
@@ -2181,6 +2191,7 @@
       // treats intact pots as solid, so checking it first discarded Metao's
       // fireball without ever applying the already-detected pot impact.
       if (!projectile.enemy && hitProp) {
+        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         const resolvePropImpact = globalThis.NeoNyke?.simulation?.resolveCampaignProjectileDestructibleImpact;
         if (typeof resolvePropImpact !== 'function') throw new Error('Shared projectile destructible impact policy is unavailable');
         const impact = resolvePropImpact(projectile, hitProp);
@@ -2224,6 +2235,7 @@
           Neo.enemies || [],
           {
             include: enemy => !enemy?.dead
+              && !(projectile.hitEntityIds || []).includes(enemy.id ?? enemy)
               && !(projectile.boomerangHitSet && projectile.boomerangHitSet.has(enemy)),
           },
         )?.entity;
@@ -2238,6 +2250,7 @@
           continue;
         }
         if (target) {
+          if (!projectile.boomerang) (projectile.hitEntityIds ||= []).push(target.id ?? target);
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
           const hitOptions = { ...(projectile.hitOptions || {}) };
           hitOptions.attacker = projectile.owner || Neo.player;
@@ -2252,6 +2265,11 @@
             projectile.color || (projectile.kind === 'fireball' ? '#ff8844' : '#a857ff'),
             hitOptions
           );
+          if (!target.dead) {
+            globalThis.NeoNyke.simulation.resolveCampaignProjectileStatusApplications(projectile, {
+              random: () => Neo.nextRandom('encounter'),
+            }).forEach(effect => Neo.applyStatus(target, effect.key, effect.stacks, effect.duration, projectile.source));
+          }
           if (Neo.player?.character === 'princess' && projectile.pierceCount > 0) {
             Neo.applyPlayerHealing?.(1.2, { showBarrier: false });
           }
@@ -2267,6 +2285,7 @@
             Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', projectile.splashFireStacks || 1, projectile.fireDuration || 3, null);
           }
           detonatePlayerStatusSplash(projectile, projectile.x, projectile.y);
+          detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
           if (projectile.boomerang) {
             // Track the foe so it isn't struck twice, then either keep piercing on
@@ -2311,17 +2330,20 @@
         const hitAlly = findProjectileTarget(
           projectile,
           { x: prevX, y: prevY },
-          Object.values(Neo.allies || {}).filter(ally => ally?.status === 'active'),
+          Object.values(Neo.allies || {}).filter(ally => ally?.status === 'active'
+            && !(projectile.hitEntityIds || []).includes(ally.id ?? ally)),
           { getId: ally => ally?.id },
         )?.entity;
         if (hitAlly) {
+          (projectile.hitEntityIds ||= []).push(hitAlly.id ?? hitAlly);
           const result = Neo.damageAlly?.(hitAlly.id, projectile.damage || 10, { attacker: projectile.owner });
           if (result?.died) {
             Neo.spawnParticle?.({ x: hitAlly.x, y: hitAlly.y - 20, life: 0.9, text: result.respawning ? 'RESPAWNING' : 'ALLY DOWN', c: '#ff708d' });
           }
           detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
-          removeProjectileAt(index);
+          if (projectile.pierceCount > 0) projectile.pierceCount -= 1;
+          else removeProjectileAt(index);
           continue;
         }
         const hitSlot = findProjectileTarget(
@@ -2329,12 +2351,14 @@
           { x: prevX, y: prevY },
           getLocalCoopSlots({ livingOnly: true }),
           {
+            include: slot => !(projectile.hitEntityIds || []).includes(slot.getEntity().id ?? slot.getEntity()),
             getEntity: slot => slot.getEntity(),
             getId: (slot, actor) => actor?.id ?? slot?.id,
           },
         )?.candidate;
         if (!hitSlot) continue;
         const hitPlayer = hitSlot.getEntity();
+        (projectile.hitEntityIds ||= []).push(hitPlayer.id ?? hitPlayer);
         if (projectile.kind === 'love_bomb') {
           detonateLoveBomb(projectile, projectile.x, projectile.y);
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
@@ -2351,7 +2375,8 @@
         applyProjectileDrainToOwner(projectile);
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
-        removeProjectileAt(index);
+        if (projectile.pierceCount > 0) projectile.pierceCount -= 1;
+        else removeProjectileAt(index);
         continue;
       }
     }
@@ -2480,20 +2505,35 @@
         }
         if (hazard.fuse <= 0) {
           const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 250);
-          getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
-            const actor = slot.getEntity();
-            if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + actor.r) {
-              damagePlayerSlot(
-                slot,
-                damage,
-                Neo.angleBetween(hazard, actor),
-                Number(hazard.knockback || 240),
-                hazard.source || 'bomb_aoe',
-                { attacker: getAttackArtifactOwner(hazard) },
-              );
+          if (hazard.nativeEnemyAttack && !hazard.enemy) {
+            const radius = hazard.blastRadius || 150;
+            for (const enemy of Neo.enemies || []) {
+              if (enemy.hp <= 0 || Math.hypot(enemy.x - hazard.x, enemy.y - hazard.y) > radius + enemy.r) continue;
+              Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x), Number(hazard.knockback || 240), '#ff7a66',
+                { rawDamage: true, canCrit: false, nativeEnemyAttack: true, attacker: hazard.owner });
             }
-          });
-          blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
+            for (const prop of Neo.destructibles || []) {
+              if (!prop.broken && !prop.hidden && Math.hypot(prop.x - hazard.x, prop.y - hazard.y) <= radius + Number(prop.r || 0)) {
+                damageDestructible(prop, damage, { sourceX: hazard.x, sourceY: hazard.y, impactType: 'blast', force: 1.6 });
+              }
+            }
+            spawnAoeShockwave(hazard.x, hazard.y, radius, '#ff7a66', 'explosion');
+          } else {
+            getLocalCoopSlots({ livingOnly: true }).forEach(slot => {
+              const actor = slot.getEntity();
+              if (Neo.dist(actor.x, actor.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + actor.r) {
+                damagePlayerSlot(
+                  slot,
+                  damage,
+                  Neo.angleBetween(hazard, actor),
+                  Number(hazard.knockback || 240),
+                  hazard.source || 'bomb_aoe',
+                  { attacker: getAttackArtifactOwner(hazard) },
+                );
+              }
+            });
+            blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
+          }
           Neo.playSfx?.('bomb_explosion');
           hazard.ttl = 0;
         }
@@ -2617,7 +2657,11 @@
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
               const angle = Neo.angleBetween(hazard, enemy);
-              Neo.hitEnemy(enemy, hazard.damage || 18, angle, Number(hazard.knockback || 170), '#ff3348');
+              Neo.hitEnemy(enemy, hazard.damage || 18, angle, Number(hazard.knockback || 170), '#ff3348',
+                hazard.nativeEnemyAttack ? { rawDamage: true, canCrit: false, nativeEnemyAttack: true, attacker: hazard.owner } : undefined);
+              if (hazard.nativeEnemyAttack && hazard.statusKey) Neo.applyStatus?.(enemy, hazard.statusKey,
+                Number(hazard.statusStacks || 1), Number(hazard.statusDuration || 3),
+                { sourceKey: hazard.source, owner: hazard.owner, nativeEnemyAttack: true });
             });
           }
         }

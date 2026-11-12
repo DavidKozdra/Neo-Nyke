@@ -158,6 +158,16 @@ describe('3D combat readability', () => {
     expect(bounds.max.z - bounds.min.z).toBeGreaterThan(10);
   });
 
+  test('scenery bounds track changed parent transforms without a full-scene matrix pass', () => {
+    const f = fixture();
+    const { group, body } = addEnemy(f);
+    group.position.x = 280;
+    const updateAll = jest.spyOn(f.scene, 'updateMatrixWorld');
+    f.api.prepareReadabilityFrame();
+    expect(f.api.getSceneryBounds(body, f.camera).getCenter(new THREE.Vector3()).x).toBeCloseTo(280);
+    expect(updateAll).not.toHaveBeenCalled();
+  });
+
   test('the aim marker follows the selected actor and hides for other viewports and touch input', () => {
     const f = fixture();
     const { actor, body } = addEnemy(f);

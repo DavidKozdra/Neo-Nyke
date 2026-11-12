@@ -1,10 +1,11 @@
 (function initializeSharedProgressionSystem(root, factory) {
-  const api = factory();
+  const bodies = typeof module !== 'undefined' && module.exports ? require('./SharedEnemyBodySystem') : root.NeoNyke?.simulation;
+  const api = factory(bodies);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedProgressionApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedProgressionApi(bodies) {
   'use strict';
 
   const KNOCKBACK_BONUS_PER_LEVEL = 0.02;
@@ -76,6 +77,7 @@
   }
 
   function getLevelMilestone(level, characterKey) {
+    if (bodies.getPlayableEnemyBodyDefinition(characterKey)) return null;
     const numericLevel = Math.floor(Number(level) || 0);
     return CHARACTER_LEVEL_MILESTONES[characterKey]?.[numericLevel]
       || DEFAULT_LEVEL_MILESTONES[numericLevel]
@@ -108,6 +110,12 @@
     if (!player) return null;
     player.level = Math.max(1, Math.floor(Number(player.level || 1))) + 1;
     player.xpToNext = Math.max(1, Math.round(Number(player.xpToNext || 20) * 1.22));
+    if (bodies.getPlayableEnemyBodyDefinition(player.characterKey || player.character)) {
+      const previousMax = player.maxHp;
+      bodies.syncPlayableEnemyBody(player, player.enemyBodyContext || {});
+      return { level: player.level, maxHpGain: player.maxHp - previousMax,
+        gains: { maxHp: 0, attackPower: 0, attackSpeed: 0 }, milestone: null, levelBonusMultiplier: 1 };
+    }
     const artificerStacks = Math.max(0, Number(options.artificerStacks ?? player.items?.artificer_charger) || 0);
     const gains = getArtificerLevelGains(artificerStacks);
     const milestone = getLevelMilestone(player.level, player.character || player.characterKey);

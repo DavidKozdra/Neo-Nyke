@@ -4216,6 +4216,10 @@ body.render3d .player-status-row:not([hidden]) {
   overflow: hidden;
 }
 
+.skill-card[hidden] {
+  display: none;
+}
+
 .skill-card.ready {
   border-color: rgba(140, 199, 255, .48);
   border-top-color: rgba(235, 246, 255, .58);

@@ -1,12 +1,13 @@
 (function initializeSharedEnemyBehaviorSystem(root, factory) {
   const geometryApi = typeof require === 'function' ? require('koz-engine-lib/Core/geometry2d.js') : root.KozEngine?.Core?.geometry2d;
   const enemyContentApi = typeof require === 'function' ? require('./SharedEnemyContent') : root.NeoNyke?.content;
-  const api = factory(geometryApi || {}, enemyContentApi || {});
+  const attackApi = typeof require === 'function' ? require('./SharedEnemyAttackSystem') : root.NeoNyke?.simulation;
+  const api = factory(geometryApi || {}, enemyContentApi || {}, attackApi || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi, enemyContentApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createSharedEnemyBehaviorSystemApi(geometryApi, enemyContentApi, attackApi) {
   'use strict';
 
   const deterministicRandom = () => 0.5;
@@ -197,6 +198,7 @@
     const randRange = (min, max, scope) => min + random(scope) * (max - min);
 
     function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
+      if (ctx.controlled) return;
       const slowMultiplier = ctx.getSlowMultiplier?.(enemy) ?? 1;
       const packSpeedMultiplier = Math.max(1, Number(enemy.minorPackSpeedMultiplier || 1));
       const signatureSpeedMultiplier = Math.max(1, Number(enemy.signatureSpeedMultiplier || 1));
@@ -304,13 +306,18 @@
       enemy.vy *= speedDamp;
       if (turnRate > 0) aimEnemyBeam(enemy, dt, turnRate * 0.55);
       if (typeof onTick === 'function') onTick(enemy, dt);
+      const path = ctx.getBeamPath?.(enemy, range, enemy.beamAngle) || [{ x1: enemy.x, y1: enemy.y,
+        x2: enemy.x + Math.cos(enemy.beamAngle) * range, y2: enemy.y + Math.sin(enemy.beamAngle) * range }];
+      ctx.presentBeam?.(enemy, { range, angle: enemy.beamAngle, remaining: enemy.beamTime, path });
       if (enemy.beamTick <= 0) {
         enemy.beamTick = tick;
-        const endX = enemy.x + Math.cos(enemy.beamAngle) * range;
-        const endY = enemy.y + Math.sin(enemy.beamAngle) * range;
         (ctx.getPlayers?.(enemy) || []).forEach(player => {
-          const hit = segmentHitsCircle(enemy.x, enemy.y, endX, endY, player.x, player.y, player.r + 5);
-          if (hit) ctx.damagePlayer(enemy, player, ctx.scaleEnemyLaserDamage?.(damage) ?? damage, hit.angle, knockback, enemy.type);
+          const hit = path.map(segment => segmentHitsCircle(segment.x1, segment.y1, segment.x2, segment.y2,
+            player.x, player.y, player.r + 5)).find(Boolean);
+          if (hit) {
+            ctx.damagePlayer(enemy, player, ctx.scaleEnemyLaserDamage?.(damage) ?? damage, hit.angle, knockback, config.damageSource || enemy.type);
+            config.onHit?.(player, enemy);
+          }
         });
       }
       if (enemy.beamTime <= 0) {
@@ -406,24 +413,6 @@
       return true;
     }
 
-    function spawnNpcSignatureProjectile(enemy, moveKey, angle, options = {}) {
-      const speed = Number(options.speed || 520);
-      ctx.spawnProjectile?.(enemy, {
-        x: enemy.x + Math.cos(angle) * (enemy.r + 8),
-        y: enemy.y + Math.sin(angle) * (enemy.r + 8),
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        r: Number(options.r || 5),
-        life: Number(options.life || 1.4),
-        kind: options.kind || moveKey,
-        source: moveKey,
-        damage: Math.max(1, Math.round(Number(enemy.dmg || 10) * Number(options.damageScale || 1))),
-        knockback: Number(options.knockback || 140),
-        pierceCount: Number(options.pierceCount || 0),
-        statusEffects: options.statusEffects,
-      });
-    }
-
     function summonNpcCultFollowers(enemy, count) {
       for (let index = 0; index < count; index += 1) {
         const angle = (Math.PI * 2 * index) / count + random('encounter') * 0.5;
@@ -438,15 +427,9 @@
       const level = Math.max(1, Math.floor(Number(enemy.level) || 1));
       const levelTwenty = level >= 20;
       const angle = angleBetween(enemy, player);
-      const fan = (count, spread, options) => {
-        for (let index = 0; index < count; index += 1) {
-          const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
-          spawnNpcSignatureProjectile(enemy, moveKey, angle + offset, options);
-        }
-      };
-
-      if (moveKey === 'hunter_volley') {
-        fan(levelTwenty ? 7 : 5, 0.17, { speed: 620, life: 1.15, damageScale: 0.72, pierceCount: levelTwenty ? 2 : 1 });
+      const projectiles = attackApi.planEnemySignatureProjectiles(enemy, moveKey, angle);
+      if (projectiles) {
+        projectiles.forEach(projectile => ctx.spawnProjectile?.(enemy, projectile));
       } else if (moveKey === 'hunter_trap') {
         ctx.spawnHazard?.(enemy, {
           kind: 'red_spikes', enemy: true, source: 'hunter_trap',
@@ -457,40 +440,11 @@
           knockback: levelTwenty ? 300 : 240,
           statusKey: 'bleed', statusStacks: levelTwenty ? 3 : 2, statusDuration: 4.5,
         });
-      } else if (moveKey === 'sniper_round') {
-        fan(levelTwenty ? 2 : 1, 0.14, {
-          speed: 900, r: 6, life: 1.05, damageScale: 1.45,
-          knockback: 300, pierceCount: levelTwenty ? 4 : 2,
-        });
-      } else if (moveKey === 'gunner_barrage') {
-        fan(levelTwenty ? 16 : 12, 0.025, { speed: 720, life: 1.05, damageScale: 0.42, knockback: 70 });
-      } else if (moveKey === 'bullet_nova' || moveKey === 'laser_nova') {
-        const count = moveKey === 'bullet_nova' ? (levelTwenty ? 30 : 24) : (levelTwenty ? 16 : 12);
-        for (let index = 0; index < count; index += 1) {
-          spawnNpcSignatureProjectile(enemy, moveKey, angle + index * Math.PI * 2 / count, {
-            speed: moveKey === 'bullet_nova' ? 680 : 520,
-            r: moveKey === 'bullet_nova' ? 4 : 6,
-            damageScale: moveKey === 'bullet_nova' ? 0.4 : 0.68,
-            knockback: moveKey === 'bullet_nova' ? 65 : 130,
-          });
-        }
-      } else if (moveKey === 'dungeon_beam') {
-        fan(levelTwenty ? 3 : 1, 0.12, {
-          speed: 820, r: 11, life: 0.9, damageScale: 1.15,
-          knockback: 220, pierceCount: levelTwenty ? 3 : 2,
-        });
-      } else if (moveKey === 'cult_bolt_volley') {
-        fan(levelTwenty ? 7 : 5, 0.16, {
-          speed: 500, r: 7, life: 1.4, damageScale: 0.7, knockback: 100,
-          statusEffects: [{ key: 'fire', chance: 1, stacks: levelTwenty ? 2 : 1, duration: 3.2 }],
-        });
       } else if (moveKey === 'cult_frenzy') {
         enemy.npcFrenzyTime = levelTwenty ? 8 : 6;
         enemy.signatureSpeedMultiplier = levelTwenty ? 1.6 : 1.4;
         enemy.signatureAttackSpeedMultiplier = levelTwenty ? 1.6 : 1.4;
         enemy.attackCd = Math.min(Number(enemy.attackCd || 0), 0.18);
-      } else if (moveKey === 'shield_throw') {
-        fan(1, 0, { speed: 600, r: 12, life: 1.7, damageScale: 1.1, knockback: 330, pierceCount: levelTwenty ? 5 : 3 });
       } else if (moveKey === 'shield_guard') {
         ctx.grantBarrier?.(enemy, enemy, Math.round(Number(enemy.max || enemy.maxHealth || 1) * (levelTwenty ? 0.34 : 0.24)));
         enemy.signatureGuardTime = levelTwenty ? 5 : 3.5;
@@ -537,9 +491,9 @@
       const moveKey = unlocked[Number(enemy.npcSignatureIndex || 0) % unlocked.length];
       enemy.npcSignatureIndex = Number(enemy.npcSignatureIndex || 0) + 1;
       enemy.npcSignatureMove = moveKey;
-      enemy.npcSignatureWindup = moveKey === 'sniper_round' || moveKey === 'dungeon_beam' ? 0.7 : 0.48;
-      enemy.npcSignatureCd = (Math.max(1, Number(enemy.level || 1)) >= 20 ? 5.8 : 7.4)
-        * Math.max(0.72, Number(tuningOf().rangedCadence || 1));
+      const timing = attackApi.getEnemySignatureTiming(moveKey, enemy.level, tuningOf());
+      enemy.npcSignatureWindup = timing.windup;
+      enemy.npcSignatureCd = timing.cooldown;
       ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: moveKey });
       return true;
     }
@@ -928,6 +882,7 @@
             source: 'golem_projectile',
             damage: enemy.dmg + 4,
             knockback: 120 * (enemy.type === 'bulk_golem' ? BULK_GOLEM_KNOCKBACK_MULTIPLIER : 1),
+            statusEffects: [{ key: 'poison', chance: 1, stacks: 1, duration: 4.2 }],
           });
         }
         return;
@@ -962,6 +917,7 @@
         return;
       }
 
+      if (ctx.controlled) return;
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.1, dt);
       if (enemy.attackCd <= 0) {
         if (distance < 460) {
@@ -1074,6 +1030,27 @@
       }
     }
 
+    function startTRexAttack(enemy, moveKey, angle) {
+      const target = ctx.getPlayer(enemy);
+      const distance = target ? dist(enemy.x, enemy.y, target.x, target.y) : Infinity;
+      if (moveKey === 'enemy_t_rex_primary') {
+        if (target && distance < enemy.r + target.r + 18) {
+          ctx.damagePlayer(enemy, target, enemy.dmg, angleBetween(enemy, target), 360, enemy.type);
+          enemy.swingTime = 0.3;
+        }
+        enemy.attackCd = 0.9;
+      } else if (moveKey === 'enemy_t_rex_roar') {
+        if (distance < 240) ctx.damagePlayer(enemy, target, Math.round(enemy.dmg * 0.45), angleBetween(enemy, target), 440, enemy.type);
+        enemy.roarCd = 4.4;
+        ctx.presentTRexAttack?.(enemy, 'roar');
+      } else if (moveKey === 'enemy_t_rex_charge') {
+        enemy.dashAngle = angle;
+        enemy.windup = 0.55;
+        enemy.dashHasMoved = false;
+        enemy.attackCd = 1.8;
+      }
+    }
+
     function updateTRexBoss(enemy, dt) {
       const player = ctx.getPlayer(enemy);
       if (!player) return;
@@ -1097,11 +1074,13 @@
         if (isTRexChargeWallImpact(enemy, ctx.bounds?.(enemy))) {
           createTRexWallRockDescriptors(enemy).forEach(rock => ctx.spawnProjectile?.(enemy, rock));
           ctx.emit?.('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: 't_rex_wall_impact' });
+          ctx.presentTRexAttack?.(enemy, 'wall_impact');
           enemy.dashTime = 0;
           enemy.dashHasMoved = false;
           enemy.vx = -Math.cos(enemy.dashAngle) * 140;
           enemy.vy = -Math.sin(enemy.dashAngle) * 140;
           enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+          ctx.holdAttackCooldown?.(enemy, enemy.attackCd / Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1)));
           return;
         }
         const chargeSpeed = Math.max(610, Number(enemy.speed || 0) * 2);
@@ -1115,21 +1094,41 @@
         }
         return;
       }
+      if (ctx.controlled) return;
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
       if (distance < enemy.r + player.r + 18 && enemy.attackCd <= 0) {
-        ctx.damagePlayer(enemy, player, enemy.dmg, Math.atan2(dy, dx), 360, enemy.type);
-        enemy.swingTime = 0.3;
-        enemy.attackCd = 0.9;
+        startTRexAttack(enemy, 'enemy_t_rex_primary', Math.atan2(dy, dx));
       } else if (enemy.roarCd <= 0 && distance < 240) {
-        ctx.damagePlayer(enemy, player, Math.round(enemy.dmg * 0.45), Math.atan2(dy, dx), 440, enemy.type);
-        enemy.roarCd = 4.4;
+        startTRexAttack(enemy, 'enemy_t_rex_roar', Math.atan2(dy, dx));
       } else if (enemy.attackCd <= 0 && distance > enemy.r + player.r + 40) {
         const predictedX = player.x + Number(player.vx || 0) * 0.25;
         const predictedY = player.y + Number(player.vy || 0) * 0.25;
-        enemy.dashAngle = Math.atan2(predictedY - enemy.y, predictedX - enemy.x);
-        enemy.windup = 0.55;
-        enemy.dashHasMoved = false;
-        enemy.attackCd = 1.8;
+        startTRexAttack(enemy, 'enemy_t_rex_charge', Math.atan2(predictedY - enemy.y, predictedX - enemy.x));
+      }
+    }
+
+    function performShieldSupport(enemy) {
+      const tuning = tuningOf();
+      (ctx.getAllies?.(enemy) || []).forEach(other => {
+        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        ctx.grantBarrier(enemy, other, Math.round(other.max * 0.22 * tuning.supportPower));
+      });
+      ctx.grantBarrier(enemy, enemy, Math.round(enemy.max * 0.14 * tuning.supportPower));
+      ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'shield' });
+    }
+
+    function performHealerSupport(enemy) {
+      const tuning = tuningOf();
+      const floor = ctx.getFloor?.() || 1;
+      let healedAny = false;
+      (ctx.getAllies?.(enemy) || []).forEach(other => {
+        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        const heal = Math.max(8, Math.round(other.max * (floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
+        if (ctx.healEnemy(enemy, other, heal) > 0) healedAny = true;
+      });
+      if (healedAny) {
+        enemy.attackAnimT = 0.24;
+        ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'healer' });
       }
     }
 
@@ -1160,12 +1159,7 @@
       } else if (enemy.supportCd <= 0) {
         enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
         enemy.attackAnimT = 0.24;
-        (ctx.getAllies?.(enemy) || []).forEach(other => {
-          if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
-          ctx.grantBarrier(enemy, other, Math.round(other.max * 0.22 * tuning.supportPower));
-        });
-        ctx.grantBarrier(enemy, enemy, Math.round(enemy.max * 0.14 * tuning.supportPower));
-        ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'shield' });
+        performShieldSupport(enemy);
       }
 
       if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 22) {
@@ -1209,16 +1203,7 @@
       if (enemy.supportCd <= 0) {
         const floor = ctx.getFloor?.() || 1;
         enemy.supportCd = (floor >= 4 ? 2.1 : 2.8) * Math.max(0.74, tuning.rangedCadence);
-        let healedAny = false;
-        allies.forEach(other => {
-          if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
-          const heal = Math.max(8, Math.round(other.max * (floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
-          if (ctx.healEnemy(enemy, other, heal) > 0) healedAny = true;
-        });
-        if (healedAny) {
-          enemy.attackAnimT = 0.24;
-          ctx.emit?.('ENEMY_SUPPORT_USED', { enemyId: enemy.id, supportKind: 'healer' });
-        }
+        performHealerSupport(enemy);
       }
 
       if (enemy.attackCd <= 0 && !nearestWounded && player && distance < 350) {
@@ -1787,8 +1772,70 @@
       }
     }
 
+    function performBulkNova(enemy) {
+      const tier = Math.floor(Math.max(1, Number(enemy.level || 1)) / 5);
+      enemy.aoeTime = 3;
+      if (!enemy.bulkNovaLineShown) {
+        enemy.bulkNovaLineShown = true;
+        ctx.speak?.(enemy, 'Break under the weight.');
+      }
+      ctx.blastRadius(enemy, enemy.x, enemy.y, Math.min(225, 173 + tier * 9),
+        Math.round(enemy.dmg * 0.864), 200 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+        { attackKind: 'enemy_bulk_nova', color: '#ff8844' });
+      ctx.presentBulkAttack?.(enemy, 'nova');
+    }
+
+    function startBulkLeap(enemy) {
+      const player = ctx.getPlayer(enemy);
+      if (!player) return false;
+      const bounds = ctx.bounds(enemy);
+      const clampX = x => clamp(x, bounds.wall + enemy.r, bounds.width - bounds.wall - enemy.r);
+      const clampY = y => clamp(y, bounds.wall + enemy.r, bounds.height - bounds.wall - enemy.r);
+      const angle = angleBetween(enemy, player);
+      const distance = dist(enemy.x, enemy.y, player.x, player.y);
+      const targetDistance = clamp(distance - 84, 80, 260);
+      // Match rand(-34, 34), the campaign's (max, min) helper.
+      const preferredX = clampX(player.x - Math.cos(angle) * targetDistance + randRange(34, -34, 'encounter'));
+      const preferredY = clampY(player.y - Math.sin(angle) * targetDistance + randRange(34, -34, 'encounter'));
+      const usable = (x, y) => {
+        if (ctx.isBlocked?.(enemy, x, y, enemy.r)) return false;
+        let openPaths = 0, towardTarget = false;
+        const fromTarget = dist(x, y, player.x, player.y);
+        for (let index = 0; index < 8; index++) {
+          const direction = index / 8 * Math.PI * 2;
+          const px = x + Math.cos(direction) * Math.max(18, enemy.r + 10);
+          const py = y + Math.sin(direction) * Math.max(18, enemy.r + 10);
+          if (ctx.isBlocked?.(enemy, px, py, enemy.r)) continue;
+          openPaths++;
+          if (dist(px, py, player.x, player.y) < fromTarget - 2) towardTarget = true;
+        }
+        return openPaths >= 2 && towardTarget;
+      };
+      let landing = usable(preferredX, preferredY) ? { x: preferredX, y: preferredY } : null;
+      for (let attempt = 0; !landing && attempt < 40; attempt++) {
+        const direction = attempt / 16 * Math.PI * 2;
+        const radius = 30 + attempt % 4 * 40;
+        const x = clampX(preferredX + Math.cos(direction) * radius);
+        const y = clampY(preferredY + Math.sin(direction) * radius);
+        if (usable(x, y)) landing = { x, y };
+      }
+      if (!landing) {
+        enemy.jumpCd = 0.8;
+        ctx.setMoveCooldown?.(enemy, 'enemy_bulk_leap', 0.8);
+        return false;
+      }
+      Object.assign(enemy, { bulkJumpDuration: 0.82, bulkJumpTime: 0.82,
+        bulkJumpStartX: enemy.x, bulkJumpStartY: enemy.y,
+        bulkJumpTargetX: landing.x, bulkJumpTargetY: landing.y,
+        windup: 0, dashTime: 0, jumpCd: 99 });
+      ctx.presentBulkAttack?.(enemy, 'takeoff');
+      ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: 'bulk_jump', targetX: landing.x, targetY: landing.y });
+      return true;
+    }
+
     function updateBulkGolemBoss(enemy, dt) {
-      enemy.speed = 78;
+      const tier = Math.floor(Math.max(1, Number(enemy.level || 1)) / 5);
+      enemy.speed = 78 * Math.min(1.2, 1 + tier * 0.025);
       enemy.jumpCd = Math.max(0, Number(enemy.jumpCd || 0) - dt);
       const player = ctx.getPlayer(enemy);
       if (!player) return;
@@ -1804,13 +1851,20 @@
         enemy.vx = 0;
         enemy.vy = 0;
         enemy.airborne = true;
+        ctx.setMoveCooldown?.(enemy, 'enemy_bulk_leap', enemy.bulkJumpTime + 2.4);
+        if (enemy.aoeTime > 0) ctx.setMoveCooldown?.(enemy, 'enemy_bulk_nova', enemy.aoeTime);
+        if (progress > 0.62 && !enemy.bulkJumpWarned) {
+          enemy.bulkJumpWarned = true;
+          ctx.presentBulkAttack?.(enemy, 'warning');
+        }
         if (enemy.bulkJumpTime <= 0) {
           enemy.x = Number(enemy.bulkJumpTargetX || enemy.x);
           enemy.y = Number(enemy.bulkJumpTargetY || enemy.y);
           enemy.jumpZ = 0;
           enemy.airborne = false;
+          enemy.bulkJumpWarned = false;
           enemy.jumpCd = 2.4;
-          const impactRadius = 150;
+          const impactRadius = Math.min(215, 150 + tier * 10);
           ctx.blastRadius(
             enemy,
             enemy.x,
@@ -1818,7 +1872,15 @@
             impactRadius,
             Math.round(enemy.dmg * 0.85),
             330 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+            { attackKind: 'enemy_bulk_leap', singleTarget: true, strict: true, color: '#ff8844' },
           );
+          ctx.presentBulkAttack?.(enemy, 'landing', impactRadius);
+          if (enemy.level >= 10) ctx.spawnHazard?.(enemy, {
+            kind: 'bomb_aoe', enemy: true, source: enemy.type, x: enemy.x, y: enemy.y,
+            blastRadius: impactRadius + 24, fuse: 0.55, fuseDuration: 0.55, ttl: 0.7,
+            baseDamage: Math.round(enemy.dmg * 0.62), sparkTick: 0,
+            knockback: 240 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
+          });
         }
         return;
       }
@@ -1826,21 +1888,13 @@
       enemy.airborne = false;
       enemy.jumpZ = 0;
       enemy.aoeTime = Math.max(0, Number(enemy.aoeTime ?? 3) - dt);
-      if (enemy.aoeTime <= 0) {
-        enemy.aoeTime = 3;
-        if (!enemy.bulkNovaLineShown) {
-          enemy.bulkNovaLineShown = true;
-          ctx.speak?.(enemy, 'Break under the weight.');
-        }
-        ctx.blastRadius(
-          enemy,
-          enemy.x,
-          enemy.y,
-          173,
-          Math.round(enemy.dmg * 0.864),
-          200 * BULK_GOLEM_KNOCKBACK_MULTIPLIER,
-        );
+      if (ctx.controlled) {
+        if (enemy.spitWindup > 0) enemy.nativeMoveKey = 'enemy_bulk_golem_primary';
+        else if (enemy.windup > 0 || enemy.dashTime > 0) enemy.nativeMoveKey = 'enemy_bulk_charge';
+        updateGolemEnemy(enemy, dt);
+        return;
       }
+      if (enemy.aoeTime <= 0) performBulkNova(enemy);
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const distance = Math.hypot(dx, dy) || 1;
@@ -1848,28 +1902,7 @@
       const nextY = enemy.y + (dy / distance) * enemy.speed * 0.25;
       const pathBlocked = ctx.isBlocked?.(enemy, nextX, enemy.y, enemy.r) && ctx.isBlocked?.(enemy, enemy.x, nextY, enemy.r);
       if (enemy.jumpCd <= 0 && (pathBlocked || distance > 230)) {
-        const angle = Math.atan2(dy, dx);
-        const targetDistance = clamp(distance - 84, 80, 260);
-        const landing = findSafeLanding(
-          enemy,
-          player.x - Math.cos(angle) * targetDistance + randRange(-34, 34, 'encounter'),
-          player.y - Math.sin(angle) * targetDistance + randRange(-34, 34, 'encounter'),
-          enemy.r,
-        );
-        if (landing) {
-          enemy.bulkJumpDuration = 0.82;
-          enemy.bulkJumpTime = enemy.bulkJumpDuration;
-          enemy.bulkJumpStartX = enemy.x;
-          enemy.bulkJumpStartY = enemy.y;
-          enemy.bulkJumpTargetX = landing.x;
-          enemy.bulkJumpTargetY = landing.y;
-          enemy.windup = 0;
-          enemy.dashTime = 0;
-          enemy.jumpCd = 99;
-          ctx.emit?.('ENEMY_TELEGRAPH', { enemyId: enemy.id, attackKind: 'bulk_jump', targetX: landing.x, targetY: landing.y });
-          return;
-        }
-        enemy.jumpCd = 0.8;
+        if (startBulkLeap(enemy)) return;
       }
       updateGolemEnemy(enemy, dt);
     }
@@ -2116,6 +2149,7 @@
       const prev = wave.travelled;
       wave.travelled += wave.speed * dt;
       const front = wave.travelled;
+      ctx.presentShockwave?.(enemy, wave);
       if (!wave.hit) {
         (ctx.getPlayers?.(enemy) || []).forEach(player => {
           if (wave.hit) return;
@@ -2145,15 +2179,47 @@
       const angle = Number.isFinite(enemy.antonyDeathBallAngle)
         ? enemy.antonyDeathBallAngle
         : (player ? angleBetween(enemy, player) : 0);
-      ctx.spawnProjectile(enemy, {
-        x: enemy.x + Math.cos(angle) * (enemy.r + 14),
-        y: enemy.y + Math.sin(angle) * (enemy.r + 14),
-        vx: Math.cos(angle) * 525, vy: Math.sin(angle) * 525,
-        r: 38, life: 3.4, kind: 'cold_death', source: 'antony_death_ball',
-        damage: Math.round(enemy.dmg * 1.1), knockback: 230,
-        statusEffects: [{ key: 'slow', chance: 1, stacks: 1, duration: 4 }],
-        homing: true, homingTurnRate: 0.65, homingSpeed: 570, homingAccel: 1.1,
-      });
+      for (const projectile of attackApi.planAntonyDeathBallProjectiles(enemy, angle)) ctx.spawnProjectile(enemy, projectile);
+    }
+
+    function startAntonyAttack(enemy, moveKey, angle) {
+      const tuning = tuningOf();
+      if (moveKey === 'enemy_antony_blemmye_primary') {
+        const player = ctx.getPlayer(enemy);
+        enemy.attackAnimT = 0.28;
+        enemy.biteAnimT = 0.8;
+        if (player && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 26) {
+          const damage = Math.round(enemy.dmg * 0.82);
+          ctx.damagePlayer(enemy, player, damage, angleBetween(enemy, player), 240, enemy.type);
+          if (enemy.level >= 20) { enemy.antonyComboQueued = true; enemy.antonyComboTimer = 0.48; }
+          if (random('encounter') < 0.35) {
+            ctx.applyPlayerStatus(enemy, player, 'dark_drain', 2, 4.2);
+            ctx.healEnemy(enemy, enemy, Math.round(damage * 0.35));
+          }
+        }
+        enemy.biteCd = 1.9 * tuning.rangedCadence;
+        enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 0.55);
+      } else if (moveKey === 'enemy_antony_slash') {
+        enemy.attackAnimT = 0.3;
+        enemy.swingTime = 0.32;
+        enemy.swingA = angle;
+        meleeArcStrike(enemy, angle, 66, 0.82, Math.round(enemy.dmg * 0.92), 300, enemy.type);
+        enemy.slashCd = 2.45 * tuning.rangedCadence;
+        enemy.attackCd = 0.85;
+        ctx.emit?.('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: 'antony_slash' });
+      } else if (moveKey === 'enemy_antony_freeze_ball') {
+        enemy.state = 'antonyDeathBall';
+        enemy.windup = 1.05 / tuning.reaction;
+        enemy.antonyDeathBallAngle = angle;
+        enemy.deathBallCd = 7.2 * tuning.rangedCadence;
+        enemy.attackCd = 1.2;
+      } else if (moveKey === 'enemy_antony_hammer') {
+        enemy.state = 'antonyHammer';
+        enemy.windup = 0.9 / tuning.reaction;
+        enemy.antonyHammerAngle = angle;
+        enemy.hammerCd = 4.1 * tuning.rangedCadence;
+        enemy.attackCd = 1;
+      }
     }
 
     function updateAntonyBlemmyeBoss(enemy, dt) {
@@ -2168,6 +2234,7 @@
       enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
       enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
       enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
+      enemy.antonyComboTimer = Math.max(0, Number(enemy.antonyComboTimer || 0) - dt);
       enemy.biteAnimT = Math.max(0, Number(enemy.biteAnimT || 0) - dt);
       // Local play retires attackAnimT in its campaign wrapper and swingTime in
       // Anthony's body. The headless authority owns both responsibilities here,
@@ -2175,6 +2242,24 @@
       enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt);
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
+      if (enemy.beamTime > 0 && enemy.state === 'antonyMouthBeam') {
+        tickEnemyBeam(enemy, dt, {
+          tick: 0.085 * Math.max(0.7, tuning.rangedCadence), range: 610,
+          knockback: 210, damage: Math.round(enemy.dmg * 0.72), speedDamp: 0.8,
+          turnRate: 1.45 * tuning.reaction, damageSource: 'antony_mouth_beam',
+          onHit: player => {
+            if (random('encounter') < 0.28) ctx.applyPlayerStatus(enemy, player, 'fire', attackApi.getBossStatusStacks(enemy, 1), 3.2);
+          },
+          onEnd: active => { active.state = null; active.attackCd = 1.2; },
+        });
+        return;
+      }
+      if (enemy.level >= 20 && enemy.antonyComboTimer <= 0 && enemy.antonyComboQueued) {
+        enemy.antonyComboQueued = false;
+        enemy.state = 'antonyMouthBeam';
+        enemy.windup = 0.62 / tuning.reaction;
+        enemy.beamAngle = angleBetween(enemy, player);
+      }
       if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
 
       if (enemy.windup > 0) {
@@ -2188,6 +2273,10 @@
           } else if (enemy.state === 'antonyDeathBall') {
             spawnAntonyDeathBall(enemy);
             enemy.attackCd = 1.2 * tuning.rangedCadence;
+          } else if (enemy.state === 'antonyMouthBeam') {
+            enemy.beamTime = 1.05;
+            enemy.beamTick = 0;
+            return;
           }
           enemy.state = null;
         }
@@ -2203,32 +2292,17 @@
       const desired = 92;
       const direction = distance < desired - 24 ? -0.6 : 1;
       steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.7, dt);
+      if (ctx.controlled) return;
 
       // Bite: very short range life-drain chomp.
       if (enemy.biteCd <= 0 && distance < enemy.r + player.r + 26) {
-        const angle = Math.atan2(dy, dx);
-        const biteDamage = Math.round(enemy.dmg * 0.82);
-        enemy.attackAnimT = 0.28;
-        enemy.biteAnimT = 0.8;
-        ctx.damagePlayer(enemy, player, biteDamage, angle, 240, enemy.type);
-        if (random('encounter') < 0.35) {
-          ctx.applyPlayerStatus(enemy, player, 'dark_drain', 2, 4.2);
-          const heal = Math.round(biteDamage * 0.35);
-          ctx.healEnemy(enemy, enemy, heal);
-        }
-        enemy.biteCd = 1.9 * tuning.rangedCadence;
-        enemy.attackCd = Math.max(enemy.attackCd, 0.55);
+        startAntonyAttack(enemy, 'enemy_antony_blemmye_primary', Math.atan2(dy, dx));
         return;
       }
 
       // Slash: wide sweeping arc, no windup, punishes hugging.
       if (enemy.slashCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + player.r + 70) {
-        enemy.attackAnimT = 0.3;
-        enemy.swingTime = 0.32;
-        ctx.emit?.('ENEMY_ATTACKED', { enemyId: enemy.id, attackKind: 'antony_slash' });
-        meleeArcStrike(enemy, angleBetween(enemy, player), 66, 0.82, Math.round(enemy.dmg * 0.92), 300, enemy.type);
-        enemy.slashCd = 2.45 * tuning.rangedCadence;
-        enemy.attackCd = 0.85;
+        startAntonyAttack(enemy, 'enemy_antony_slash', angleBetween(enemy, player));
         if (!enemy.antonySlashLineShown) {
           enemy.antonySlashLineShown = true;
           ctx.speak?.(enemy, 'Carve you open.');
@@ -2238,11 +2312,7 @@
 
       // Cold death ball: charged frost orb at mid/long range.
       if (enemy.deathBallCd <= 0 && enemy.attackCd <= 0 && distance > enemy.r + player.r + 40) {
-        enemy.state = 'antonyDeathBall';
-        enemy.windup = 1.05 / tuning.reaction;
-        enemy.antonyDeathBallAngle = Math.atan2(dy, dx);
-        enemy.deathBallCd = 7.2 * tuning.rangedCadence;
-        enemy.attackCd = 1.2;
+        startAntonyAttack(enemy, 'enemy_antony_freeze_ball', Math.atan2(dy, dx));
         if (!enemy.antonyDeathBallLineShown) {
           enemy.antonyDeathBallLineShown = true;
           ctx.speak?.(enemy, 'Feel the cold.');
@@ -2253,11 +2323,7 @@
 
       // Hammer: directional shockwave that travels forward.
       if (enemy.hammerCd <= 0 && distance < 320 && enemy.attackCd <= 0) {
-        enemy.state = 'antonyHammer';
-        enemy.windup = 0.9 / tuning.reaction;
-        enemy.antonyHammerAngle = Math.atan2(dy, dx);
-        enemy.hammerCd = 4.1 * tuning.rangedCadence;
-        enemy.attackCd = 1.0;
+        startAntonyAttack(enemy, 'enemy_antony_hammer', Math.atan2(dy, dx));
         if (!enemy.antonyHammerLineShown) {
           enemy.antonyHammerLineShown = true;
           ctx.speak?.(enemy, 'Open wide.');
@@ -3206,7 +3272,112 @@
       updateMirrorChampion(enemy, dt);
     }
 
+    // A player starts exactly one native attack. Its execution is the same
+    // state machine used above; movement and autonomous attack selection stay
+    // with the owning controller. Support units share their native beam body.
+    function startControlledEnemyAction(enemy, moveKey, angle) {
+      const def = attackApi.getEnemyNativeAction(moveKey);
+      if (!def) return null;
+      const timing = attackApi.getEnemyNativeActionTiming(moveKey, enemy, tuningOf(), ctx.getFloor?.());
+      if (enemy.type === 'antony_blemmye') {
+        enemy.nativeMoveKey = moveKey;
+        startAntonyAttack(enemy, moveKey, angle);
+        return timing;
+      }
+      if (enemy.type === 't_rex') {
+        enemy.nativeMoveKey = moveKey;
+        startTRexAttack(enemy, moveKey, angle);
+        return timing;
+      }
+      if (enemy.type === 'bulk_golem') {
+        enemy.attackCd ??= 0;
+        enemy.aoeTime ??= 0;
+        enemy.jumpCd ??= 0;
+        if (moveKey === 'enemy_bulk_nova') performBulkNova(enemy);
+        else {
+          enemy.nativeMoveKey = moveKey;
+          if (moveKey === 'enemy_bulk_leap') startBulkLeap(enemy);
+          else {
+            enemy.windup = 0; enemy.spitWindup = 0; enemy.dashTime = 0;
+            enemy.attackCd = 2.6;
+            if (moveKey === 'enemy_bulk_charge') { enemy.windup = 0.62; enemy.dashAngle = angle; }
+            else enemy.spitWindup = 0.7;
+          }
+        }
+        return timing;
+      }
+      Object.assign(enemy, { windup: 0, spitWindup: 0, swingTime: 0, beamTime: 0,
+        burstShots: 0, attackCd: timing.cooldown, novaCd: 3600, supportCd: 3600,
+        novaTimer: 0, shoveTimer: 0, dashTime: 0, nativeMoveKey: moveKey,
+        beamAngle: angle, beamAimBias: 0, swingA: angle, dashAngle: angle, state: 'blade' });
+      if (def.kind === 'beam') {
+        const bias = { laser: 0.2, cult_mage: 0.18, summoner: 0.17, healer: 0.16, boss_spawner: 0.16 }[enemy.type];
+        enemy.beamAngle += rollEnemyBeamBias(enemy, bias);
+      }
+      if (def.kind === 'contact') {
+        enemy.attackCd = 0;
+        if (enemy.type === 'shield_unit') updateShieldUnitEnemy(enemy, 0);
+        else updateHunterEnemy(enemy, 0);
+        enemy.attackCd = timing.cooldown;
+      } else if (def.kind === 'charge') {
+        enemy.state = 'charge';
+        enemy.windup = timing.windup;
+      } else if (moveKey === 'enemy_cult_nova') enemy.novaTimer = timing.windup;
+      else if (moveKey === 'enemy_spawner_shove') enemy.shoveTimer = timing.windup;
+      else if (moveKey === 'enemy_healer_pulse') performHealerSupport(enemy);
+      else if (moveKey === 'enemy_shield_pulse') performShieldSupport(enemy);
+      else if (enemy.type === 'golem') enemy.spitWindup = timing.windup;
+      else enemy.windup = timing.windup;
+      return timing;
+    }
+
+    function startControlledEnemyPrimary(enemy, angle) {
+      return startControlledEnemyAction(enemy, attackApi.getEnemyNativePrimary(enemy.type)?.key, angle);
+    }
+
+    function updateControlledEnemyPrimary(enemy, dt) {
+      // The signature controller consumes the release frame itself. Its charge
+      // starts on the following update, just as it does for the NPC.
+      if (enemy.nativeSignatureStarted) { enemy.nativeSignatureStarted = false; return true; }
+      if (enemy.npcSignatureRush) {
+        updateChargerEnemy(enemy, dt);
+        return enemy.dashTime > 0;
+      }
+      if (enemy.type === 'bulk_golem') {
+        enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - dt * Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1)));
+        updateBulkGolemBoss(enemy, dt);
+        return enemy.bulkJumpTime > 0 || enemy.spitWindup > 0 || enemy.windup > 0 || enemy.dashTime > 0
+          || enemy.aoeTime > 0 || enemy.jumpCd > 0 || enemy.attackCd > 0;
+      }
+      if (enemy.type === 't_rex') {
+        enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - dt * Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1)));
+        enemy.swingTime = Math.max(0, Number(enemy.swingTime || 0) - dt);
+        updateTRexBoss(enemy, dt);
+        return enemy.windup > 0 || enemy.dashTime > 0 || enemy.attackCd > 0;
+      }
+      if (enemy.type === 'antony_blemmye') {
+        enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - dt * Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1)));
+        updateAntonyBlemmyeBoss(enemy, dt);
+        return enemy.windup > 0 || enemy.beamTime > 0 || enemy.antonyComboQueued
+          || !!enemy.antonyShockwave || enemy.swingTime > 0 || enemy.attackCd > 0;
+      }
+      const update = {
+        charger: updateChargerEnemy, knave: updateKnaveEnemy, sniper: updateSniperEnemy,
+        machine_gunner: updateMachineGunnerEnemy, golem: updateGolemEnemy,
+        laser: updateLaserEnemy, cult_mage: updateCultMageEnemy,
+        summoner: updateCultMageEnemy, healer: updateLaserEnemy,
+        boss_spawner: enemy.nativeMoveKey === 'enemy_spawner_shove' ? updateBossSpawnerEnemy : updateLaserEnemy,
+      }[enemy.type];
+      const active = () => enemy.windup > 0 || enemy.spitWindup > 0 || enemy.swingTime > 0
+        || enemy.beamTime > 0 || enemy.burstShots > 0 || enemy.dashTime > 0 || enemy.novaTimer > 0 || enemy.shoveTimer > 0;
+      if (update && active()) update(enemy, dt);
+      return active();
+    }
+
     return {
+      startControlledEnemyPrimary,
+      startControlledEnemyAction,
+      updateControlledEnemyPrimary,
       steerEnemy,
       trySteerEnemyToCover,
       hasLineOfSight,
@@ -3218,6 +3389,7 @@
       wanderEnemy,
       blindDefendEnemy,
       updateNpcEnemySignatureMoves,
+      executeNpcEnemySignatureMove,
       updateHunterEnemy: withNpcSignatures(updateHunterEnemy),
       updateCultMageEnemy: withNpcSignatures(updateCultMageEnemy),
       updateKnaveEnemy,

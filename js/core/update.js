@@ -320,6 +320,7 @@ export function loop(timestamp) {
 
   function update(dt) {
     let sectionPerfStart = Neo.perfStart();
+    simulationApi.syncPlayableEnemyBody?.(Neo.player, Neo.getPlayableEnemyBodyContext());
     const itemStats = Neo.getItemStats();
     Neo.compactEnemyList();
     Neo.gameElapsedTime += dt;
@@ -477,7 +478,7 @@ export function loop(timestamp) {
       const powerUpBoost = Neo.player.deathBallBuffTime > 0 ? 1 + Number(Neo.player.deathBallBuffPower || 0) : 1;
       const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
       const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
-      const targetSpeed = (Neo.PLAYER_BASE_MOVE_SPEED || 228) * flightBoost * zoomiesBoost * powerUpBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
+      const targetSpeed = (Neo.player.enemyBody ? Neo.player.moveSpeed : (Neo.PLAYER_BASE_MOVE_SPEED || 228)) * flightBoost * zoomiesBoost * powerUpBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
       simulationApi.applyCampaignPlayerVelocity(Neo.player, { moveX, moveY }, dt, { speed: targetSpeed });
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(12, -12, 'fx'), y: Neo.player.y + Neo.rand(10, -10, 'fx'), life: 0.2, c: '#ffd1ea' });
@@ -760,6 +761,8 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     Neo.updateGhostBalls?.(dt);
     if (Neo.gameState !== 'play') return;
+    Neo.updateEnemyProjectileSignature?.(dt);
+    Neo.updateEnemyNativePrimary?.(dt);
     Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     Neo.updateDeathBallCharge?.(dt);

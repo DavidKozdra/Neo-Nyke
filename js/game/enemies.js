@@ -2682,7 +2682,7 @@
         enemy.burstShots -= 1;
         enemy.attackAnimT = 0.24;
         const baseAngle = Neo.angleBetween(enemy, Neo.player);
-        enemy.burstAngle = Neo.turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
+        enemy.burstAngle = Neo.turnAngleToward(enemy.burstAngle ?? baseAngle, baseAngle, 0.22 * tuning.reaction);
         const spread = ((Neo.nextRandom('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
         const fireAngle = enemy.burstAngle + spread;
         const projectileSpeed = 300 * Math.min(1.45, tuning.reaction + 0.06);

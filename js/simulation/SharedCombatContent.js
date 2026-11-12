@@ -164,13 +164,13 @@
   });
 
   function getCharacterDefaultWeapon(characterKey) {
-    return enemyContent.getPlayableEnemyDefinition?.(characterKey)?.defaultWeapon
-      || CHARACTER_DEFAULT_WEAPONS[characterKey]
+    if (enemyContent.isPlayableEnemyCharacterKey?.(characterKey)) return enemyContent.getPlayableEnemyDefinition(characterKey)?.defaultWeapon ?? null;
+    return CHARACTER_DEFAULT_WEAPONS[characterKey]
       || CHARACTER_DEFAULT_WEAPONS.thorn_knight;
   }
 
   function getCharacterStartingItems(characterKey) {
-    const items = enemyContent.getPlayableEnemyDefinition?.(characterKey)?.startingItems
+    const items = (enemyContent.isPlayableEnemyCharacterKey?.(characterKey) ? enemyContent.getPlayableEnemyDefinition(characterKey)?.startingItems : null)
       || CHARACTER_STARTING_ITEMS[characterKey];
     return { ...(items || {}) };
   }

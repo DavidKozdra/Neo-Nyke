@@ -208,7 +208,10 @@
       state,
       randomService: options.randomService,
       systems: [
-        ({ state: simulationState }) => syncCampaignItemStats?.(simulationState),
+        ({ state: simulationState }) => {
+          combatApi.syncAuthorityPlayableEnemyBodies(simulationState);
+          syncCampaignItemStats?.(simulationState);
+        },
         createCampaignMovementSystem({ isRoomLocked }),
         createCampaignCombatSystem({ emitEvent }),
         createCampaignProgressionSystem({ emitEvent }),

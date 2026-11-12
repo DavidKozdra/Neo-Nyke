@@ -23,7 +23,10 @@
   const dispatcher = agentApi?.createTypedAgentDispatcher?.({
     updateMethodByType: ENEMY_UPDATE_METHOD_BY_TYPE,
     fallbackUpdateMethod: 'updateHunterEnemy',
-    beforeUpdate: (enemy, fixedDelta, context) => context.updateEnemyProjectileEvade?.(enemy, fixedDelta) === true,
+    // The campaign routes T-Rex directly to its boss body (core/update.js).
+    // Its headlong charge must not be replaced by the generic projectile juke.
+    beforeUpdate: (enemy, fixedDelta, context) => enemy.type !== 't_rex'
+      && context.updateEnemyProjectileEvade?.(enemy, fixedDelta) === true,
   });
   const actorsByEnemy = new WeakMap();
   function enemyUpdateMethod(type) { return dispatcher?.updateMethodForType(type) || 'updateHunterEnemy'; }

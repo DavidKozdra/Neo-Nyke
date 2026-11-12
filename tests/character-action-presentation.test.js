@@ -237,7 +237,7 @@ describe('character action presentation', () => {
     expect(combat).toContain("startPlayerSpriteAction('bite', 0.8)");
     expect(enemies).toContain('enemy.biteAnimT = 0.8');
     expect(sharedEnemyBehavior).toContain('enemy.biteAnimT = 0.8');
-    expect(networkView).toContain("player.actionKind === 'antony_bite'");
+    expect(networkView).toContain("['antony_bite', 'enemy_antony_blemmye_primary'].includes(player.actionKind)");
   });
 
   test('Anthony resumes his walk cycle while moving after an attack finishes', () => {

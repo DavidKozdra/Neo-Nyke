@@ -1870,3 +1870,23 @@ window.NeoNykeIconDefs = {
     },
   },
 };
+
+// Native enemy primaries retain the matching weapon/beam silhouette in the HUD.
+Object.entries({
+  hunter: 'slash', cult_follower: 'slash', knave: 'knave_blade', charger: 'charger_rush', shield_unit: 'shield_throw',
+  sniper: 'sniper_round', machine_gunner: 'gunner_barrage', golem: 'ghost_ball',
+  laser: 'dungeon_beam', cult_mage: 'cult_bolt_volley', summoner: 'cult_bolt_volley',
+  healer: 'dungeon_beam', boss_spawner: 'dungeon_beam',
+  antony_blemmye: 'antony_bite', t_rex: 'antony_bite', bulk_golem: 'ghost_ball',
+}).forEach(([type, icon]) => {
+  window.NeoNykeIconDefs.moves[`enemy_${type}_primary`] = window.NeoNykeIconDefs.moves[icon];
+});
+
+Object.entries({
+  enemy_knave_charge: 'knight_slash_dash', enemy_golem_charge: 'charger_rush',
+  enemy_cult_nova: 'laser_nova', enemy_spawner_shove: 'laser_shockwave',
+  enemy_healer_pulse: 'healing_zone', enemy_shield_pulse: 'shield_guard',
+  enemy_antony_hammer: 'hammer_smash', enemy_antony_freeze_ball: 'antony_freeze_ball', enemy_antony_slash: 'knave_blade',
+  enemy_t_rex_roar: 'laser_shockwave', enemy_t_rex_charge: 'charger_rush',
+  enemy_bulk_charge: 'charger_rush', enemy_bulk_nova: 'hammer_smash', enemy_bulk_leap: 'nimrod_stomp',
+}).forEach(([key, icon]) => { window.NeoNykeIconDefs.moves[key] = window.NeoNykeIconDefs.moves[icon]; });

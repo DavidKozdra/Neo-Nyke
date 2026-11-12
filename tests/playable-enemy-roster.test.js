@@ -25,11 +25,15 @@ describe('credits-studio playable enemy roster', () => {
     });
   });
 
-  test('gives every enemy form a valid style-specific four-slot kit', () => {
+  test('gives every enemy form valid native slots and leaves unused slots empty', () => {
     enemyContent.PLAYABLE_ENEMY_ROSTER.forEach(profile => {
       expect(moveContent.getDefaultMoveLoadout(profile.characterKey)).toEqual(profile.moveLoadout);
       expect(Object.keys(profile.moveLoadout)).toEqual(moveContent.MOVE_SLOTS);
       Object.entries(profile.moveLoadout).forEach(([slot, moveKey]) => {
+        if (moveKey === null) {
+          expect(moveContent.MOVE_SLOT_KEYS[slot].every(key => !moveContent.isMoveAllowedForCharacter(key, profile.characterKey))).toBe(true);
+          return;
+        }
         expect(moveContent.getMoveSlot(moveKey)).toBe(slot);
         expect(moveContent.isMoveAllowedForCharacter(moveKey, profile.characterKey)).toBe(true);
       });
@@ -39,25 +43,23 @@ describe('credits-studio playable enemy roster', () => {
     });
   });
 
-  test('gives playable Anthony only his bite, knife throw, freeze ball, and normal dash', () => {
+  test('gives playable Anthony his native bite, hammer, frost orb and sweeping slash', () => {
     const anthony = enemyContent.getPlayableEnemyDefinition('enemy_antony_blemmye');
     expect(anthony.moveLoadout).toEqual({
-      melee: 'antony_bite',
-      laser: 'antony_knife_throw',
-      smash: 'antony_freeze_ball',
-      dash: 'dash',
+      melee: 'enemy_antony_blemmye_primary',
+      laser: 'enemy_antony_hammer',
+      smash: 'enemy_antony_freeze_ball',
+      dash: 'enemy_antony_slash',
     });
     expect(anthony.defaultWeapon).toBe('knave_blade');
-    expect(moveContent.ENEMY_SIGNATURE_MOVE_KEYS).not.toEqual(expect.arrayContaining([
-      'antony_hammer',
-      'antony_slash',
-    ]));
+    expect(moveContent.getMoveSlot('antony_knife_throw')).toBeNull();
   });
 
-  test('gives every enemy form a real weapon and valid starting inventory', () => {
+  test('gives every enemy form a valid starting inventory and respects unarmed native forms', () => {
     enemyContent.PLAYABLE_ENEMY_ROSTER.forEach(profile => {
       expect(combatContent.getCharacterDefaultWeapon(profile.characterKey)).toBe(profile.defaultWeapon);
-      expect(combatContent.WEAPON_BASE_STATS[profile.defaultWeapon]).toBeDefined();
+      if (profile.defaultWeapon) expect(combatContent.WEAPON_BASE_STATS[profile.defaultWeapon]).toBeDefined();
+      else expect(profile.signatureMelee).toBe(true);
       expect(combatContent.getCharacterStartingItems(profile.characterKey)).toEqual(profile.startingItems);
       Object.entries(profile.startingItems).forEach(([itemKey, count]) => {
         expect(itemContent.ITEM_DEFS[itemKey]).toBeDefined();
@@ -133,6 +135,7 @@ describe('credits-studio playable enemy roster', () => {
       expect(icons[moveKey].pixels.length).toBeGreaterThan(0);
     });
     enemyContent.PLAYABLE_ENEMY_ROSTER.forEach(profile => {
+      if (!profile.defaultWeapon) return;
       expect(context.window.NeoNykeIconDefs.weapons[profile.defaultWeapon]).toEqual(expect.objectContaining({
         color: expect.stringMatching(/^#[0-9a-f]{6}$/i),
         pixels: expect.any(Array),

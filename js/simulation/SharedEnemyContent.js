@@ -45,7 +45,10 @@
     ent_of_pestilence: enemy('ent_of_pestilence', 'boss', { radius: 48, maxHealth: 2050, moveSpeed: 82, contactDamage: 28, attackCooldown: 1.15 }, { spriteKey: 'ent_boss', boss: true, poisonImmune: true, patterns: Object.freeze(['brood', 'spit', 'rush']) }),
     t_rex: enemy('t_rex', 'boss', { radius: 58, maxHealth: 2600, moveSpeed: 336, contactDamage: 42, attackCooldown: 1.05 }, { spriteKey: 'bulk_golem', boss: true, bleedImmune: true, patterns: Object.freeze(['bite', 'charge', 'roar']) }),
     sea_snake: enemy('sea_snake', 'boss', { radius: 38, maxHealth: 2350, moveSpeed: 156, contactDamage: 34, attackCooldown: 0.9 }, { spriteKey: 'sea_snake', boss: true, patterns: Object.freeze(['enter', 'coil', 'constrict']) }),
-    god: enemy('god', 'boss', { radius: 34, maxHealth: 920, moveSpeed: 108, contactDamage: 18, attackCooldown: 1.4 }, { boss: true, patterns: Object.freeze(['laser', 'sweep', 'partition', 'charge', 'sword_ring']) }),
+    god: enemy('god', 'boss', { radius: 34, maxHealth: 920, moveSpeed: 108, contactDamage: 18, attackCooldown: 1.4 }, { boss: true,
+      stunResistance: 5, maxStunDuration: 0.18, statusResistance: 0.45, bleedResistance: 0.55,
+      statusResistances: Object.freeze({ bleed: 0.72, fire: 0.5, poison: 0.68, dark_drain: 0.75, slow: 0.7, static: 0.6 }),
+      patterns: Object.freeze(['laser', 'sweep', 'partition', 'charge', 'sword_ring']) }),
     mirror_knight: enemy('mirror_knight', 'mirror', { radius: 18, maxHealth: 180, moveSpeed: 180, contactDamage: 20, attackCooldown: 0.8 }, { spriteKey: 'thorn_knight' }),
     rival: enemy('rival', 'mirror', { radius: 18, maxHealth: 220, moveSpeed: 228, contactDamage: 22, attackCooldown: 0.7 }, { spriteKey: 'thorn_knight' }),
     mooggy: enemy('mooggy', 'assassin', { radius: 15, maxHealth: 120, moveSpeed: 228, contactDamage: 14, attackCooldown: 0.2 }),
@@ -63,10 +66,7 @@
     startingItems: Object.freeze({ ...startingItems }),
   });
 
-  // Playable forms translate each enemy's authored combat behavior into the
-  // campaign's four player move slots. Boss health is deliberately normalized
-  // to hero-scale multipliers; the identity comes from the kit, not thousands
-  // of free HP. Keys are prefixed so enemies such as Knave and Mooggy can exist
+  // Keys are prefixed so enemies such as Knave and Mooggy can exist
   // beside their normal hero versions without save-data collisions.
   const PLAYABLE_ENEMY_BUILD_DEFS = Object.freeze({
     hunter: playableEnemyBuild(
@@ -169,10 +169,10 @@
     ),
     bulk_golem: playableEnemyBuild(
       'Bulk Golem', 'knight', 'Siege juggernaut', 'Crush the whole room',
-      'A hero-scaled siege boss retaining massive impact: hammer through the front, throw a shockwave, then leap into a room-filling smash.',
+      'Hurl sludge, charge through an opponent, release a crushing nova, or leap across obstacles. At level 10, landing leaves a delayed second explosion.',
       { damageMultiplier: 1.18, hpMultiplier: 1.35, moveSpeedMultiplier: 0.78, aoeRadiusMultiplier: 1.3 },
-      { melee: 'slash', laser: 'laser_shockwave', smash: 'hammer_smash', dash: 'nimrod_stomp' },
-      'sarges_hammer', { turtle_shell: 1, copper_penny: 1 },
+      { melee: 'enemy_bulk_golem_primary', laser: 'enemy_bulk_charge', smash: 'enemy_bulk_nova', dash: 'enemy_bulk_leap' },
+      null, {},
     ),
     artificer_knave: playableEnemyBuild(
       'Artificer Knave', 'knave', 'Blade engineer', 'Dash behind turrets',
@@ -190,10 +190,10 @@
     ),
     antony_blemmye: playableEnemyBuild(
       'Anthony the Blessed Blemmyie', 'knight', 'Chest-faced bruiser',
-      'Bite, throw, freeze',
-      "Anthony's exact boss kit: a life-draining bite, an aimed knife throw, and a homing freeze ball.",
+      'Bite, slash, hammer, freeze',
+      'Bite to drain life, slash nearby opponents, send a hammer shockwave forward, or charge homing frost orbs. At level 20, a successful bite chains into a mouth beam.',
       { damageMultiplier: 1.15, hpMultiplier: 1.25, moveSpeedMultiplier: 0.82, aoeRadiusMultiplier: 1.18, signatureMelee: true },
-      { melee: 'antony_bite', laser: 'antony_knife_throw', smash: 'antony_freeze_ball', dash: 'dash' },
+      { melee: 'enemy_antony_blemmye_primary', laser: 'enemy_antony_hammer', smash: 'enemy_antony_freeze_ball', dash: 'enemy_antony_slash' },
       'knave_blade', { tough_bandaid: 1, copper_penny: 1 },
     ),
     handsome_devil: playableEnemyBuild(
@@ -212,10 +212,10 @@
     ),
     t_rex: playableEnemyBuild(
       'T-Rex', 'knight', 'Prehistoric juggernaut', 'Roar and charge',
-      'The dungeon tyrant becomes a heavy hero: stone fists, a crushing shockwave, a seismic smash, and its signature headlong rush.',
+      'Bite at close range, knock back an opponent with a roar, or wind up a headlong charge. Crashing into a wall scatters ten damaging rocks.',
       { damageMultiplier: 1.2, hpMultiplier: 1.35, moveSpeedMultiplier: 0.92, aoeRadiusMultiplier: 1.22 },
-      { melee: 'slash', laser: 'laser_shockwave', smash: 'hammer_smash', dash: 'charger_rush' },
-      'stone_fists', { turtle_shell: 1, tough_bandaid: 1 },
+      { melee: 'enemy_t_rex_primary', laser: 'enemy_t_rex_roar', smash: null, dash: 'enemy_t_rex_charge' },
+      null, {},
     ),
     sea_snake: playableEnemyBuild(
       'Snake of the Sea', 'wizard', 'Constricting leviathan', 'Circle and collapse',
@@ -293,11 +293,6 @@
     queen_cult: Object.freeze([
       Object.freeze({ level: 20, moveKey: 'summon_cult_followers' }),
     ]),
-    antony_blemmye: Object.freeze([
-      Object.freeze({ level: 7, moveKey: 'antony_bite' }),
-      Object.freeze({ level: 14, moveKey: 'antony_knife_throw' }),
-      Object.freeze({ level: 20, moveKey: 'antony_freeze_ball' }),
-    ]),
   });
 
   function isNpcEnemyMoveUnlocked(type, moveKey, level) {
@@ -323,14 +318,82 @@
     }
   }
 
+  // Primary attacks use the enemy state machines. These keys are distinct from
+  // hero weapons and from the additional attacks unlocked at levels 7 and 20.
+  const ENEMY_NATIVE_PRIMARIES = Object.freeze(Object.fromEntries([
+    ['hunter', 'Hunter Strike', 'contact', 0, 1.05, 0, 10],
+    ['cult_follower', 'Follower Strike', 'contact', 0, 1.05, 0, 10],
+    ['charger', 'Charger Collision', 'charge', 0.52, 2.4, 4, 138],
+    ['shield_unit', 'Shield Bash', 'contact', 0, 1.05, 0, 22],
+    ['knave', 'Knave Slash', 'blade', 0.28, 1.05, 5, 56],
+    ['sniper', 'Sniper Shot', 'projectile', 0.6, 2.2, 5, 576],
+    ['machine_gunner', 'Machine Gun Burst', 'projectile', 0.38, 2.45, 2, 461],
+    ['golem', 'Golem Spit', 'projectile', 0.7, 2.6, 4, 660],
+    ['laser', 'Laser Beam', 'beam', 0.78, 2.8, 0, 430],
+    ['cult_mage', 'Cult Beam', 'beam', 0.86, 2.9, 0, 460],
+    ['summoner', 'Summoner Beam', 'beam', 0.6, 2.6, 0, 460],
+    ['healer', 'Healer Beam', 'beam', 0.54, 2.8, 0, 430],
+    ['boss_spawner', 'Spawner Beam', 'beam', 0.68, 3.1, 0, 430],
+    ['antony_blemmye', 'Blessed Bite', 'bite', 0, 1.9, 0, 26],
+    ['t_rex', 'T-Rex Bite', 'bite', 0, 0.9, 0, 18],
+    ['bulk_golem', 'Bulk Sludge', 'projectile', 0.7, 2.6, 4, 660],
+  ].map(([type, name, kind, windup, cooldown, damageBonus, range]) => [type, Object.freeze({
+    key: `enemy_${type}_primary`, type, name, kind, windup, cooldown, damageBonus, range,
+    slot: 'melee',
+    tuned: !['hunter', 'cult_follower', 'charger', 'knave', 'golem', 't_rex', 'bulk_golem'].includes(type),
+    damage: ENEMY_CATALOG[type].contactDamage + damageBonus,
+    ...(type === 'antony_blemmye' ? { independentCooldown: true, damageScale: 0.82,
+      damage: Math.round(ENEMY_CATALOG[type].contactDamage * 0.82),
+      description: 'A short bite with a 35% chance to drain life. At level 20, a hit chains into a mouth beam.' } : {}),
+    ...(type === 't_rex' ? { description: 'Bite a nearby opponent. Shares its recovery with Headlong Charge.' } : {}),
+  })])));
+
+  const ENEMY_NATIVE_ACTIONS = Object.freeze(Object.fromEntries([
+    { key: 'enemy_bulk_charge', type: 'bulk_golem', slot: 'laser', name: 'Bulk Charge', kind: 'charge', windup: 0.62, cooldown: 2.6, damageBonus: 6, range: 133, attackCooldown: true,
+      description: 'Wind up, then charge with crushing knockback. Shares its recovery with Bulk Sludge.' },
+    { key: 'enemy_bulk_nova', type: 'bulk_golem', slot: 'smash', name: 'Crushing Nova', kind: 'aoe', windup: 0, cooldown: 3, damageScale: 0.864, range: 173, concurrent: true,
+      description: 'Release a shockwave around you. Its radius grows every five levels. Recharge pauses while leaping.' },
+    { key: 'enemy_bulk_leap', type: 'bulk_golem', slot: 'dash', name: 'Bulk Leap', kind: 'leap', windup: 0, cooldown: 3.22, damageScale: 0.85, range: 150,
+      description: 'Leap toward your aim over 0.82 seconds and slam down, then recover for 2.4 seconds. At level 10, leave a second blast with a 0.55-second fuse.' },
+    { key: 'enemy_t_rex_roar', type: 't_rex', slot: 'laser', name: 'Tyrant Roar', kind: 'roar', windup: 0, cooldown: 4.4, damageScale: 0.45, range: 240,
+      description: 'Roar at the nearest opponent within 240 pixels, dealing damage and strong knockback.' },
+    { key: 'enemy_t_rex_charge', type: 't_rex', slot: 'dash', name: 'Headlong Charge', kind: 'charge', windup: 0.55, cooldown: 1.8, damageBonus: 22, range: 484, attackCooldown: true,
+      description: 'Wind up for 0.55 seconds, then charge for 0.72 seconds. A collision inflicts Bleed; a wall crash scatters ten rocks and adds recovery.' },
+    { key: 'enemy_antony_hammer', type: 'antony_blemmye', slot: 'laser', name: 'Hammer Shockwave', kind: 'shockwave', windup: 0.9, cooldown: 4.1, damageScale: 0.7, range: 320, tuned: true, independentCooldown: true,
+      description: 'Wind up and send a damaging crescent forward. The wave travels 320 pixels.' },
+    { key: 'enemy_antony_freeze_ball', type: 'antony_blemmye', slot: 'smash', name: 'Cold Death Ball', kind: 'projectile', windup: 1.05, cooldown: 7.2, damageScale: 1.1, range: 1785, tuned: true, independentCooldown: true,
+      description: 'Charge a homing frost orb that explodes and applies Cold. Fire two at level 10 and three at level 25.' },
+    { key: 'enemy_antony_slash', type: 'antony_blemmye', slot: 'dash', name: 'Sweeping Slash', kind: 'blade', windup: 0, cooldown: 2.45, damageScale: 0.92, range: 66, tuned: true, independentCooldown: true,
+      description: 'Immediately sweep a wide melee arc in front of you.' },
+    { key: 'enemy_knave_charge', type: 'knave', slot: 'dash', name: 'Knave Charge', kind: 'charge', windup: 0.46, cooldown: 1.9, damageBonus: 6, range: 135, attackCooldown: true },
+    { key: 'enemy_golem_charge', type: 'golem', slot: 'dash', name: 'Golem Charge', kind: 'charge', windup: 0.62, cooldown: 2.6, damageBonus: 6, range: 133, attackCooldown: true },
+    { key: 'enemy_cult_nova', type: 'cult_mage', slot: 'smash', name: 'Cult Nova', kind: 'aoe', windup: 0.5, cooldown: 4.4, damageScale: 1.1, range: 120, tuned: true },
+    { key: 'enemy_spawner_shove', type: 'boss_spawner', slot: 'laser', name: 'Spawner Shockwave', kind: 'aoe', windup: 0.7, cooldown: 5, damageScale: 1.4, range: 200, tuned: true },
+    { key: 'enemy_healer_pulse', type: 'healer', slot: 'smash', name: 'Healing Pulse', kind: 'support', windup: 0, cooldown: 2.8, range: 170 },
+    { key: 'enemy_shield_pulse', type: 'shield_unit', slot: 'smash', name: 'Barrier Pulse', kind: 'support', windup: 0, cooldown: 2.9, range: 170 },
+  ].map(def => [def.key, Object.freeze({ ...def,
+    damage: def.kind === 'support' ? 0 : Math.round(ENEMY_CATALOG[def.type].contactDamage * (def.damageScale || 1) + (def.damageBonus || 0)),
+  })])));
+
   const PLAYABLE_ENEMY_ROSTER = Object.freeze(Object.keys(ENEMY_CATALOG).map(type => {
     const enemyDef = ENEMY_CATALOG[type];
     const build = PLAYABLE_ENEMY_BUILD_DEFS[type];
+    const nativeActions = Object.values(ENEMY_NATIVE_ACTIONS).filter(def => def.type === type);
     return Object.freeze({
       type,
       characterKey: `enemy_${type}`,
       spriteKey: enemyDef.spriteKey,
       ...build,
+      ...(!['mooggy', 'mirror_knight', 'rival'].includes(type) ? {
+        hpMultiplier: enemyDef.maxHealth / 120, moveSpeedMultiplier: (type === 'bulk_golem' ? 78 : enemyDef.moveSpeed) / 228,
+        damageMultiplier: 1, aoeRadiusMultiplier: 1, aoeDamageMultiplier: 1, laserCooldownMultiplier: 1,
+        startingItems: Object.freeze({}),
+      } : {}),
+      ...(ENEMY_NATIVE_PRIMARIES[type] ? {
+        signatureMelee: true,
+        moveLoadout: Object.freeze({ ...build.moveLoadout, melee: ENEMY_NATIVE_PRIMARIES[type].key,
+          ...Object.fromEntries(nativeActions.map(def => [def.slot, def.key])) }),
+      } : {}),
     });
   }));
   const PLAYABLE_ENEMY_BY_CHARACTER = Object.freeze(Object.fromEntries(
@@ -368,12 +431,16 @@
     return BOSS_RUSH_START_LEVEL + Math.max(0, Math.floor(Number(stage) || 0));
   }
 
-  function getEnemyDefinition(type) {
-    return ENEMY_CATALOG[type] || ENEMY_CATALOG.hunter;
+  function getEnemyDefinition(type, options = {}) {
+    const definition = ENEMY_CATALOG[type] || ENEMY_CATALOG.hunter;
+    const floor = Number(options.floorNumber || ((Math.max(1, Number(options.progressionDepth || 1)) - 1) % Number(options.maxFloor || 10)) + 1);
+    return type === 'healer' && floor >= 4 ? { ...definition, maxHealth: 260 } : definition;
   }
 
   return {
     ENEMY_CATALOG,
+    ENEMY_NATIVE_PRIMARIES,
+    ENEMY_NATIVE_ACTIONS,
     STANDARD_ENEMY_TYPES,
     BOSS_ENEMY_TYPES,
     ELITE_POWER_TYPES,

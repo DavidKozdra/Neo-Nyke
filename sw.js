@@ -392,7 +392,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/assets/sprites/icons.js",
-      "revision": "dbfbca9af200f16ec2d799f7959edab6ee0a3d43c98a6eefb8cb921a099a3646"
+      "revision": "74b454f16aee6758ef21958c235d14d5eb0e4b4b290727618a44626484ac4711"
     },
     {
       "url": "/assets/sprites/ui/mobile-menu.png",
@@ -416,7 +416,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/css/style.css",
-      "revision": "db0308fc1eb43d07d6eb55fed00d984413d9612300ad3487a4b053b1db900bbe"
+      "revision": "1f9967c7305ded6123eecb629b2024bc5dc5923520f2134a56f5f0107287fc25"
     },
     {
       "url": "/css/theme-princess.css",
@@ -464,7 +464,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/core/game-state.js",
-      "revision": "8a493b451a5f19e57fe4e6857a7ef0df0c1cdf7946f7634091d7fc4933084223"
+      "revision": "b6bd6da2449e48176a09d0ef8fd2f5b712c5db31ace15921c0b3973ae97c24d2"
     },
     {
       "url": "/js/core/math-utils.js",
@@ -492,11 +492,11 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/core/status.js",
-      "revision": "b978f3becb8f62ece0c2d9ef031dcb8b0f6bbf01b721bf2df2857449bb53aa34"
+      "revision": "16b8cd9fed347030a0b612960a7ae0439505f488be309601d0ea425fbf11be2f"
     },
     {
       "url": "/js/core/update.js",
-      "revision": "81e03c5d2ca597a9d99dfa2561df5382d1e18a6867a2fa6413a96572b718c8ad"
+      "revision": "d47ac2a6a5014f20fe6a3ceb14d67474ce38318c46394b777f5ec30ff93a385c"
     },
     {
       "url": "/js/dataAdapter.js",
@@ -512,7 +512,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/draw/entities.js",
-      "revision": "25aeefdf4f6632a5cf9227d6cd6ea2940be13edc8a0b31c00d5c6faa8f826bb8"
+      "revision": "4660241d3d320b08827591fc1a515a04ad50d463442455b9ab6c566417311ba3"
     },
     {
       "url": "/js/draw/environment.js",
@@ -544,7 +544,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/draw/three-renderer.js",
-      "revision": "290027e3b67dd753588ba7f5971c9a429e37d0048a19b2b91d846452c304674c"
+      "revision": "d1dca8918687b2f16b7378785130438f1f4fe89ead262980c89a734536e56c27"
     },
     {
       "url": "/js/draw/viewport.js",
@@ -556,11 +556,11 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/game/combat.js",
-      "revision": "7c023180b8c2d67c93df9f9711d2d55b1f18b8e4b3a072737218e17bef6448c4"
+      "revision": "e71223fda1e63da694a27d8daf085e62a2a69acd4f24f69228b7cd054d97d5e8"
     },
     {
       "url": "/js/game/enemies.js",
-      "revision": "a0465dee409327091430ba860198b242bc65b9b7857793c124edceca9cce46c7"
+      "revision": "40a853ec68a7d3206f16ed1cee9c6c6e7e242106069bb4e6e1c2f9db84544020"
     },
     {
       "url": "/js/game/hud.js",
@@ -568,7 +568,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/game/player.js",
-      "revision": "8cc8c6dfe809c22a04455da410c44360b83d504b33fe80dd829a62914e726f63"
+      "revision": "9ea484a82e3c3573cef0debba561fb59beb6533d56f57fd19050651e45fb8138"
     },
     {
       "url": "/js/game/projectile-types.js",
@@ -588,7 +588,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/game/world.js",
-      "revision": "02cc895312fd314313dfcaf8c6a6960467b47c0784135d06071f84e72aecca47"
+      "revision": "e822c8800e4d3e1ca6d6f24c47c8d9f0008d3ff8783584bdd26e9d4f29f4965c"
     },
     {
       "url": "/js/gamepadControls.js",
@@ -600,7 +600,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/main.js",
-      "revision": "2eb0320522d17d4892a5f37a149459fbda7b37e36d6bccb9c7277d85f4188625"
+      "revision": "545e42a8c6ce34f06fd9728a912b54e103ab19ba5dbfc2b362641443fa2a765f"
     },
     {
       "url": "/js/multiplayer/BrowserMultiplayerSession.js",
@@ -640,15 +640,15 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/rendering/NetworkGameView.js",
-      "revision": "230ee05c94f578cd1185885e1fd743a7630462ea88335549d28568489e464a7e"
+      "revision": "953e76b965c752f51a20d562dcec5b0a9edfd75e16fe0c3c571be14bf4334286"
     },
     {
       "url": "/js/simulation/CampaignMovementRules.js",
-      "revision": "50c92034e09c07c5ea8f3da0c028ccff2516cabc31ad7cd8f4cdf8e358a0848d"
+      "revision": "42c15b686509abfd14e62ef0d8ae7f4eb2d4a5246a330147a762385392cbf6eb"
     },
     {
       "url": "/js/simulation/CampaignSimulation.js",
-      "revision": "005985249c9653cca087d52b713a3625f4f8941c5de08b2a58308abd2383231f"
+      "revision": "42f871aabf71f66ab84b022b23f55ae2ac7f06e08dd1163d88323daa8004c630"
     },
     {
       "url": "/js/simulation/DeterministicFloorGenerator.js",
@@ -672,7 +672,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/NetworkCombatSystem.js",
-      "revision": "0a12abc82c32d13e7d342485d31a1ceb17b2b49b37ea3929baf6a2c1d1f45328"
+      "revision": "551dffc90bec4c5b6ebf0a9372793729eadd51f37bb00360a89daf7b10066110"
     },
     {
       "url": "/js/simulation/RandomService.js",
@@ -684,7 +684,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedAllySystem.js",
-      "revision": "8883f9649cb0cced96ece234ee55601d51620b5471d57b1d755770570a0db556"
+      "revision": "7ff7fac3f6742260292b571d0e8a5c82c119a9ccd084a6c9cbb89fcfc4d461c4"
     },
     {
       "url": "/js/simulation/SharedBeamPathSystem.js",
@@ -704,7 +704,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedCombatContent.js",
-      "revision": "0ea0e8f527358e17b805c8e494cf05bf2c4daf9c309304313594c160c282e605"
+      "revision": "d520118eb18641b0a3dfa720f798a996d2ea9ec0f5a06b3492b9c749c1321eb9"
     },
     {
       "url": "/js/simulation/SharedDamageSystem.js",
@@ -732,15 +732,23 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedEnemyAISystem.js",
-      "revision": "11db8b8013fd8b382a800ba5366aa28528419ed6ee6e35bdb8f69e4cbd3396fc"
+      "revision": "a5b1e4a38237a2c46b34151eb8b4b30752a5f8508eb4801b29443a8092a5e667"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyAttackSystem.js",
+      "revision": "9df86a907366700f30818130156a46fe5f3b35f06fdc024f2910471f6f53a415"
     },
     {
       "url": "/js/simulation/SharedEnemyBehaviorSystem.js",
-      "revision": "fbf02d32f8719e8872895d8cf0adacca93749fa790a7442efbfd6f11730295ff"
+      "revision": "fd9ea558038c43f03628ff3aa555e7c3e4f1e614cb5b8965bfa6f44f649a88bc"
+    },
+    {
+      "url": "/js/simulation/SharedEnemyBodySystem.js",
+      "revision": "6b749f7a9ae0e923c59af24169779676feb20143d444f23a621bb92aea99b91c"
     },
     {
       "url": "/js/simulation/SharedEnemyContent.js",
-      "revision": "3419ea864781f00c0695101f7041f51f02c9a80712fd8be542b47af7093ede8b"
+      "revision": "f3cdfc7eb0f75644c44fea6e97a45edb759031685233dc38266cb6f9c531fa34"
     },
     {
       "url": "/js/simulation/SharedEnemyDropSystem.js",
@@ -780,7 +788,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedItemEffectSystem.js",
-      "revision": "4207a4774e73d3c80b1c556b418858174807bcd7cd0faf32d429e2387d51e00a"
+      "revision": "d450be87506c00e6de6d9d935015d221856a1c8da35b1eb22caa7dbbbe6ea7b6"
     },
     {
       "url": "/js/simulation/SharedMirrorCombatSystem.js",
@@ -788,7 +796,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedMoveContent.js",
-      "revision": "e7a04b5d854960bdb37ae3ab1999e1b36aac27032c49bf05d5ff4ab8b17696c7"
+      "revision": "7ba7d7cd69ba7bb90760e29fa1a3c7a846f13bde735a417f307922f226c00bd1"
     },
     {
       "url": "/js/simulation/SharedMoveEffectSystem.js",
@@ -804,7 +812,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/SharedProgressionSystem.js",
-      "revision": "961c4574d8bfca693eee9e4ce199cae3a88e1b9f850b44c2d1364c6a11554160"
+      "revision": "ea1ad3802c3681770d98fafc3fd1b1811cc5d6f123bf95032f98cb283be4b74e"
     },
     {
       "url": "/js/simulation/SharedProjectileSystem.js",
@@ -864,7 +872,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/controller.js",
-      "revision": "899d156947320800f53f72d4cfbb021e2e978ed478cd6b15ecce94738cc74d49"
+      "revision": "4d34b2268267dd4465a54dc3352a65d36c3ff6fc3a6dd7b1c158dcd6aa292e41"
     },
     {
       "url": "/js/ui/credits.js",
@@ -876,7 +884,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/input.js",
-      "revision": "44eaee8e8771db0b29ff579fd043e20153eca3a445f98c355d245d31e2fb29be"
+      "revision": "852c0bc559ce831ac50e1c8d59fcc8f8f333e3ed7916998e868f9d745e05a401"
     },
     {
       "url": "/js/ui/item-picker.js",
@@ -1193,14 +1201,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 295,
-    "bytes": 56789359,
-    "criticalEntries": 235,
-    "criticalBytes": 13823374,
+    "entries": 297,
+    "bytes": 56886367,
+    "criticalEntries": 237,
+    "criticalBytes": 13920382,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "e9a8937ea01db81c"
+  "version": "d871bf12dab29b0f"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

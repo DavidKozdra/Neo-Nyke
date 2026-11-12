@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedAllySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedRivalSystem.js'), ...require('./SharedBossIntroSystem.js'), ...require('./SharedEnemyDropSystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedEliteSystem.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedPlayerDamageSystem.js'), ...require('./SharedPotionSystem.js'), ...require('./SharedHazardSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedChestSystem.js'), ...require('./SharedAllySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedEndlessIntermissionSystem.js'), ...require('./LoopContentSystem.js'), ...require('./SharedEndgameSystem.js'), ...require('./SharedSpecialRoomSystem.js'), ...require('./SharedRoomLifecycleSystem.js'), ...require('./SharedEnemyAttackSystem.js'), ...require('./SharedEnemyBehaviorSystem.js'), ...require('./CampaignMovementRules.js'), ...require('./SharedDashSystem.js'), ...require('./SharedBeamPathSystem.js'), ...require('./SharedMirrorCombatSystem.js'), ...require('./SharedMoveEffectSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const enemyScalingApi = typeof require === 'function'
     ? require('./SharedEnemyScalingSystem.js')
@@ -20,6 +20,10 @@
 
   const generateFloorLayout = floorApi?.generateFloorLayout || browserApi?.generateFloorLayout;
   const CAMPAIGN_PLAYER_RADIUS = Number(worldContentApi?.CAMPAIGN_PLAYER_RADIUS || 14);
+  const bodyApi = typeof require === 'function' ? require('./SharedEnemyBodySystem.js') : browserApi;
+  const { ENEMY_PROJECTILE_SIGNATURES, ENEMY_NATIVE_SIGNATURES, getEnemySignatureAimTarget, getEnemySignatureTiming, getPlayableEnemyAttackActor, planEnemySignatureProjectiles,
+    getEnemyNativePrimary, getPlayableEnemyPrimary, getEnemyNativePrimaryTiming, getEnemyPrimaryAimTarget,
+    getEnemyNativeAction, getEnemyNativeActionTiming } = contentApi;
   const MAX_FLOOR = 10;
   const {
     scaleCampaignEnemyStats,
@@ -505,10 +509,19 @@
     player.kitChoices = sanitizeKitChoices(key, kitChoices) || {};
     Object.assign(player.equippedMoves, player.kitChoices);
     player.ownedWeapons = defaultWeapon ? { [defaultWeapon]: true } : {};
-    player.ownedMoves = Object.fromEntries(Object.values(player.equippedMoves).map(moveKey => [moveKey, true]));
+    player.ownedMoves = Object.fromEntries(Object.values(player.equippedMoves).filter(Boolean).map(moveKey => [moveKey, true]));
     player.items = getCharacterStartingItems(key);
     player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
+    if (player.enemyNativePrimary?.actor?.type === 'bulk_golem') {
+      player.airborne = false;
+      player.jumpZ = 0;
+    }
+    player.enemyNativePrimary = null;
+    player.enemySignatureCast = null;
+    player.enemySignatureCooldownUntilTick = 0;
+    player.signatureGuardTime = 0;
+    player.nativeShockwave = null;
     // Charge pools are built lazily per move by ensureMoveChargeState (which reads
     // the character's base charges), so a character swap can't strand a stale pool.
     player.moveChargeState = {};
@@ -525,10 +538,15 @@
     player.maxHp = profile.maxHp;
     player.hp = Math.round(profile.maxHp * healthRatio);
     player.moveSpeed = profile.moveSpeed;
+    player.radius = CAMPAIGN_PLAYER_RADIUS;
+    player.r = CAMPAIGN_PLAYER_RADIUS;
     player.damageMultiplier = profile.damageMultiplier;
     player.aoeRadiusMultiplier = profile.aoeRadiusMultiplier;
     player.aoeDamageMultiplier = profile.aoeDamageMultiplier;
     player.laserCooldownMultiplier = profile.laserCooldownMultiplier;
+    // Clear the previous form's cached body when selecting a character again.
+    if (player.enemyBody) player.enemyBody.key = '';
+    bodyApi.syncPlayableEnemyBody(player);
     // A network hero is immediately playable after character selection. Derive
     // the starter-item effects here rather than waiting for a later pickup or
     // tick, otherwise the authoritative damage path treats every hero as if
@@ -581,6 +599,19 @@
       Number(state.floorsEntered)
         || (Math.max(0, Number(state.runLoopIndex) || 0) * MAX_FLOOR + Math.max(1, Number(state.floorNumber) || 1)),
     );
+  }
+
+  function authorityPlayableEnemyBodyContext(state) {
+    const players = activePlayers(state);
+    return { progressionDepth: authorityProgressionDepth(state), floorNumber: state.floorNumber,
+      enemyLevel: Math.max(1, ...players.map(player => Number(player.level || 1))),
+      elapsedSeconds: state.elapsedSeconds, gameMode: authorityGameMode(state), endlessWave: state.endlessWave,
+      maxFloor: MAX_FLOOR, difficulty: authorityDifficulty(state), partySize: players.length };
+  }
+
+  function syncAuthorityPlayableEnemyBodies(state) {
+    const context = authorityPlayableEnemyBodyContext(state);
+    for (const player of Object.values(state.players || {})) bodyApi.syncPlayableEnemyBody(player, context);
   }
 
   // BLACK relics are locked behind the loop campaign (loop 6 onward). Every
@@ -1588,7 +1619,7 @@
       const distance = 175 + stream.next() * 95;
       const type = plan[index];
       const miniBoss = index === miniBossIndex;
-      const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
+      const archetype = getEnemyDefinition(type, { floorNumber: state.floorNumber }) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
       const progressionLoop = Math.max(1, Math.floor((authorityProgressionDepth(state) - 1) / MAX_FLOOR) + 1);
       const eliteChance = Math.min(0.85, Math.max(0, Number(difficulty.eliteChance || 0)) + (progressionLoop - 1) * 0.1);
@@ -2620,7 +2651,7 @@
       damage,
       raw: !!details.rawDamage,
       enemy,
-      itemStats: attacker?.itemStats,
+      itemStats: details.nativeEnemyAttack ? {} : attacker?.itemStats,
       attackPower: attacker?.attackPower,
       attackerDamageMultiplier: Math.max(0.1, Number(attacker?.damageMultiplier || 1)),
       poisonDamageMultiplier: poisonMultiplier,
@@ -2648,7 +2679,7 @@
     if (crit.isCrit) incoming = Math.round(incoming * crit.critMultiplier);
     if (canCrit && attacker?.elBartoAmbushReady && capeActive) attacker.elBartoAmbushReady = false;
     // God-mode attackers hit harder for the duration of their window.
-    if (attacker && godModeActive(state, attacker) && !details.ignoreGodMode) incoming = Math.round(incoming * 1.4);
+    if (attacker && godModeActive(state, attacker) && !details.ignoreGodMode && !details.nativeEnemyAttack) incoming = Math.round(incoming * 1.4);
     // Rivals shrug off a flat 20% of every hit (they're tougher than a normal
     // enemy of the same stats); the god takes 5% off the top like the campaign.
     if (enemy.type === 'rival') incoming = Math.max(1, Math.round(incoming * 0.8));
@@ -2659,7 +2690,7 @@
     enemy.health = Math.max(0, Number(enemy.health || 0) - dealt);
     enemy.hitTick = state.tick;
     const playerAttacker = state.players?.[playerId];
-    if (playerAttacker) tryAwakenAuthorityBlackBugAllies(state, playerAttacker, enemy, dealt, emitEvent);
+    if (playerAttacker && !details.nativeEnemyAttack) tryAwakenAuthorityBlackBugAllies(state, playerAttacker, enemy, dealt, emitEvent);
     // Campaign parity: a hit shield unit cannot re-shield for a moment.
     if (enemy.type === 'shield_unit') enemy._shieldHitLockout = 1.1;
     // Knockback + heavy-hit stun, mirroring hitEnemy in combat.js. Bosses and
@@ -2702,7 +2733,7 @@
     const general = Number(target?.statusResistance || 0);
     const keyed = Number(target?.statusResistances?.[key] || 0);
     const playerTarget = !!target?.id && !!state.players?.[target.id];
-    const ramped = playerTarget ? 0 : getCampaignGenericStatusResistance(key, {
+    const ramped = playerTarget && !target.enemyBody ? 0 : getCampaignGenericStatusResistance(key, {
       statusResistScale: Number(authorityDifficulty(state).statusResistScale || 0),
       elapsedSeconds: Number(state.tick || 0) / 20,
     });
@@ -2823,7 +2854,7 @@
       vy: Math.sin(angle) * Number(definition.speed ?? PROJECTILE_SPEED),
       radius: Number(definition.radius || 8),
       damage: Number(definition.damage || PROJECTILE_DAMAGE),
-      knockback: Math.max(0, Number(definition.knockback || 0)),
+      knockback: Math.max(0, Number(definition.knockback ?? (definition.nativeEnemyAttack ? 120 : 0))),
       // colour is derived client-side from `kind` (see NetworkGameView cosmetics)
       attackKind: definition.attackKind || definition.weaponKey || definition.kind,
       remainingPierces: Math.max(0, Number(definition.pierce || 0)),
@@ -2843,6 +2874,9 @@
       splashFireStacks: Number(definition.splashFireStacks || 0),
       fireDuration: Number(definition.fireDuration || 0),
       hitOptions: definition.hitOptions ? { ...definition.hitOptions } : null,
+      statusEffects: definition.statusEffects?.map(effect => ({ ...effect })),
+      nativeEnemyAttack: !!definition.nativeEnemyAttack,
+      enemyBlast: definition.enemyBlast ? { ...definition.enemyBlast } : null,
       splashStatusKey: definition.splashStatusKey || '',
       splashStatusStacks: Math.max(0, Number(definition.splashStatusStacks || 0)),
       splashStatusDuration: Math.max(0, Number(definition.splashStatusDuration || 0)),
@@ -2865,14 +2899,14 @@
     };
     configureCampaignProjectile(projectile, {
       enemy: false,
-      itemStats: player.itemStats,
+      itemStats: definition.nativeEnemyAttack ? {} : player.itemStats,
       random: randomService ? () => randomService.next('encounter') : () => 0.5,
       hasExplicitHoming: Object.prototype.hasOwnProperty.call(definition, 'homing'),
       hasExplicitBounces: Object.prototype.hasOwnProperty.call(definition, 'bouncesRemaining'),
     });
     projectile.expiresTick = state.tick + Math.ceil(Number(projectile.lifeTicks || lifeTicks));
     state.projectiles[projectileId] = projectile;
-    if (!definition.heartOceanEcho && Number(player.items?.heart_of_the_ocean || 0) > 0) {
+    if (!definition.nativeEnemyAttack && !definition.heartOceanEcho && Number(player.items?.heart_of_the_ocean || 0) > 0) {
       const requiredProjectiles = Math.max(1, Number(player.itemStats?.heartOceanProjectileRequirement || 2));
       player.heartOceanProjectileCount = Math.max(0, Number(player.heartOceanProjectileCount || 0)) + 1;
       if (player.heartOceanProjectileCount >= requiredProjectiles) {
@@ -3737,6 +3771,7 @@
     if (state.tick < Number(player.attackCooldownUntilTick || 0) || player.downed) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
+    if (getPlayableEnemyPrimary(player.characterKey)) return queueEnemyNativePrimary(state, player, action, emitEvent);
     if (!player.equippedWeapon && player.equippedMoves?.melee === 'mooggy_swipe') {
       const base = MOVE_BASE_STATS.mooggy_swipe || {};
       const stats = applyForgeStats(player, 'move', 'mooggy_swipe', base);
@@ -4129,6 +4164,9 @@
   // charges at all.
   // Full capacity for a move, base charges widened by any Extra Battery upgrade.
   function moveChargeCapacity(player, moveKey) {
+    if (getEnemyNativeAction(moveKey)) return 1;
+    if (contentApi.isPlayableEnemyCharacterKey(player?.characterKey || player?.character)
+      && ENEMY_NATIVE_SIGNATURES.includes(moveKey)) return 1;
     const base = getMoveBaseCharges(moveKey, player?.characterKey || player?.character);
     const overrideMax = Math.max(0, Math.floor(Number(player?.moveStackOverrides?.[moveKey] || 0)));
     return Math.max(1, base, overrideMax);
@@ -4526,6 +4564,7 @@
     for (const player of Object.values(state.players || {})) {
       const channel = player?.beamChannel;
       if (!channel) continue;
+      if (channel.nativeEnemyAttack) continue;
       if (player.downed || player.disconnected || state.tick >= Number(channel.untilTick || 0)) {
         endBeamChannel(state, player);
         continue;
@@ -4655,17 +4694,391 @@
     }
   }
 
+  const nativePrimaryRuntime = {};
+  function nativePrimaryTuning() {
+    const difficulty = authorityDifficulty(nativePrimaryRuntime.state);
+    return { reaction: difficulty.enemyReactionMultiplier, rangedCadence: difficulty.rangedCadenceMultiplier,
+      supportPower: difficulty.supportPowerMultiplier };
+  }
+  function nativePrimaryTargets() {
+    const { state, player } = nativePrimaryRuntime;
+    return Object.values(state.enemies || {}).filter(enemy => !enemy.dead && enemy.health > 0 && enemy.roomId === player.roomId)
+      .map(enemy => ({ ...enemy, r: enemy.radius }));
+  }
+  const nativePrimaryBehaviors = createCampaignEnemyBehaviors({
+    controlled: true,
+    getTuning: nativePrimaryTuning,
+    getFloor: () => nativePrimaryRuntime.state.floorNumber,
+    bounds: () => ({ wall: nativePrimaryRuntime.state.floorState.wallThickness,
+      width: nativePrimaryRuntime.state.floorState.width, height: nativePrimaryRuntime.state.floorState.height }),
+    isBlocked: (_actor, x, y, radius) => {
+      const { state, player } = nativePrimaryRuntime;
+      const room = currentRoom(state, player.roomId);
+      const floor = state.floorState;
+      return x - radius < floor.wallThickness || x + radius > floor.width - floor.wallThickness
+        || y - radius < floor.wallThickness || y + radius > floor.height - floor.wallThickness
+        || (room?.structures || []).some(prop => circleIntersectsRoomObstacle(x, y, radius, prop))
+        || (room?.destructibles || []).some(prop => !prop.broken && !prop.hidden && circleIntersectsRoomObstacle(x, y, radius, prop));
+    },
+    random: scope => combatRandomByState.get(nativePrimaryRuntime.state)?.next(scope) ?? 0.5,
+    getPlayer: actor => getEnemyPrimaryAimTarget(actor, nativePrimaryTargets(), nativePrimaryRuntime.angle),
+    getPlayers: nativePrimaryTargets,
+    getAllies: () => {
+      const { state, player } = nativePrimaryRuntime;
+      return [...Object.values(state.players || {}), ...Object.values(state.allies || {})]
+        .filter(entity => entity !== player && entity.roomId === player.roomId && !entity.downed && !entity.disconnected
+          && Number(entity.hp ?? entity.health) > 0)
+        .map(entity => ({ x: entity.x, y: entity.y, hp: entity.hp ?? entity.health,
+          max: entity.maxHp ?? entity.maxHealth, entity }));
+    },
+    healEnemy: (actor, target, amount) => {
+      const { emitEvent } = nativePrimaryRuntime;
+      const entity = target === actor ? nativePrimaryRuntime.player : target.entity;
+      const gain = Math.min(amount, Number(entity.maxHp ?? entity.maxHealth) - Number(entity.hp ?? entity.health));
+      if ('hp' in entity) entity.hp += gain;
+      else entity.health += gain;
+      if (gain > 0) emitEvent('PLAYER_HEALED', { playerId: entity.id, roomId: entity.roomId,
+        source: nativePrimaryRuntime.moveKey, healedAmount: gain, health: entity.hp ?? entity.health });
+      return gain;
+    },
+    grantBarrier: (actor, target, amount) => {
+      const entity = target === actor ? nativePrimaryRuntime.player : target.entity;
+      if (amount > Number(entity.barrier || 0)) {
+        entity.barrier = amount;
+        if ('hp' in entity) entity.nativeBarrierAge = 0;
+        else entity.barrierAge = 0;
+      }
+      if (actor.nativeMoveKey === 'shield_guard') entity.nativeBarrierAge = 0;
+    },
+    blastRadius: (actor, x, y, radius, damage, knockback, options = {}) => {
+      const { state, player, emitEvent, moveKey } = nativePrimaryRuntime;
+      let targets = livingEncounterEnemies(state, player.roomId);
+      if (options.singleTarget) targets = targets.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, 1);
+      for (const enemy of targets) {
+        const distance = Math.hypot(enemy.x - x, enemy.y - y), reach = radius + Number(enemy.radius || 0);
+        if (options.strict ? distance >= reach : distance > reach) continue;
+        damageEnemy(state, enemy, damage, player.id, emitEvent, { attackKind: options.attackKind || moveKey,
+          rawDamage: true, canCrit: false, nativeEnemyAttack: true,
+          angle: Math.atan2(enemy.y - y, enemy.x - x), knockback });
+      }
+      if (!options.singleTarget) for (const prop of currentRoom(state, player.roomId)?.destructibles || []) {
+        if (!prop.broken && !prop.hidden && Math.hypot(prop.x - x, prop.y - y) <= radius + Number(prop.r || prop.radius || 0)) {
+          damageNetworkDestructible(state, player.roomId, prop, damage, emitEvent, combatRandomByState.get(state), { playerId: player.id, attackKind: options.attackKind || moveKey });
+        }
+      }
+      emitEvent('PLAYER_ABILITY_USED', { playerId: player.id, roomId: player.roomId, abilityId: moveKey,
+        slot: MOVE_SLOT_BY_KEY[moveKey], mode: 'aoe', released: true, originX: x, originY: y, radius });
+    },
+    scaleEnemyLaserDamage: damage => scaleCampaignEnemyLaserDamage(damage, authorityDifficulty(nativePrimaryRuntime.state)),
+    getBeamPath: (actor, range, angle) => {
+      const { state, player } = nativePrimaryRuntime;
+      return buildCampaignRicochetBeamPath({ originX: actor.x, originY: actor.y, angle, range, maxBounces: 1,
+        rects: campaignBeamReflectRects(state, currentRoom(state, player.roomId)) });
+    },
+    damagePlayer: (actor, target, damage, angle, knockback) => {
+      const { state, player, emitEvent } = nativePrimaryRuntime;
+      const enemy = state.enemies[target.id];
+      if (enemy) damageEnemy(state, enemy, damage, player.id, emitEvent, {
+        attackKind: actor.nativeMoveKey || nativePrimaryRuntime.moveKey,
+        rawDamage: true, canCrit: false, nativeEnemyAttack: true, angle, knockback,
+      });
+    },
+    applyPlayerStatus: (_actor, target, key, stacks, duration) => {
+      const { state, player } = nativePrimaryRuntime;
+      const enemy = state.enemies[target.id];
+      if (enemy) applyAuthorityStatus(state, enemy, key, stacks, duration, player.id);
+    },
+    presentShockwave: (actor, wave) => {
+      nativePrimaryRuntime.player.nativeShockwave = { x: actor.x, y: actor.y, ...wave };
+    },
+    holdAttackCooldown: (actor, seconds) => {
+      const { state, player } = nativePrimaryRuntime;
+      const until = Math.max(Number(player.attackCooldownUntilTick || 0), state.tick + Math.ceil(seconds * 20));
+      player.attackCooldownUntilTick = until;
+      for (const key of Object.values(player.equippedMoves || {})) {
+        const def = getEnemyNativeAction(key);
+        if (!def || def.independentCooldown || !(def.slot === 'melee' || def.attackCooldown)) continue;
+        const pool = ensureMoveChargeState(player, key);
+        pool.maxCharges = 1; pool.charges = 0; pool.timers = [until];
+        (player.moveCooldownUntilTick ||= {})[key] = until;
+      }
+    },
+    presentTRexAttack: (actor, kind) => {
+      if (kind === 'roar') return; // The immediate cast event presents the roar.
+      const { player, emitEvent, moveKey } = nativePrimaryRuntime;
+      emitEvent('PLAYER_ABILITY_USED', { playerId: player.id, roomId: player.roomId, abilityId: moveKey,
+        slot: MOVE_SLOT_BY_KEY[moveKey], mode: 'aoe', released: true, originX: actor.x, originY: actor.y,
+        radius: kind === 'wall_impact' ? actor.r + 30 : 230,
+        nativeTRexEffect: kind, color: kind === 'wall_impact' ? '#b99a72' : '#ffcf72' });
+    },
+    setMoveCooldown: (_actor, key, seconds) => {
+      const { state, player } = nativePrimaryRuntime;
+      const until = state.tick + Math.ceil(seconds * 20);
+      const pool = ensureMoveChargeState(player, key);
+      pool.maxCharges = 1; pool.charges = 0; pool.timers = [until];
+      (player.moveCooldownUntilTick ||= {})[key] = until;
+    },
+    presentBulkAttack: (actor, kind, radius) => {
+      const { player, emitEvent } = nativePrimaryRuntime;
+      emitEvent('PLAYER_ABILITY_USED', { playerId: player.id, roomId: player.roomId,
+        abilityId: kind === 'nova' ? 'enemy_bulk_nova' : 'enemy_bulk_leap', nativeBulkEffect: kind,
+        originX: kind === 'warning' ? actor.bulkJumpTargetX : actor.x,
+        originY: kind === 'warning' ? actor.bulkJumpTargetY : actor.y,
+        radius: radius || (kind === 'warning' ? 76 : kind === 'takeoff' ? 64 : Math.min(225, 173 + Math.floor(actor.level / 5) * 9)) });
+    },
+    spawnHazard: (actor, hazard) => {
+      const { state, player } = nativePrimaryRuntime;
+      const room = currentRoom(state, player.roomId);
+      (room.hazards ||= []).push({ ...hazard, enemy: false, nativeEnemyAttack: true, ownerId: player.id, attackKind: actor.nativeMoveKey });
+    },
+    spawnProjectile: (actor, descriptor) => {
+      const { state, player, emitEvent, angle } = nativePrimaryRuntime;
+      const speedScale = getCampaignEnemyProjectileSpeedMultiplier(authorityDifficulty(state), {
+        boss: actor.boss, elapsedSeconds: state.elapsedSeconds,
+      });
+      const projectile = createPlayerProjectile(state, player, {
+        kind: descriptor.kind, attackKind: descriptor.source, originX: descriptor.x, originY: descriptor.y,
+        speed: Math.hypot(descriptor.vx, descriptor.vy) * speedScale, radius: descriptor.r,
+        damage: descriptor.damage, knockback: descriptor.knockback, lifeTicks: descriptor.life * 20,
+        pierce: descriptor.pierceCount, statusEffects: descriptor.statusEffects, nativeEnemyAttack: true,
+        enemyBlast: descriptor.enemyBlast, homing: descriptor.homing, homingTarget: 'enemy',
+        homingTurnRate: descriptor.homingTurnRate, homingSpeed: Number(descriptor.homingSpeed || 0) * speedScale,
+        homingAccel: descriptor.homingAccel,
+        homingRadius: descriptor.homingRadius || Math.hypot(state.floorState?.width || 900, state.floorState?.height || 700),
+      }, Math.atan2(descriptor.vy, descriptor.vx));
+      emitEvent('PLAYER_ABILITY_USED', {
+        playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+        abilityId: actor.nativeMoveKey || nativePrimaryRuntime.moveKey, slot: MOVE_SLOT_BY_KEY[actor.nativeMoveKey || nativePrimaryRuntime.moveKey], mode: 'projectile', released: true,
+        aimDirection: angle, originX: player.x, originY: player.y,
+        projectileIds: [projectile.id], spawnedProjectiles: [projectileTrajectory(projectile)],
+      });
+    },
+    presentBeam: (actor, beam) => {
+      const { state, player } = nativePrimaryRuntime;
+      player.beamChannel = { nativeEnemyAttack: true, moveKey: getEnemyNativePrimary(player.characterKey).key,
+        path: beam.path,
+        angle: beam.angle, range: beam.range, startTick: player.enemyNativePrimary.startTick,
+        untilTick: state.tick + Math.max(0, beam.remaining) * 20 };
+    },
+  });
+
+  function queueEnemyNativePrimary(state, player, action, emitEvent) {
+    const def = action.abilityId ? getEnemyNativeAction(action.abilityId) : getPlayableEnemyPrimary(player.characterKey);
+    if (!def || def.type !== contentApi.getPlayableEnemyDefinition(player.characterKey)?.type) return null;
+    if (action.action !== (def.slot === 'melee' ? 'ATTACK' : def.slot === 'dash' ? 'DASH' : 'ABILITY')) return null;
+    if (!hasMoveCharge(player, def.key)) return null;
+    const attack = !def.independentCooldown && (def.slot === 'melee' || def.attackCooldown);
+    const previousActor = player.enemyNativePrimary?.actor;
+    if (def.kind !== 'support' && (player.enemySignatureCast || !contentApi.canStartControlledEnemyAction(previousActor, def.key))) return null;
+    if (attack && state.tick < Number(player.attackCooldownUntilTick || 0)) return null;
+    if (def.key === 'enemy_shield_pulse' && state.tick < Number(player.enemyShieldLockoutUntilTick || 0)) return null;
+    if (def.slot === 'melee') player.equippedWeapon = null;
+    player.equippedMoves[def.slot] = def.key;
+    Object.assign(nativePrimaryRuntime, { state, player, emitEvent, angle: Number(action.aimDirection), moveKey: def.key });
+    const actor = previousActor?.type === def.type && ['antony_blemmye', 't_rex', 'bulk_golem'].includes(previousActor.type) ? previousActor
+      : getPlayableEnemyAttackActor(player, authorityPlayableEnemyBodyContext(state));
+    const timing = getEnemyNativeActionTiming(def.key, actor, nativePrimaryTuning(), state.floorNumber);
+    const cooldownTicks = Math.ceil(timing.cooldown * 20);
+    if (attack) player.attackCooldownUntilTick = state.tick + cooldownTicks;
+    const cooldownKeys = attack ? Object.values(player.equippedMoves).filter(key => {
+      const other = getEnemyNativeAction(key);
+      return other && (other.slot === 'melee' || other.attackCooldown);
+    }) : [def.key];
+    for (const key of cooldownKeys) {
+      const pool = ensureMoveChargeState(player, key);
+      pool.maxCharges = 1; pool.charges = 0; pool.timers = [state.tick + cooldownTicks];
+      (player.moveCooldownUntilTick ||= {})[key] = state.tick + cooldownTicks;
+    }
+    if (def.kind !== 'support' && !(def.concurrent && player.enemyNativePrimary)) player.enemyNativePrimary = { actor, moveKey: def.key, slot: def.slot,
+      roomId: player.roomId, floorNumber: state.floorNumber, angle: Number(action.aimDirection), startTick: state.tick };
+    if (def.kind === 'leap' && Number.isFinite(action.targetX) && Number.isFinite(action.targetY)) actor.nativeAimPoint = { x: action.targetX, y: action.targetY };
+    nativePrimaryBehaviors.startControlledEnemyAction(actor, def.key, Number(action.aimDirection));
+    if (actor.bulkJumpTime > 0) player.airborne = true;
+    setPlayerAction(state, player, ['blade', 'bite'].includes(def.kind) ? 'melee' : def.slot, def.key, Number(action.aimDirection));
+    if (['blade', 'bite'].includes(def.kind)) player.action = 'attack';
+    emitEvent('PLAYER_ABILITY_USED', {
+      playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+      abilityId: def.key, slot: def.slot, mode: def.windup ? 'windup' : def.kind,
+      attackCooldownUntilTick: player.attackCooldownUntilTick,
+      aimDirection: Number(action.aimDirection), cooldownTicks, windupSeconds: timing.windup,
+      originX: player.x, originY: player.y, projectileIds: [], spawnedProjectiles: [],
+      ...(def.kind === 'roar' ? { nativeTRexEffect: 'roar', radius: 230, color: '#ffcf72' } : {}),
+      moveChargeState: readMoveChargeState(player, def.key),
+      ...(action.predictionId ? { predictionId: action.predictionId } : {}),
+    });
+    return { moveKey: def.key, slot: def.slot, mode: 'windup', projectileIds: [], targetIds: [] };
+  }
+
+  function updateEnemyPlayerNativePrimaries(state, inputs, fixedDelta, emitEvent) {
+    Object.values(state.players || {}).forEach(player => {
+      if (state.tick < Number(player.enemyShieldLockoutUntilTick || 0)) {
+        const key = 'enemy_shield_pulse';
+        const pool = ensureMoveChargeState(player, key);
+        const until = Math.max(state.tick + 10, Number(pool.timers?.[0] || 0));
+        pool.maxCharges = 1; pool.charges = 0; pool.timers = [until];
+        (player.moveCooldownUntilTick ||= {})[key] = until;
+      }
+      if (player.nativeBarrierAge != null) {
+        player.nativeBarrierAge += fixedDelta;
+        if (player.nativeBarrierAge > 5) player.barrier = Math.max(0, Number(player.barrier || 0) - fixedDelta * 20);
+        if (!(player.barrier > 0)) delete player.nativeBarrierAge;
+      }
+      const cast = player.enemyNativePrimary;
+      if (!cast) return;
+      const clear = () => {
+        player.enemyNativePrimary = null;
+        player.nativeShockwave = null;
+        if (cast.actor.type === 'bulk_golem') { player.airborne = false; player.jumpZ = 0; }
+        if (player.beamChannel?.nativeEnemyAttack) player.beamChannel = null;
+      };
+      if (player.downed || player.disconnected || player.hp <= 0 || player.roomId !== cast.roomId
+        || state.floorNumber !== cast.floorNumber || player.characterKey !== `enemy_${cast.actor.type}`) { clear(); return; }
+      if (Number(player.stunnedUntilTick || 0) > state.tick || Number(player.stun || 0) > 0) {
+        if (player.beamChannel?.nativeEnemyAttack) player.beamChannel = null;
+        return;
+      }
+      const liveAngle = inputs?.[player.id]?.aimDirection;
+      Object.assign(nativePrimaryRuntime, { state, player, emitEvent, moveKey: cast.moveKey || cast.actor.nativeMoveKey,
+        angle: Number.isFinite(liveAngle) ? liveAngle : cast.angle });
+      Object.assign(cast.actor, { x: player.x, y: player.y, vx: player.vx || 0, vy: player.vy || 0 });
+      const active = nativePrimaryBehaviors.updateControlledEnemyPrimary(cast.actor, fixedDelta);
+      if (cast.actor.type === 'bulk_golem') Object.assign(player, { x: cast.actor.x, y: cast.actor.y,
+        airborne: !!cast.actor.airborne, jumpZ: Number(cast.actor.jumpZ || 0) });
+      if (!cast.actor.antonyShockwave) player.nativeShockwave = null;
+      player.vx = cast.actor.vx; player.vy = cast.actor.vy;
+      if (!active) clear();
+    });
+  }
+
+  function queueEnemyProjectileSignature(state, player, action, emitEvent) {
+    const moveKey = action.abilityId;
+    const actor = getPlayableEnemyAttackActor(player, authorityPlayableEnemyBodyContext(state));
+    if (!actor) return null;
+    if (player.enemyNativePrimary || player.enemySignatureCast || state.tick < Number(player.enemySignatureCooldownUntilTick || 0)) return null;
+    const timing = getEnemySignatureTiming(moveKey, actor.level, {
+      rangedCadence: authorityDifficulty(state).rangedCadenceMultiplier,
+    });
+    const slot = MOVE_SLOT_BY_KEY[moveKey];
+    const cooldownTicks = Math.ceil(timing.cooldown * 20);
+    player.enemySignatureCooldownUntilTick = state.tick + cooldownTicks;
+    player.enemySignatureCast = {
+      moveKey, actor, angle: Number(action.aimDirection),
+      remaining: timing.windup, roomId: player.roomId, floorNumber: state.floorNumber,
+      predictionId: action.predictionId,
+    };
+    if (moveKey === 'hunter_trap') {
+      const target = getEnemySignatureAimTarget(actor, moveKey, livingEncounterEnemies(state, player.roomId), Number(action.aimDirection),
+        { x: Number(action.targetX), y: Number(action.targetY) });
+      Object.assign(player.enemySignatureCast, { targetId: target.id, aimPoint: { x: target.x, y: target.y } });
+    }
+    Object.values(player.equippedMoves || {}).forEach(key => {
+      if (!ENEMY_NATIVE_SIGNATURES.includes(key)) return;
+      const pool = ensureMoveChargeState(player, key);
+      pool.maxCharges = 1;
+      pool.charges = 0;
+      pool.timers = [state.tick + cooldownTicks];
+      (player.moveCooldownUntilTick ||= {})[key] = state.tick + cooldownTicks;
+    });
+    setPlayerAction(state, player, slot, moveKey, Number(action.aimDirection));
+    emitEvent('PLAYER_ABILITY_USED', {
+      playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+      slot, abilityId: moveKey, mode: 'windup', aimDirection: Number(action.aimDirection),
+      cooldownTicks, windupSeconds: timing.windup,
+      originX: player.x, originY: player.y, destinationX: player.x, destinationY: player.y,
+      projectileIds: [], spawnedProjectiles: [], abilityEntityIds: [], targetIds: [],
+      moveChargeState: readMoveChargeState(player, moveKey),
+      ...(action.predictionId ? { predictionId: action.predictionId } : {}),
+    });
+    return { moveKey, slot, mode: 'windup', projectileIds: [], abilityEntityIds: [], targetIds: [] };
+  }
+
+  function updateEnemyPlayerSignatures(state, inputs, fixedDelta, emitEvent) {
+    Object.values(state.players || {}).forEach(player => {
+      player.signatureGuardTime = Math.max(0, Number(player.signatureGuardTime || 0) - fixedDelta);
+      const cast = player.enemySignatureCast;
+      if (!cast) return;
+      if (player.downed || player.disconnected || player.hp <= 0 || player.roomId !== cast.roomId || state.floorNumber !== cast.floorNumber
+        || player.characterKey !== `enemy_${cast.actor.type}`) {
+        player.enemySignatureCast = null;
+        return;
+      }
+      if (Number(player.stunnedUntilTick || 0) > state.tick || Number(player.stun || 0) > 0) return;
+      player.vx = Number(player.vx || 0) * 0.76;
+      player.vy = Number(player.vy || 0) * 0.76;
+      cast.remaining -= fixedDelta;
+      if (cast.remaining > 0.000001) return;
+      player.enemySignatureCast = null;
+      const actor = { ...cast.actor, x: player.x, y: player.y };
+      const liveAngle = inputs?.[player.id]?.aimDirection;
+      const angle = Number.isFinite(liveAngle) ? liveAngle : cast.angle;
+      if (!ENEMY_PROJECTILE_SIGNATURES.includes(cast.moveKey)) {
+        actor.nativeMoveKey = cast.moveKey;
+        const targets = livingEncounterEnemies(state, player.roomId);
+        const target = targets.find(enemy => cast.targetId != null && enemy.id === cast.targetId)
+          || getEnemySignatureAimTarget(actor, cast.moveKey, targets, angle, cast.aimPoint);
+        Object.assign(nativePrimaryRuntime, { state, player, emitEvent, angle, moveKey: cast.moveKey });
+        nativePrimaryBehaviors.executeNpcEnemySignatureMove(actor, target, cast.moveKey);
+        if (cast.moveKey === 'shield_guard') player.signatureGuardTime = actor.signatureGuardTime;
+        if (actor.npcSignatureRush) {
+          Object.assign(actor, { vx: player.vx || 0, vy: player.vy || 0, nativeSignatureStarted: true });
+          player.enemyNativePrimary = { actor, moveKey: cast.moveKey, angle, roomId: cast.roomId,
+            floorNumber: cast.floorNumber, startTick: state.tick };
+        }
+        emitEvent('PLAYER_ABILITY_USED', {
+          playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+          slot: MOVE_SLOT_BY_KEY[cast.moveKey], abilityId: cast.moveKey, released: true,
+          mode: cast.moveKey === 'shield_guard' ? 'shield' : cast.moveKey === 'hunter_trap' ? 'summon' : 'charge',
+          nativeEnemySignature: true, aimDirection: angle, originX: player.x, originY: player.y,
+          destinationX: player.x, destinationY: player.y,
+          ...(cast.predictionId ? { predictionId: cast.predictionId } : {}),
+        });
+        return;
+      }
+      const speedScale = getCampaignEnemyProjectileSpeedMultiplier(authorityDifficulty(state), {
+        boss: actor.boss, elapsedSeconds: state.elapsedSeconds,
+      });
+      const projectiles = planEnemySignatureProjectiles(actor, cast.moveKey, angle).map(descriptor => {
+        const projectile = createPlayerProjectile(state, player, {
+          kind: descriptor.kind, attackKind: descriptor.source,
+          originX: descriptor.x, originY: descriptor.y,
+          speed: Math.hypot(descriptor.vx, descriptor.vy) * speedScale,
+          radius: descriptor.r, damage: descriptor.damage, knockback: descriptor.knockback,
+          lifeTicks: descriptor.life * 20, pierce: descriptor.pierceCount,
+          statusEffects: descriptor.statusEffects, nativeEnemyAttack: true,
+        }, Math.atan2(descriptor.vy, descriptor.vx));
+        if (cast.predictionId) projectile.predictionId = cast.predictionId;
+        return projectile;
+      });
+      emitEvent('PLAYER_ABILITY_USED', {
+        playerId: player.id, roomId: player.roomId, abilityId: cast.moveKey,
+        slot: MOVE_SLOT_BY_KEY[cast.moveKey], characterKey: player.characterKey,
+        mode: 'projectile', released: true, aimDirection: angle,
+        originX: player.x, originY: player.y, destinationX: player.x, destinationY: player.y,
+        projectileIds: projectiles.map(projectile => projectile.id),
+        spawnedProjectiles: projectiles.map(projectileTrajectory),
+      });
+    });
+  }
+
   function resolvePlayerAbility(state, player, action, emitEvent, random, execution = {}) {
     if (player.downed) return null;
     const moveKey = String(action.abilityId || '');
     const slot = MOVE_SLOT_BY_KEY[moveKey];
     if (!slot || slot === 'melee' || player.equippedMoves?.[slot] !== moveKey) return null;
+    if (contentApi.isPlayableEnemyCharacterKey(player.characterKey)
+      && contentApi.getPlayableEnemyDefinition(player.characterKey)?.moveLoadout?.[slot] === null) return null;
     const expectedAction = slot === 'dash' ? 'DASH' : 'ABILITY';
     if (action.action !== expectedAction) return null;
     const stats = applyForgeStats(player, 'move', moveKey, MOVE_BASE_STATS[moveKey] || {});
     if (!execution.releaseHeldCharge && !hasMoveCharge(player, moveKey)) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
+    if (getEnemyNativeAction(moveKey) && contentApi.isPlayableEnemyCharacterKey(player.characterKey)) {
+      return queueEnemyNativePrimary(state, player, action, emitEvent);
+    }
+    if (ENEMY_NATIVE_SIGNATURES.includes(moveKey) && contentApi.getPlayableEnemyDefinition(player.characterKey)) {
+      return queueEnemyProjectileSignature(state, player, action, emitEvent);
+    }
     const dashMoveX = Math.max(-1, Math.min(1, Number(action.dashMoveX) || 0));
     const dashMoveY = Math.max(-1, Math.min(1, Number(action.dashMoveY) || 0));
     // Campaign dashes follow movement when a direction is held, then fall back
@@ -6288,11 +6701,13 @@
       barrier: player.barrier,
       ironLungApplies: itemStats.hasIronLung && room?.type !== 'boss' && room?.type !== 'god',
       bossLike,
+      applyDamageCaps: !player.enemyBody,
       ...resolvedOptions,
     });
     const { absorbed } = resolvedDamage;
     resetGenericHealthRegen(player);
     player.barrier = resolvedDamage.barrier;
+    if (player.characterKey === 'enemy_shield_unit') player.enemyShieldLockoutUntilTick = state.tick + 22;
     player.hp = resolvedDamage.health;
     if (resolvedDamage.dealt > 0 && packAttacker?.elite) {
       const eliteProcs = resolveCampaignElitePlayerHitProcs(packAttacker, player, {
@@ -6395,7 +6810,7 @@
     // this, a packed room can apply several independent contact/projectile hits
     // in consecutive 20 Hz ticks and make a healthy player appear to die in a
     // single network update. Status ticks deliberately opt out below.
-    if (dealt > 0 && !resolvedOptions.noInvFrames) {
+    if (dealt > 0 && !resolvedOptions.noInvFrames && !player.enemyBody) {
       player.invulnerableUntilTick = Math.max(
         Number(player.invulnerableUntilTick || 0),
         state.tick + PLAYER_HIT_INVULNERABILITY_TICKS,
@@ -6442,12 +6857,12 @@
   function updateTransientEnemyHazards(state, room, players, fixedDelta, emitEvent) {
     let expired = false;
     room.hazards.forEach(hazard => {
-      if (!hazard.enemy) return;
+      if (!hazard.enemy && !hazard.nativeEnemyAttack) return;
       if (hazard.kind === 'bomb_aoe') {
         hazard.fuse = Number(hazard.fuse || 0) - fixedDelta;
         if (hazard.fuse > 0) return;
-        const damage = Math.max(1, Math.round(Number(hazard.baseDamage || 250) * (1 + Math.max(0, Number(state.floorNumber || 1) - 1) * 0.07 + Math.max(0, Number(state.elapsedSeconds || 0) / 60) * 0.04)));
-        players.forEach(player => {
+        const damage = Math.max(1, Math.round(Number(hazard.baseDamage || 250) * (1 + Math.max(0, authorityProgressionDepth(state) - 1) * 0.07 + Math.max(0, Number(state.elapsedSeconds || 0) / 60) * 0.04)));
+        if (!hazard.nativeEnemyAttack || hazard.enemy) players.forEach(player => {
           if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.blastRadius || 150) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
           damagePlayer(state, player, damage, hazard.ownerId, emitEvent, hazard.source || 'bomb_aoe', {
             angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
@@ -6457,7 +6872,9 @@
         const blastRadius = Number(hazard.blastRadius || 150);
         livingEncounterEnemies(state, room.id).forEach(enemy => {
           if (!campaignHazardHitsEntity(hazard, enemy, { radius: blastRadius })) return;
-          damageEnemy(state, enemy, damage, hazard.ownerId || null, emitEvent, { attackKind: hazard.source || 'bomb_aoe' });
+          damageEnemy(state, enemy, damage, hazard.ownerId || null, emitEvent, { attackKind: hazard.attackKind || hazard.source || 'bomb_aoe',
+            ...(hazard.nativeEnemyAttack ? { rawDamage: true, canCrit: false, nativeEnemyAttack: true,
+              angle: Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x), knockback: Number(hazard.knockback || 240) } : {}) });
         });
         (room.destructibles || []).forEach(prop => {
           if (prop.broken || prop.hidden || !campaignHazardHitsEntity(hazard, prop, { radius: blastRadius })) return;
@@ -6617,16 +7034,20 @@
         });
         hazard.armTime = Number(hazard.armTime || 0) - fixedDelta;
         if (hazard.armTime > 0 || hazard.hit) return;
-        players.forEach(player => {
-          if (hazard.hit) return;
-          if (Math.hypot(player.x - hazard.x, player.y - hazard.y) > Number(hazard.r || 34) + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
-          hazard.hit = true;
-          damagePlayer(state, player, Number(hazard.damage || 10), hazard.ownerId, emitEvent, hazard.source || 'red_spikes', {
-            angle: Math.atan2(player.y - hazard.y, player.x - hazard.x),
-            knockback: Number(hazard.knockback || 170),
+        // Campaign spikes strike everyone in range once at the end of their
+        // warning. They do not wait for a later entrant like a proximity mine.
+        hazard.hit = true;
+        const friendlyNative = hazard.nativeEnemyAttack && !hazard.enemy;
+        const targets = friendlyNative ? livingEncounterEnemies(state, room.id) : players;
+        targets.forEach(target => {
+          if (Math.hypot(target.x - hazard.x, target.y - hazard.y) > Number(hazard.r || 34) + Number(target.radius || CAMPAIGN_PLAYER_RADIUS)) return;
+          const options = { angle: Math.atan2(target.y - hazard.y, target.x - hazard.x), knockback: Number(hazard.knockback || 170) };
+          if (friendlyNative) damageEnemy(state, target, Number(hazard.damage || 18), hazard.ownerId, emitEvent, {
+            ...options, attackKind: hazard.attackKind || hazard.source, rawDamage: true, canCrit: false, nativeEnemyAttack: true,
           });
+          else damagePlayer(state, target, Number(hazard.damage || 18), hazard.ownerId, emitEvent, hazard.source || 'red_spikes', options);
           if (hazard.statusKey) {
-            applyAuthorityStatus(state, player, hazard.statusKey, Number(hazard.statusStacks || 1), Number(hazard.statusDuration || 3), hazard.ownerId);
+            applyAuthorityStatus(state, target, hazard.statusKey, Number(hazard.statusStacks || 1), Number(hazard.statusDuration || 3), hazard.ownerId);
           }
         });
         return;
@@ -6643,7 +7064,7 @@
         });
       }
     });
-    if (expired) room.hazards = room.hazards.filter(hazard => !hazard.enemy || Number(hazard.ttl || 0) > 0);
+    if (expired) room.hazards = room.hazards.filter(hazard => (!hazard.enemy && !hazard.nativeEnemyAttack) || Number(hazard.ttl || 0) > 0);
   }
 
   function updateRoomHazards(state, fixedDelta, emitEvent) {
@@ -7495,6 +7916,11 @@
     scaleEnemyLaserDamage(damage) {
       return scaleCampaignEnemyLaserDamage(damage, behaviorRuntime.state.matchRules?.difficulty);
     },
+    getBeamPath(enemy, range, angle) {
+      const state = behaviorRuntime.state;
+      return buildCampaignRicochetBeamPath({ originX: enemy.x, originY: enemy.y, angle, range, maxBounces: 1,
+        rects: campaignBeamReflectRects(state, currentRoom(state, enemy.roomId)) });
+    },
     applyPlayerStatus(enemy, playerRef, key, stacks, duration) {
       const state = behaviorRuntime.state;
       const player = state.players?.[playerRef.id];
@@ -7536,6 +7962,7 @@
         knockback: Number(descriptor.knockback || 120),
         statusEffects: Array.isArray(descriptor.statusEffects) ? descriptor.statusEffects : undefined,
         enemyBlast: descriptor.enemyBlast ? { ...descriptor.enemyBlast } : null,
+        remainingPierces: Math.max(0, Number(descriptor.pierceCount || 0)),
         // Homing boss shots (Queen missiles, god swords) steer via the shared
         // projectile system; drain shots heal their owner on hit.
         ...(descriptor.homing ? {
@@ -7555,9 +7982,12 @@
     },
     blastRadius(enemy, x, y, radius, damage, knockback, options = {}) {
       const state = behaviorRuntime.state;
-      livingRoomPlayers(state, enemy.roomId).forEach(player => {
+      let targets = livingRoomPlayers(state, enemy.roomId);
+      if (options.singleTarget) targets = targets.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, 1);
+      targets.forEach(player => {
         const playerDistance = Math.hypot(player.x - x, player.y - y);
-        if (playerDistance > radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
+        const reach = radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS);
+        if (options.strict ? playerDistance >= reach : playerDistance > reach) return;
         const angle = Math.atan2(player.y - y, player.x - x);
         // Optional distance falloff (Queen finisher: 5x at center → 1x at edge).
         const falloff = options.playerDamageFalloff;
@@ -7712,6 +8142,7 @@
     // (campaign core/update.js).
     enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - fixedDelta
       * Math.max(1, Number(enemy.minorPackCooldownRate || 1))
+      * Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1))
       * Math.max(1, Number(enemy.signatureAttackSpeedMultiplier || 1)));
     const foldGodInvulnerability = () => {
       if (Number(enemy.inv || 0) > 0) {
@@ -9331,8 +9762,16 @@
     };
     const detonateEnemyProjectileBlast = (projectile, x = projectile.x, y = projectile.y) => {
       const blast = resolveCampaignEnemyProjectileBlast(projectile);
-      if (!blast || !projectile.hostile) return false;
-      livingRoomPlayers(state, projectile.roomId).forEach(player => {
+      if (!blast || (!projectile.hostile && !projectile.nativeEnemyAttack)) return false;
+      if (!projectile.hostile) livingEncounterEnemies(state, projectile.roomId).forEach(enemy => {
+        if (Math.hypot(enemy.x - x, enemy.y - y) > blast.radius + Number(enemy.radius || 0)) return;
+        damageEnemy(state, enemy, blast.damage, projectile.ownerId, emitEvent, {
+          attackKind: `${projectile.attackKind}_blast`, rawDamage: true, canCrit: false, nativeEnemyAttack: true,
+          angle: Math.atan2(enemy.y - y, enemy.x - x), knockback: blast.knockback,
+        });
+        if (!enemy.dead && blast.statusKey) applyAuthorityStatus(state, enemy, blast.statusKey, blast.statusStacks, blast.statusDuration, projectile.ownerId);
+      });
+      else livingRoomPlayers(state, projectile.roomId).forEach(player => {
         if (Math.hypot(player.x - x, player.y - y) > blast.radius + Number(player.radius || CAMPAIGN_PLAYER_RADIUS)) return;
         damagePlayer(state, player, blast.damage, projectile.ownerId, emitEvent, `${projectile.attackKind}_blast`, {
           angle: Math.atan2(player.y - y, player.x - x), knockback: blast.knockback,
@@ -9346,7 +9785,8 @@
           projectileId: projectile.id, attackKind: `${projectile.attackKind}_blast`,
         });
       });
-      emitEvent('ENEMY_PROJECTILE_DETONATED', { projectileId: projectile.id, roomId: projectile.roomId, x, y, ...blast });
+      emitEvent('ENEMY_PROJECTILE_DETONATED', { projectileId: projectile.id, roomId: projectile.roomId, x, y,
+        color: projectile.enemyBlast?.color || '#9fe8ff', ...blast });
       return true;
     };
     Object.entries(state.projectiles || {}).forEach(([projectileId, projectile]) => {
@@ -9495,6 +9935,7 @@
           return;
         }
         const impact = resolveCampaignProjectileDestructibleImpact(projectile, destructible);
+        detonateEnemyProjectileBlast(projectile, destructibleHit.x, destructibleHit.y);
         detonateLoveBomb(projectile, destructibleHit.x, destructibleHit.y);
         delete state.projectiles[projectileId];
         damageNetworkDestructible(state, projectile.roomId, destructible, impact.directDamage, emitEvent, random, {
@@ -9529,7 +9970,8 @@
       }
       if (projectile.hostile) {
         const player = findCampaignProjectileEntitySweepHit(projectile, previous, Object.values(state.players || {}), {
-          include: candidate => candidate && !candidate.downed && candidate.roomId === projectile.roomId,
+          include: candidate => candidate && !candidate.downed && candidate.roomId === projectile.roomId
+            && !(projectile.hitPlayerIds || []).includes(candidate.id),
         })?.entity;
         if (projectile.kind === 'love_bomb' && player) {
           detonateLoveBomb(projectile);
@@ -9537,7 +9979,9 @@
           return;
         }
         if (!player) return;
-        delete state.projectiles[projectileId];
+        (projectile.hitPlayerIds ||= []).push(player.id);
+        if (Number(projectile.remainingPierces || 0) > 0) projectile.remainingPierces -= 1;
+        else delete state.projectiles[projectileId];
         damagePlayer(state, player, projectile.damage, projectile.ownerId, emitEvent, projectile.attackKind, {
           angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
           knockback: Number(projectile.knockback || 120),
@@ -9618,12 +10062,21 @@
         angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
         knockback: Number(projectile.knockback || 120),
         lightning: !!projectile.lightning,
+        rawDamage: !!projectile.nativeEnemyAttack,
+        nativeEnemyAttack: !!projectile.nativeEnemyAttack,
+        canCrit: projectile.nativeEnemyAttack ? false : undefined,
         ignoreGodMode: !!projectile.ignoreGodMode,
       });
       const projectileOwner = state.players?.[projectile.ownerId];
-      if (!hitEnemy.dead && projectileOwner) {
+      if (!hitEnemy.dead) {
+        resolveCampaignProjectileStatusApplications(projectile, { random: () => random.next('encounter') }).forEach(effect => {
+          applyAuthorityStatus(state, hitEnemy, effect.key, effect.stacks, effect.duration, projectile.ownerId);
+        });
+      }
+      if (!hitEnemy.dead && projectileOwner && !projectile.nativeEnemyAttack) {
         applyAuthorityOnHitStatusProcs(state, hitEnemy, projectileOwner, projectile.hitOptions || {}, random);
       }
+      detonateEnemyProjectileBlast(projectile);
       if (Number(projectile.splash || 0) > 0) {
         livingEncounterEnemies(state, projectile.roomId).forEach(candidate => {
           if (Math.hypot(candidate.x - projectile.x, candidate.y - projectile.y) > Number(projectile.splash)) return;
@@ -10795,6 +11248,8 @@
       tickMoveCharges(state);
       updatePlayerActions(state, inputs, emitEvent, random);
       updatePlayerHeldCharges(state, inputs, emitEvent, random);
+      updateEnemyPlayerSignatures(state, inputs, fixedDelta, emitEvent);
+      updateEnemyPlayerNativePrimaries(state, inputs, fixedDelta, emitEvent);
       updateAutomaticPrincessShields(state, emitEvent, random);
       updatePlayerBeamChannels(state, inputs, fixedDelta, emitEvent);
       updatePlayerEquipmentEffects(state, emitEvent);
@@ -10844,6 +11299,7 @@
     createCampaignCombatSystem: createNetworkCombatSystem,
     createCampaignProgressionSystem: createFloorProgressionSystem,
     applyNetworkHeroProfile,
+    syncAuthorityPlayableEnemyBodies,
     announceAuthorityBossIntro,
     applyAuthorityRoomEntryItemEffects,
     sanitizeKitChoices,

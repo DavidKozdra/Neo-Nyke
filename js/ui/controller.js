@@ -569,6 +569,7 @@ export function createUIController(view) {
         return Math.max(1, Number(Neo.getMoveMaxStacks?.(moveKey, selected, null) || fallback));
       };
       const skillsHtml = slots.map(slot => {
+        if (defaultMoves[slot] === null) return '';
         const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
         // The melee (M1) slot is driven by the equipped weapon — characters
         // start with their signature weapon, so show that here rather than the
@@ -2068,6 +2069,7 @@ export function createUIController(view) {
           : name === 'smash' ? view.timeSmash
             : view.timeDash;
       const card = view.actionCards[name];
+      if (card) card.hidden = maxCharges === 0;
       const ready = charges > 0 && !active;
       // One fill fraction per recovering charge, derived from its own timer, so a
       // freshly-spent pip starts near empty instead of inheriting the progress of

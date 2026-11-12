@@ -283,6 +283,8 @@
   }
 
   function getActorSpriteActionState(actor, options = {}) {
+    const native = actor?.enemyNativePrimary?.actor;
+    if (native?.bulkJumpTime > 0) return { action: 'smash', progress: Neo.clamp(1 - native.bulkJumpTime / 0.82, 0, 0.999) };
     if (options.action) {
       return { action: options.action, progress: options.actionProgress ?? null };
     }
@@ -2069,14 +2071,15 @@
       actionState: playerActionState,
       seedKey: 'player',
     });
-    drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
+    const drawY = Neo.player.y - Math.max(0, Number(Neo.player.jumpZ || 0));
+    drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, drawY, playerSize, {
       ...playerSpriteOptions,
       flipX: facing < 0,
     });
-    drawStunStars(Neo.player, Neo.player.y);
-    drawEnemyStatusIconRow(Neo.player, Neo.player.y);
+    drawStunStars(Neo.player, drawY);
+    drawEnemyStatusIconRow(Neo.player, drawY);
     Neo.ctx.save();
-    Neo.ctx.translate(Neo.player.x, Neo.player.y);
+    Neo.ctx.translate(Neo.player.x, drawY);
     drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
       hidden: shouldHideActorAimArm(getPlayerSpriteKey(), playerActionState.action),
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
@@ -2278,14 +2281,15 @@
       actionState: slotActionState,
       seedKey: pn.id || label || charKey,
     });
-    drawActorSprite(pn, spriteKey, pn.x, pn.y, slotSize, {
+    const drawY = pn.y - Math.max(0, Number(pn.jumpZ || 0));
+    drawActorSprite(pn, spriteKey, pn.x, drawY, slotSize, {
       ...slotSpriteOptions,
       flipX: facing < 0,
     });
-    drawStunStars(pn, pn.y);
-    drawEnemyStatusIconRow(pn, pn.y);
+    drawStunStars(pn, drawY);
+    drawEnemyStatusIconRow(pn, drawY);
     Neo.ctx.save();
-    Neo.ctx.translate(pn.x, pn.y);
+    Neo.ctx.translate(pn.x, drawY);
     drawAimIndicator(aimAngle, spriteKey, '#f5f1e8', slotSize, facing, {
       hidden: shouldHideActorAimArm(spriteKey, slotActionState.action),
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),

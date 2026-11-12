@@ -5,13 +5,14 @@
     : root.KozEngine?.Rendering3D?.cameraRig;
   const moveEffect = typeof require === 'function' ? require('./SharedMoveEffectSystem.js') : (root.NeoNyke?.simulation || {});
   const roomInterior = typeof require === 'function' ? require('./SharedRoomInteriorSystem.js') : (root.NeoNyke?.simulation || {});
-  const api = factory(status, cameraRig, moveEffect, roomInterior);
+  const enemyAttacks = typeof require === 'function' ? require('./SharedEnemyAttackSystem.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(status, cameraRig, moveEffect, roomInterior, enemyAttacks);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status, cameraRig, moveEffect, roomInterior) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createCampaignMovementRulesApi(status, cameraRig, moveEffect, roomInterior, enemyAttacks) {
   'use strict';
 
   // Extracted verbatim from the campaign's former local-only movement path.
@@ -105,10 +106,13 @@
   // In particular, stun damps existing knockback; it does not use the ordinary
   // stop response (which would erase the impulse in a single 20 Hz tick).
   function applyCampaignPlayerVelocity(player, input, dt, options = {}) {
+    const native = enemyAttacks.getControlledEnemyMovement?.(player);
     if (options.stunned) {
       const friction = Math.pow(0.84, Math.max(0, Number(dt) || 0) * 60);
       player.vx = Number(player.vx || 0) * friction;
       player.vy = Number(player.vy || 0) * friction;
+    } else if (native) {
+      player.vx = native.vx; player.vy = native.vy;
     } else if (options.dashing) {
       player.vx = Number(options.dashVx || 0);
       player.vy = Number(options.dashVy || 0);
@@ -168,7 +172,7 @@
     // God mode (all relics collected) boosts move speed 1.25x for its window.
     const godBoost = Number(currentTick) < Number(player?.godUntilTick || 0) ? 1.25 : 1;
     const laserWeight = Math.max(0, Number(player?.itemStats?.laserWeightMultiplier ?? 1));
-    const laserSlow = player?.beamChannel ? Math.max(0, 1 - 0.6 * laserWeight) : 1;
+    const laserSlow = player?.beamChannel && !player.beamChannel.nativeEnemyAttack ? Math.max(0, 1 - 0.6 * laserWeight) : 1;
     return Math.max(0, Number(player?.moveSpeed) || 228)
       * timedMultiplier
       * flightBoost

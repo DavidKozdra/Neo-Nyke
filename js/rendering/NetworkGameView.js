@@ -35,6 +35,9 @@
   const moveEffects = typeof require === 'function'
     ? require('../simulation/SharedMoveEffectSystem.js')
     : (root.NeoNyke?.simulation || {});
+  const enemyAttackPolicies = typeof require === 'function'
+    ? require('../simulation/SharedEnemyAttackSystem.js')
+    : (root.NeoNyke?.simulation || {});
   const forgePolicies = typeof require === 'function'
     ? require('../simulation/SharedForgeSystem.js')
     : (root.NeoNyke?.content || {});
@@ -391,6 +394,8 @@
   function deriveAbilityPresentation(data = {}) {
     const key = String(data.abilityId || '');
     const authored = ABILITY_PRESENTATIONS[key];
+    if (data.mode === 'windup') return { ...authored, kind: 'windup', sound: null };
+    if (data.nativeEnemySignature) return { ...authored, kind: data.mode };
     if (authored) return authored;
     if (data.slot === 'dash') return { color: '#8fdcff', style: 'light' };
     if (data.mode === 'support') return { color: '#78f0bc', style: 'light' };
@@ -1754,7 +1759,12 @@
       let key = '';
       let pool = null;
       let readyAtTick = null;
-      if (event.eventType === 'PLAYER_ATTACKED' || (event.eventType === 'ACTION_REJECTED' && data.action === 'ATTACK')) {
+      if (event.eventType === 'PLAYER_ABILITY_USED' && data.slot === 'melee'
+        && enemyAttackPolicies.getEnemyNativePrimary?.(data.abilityId)) {
+        key = `attack:${data.abilityId}`;
+        pool = data.moveChargeState || null;
+        readyAtTick = data.attackCooldownUntilTick;
+      } else if (event.eventType === 'PLAYER_ATTACKED' || (event.eventType === 'ACTION_REJECTED' && data.action === 'ATTACK')) {
         const weaponKey = data.weaponKey || data.attackKind || this.localPredictedPlayer?.equippedWeapon;
         const meleeMove = !weaponKey ? this.localPredictedPlayer?.equippedMoves?.melee : '';
         key = `attack:${weaponKey || meleeMove || 'melee'}`;
@@ -1840,7 +1850,7 @@
           const dashOptions = dashInput
             ? { dashMoveX: dashInput.moveX, dashMoveY: dashInput.moveY }
             : {};
-          if (['warp', 'zip_lightning', 'knight_slash_dash'].includes(abilityId) && Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))) {
+          if ((['warp', 'zip_lightning', 'knight_slash_dash', 'hunter_trap'].includes(abilityId) || enemyAttackPolicies.getEnemyNativeAction?.(abilityId)?.kind === 'leap') && Number.isFinite(Number(this.neo.mouse?.worldX)) && Number.isFinite(Number(this.neo.mouse?.worldY))) {
             dashOptions.targetX = Number(this.neo.mouse.worldX);
             dashOptions.targetY = Number(this.neo.mouse.worldY);
           }
@@ -1852,8 +1862,10 @@
           };
           if (slot === 'dash') {
             if (this.session.combatPredictionCorrelation) this.session.sendDash(abilityId, this.aimDirection, actionOptions);
+            else if (enemyAttackPolicies.getEnemyNativeAction?.(abilityId)?.kind === 'leap') this.session.sendDash(abilityId, this.aimDirection, dashOptions);
             else this.session.sendDash(abilityId, this.aimDirection);
           } else if (this.session.combatPredictionCorrelation) this.session.sendAbility(abilityId, this.aimDirection, actionOptions);
+          else if (abilityId === 'hunter_trap') this.session.sendAbility(abilityId, this.aimDirection, dashOptions);
           else this.session.sendAbility(abilityId, this.aimDirection);
           return;
         }
@@ -2063,7 +2075,7 @@
           if (!predicted) this._playNetworkSfx(sound, event, authorityTick);
         }
         if (event.eventType === 'PLAYER_ABILITY_USED') {
-          if (!predicted) this._playNetworkSfx(deriveAbilityPresentation(event.data).sound || 'lazer_blast', event, authorityTick);
+          if (!predicted && event.data?.mode !== 'windup') this._playNetworkSfx(deriveAbilityPresentation(event.data).sound || 'lazer_blast', event, authorityTick);
         }
         if (event.eventType === 'PLAYER_HIT' && event.data?.playerId === localPlayerId
           && this.localPredictedPlayer && Number(event.data.knockbackMagnitude || 0) > 0) {
@@ -2208,7 +2220,7 @@
             : weaponKey === 'princess_wand' ? 'fire' : 'sword_swing';
         this.neo.playSfx?.(sound);
       } else if (eventType === 'PLAYER_ABILITY_USED') {
-        this.neo.playSfx?.(deriveAbilityPresentation(data).sound || 'lazer_blast');
+        if (data.mode !== 'windup') this.neo.playSfx?.(deriveAbilityPresentation(data).sound || 'lazer_blast');
       }
       this._spawnGameplayEventEffect(event);
       this.combatEffects.push({ ...event, startedAt: now });
@@ -2225,6 +2237,12 @@
     _predictLocalAttack() {
       const player = this.localPredictedPlayer;
       if (!player) return;
+      const native = enemyAttackPolicies.getPlayableEnemyPrimary?.(player.characterKey);
+      if (native) return this._predictCombatEvent('PLAYER_ABILITY_USED', {
+        playerId: player.id, roomId: player.roomId, characterKey: player.characterKey,
+        abilityId: native.key, slot: 'melee', mode: native.windup ? 'windup' : 'swing',
+        aimDirection: this.aimDirection, originX: Number(player.x || 0), originY: Number(player.y || 0),
+      });
       const weaponKey = player.weaponKey || player.equippedWeapon || player.actionKind || 'melee';
       const attack = combatSystem.getCampaignWeaponAttack?.(weaponKey, player.characterKey);
       return this._predictCombatEvent('PLAYER_ATTACKED', {
@@ -2250,10 +2268,12 @@
       const player = this.localPredictedPlayer;
       if (!player) return;
       const stats = MOVE_BASE_STATS[abilityId] || {};
-      const presentation = deriveAbilityPresentation({ abilityId, slot });
+      const nativeWindup = String(player.characterKey || '').startsWith('enemy_')
+        && (enemyAttackPolicies.ENEMY_NATIVE_SIGNATURES.includes(abilityId) || !!enemyAttackPolicies.getEnemyNativeAction?.(abilityId));
+      const presentation = deriveAbilityPresentation({ abilityId, slot, ...(nativeWindup ? { mode: 'windup' } : {}) });
       const dashMoveX = Math.max(-1, Math.min(1, Number(options.dashMoveX) || 0));
       const dashMoveY = Math.max(-1, Math.min(1, Number(options.dashMoveY) || 0));
-      const actionAimDirection = slot === 'dash' && Math.hypot(dashMoveX, dashMoveY) > 0.15
+      const actionAimDirection = !nativeWindup && slot === 'dash' && Math.hypot(dashMoveX, dashMoveY) > 0.15
         ? Math.atan2(dashMoveY, dashMoveX)
         : this.aimDirection;
       const chargeRatio = clamp(Number(options.chargeRatio || 0), 0, 1);
@@ -2287,7 +2307,7 @@
         effectRadius: radius,
       };
       const floor = this.currentSample?.state?.floorState || {};
-      const dash = planPredictedDashPreview({
+      const dash = nativeWindup ? null : planPredictedDashPreview({
         abilityId, player, state: this.currentSample?.state, floor,
         originX, originY, aimDirection: actionAimDirection, moveX: dashMoveX, moveY: dashMoveY,
         targetX, targetY, chargeRatio,
@@ -2474,6 +2494,15 @@
     _spawnGameplayEventEffect(event) {
       const state = this.currentSample?.state;
       const data = event.data || {};
+      if (event.eventType === 'BOMB_AOE_DETONATED') {
+        this.neo.spawnAoeShockwave?.(data.x, data.y, data.blastRadius, '#ff7a66', 'explosion');
+        this.neo.playSfx?.('bomb_explosion');
+        return;
+      }
+      if (event.eventType === 'ENEMY_PROJECTILE_DETONATED') {
+        this.neo.spawnAoeShockwave?.(data.x, data.y, data.radius, data.color || '#9fe8ff', 'explosion');
+        return;
+      }
       const entity = state?.enemies?.[data.enemyId] || state?.players?.[data.playerId];
       if (!entity) return;
       if (event.eventType === 'BOSS_INTRO') {
@@ -2532,6 +2561,19 @@
           this.neo.spawnHealPopup?.(entity.x, entity.y - 20, Number(data.healedAmount));
         }
       } else if (event.eventType === 'PLAYER_ABILITY_USED') {
+        if (data.nativeBulkEffect) {
+          const kind = data.nativeBulkEffect;
+          this.neo.ringBurst?.(data.originX, data.originY, data.radius, kind === 'takeoff' ? '#ffb067' : '#ff8844', kind === 'warning' ? 0.32 : kind === 'takeoff' ? 0.35 : 0.55);
+          if (kind === 'landing' || kind === 'nova') this.neo.addTrauma?.(0.65, Math.PI / 2, 20);
+          return;
+        }
+        if (data.nativeTRexEffect) {
+          const crash = data.nativeTRexEffect === 'wall_impact';
+          this.neo.ringBurst?.(Number(data.originX), Number(data.originY), Number(data.radius), data.color, crash ? 0.45 : 0.55);
+          if (crash) this.neo.spawnParticle?.({ x: Number(data.originX), y: Number(data.originY) - Number(entity.radius || 58),
+            life: 0.65, text: 'CRASH!', c: '#d6b88a' });
+          return;
+        }
         const presentation = deriveAbilityPresentation(data);
         const originX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(entity.x);
         const originY = Number.isFinite(Number(data.originY)) ? Number(data.originY) : Number(entity.y);
@@ -3370,7 +3412,7 @@
           actor._networkAttackActionKey = recoilActionKey;
           actor._networkAttackStartedAt = presentationClock - Math.min(ARM_RECOIL_DURATION, observedAge);
         }
-        const spriteAction = player.action === 'attack' && player.actionKind === 'antony_bite'
+        const spriteAction = player.action === 'attack' && ['antony_bite', 'enemy_antony_blemmye_primary'].includes(player.actionKind)
           ? 'bite'
           : player.action === 'dash'
           ? 'dash'
@@ -3584,6 +3626,7 @@
         this.localBeamChannelStart = -1;
         return;
       }
+      if (channel.nativeEnemyAttack) { this.localBeamAngle = Number(channel.angle || 0); return; }
       if (this.localBeamChannelStart !== Number(channel.startTick)) {
         this.localBeamAngle = Number(channel.angle || 0);
         this.localBeamChannelStart = Number(channel.startTick);
@@ -3616,13 +3659,29 @@
           laserAngle: isLocal && this.localBeamAngle != null ? this.localBeamAngle : Number(channel.angle || 0),
           laserSweepSpeed: Number(channel.sweepDirection || 1) * 4.6,
           loveBeamCasting: channel.moveKey === 'love_beam',
-          activeBeamPaths: null,
+          activeBeamPaths: channel.nativeEnemyAttack ? [channel.path || [{ x1: actor.x, y1: actor.y,
+            x2: actor.x + Math.cos(channel.angle) * channel.range,
+            y2: actor.y + Math.sin(channel.angle) * channel.range }]] : null,
         }];
       });
     }
 
     _syncSpecialMovePresentation(now = root.performance?.now?.() ?? Date.now()) {
       const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
+      const tick = Number(this.currentSample?.state?.tick || 0);
+      if (this.nativeShockwavePresentationTick !== tick) {
+        this.nativeShockwavePresentationTick = tick;
+        this.presentationPlayerSlots.forEach(slot => {
+          const actor = slot.getEntity?.();
+          const wave = actor?.nativeShockwave;
+          if (!wave || slot.getDead?.()) return;
+          for (let index = 0; index < 7; index++) {
+            const angle = wave.angle + (index / 6 - 0.5) * 2 * wave.halfArc;
+            this.neo.spawnParticle?.({ x: actor.x + Math.cos(angle) * wave.travelled,
+              y: actor.y + Math.sin(angle) * wave.travelled, life: 0.22, c: '#ffcf8a', size: 3.2 });
+          }
+        });
+      }
       const abilityEffects = this.combatEffects.filter(effect => effect.eventType === 'PLAYER_ABILITY_USED');
       const liveJusticeBlades = Object.values(this.currentSample?.state?.abilityEntities || {})
         .filter(entity => entity?.kind === 'blade_justice');

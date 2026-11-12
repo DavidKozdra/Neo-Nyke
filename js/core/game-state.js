@@ -389,7 +389,8 @@ export function resumeGame() {
   }
 
   function getCharacterStartingItems(characterKey) {
-    const enemyBuild = globalThis.NeoNyke?.content?.getPlayableEnemyDefinition?.(characterKey);
+    const enemyBuild = globalThis.NeoNyke?.content?.isPlayableEnemyCharacterKey?.(characterKey)
+      ? globalThis.NeoNyke.content.getPlayableEnemyDefinition(characterKey) : null;
     if (enemyBuild) return { ...enemyBuild.startingItems };
     const items = {};
     if (characterKey === 'thorn_knight') {
@@ -947,6 +948,15 @@ export function resumeGame() {
     }
   }
 
+  function getPlayableEnemyBodyContext() {
+    return {
+      progressionDepth: Neo.getProgressionDepth?.() || Neo.floor || 1, floorNumber: Neo.floor || 1,
+      elapsedSeconds: Neo.gameElapsedTime, gameMode: Neo.gameMode, endlessWave: Neo.endlessWave,
+      maxFloor: Neo.MAX_FLOOR, difficulty: Neo.getDifficultyDef?.(), scaling: Neo.ENEMY_SCALING,
+      sandbox: Neo.getActiveSandboxSettings?.(),
+    };
+  }
+
   function createDefaultPlayer() {
     const items = {
       neo_knife: 0,
@@ -1046,9 +1056,9 @@ export function resumeGame() {
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
-    Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
+    Object.values(equippedMoves).filter(Boolean).forEach(key => { ownedMoves[key] = true; });
     const maxHp = Math.round((Neo.PLAYER_BASE_MAX_HP || 120) * (character.hpMultiplier || 1));
-    return {
+    const player = {
       id: 'local-player-1',
       character: character.key,
       x: Neo.START_X,
@@ -1141,6 +1151,8 @@ export function resumeGame() {
       forgeVoucherCharges: 0,
       forgeUpgradesApplied: 0,
     };
+    globalThis.NeoNyke?.simulation?.syncPlayableEnemyBody?.(player, getPlayableEnemyBodyContext());
+    return player;
   }
 
   function applyRunChallengeStartModifiers() {
@@ -1994,6 +2006,8 @@ export function resumeGame() {
   }
 
   function getMeleeCooldownDuration(moveKey = Neo.getEquippedMove('melee'), attackSpeed = Neo.getAttackSpeedValue()) {
+    const native = Neo.getEnemyNativeActionInfo?.(moveKey);
+    if (native) return native.cooldown;
     const anvilBase = getMoveCooldownBase(moveKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'slash') return 0.4 / attackSpeed;
@@ -2001,6 +2015,10 @@ export function resumeGame() {
   }
 
   function getLaserCooldownDuration(moveKey = Neo.getEquippedMove('laser'), attackSpeed = Neo.getAttackSpeedValue()) {
+    const native = Neo.getEnemyNativeActionInfo?.(moveKey);
+    if (native) return native.cooldown;
+    const signature = Neo.getEnemySignatureAttackInfo?.(moveKey);
+    if (signature) return signature.cooldown;
     const anvilBase = getMoveCooldownBase(moveKey);
     const characterMult = Number(Neo.getCharacterDef?.().laserCooldownMultiplier || 1);
     if (anvilBase !== null) return (anvilBase / attackSpeed) * characterMult;
@@ -2016,6 +2034,10 @@ export function resumeGame() {
   }
 
   function getDashCooldownDuration(moveKey = Neo.getEquippedMove('dash'), attackSpeed = Neo.getAttackSpeedValue()) {
+    const native = Neo.getEnemyNativeActionInfo?.(moveKey);
+    if (native) return native.cooldown;
+    const signature = Neo.getEnemySignatureAttackInfo?.(moveKey);
+    if (signature) return signature.cooldown;
     const anvilBase = getMoveCooldownBase(moveKey);
     let duration;
     if (anvilBase !== null) duration = anvilBase / attackSpeed;
@@ -2031,12 +2053,20 @@ export function resumeGame() {
 
   function getSmashCooldownDuration(attackSpeed = Neo.getAttackSpeedValue()) {
     const smashKey = Neo.getEquippedMove('smash');
+    const native = Neo.getEnemyNativeActionInfo?.(smashKey);
+    if (native) return native.cooldown;
+    const signature = Neo.getEnemySignatureAttackInfo?.(smashKey);
+    if (signature) return signature.cooldown;
     const anvilBase = getMoveCooldownBase(smashKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     return (Neo.godTimer > 0 ? 2 : Neo.ATTACKS.smash.baseCooldown) / attackSpeed;
   }
 
   function getMoveMaxStacks(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter, playerState = Neo.player) {
+    if (moveKey === null) return 0;
+    if (globalThis.NeoNyke?.simulation?.getEnemyNativeAction?.(moveKey)) return 1;
+    if (globalThis.NeoNyke?.content?.isPlayableEnemyCharacterKey(characterKey)
+      && globalThis.NeoNyke?.simulation?.ENEMY_NATIVE_SIGNATURES?.includes(moveKey)) return 1;
     const moveDef = Neo.MOVE_DEFS[moveKey] || {};
     const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
     const characterStacks = Math.max(1, Number(moveDef.stackOverrides?.[characterKey] || baseStacks));
@@ -2062,6 +2092,11 @@ export function resumeGame() {
   }
 
   function createCooldownEntry(slot, playerState = Neo.player, source = null, options = {}) {
+    const content = globalThis.NeoNyke?.content;
+    if (content?.isPlayableEnemyCharacterKey?.(playerState?.character)
+      && content.getPlayableEnemyDefinition(playerState.character)?.moveLoadout?.[slot] === null) {
+      return { charges: 0, maxCharges: 0, timers: [], holding: 0 };
+    }
     // A live in-memory hold (set by spendSkillCharge's deferTimer path) is still
     // backed by an active charging flag and will release normally, so rebuilds
     // from the live entry (e.g. Extra Battery) keep it. A hold read back from a
@@ -2160,6 +2195,10 @@ export function resumeGame() {
       || !!Neo.ghostBallCharging
       || (Array.isArray(Neo.ghostBalls) && Neo.ghostBalls.length > 0);
     Neo.MOVE_SLOTS.forEach(slot => {
+      if (Neo.getEquippedMove(slot) === null) {
+        Neo.cooldowns[slot] = createCooldownEntry(slot);
+        return;
+      }
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
       const liveHold = (slot === 'smash' && smashChargingLive && state.holding > 0)
         || (slot === 'dash' && dashChargingLive && state.holding > 0)
@@ -2191,6 +2230,10 @@ export function resumeGame() {
 
   function tickCooldowns(dt) {
     Neo.MOVE_SLOTS.forEach(slot => {
+      if (Neo.getEquippedMove(slot) === null) {
+        Neo.cooldowns[slot] = createCooldownEntry(slot);
+        return;
+      }
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
       // Capacity can grow mid-run (Gelleh's level-5 Zip Lightning charge, or
       // any level-jump path the levelUp hook skips). The stored maxCharges was
@@ -2219,6 +2262,7 @@ export function resumeGame() {
 
   function getSkillCooldownInfo(slot, attackSpeed = Neo.getAttackSpeedValue()) {
     const moveKey = Neo.getEquippedMove(slot);
+    if (moveKey === null) return { charges: 0, maxCharges: 0, current: 0, max: 0, timers: [] };
     const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
     return {
       charges: state.charges,
@@ -4754,6 +4798,7 @@ export function resumeGame() {
   Neo.updateFirstRunTutorialProgress = updateFirstRunTutorialProgress;
   Neo.getCharacterStartingItems = getCharacterStartingItems;
   Neo.createDefaultPlayer = createDefaultPlayer;
+  Neo.getPlayableEnemyBodyContext = getPlayableEnemyBodyContext;
   Neo.applyRunChallengeStartModifiers = applyRunChallengeStartModifiers;
   Neo.createItemRegistry = createItemRegistry;
   Neo.loadPersistedState = loadPersistedState;

@@ -381,7 +381,8 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (Neo.isCustomCharacterKey?.(characterKey)) {
       return Neo.getCustomCharacterSettings?.(characterKey).weaponLoadout?.weapon || 'thorns_bleed_blade';
     }
-    return globalThis.NeoNyke?.content?.getCharacterDefaultWeapon?.(characterKey) || 'thorns_bleed_blade';
+    const getDefaultWeapon = globalThis.NeoNyke?.content?.getCharacterDefaultWeapon;
+    return getDefaultWeapon ? getDefaultWeapon(characterKey) : 'thorns_bleed_blade';
   }
 
 // Per-character, per-slot kit options selectable on the pick-character screen.

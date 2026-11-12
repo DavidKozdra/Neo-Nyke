@@ -277,6 +277,8 @@
       respawnRemaining: Math.max(0, number(source.respawnRemaining)),
       expiresRemaining: sourceKind === 'move' ? Math.max(0, number(source.expiresRemaining ?? source.duration, 0)) : 0,
       attackCooldown: Math.max(0, number(source.attackCooldown)),
+      barrier: Math.max(0, number(source.barrier)),
+      barrierAge: Math.max(0, number(source.barrierAge)),
       moveCooldowns: { ...(source.moveCooldowns || {}) },
       giftedMoveCharges: Math.max(0, integer(source.giftedMoveCharges)),
       temporary: sourceKind === 'move',
@@ -363,7 +365,9 @@
   function damageAlly(state, allyId, damage, options = {}) {
     const ally = getAllyCollection(state)[String(allyId || '')];
     if (!ally || ally.status !== 'active' || number(damage) <= 0) return { ok: false, reason: 'INVALID_TARGET' };
-    const dealt = Math.min(ally.health, Math.max(0, number(damage)));
+    const absorbed = Math.min(Math.max(0, number(ally.barrier)), Math.max(0, number(damage)));
+    ally.barrier = Math.max(0, number(ally.barrier) - absorbed);
+    const dealt = Math.min(ally.health, Math.max(0, number(damage) - absorbed));
     ally.health = Math.max(0, ally.health - dealt);
     if (ally.health > 0) return { ok: true, dealt, died: false, ally };
     if (ally.source.kind === 'item') {
@@ -416,6 +420,10 @@
       ally.spriteKey = ALLY_SPRITE_KEY;
       const owner = playersById?.[ally.ownerId];
       if (owner) scaleAllyWithOwner(ally, owner);
+      if (number(ally.barrier) > 0) {
+        ally.barrierAge = number(ally.barrierAge) + delta;
+        if (ally.barrierAge > 5) ally.barrier = Math.max(0, ally.barrier - delta * 20);
+      } else ally.barrierAge = 0;
       ally.attackCooldown = Math.max(0, number(ally.attackCooldown) - delta);
       Object.keys(ally.moveCooldowns || {}).forEach(key => {
         ally.moveCooldowns[key] = Math.max(0, number(ally.moveCooldowns[key]) - delta);

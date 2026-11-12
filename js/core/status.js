@@ -83,7 +83,7 @@ export function clearStatus(entity, key) {
 // (statusResistScale 0), on the player, or for bleed. See STATUS_RESIST_SCALING
 // and the difficulty defs' statusResistScale in game-core.js.
 function getEnemyGenericStatusResistance(entity, key) {
-  if (!entity || entity === Neo.player) return 0;
+  if (!entity || (entity === Neo.player && !entity.enemyBody)) return 0;
   // Time owns "resistances": the base difficulty scale ramps up over the run,
   // capped so a slow player plateaus instead of facing ever-climbing immunity.
   return globalThis.NeoNyke.simulation.getCampaignGenericStatusResistance(key, {
