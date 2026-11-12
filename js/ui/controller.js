@@ -2542,7 +2542,10 @@ export function createUIController(view) {
         view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE ARCHIVE' : 'ARCHIVE';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
-      if (open) setRunHistoryView('info');
+      if (open) {
+        paintMenuTabIcons(view.runHistoryPanel);
+        setRunHistoryView('info');
+      }
     }
 
     function setRunHistoryView(view_) {
@@ -3080,6 +3083,12 @@ export function createUIController(view) {
       }
     }
 
+    function paintMenuTabIcons(root) {
+      root?.querySelectorAll('.menu-tab-icon[data-inv-ui-icon]').forEach(canvas => {
+        Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+      });
+    }
+
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -3087,7 +3096,10 @@ export function createUIController(view) {
       // re-render the way the mods panel does — paint on open instead. Hidden
       // tabs are painted too: a canvas in a display:none panel still draws, so
       // switching tabs later needs no extra work.
-      if (open) Neo.drawModeIconCanvases?.(view.altModesPanel || document);
+      if (open) {
+        Neo.drawModeIconCanvases?.(view.altModesPanel || document);
+        paintMenuTabIcons(view.altModesPanel);
+      }
     }
 
     // Selects an Alt Modes tab programmatically, so callers that arrive from
@@ -3095,7 +3107,12 @@ export function createUIController(view) {
     function selectAltModesTab(name) {
       const tab = document.querySelector(`.altmodes-tab[data-tab="${name}"]`);
       if (!tab) return;
-      document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.altmodes-tab').forEach(t => {
+        const active = t === tab;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', String(active));
+        t.tabIndex = active ? 0 : -1;
+      });
       document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
       tab.classList.add('active');
       document.querySelector(`.altmodes-tab-panel[data-panel="${name}"]`)?.classList.remove('hidden');
@@ -4596,6 +4613,8 @@ export function createUIController(view) {
         // Alt modes tabs
         document.querySelectorAll('.altmodes-tab').forEach(tab => {
           tab.addEventListener('click', () => selectAltModesTab(tab.dataset.tab));
+          tab.addEventListener('keydown', event => handleTablistKeydown(event,
+            [...document.querySelectorAll('.altmodes-tab')], nextTab => selectAltModesTab(nextTab.dataset.tab)));
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
         view.altModeSandboxBtn?.addEventListener('click', () => {

@@ -4168,7 +4168,7 @@ function prepareReadabilityFrame() {
 
 function syncSceneryVisibility(viewCamera, actor) {
   restoreSceneryMaterials();
-  const previous = sceneryByCamera.get(viewCamera);
+  const previous = new Map((sceneryByCamera.get(viewCamera) || []).map(entry => [entry.object, entry.opacity]));
   const entries = [];
   sceneryByCamera.set(viewCamera, entries);
   if (cameraMode !== 'third' || !actor) return;
@@ -4199,7 +4199,7 @@ function syncSceneryVisibility(viewCamera, actor) {
       const hit = readabilityRay.intersectBox(bounds, readabilityHit);
       return hit && origin.distanceToSquared(hit) < origin.distanceToSquared(point) - 4;
     });
-    const lastOpacity = previous?.find(entry => entry.object === object)?.opacity ?? 1;
+    const lastOpacity = previous.get(object) ?? 1;
     const targetOpacity = blocked ? 0.18 : 1;
     const opacity = lastOpacity + (targetOpacity - lastOpacity) * (1 - Math.exp(-(blocked ? 28 : 12) * readabilityFrameDt));
     entries.push({ object, bounds, opacity });
@@ -4347,7 +4347,8 @@ function isFirstPersonActive() {
 // correct for the top-down camera but points beside the cursor in perspective
 // third person. Intersect the current 3D camera ray with the floor instead so
 // the shared simulation receives the same intended world target the player is
-// actually pointing at.
+// actually pointing at. An opaque enemy-body hit uses that actor's simulation
+// position first, so clicking a raised torso does not aim behind its feet.
 function projectCanvasMouseToWorld(canvasX, canvasY) {
   pointerAimActor = null;
   if (!ready || !Neo.render3D || cameraMode !== 'third' || !camera || !Neo.canvas) return null;

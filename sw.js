@@ -4,7 +4,7 @@ const KOZ_PWA_CONFIG = {
   "critical": [
     {
       "url": "/",
-      "revision": "06aa3bcbe9a9e900200c310dc01d9f819e0661779d1f860854c92da76f076855"
+      "revision": "2bb3955463cee301900a8b1598a174729ec50bc5db7dd1c1aca59ba65c32a9d1"
     },
     {
       "url": "/assets/fonts/PressStart2P-Latin.woff2",
@@ -403,6 +403,10 @@ const KOZ_PWA_CONFIG = {
       "revision": "e9aa8bc30bc941883ee7427bf1dc1533ab462d68834cd654a57218ffcf037190"
     },
     {
+      "url": "/css/menu-tabs.css",
+      "revision": "7e403299a794e4783d1b2ea926673abef6911b6f5d61c7cc54bcff03555ec54b"
+    },
+    {
       "url": "/css/mobile.css",
       "revision": "92011e41edcd1108da2ebcaa0ebf66a150325170d241dcaf98bd61301b9ea7f8"
     },
@@ -432,7 +436,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/index.html",
-      "revision": "06aa3bcbe9a9e900200c310dc01d9f819e0661779d1f860854c92da76f076855"
+      "revision": "2bb3955463cee301900a8b1598a174729ec50bc5db7dd1c1aca59ba65c32a9d1"
     },
     {
       "url": "/js/achievementManager.js",
@@ -540,7 +544,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/draw/three-renderer.js",
-      "revision": "0a15c66506952a14db5654f60c2cd6491a71952fb529d425c843f8c02e81d3a1"
+      "revision": "290027e3b67dd753588ba7f5971c9a429e37d0048a19b2b91d846452c304674c"
     },
     {
       "url": "/js/draw/viewport.js",
@@ -860,7 +864,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/controller.js",
-      "revision": "31894d22ff3437d3a0d0f23bd2884e9beec605250819a003aa9323cc1bd8b6a0"
+      "revision": "899d156947320800f53f72d4cfbb021e2e978ed478cd6b15ecce94738cc74d49"
     },
     {
       "url": "/js/ui/credits.js",
@@ -892,11 +896,11 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/notifications.js",
-      "revision": "47c289aa4451a85b1671372f82635a8f4c5509364110b8d9f82ac831c311c88d"
+      "revision": "00352f8b3aeb85f5333845885ac13ecd2cde733370f6c4c0d18c66d9fabc66e2"
     },
     {
       "url": "/js/ui/panels.js",
-      "revision": "b373b3d9d108e90ed0722b231450ed6bc3a7dae38c8712402feb7bd717b419e3"
+      "revision": "e3fcd927359ef7c025d2cb1490432ece490fcce503f1cb04f6262eac495dde91"
     },
     {
       "url": "/js/ui/pwa-update-prompt.js",
@@ -912,7 +916,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/tutorial-controller.js",
-      "revision": "2a4e847d894fb24750b7f58dbd89126a8b575e7ed70c3e7b47cdfd75d9cf6710"
+      "revision": "d0b89ad13c65e34e3afddec9c339f9fe195042f30015b7fdf2564e821abc2b55"
     },
     {
       "url": "/js/ui/unlock-banner.js",
@@ -1189,14 +1193,14 @@ const KOZ_PWA_CONFIG = {
   "optionalConcurrency": 2,
   "warmOptionalOnInstall": false,
   "manifestSummary": {
-    "entries": 294,
-    "bytes": 56775770,
-    "criticalEntries": 234,
-    "criticalBytes": 13809785,
+    "entries": 295,
+    "bytes": 56789359,
+    "criticalEntries": 235,
+    "criticalBytes": 13823374,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "3515db3254420049"
+  "version": "e9a8937ea01db81c"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

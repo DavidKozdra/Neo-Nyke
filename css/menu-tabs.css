@@ -1,0 +1,92 @@
+/* Inventory-style navigation for the two main-menu libraries. Loaded after
+   mobile.css so the same tab treatment survives compact panel layouts. */
+#altModesPanel .altmodes-tabs,
+#runHistoryPanel .rh-view-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--menu-border-strong);
+  border-radius: 0;
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-padding: 4px;
+}
+#altModesPanel .altmodes-tabs { margin: 0 20px; flex: 0 0 auto; }
+#runHistoryPanel .rh-head-left { flex: 1; min-width: 0; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+#runHistoryPanel .rh-view-tabs { flex: 1 1 600px; }
+#runHistoryPanel .rh-head { align-items: flex-start; }
+#altModesPanel .altmodes-tab,
+#runHistoryPanel .rh-view-tab {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 108px;
+  min-height: 78px;
+  margin: 0;
+  padding: 12px 16px !important;
+  border: 1px solid var(--menu-border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #090e14;
+  color: var(--menu-text-muted);
+  font-size: calc(15px * var(--font-scale, 1)) !important;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  box-shadow: inset 0 4px 0 transparent;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+#altModesPanel .altmodes-tab:hover,
+#runHistoryPanel .rh-view-tab:hover { color: var(--menu-text); background: #18232d; }
+#altModesPanel .altmodes-tab.active,
+#runHistoryPanel .rh-view-tab.active {
+  color: var(--menu-text);
+  background: var(--ui-panel-surface, #15202a);
+  border-color: var(--menu-border-strong);
+  box-shadow: inset 0 4px 0 var(--menu-accent-strong);
+}
+.menu-tab-icon { display: block; width: 24px; height: 24px; flex: 0 0 24px; image-rendering: pixelated; opacity: .75; }
+.active > .menu-tab-icon { opacity: 1; }
+#runHistoryPanel .rh-info-tab { display: flex; align-items: center; gap: 12px; min-height: 52px; border-radius: 5px; border: 1px solid var(--menu-border); background: #090e14; text-align: left; }
+#runHistoryPanel .rh-info-tab.active { color: var(--menu-text); background: var(--ui-panel-surface, #15202a); border-color: var(--menu-border-strong); box-shadow: inset 3px 0 var(--menu-accent-strong); }
+#altModesPanel .altmodes-tab:focus-visible,
+#runHistoryPanel .rh-view-tab:focus-visible,
+#runHistoryPanel .rh-info-tab:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+@media (max-width: 700px) {
+  #altModesPanel .altmodes-tabs { margin: 0 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #runHistoryPanel .rh-view-tabs { width: 100%; flex-basis: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #altModesPanel .altmodes-tab,
+  #runHistoryPanel .rh-view-tab { min-width: 0; min-height: 72px; padding: 10px 6px !important; overflow-wrap: anywhere; font-size: calc(13px * var(--font-scale, 1)) !important; }
+  #runHistoryPanel .rh-info-tab { flex-direction: column; justify-content: center; gap: 6px; padding: 10px 5px !important; font-size: calc(12px * var(--font-scale, 1)) !important; overflow-wrap: anywhere; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #altModesPanel .altmodes-tab,
+  #runHistoryPanel .rh-view-tab { transition: none; }
+}
+
+/* Tools share the collection tab; keep their hotkey editor easy to find. */
+#invPanel .inv-collection-section + .inv-collection-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--menu-border);
+}
+#invPanel .inv-collection-section > .inv-moves-section__label { margin: 0 0 12px; }
+#invPanel .game-panel-head { flex-wrap: wrap; }
+#invPanel .game-panel-head > .inv-tabs { order: 3; flex-basis: 100%; }
+#invPanel .inv-tabs [data-inv-ui-icon="tab-allies"],
+#invPanel .inv-tabs [data-inv-ui-icon="tab-rivals"] { opacity: 1; }
+
+/* Shop and inventory use the same category icons and header arrangement. */
+#shopPanel .game-panel-head { flex-wrap: wrap; }
+#shopPanel .game-panel-head > .shop-tabs { order: 3; flex-basis: 100%; }
+#shopPanel .shop-tabs [data-inv-ui-icon="tab-allies"] { opacity: 1; }

@@ -610,8 +610,8 @@ export function clearGameplayInput() {
   }
 
 export function bindPanelInput() {
-    const drawInventoryTabIcons = () => {
-      document.querySelectorAll('#invPanel .inv-tabs [data-inv-ui-icon]').forEach(canvas => {
+    const drawPanelTabIcons = () => {
+      document.querySelectorAll('#invPanel .inv-tabs [data-inv-ui-icon], #shopPanel .shop-tabs [data-inv-ui-icon]').forEach(canvas => {
         Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
       });
     };
@@ -658,11 +658,11 @@ export function bindPanelInput() {
       tab.addEventListener('click', () => {
         Neo.activeInvTab = tab.dataset.invTab || 'stats';
         renderInventoryPanel();
-        drawInventoryTabIcons();
+        drawPanelTabIcons();
         Neo.tutorialController?.signal?.('inventory-tab', { tab: Neo.activeInvTab });
       });
     });
-    drawInventoryTabIcons();
+    drawPanelTabIcons();
     Neo.ui.invPlayerTabBtns.forEach(tab => {
       tab.addEventListener('click', () => {
         Neo.activeInvPlayer = Number(tab.dataset.invPlayer) || 1;
@@ -2371,7 +2371,7 @@ export function getShopWeaponOffers() {
       : tabKey === 'items'
         ? 'invTabItems'
         : tabKey === 'tools'
-          ? 'invTabTools'
+          ? 'invTabItems'
           : tabKey === 'weapons'
             ? 'invTabWeapons'
             : tabKey === 'rivals'
@@ -2407,7 +2407,8 @@ export function getShopWeaponOffers() {
     }
     if (tabKey === 'items') {
       const pending = (Neo.getPendingUiItems?.(playerRef) || []).map(entry => `${entry.key}:${entry.count}`).join(',');
-      return `items|${getCountedKeys(playerRef.items)}|${playerRef.character || ''}|pending:${pending}`;
+      const order = Array.isArray(playerRef.equipmentSlots) ? playerRef.equipmentSlots.join(',') : '';
+      return `items|${getCountedKeys(playerRef.items)}|${playerRef.character || ''}|pending:${pending}|order:${order}`;
     }
     if (tabKey === 'tools') {
       const order = Array.isArray(playerRef.equipmentSlots) ? playerRef.equipmentSlots.join(',') : '';
@@ -2724,10 +2725,12 @@ export function renderInventoryPanel() {
 
     if (Neo.gameMode === 'coop' && (Neo.player2 || Neo.player3 || Neo.player4)) updateInvPlayerTabVisibility();
 
+    // Normalize old callers/saved UI state to the combined collection.
+    if (Neo.activeInvTab === 'tools') Neo.activeInvTab = 'items';
     Neo.ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === Neo.activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped', allies: 'invTabAllies', rivals: 'invTabRivals' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', weapons: 'invTabWeapons', equipped: 'invTabEquipped', allies: 'invTabAllies', rivals: 'invTabRivals' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
@@ -2847,7 +2850,7 @@ export function renderInventoryPanel() {
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
 
       Neo.drawItemIconCanvases?.(Neo.ui.invItemsList, 'data-item-icon');
-    } else if (Neo.activeInvTab === 'tools') {
+      // The collection and hotkey editor are rendered and cached together.
       const toolKeys = Neo.getEquippedToolKeys?.() || [];
       const slotKeys = Neo.EQUIPMENT_SLOT_KEYS || [];
       if (Neo.ui.invToolsList) {
