@@ -96,7 +96,8 @@ describe('Story Mode integration', () => {
 
   test('offers a saved Story-only tutorial skip with the full reward package', () => {
     expect(html).toContain('id="storySkipTutorial"');
-    expect(html).toContain('begin the story with every tutorial reward');
+    expect(html).toContain('SKIP TUTORIAL');
+    expect(html).toContain('Start on Floor 2 with every tutorial reward.');
     expect(gameState).toContain('storySkipTutorial: false');
     expect(gameState).toContain('const storySkipTutorial = storyRun && !!Neo.metaProgress?.storySkipTutorial');
     expect(gameState).toContain('Neo.floor = storySkipTutorial ? 2 : 1');

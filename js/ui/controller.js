@@ -559,6 +559,8 @@ export function createUIController(view) {
       const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
       const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
       const slots = ['melee', 'laser', 'smash', 'dash'];
+      const hasLoadoutChoices = slots.some(slot =>
+        !(slot === 'melee' && defaultWeapon) && (Neo.KIT_ALTERNATIVES?.[selected]?.[slot]?.length || 0) > 1);
       // Feed the actual starting charge pool into the compact hover readout.
       // Thorn's regular Dash starts with two; Blade Filled Dash starts with one.
       const startingChargeCount = moveKey => {
@@ -604,11 +606,12 @@ export function createUIController(view) {
               title="${safeDesc}" aria-pressed="${isSel}"${kitLocked ? ' disabled' : ''}>
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
               <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
+              <span class="hero-detail-kit-state">${isSel ? 'Equipped' : kitLocked ? 'Locked' : 'Equip'}</span>
             </button>`;
           }).join('');
           return `<div class="hero-detail-skill-pip hero-detail-skill-pip--choice">
-            <span class="hero-detail-skill-slot-label">${Neo.escapeHtml(slotLabel)}</span>
-            <div class="hero-detail-kit-options">${optionPips}</div>
+            <span class="hero-detail-skill-slot-label">${Neo.escapeHtml(slotLabel)} · ${kitLocked ? 'Loadout locked' : 'Choose one'}</span>
+            <div class="hero-detail-kit-options" role="group" aria-label="${Neo.escapeHtml(slotLabel)} loadout">${optionPips}</div>
           </div>`;
         }
         const moveDesc = moveDef.desc || '';
@@ -649,8 +652,8 @@ export function createUIController(view) {
         `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
         `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
         `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>` +
-        `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
-        `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
+        `<div class="hero-detail-skills"><div class="hero-detail-section-label">${hasLoadoutChoices ? 'Ability loadout' : 'Starting abilities'}</div>${skillsHtml}</div>` +
+        `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite">${detail.id === 'heroDetail' ? '<div class="hero-detail-demo-label">Ability preview</div>' : ''}<canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><div class="hero-detail-skill-copy"><div class="hero-detail-skill-readout-head"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-charge-meter" data-skill-readout-charges hidden><span class="hero-detail-charge-pips" data-skill-readout-charge-pips aria-hidden="true"></span><b data-skill-readout-charge-label></b></span></div><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div></div>`;
       const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
       Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 168, {
         tint: Neo.isCustomCharacterKey?.(selected) && !Neo.hasCustomCharacterSprite?.(selected) ? '#83f3ff' : null,
@@ -671,7 +674,13 @@ export function createUIController(view) {
       detail.querySelectorAll('[data-kit-move]').forEach(btn => {
         btn.addEventListener('click', () => {
           if (btn.disabled) return;
-          onKitSelect(btn.dataset.kitSlot, btn.dataset.kitMove);
+          const { kitSlot, kitMove } = btn.dataset;
+          onKitSelect(kitSlot, kitMove);
+          // Re-rendering replaces the button. Retain keyboard focus and show
+          // the newly equipped move in the preview, including mobility slots.
+          const replacement = [...detail.querySelectorAll('[data-kit-move]')].find(el =>
+            el.dataset.kitSlot === kitSlot && el.dataset.kitMove === kitMove);
+          replacement?.focus({ preventScroll: true });
         });
       });
       // Kit move descriptions: hovering (or focusing) a move feeds its
@@ -690,6 +699,8 @@ export function createUIController(view) {
           const name = el?.dataset.skillName || '';
           const desc = el?.dataset.skillDesc || '';
           if (!name && !desc) return;
+          detail.querySelectorAll('.is-previewing').forEach(pip => pip.classList.remove('is-previewing'));
+          el.classList.add('is-previewing');
           readoutName.textContent = name;
           readoutDesc.textContent = desc || 'No description available.';
           const chargeCount = Math.max(0, Number(el?.dataset.startingCharges || 0));
@@ -717,6 +728,8 @@ export function createUIController(view) {
         pips.forEach(el => {
           el.addEventListener('mouseenter', () => showSkill(el));
           el.addEventListener('focus', () => showSkill(el));
+          // Fixed abilities also support an explicit tap to inspect on touch.
+          if (!el.hasAttribute('data-kit-move')) el.addEventListener('click', () => showSkill(el));
         });
         // Seed the readout with the selected/chosen move so the panel never
         // opens empty and re-renders (e.g. after an alt-kit swap) keep a

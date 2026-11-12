@@ -616,6 +616,7 @@ function addWallSegment(group, wallSkin, x1, x2, z1, z2, wallHeight = WALL_HEIGH
   mesh.scale.set(w, wallHeight, d);
   mesh.position.set(x1 + w / 2, wallHeight / 2, z1 + d / 2);
   group.add(mesh);
+  roomSceneryOccluders.push(mesh);
 }
 
 // A short dark passage beyond each door gap, so doorways read as tunnels to
@@ -685,6 +686,7 @@ function addDoorCorridor(group, side, wallSkin, wallHeight = WALL_HEIGHT) {
 function buildRoom() {
   const room = Neo.currentRoom;
   if (!room) return;
+  roomSceneryOccluders.length = 0;
   if (roomGroup) {
     scene.remove(roomGroup);
     disposeObject(roomGroup);
@@ -846,6 +848,7 @@ function buildRoom() {
       sprite.position.set(decor.x, 0.6, decor.y);
       sprite.renderOrder = 2;
       roomGroup.add(sprite);
+      if (decor.kind === 'tree' || decor.kind === 'fruit_tree') roomSceneryOccluders.push(sprite);
       const shadow = makeShadowMesh(radius * 0.5);
       shadow.position.set(decor.x, 1.5, decor.y);
       roomGroup.add(shadow);
@@ -889,6 +892,7 @@ function buildRoom() {
         // same sequence from base to shaft(s) to capital.
         sprite.position.set(structure.x, 0.6 + index * w, structure.y);
         roomGroup.add(sprite);
+        roomSceneryOccluders.push(sprite);
       });
     } else if (structure.kind === 'anvil' || structure.kind === 'forge') {
       const key = structure.kind === 'anvil' ? 'anvil_0' : 'forge_0';
@@ -918,6 +922,7 @@ function buildRoom() {
       mesh.scale.set(w, BLOCK_HEIGHT, h);
       mesh.position.set(structure.x, BLOCK_HEIGHT / 2, structure.y);
       roomGroup.add(mesh);
+      roomSceneryOccluders.push(mesh);
     }
   });
 
@@ -4102,10 +4107,197 @@ function syncChallengeStructure() {
 }
 
 // ---------------------------------------------------------------------------
+// Combat readability in third person
+// ---------------------------------------------------------------------------
+const roomSceneryOccluders = [];
+const sceneryMaterialDefaults = new WeakMap();
+const fadedSceneryMaterials = new Map();
+const sceneryByCamera = new WeakMap();
+const spriteAlphaMasks = new WeakMap();
+const readabilityOrigin = new THREE.Vector3();
+const readabilityPoint = new THREE.Vector3();
+const readabilityScale = new THREE.Vector3();
+const readabilityRight = new THREE.Vector3();
+const readabilityUp = new THREE.Vector3();
+const readabilityRay = new THREE.Ray();
+const readabilityHit = new THREE.Vector3();
+let pointerAimActor = null;
+let groundAimMarker = null;
+let readabilityFrameDt = 1 / 60;
+let lastReadabilityFrameAt = 0;
+
+function restoreSceneryMaterials() {
+  fadedSceneryMaterials.forEach((state, material) => Object.assign(material, state));
+  fadedSceneryMaterials.clear();
+}
+
+function getSceneryBounds(object, viewCamera) {
+  const bounds = new THREE.Box3();
+  if (!object.isSprite) return bounds.setFromObject(object);
+  // Box3's default sprite bounds ignore the foot anchor and camera-facing
+  // plane. Use the actual billboard corners, including transparent padding.
+  object.getWorldPosition(readabilityOrigin);
+  object.getWorldScale(readabilityScale);
+  readabilityRight.setFromMatrixColumn(viewCamera.matrixWorld, 0);
+  readabilityUp.setFromMatrixColumn(viewCamera.matrixWorld, 1);
+  for (const x of [0, 1]) for (const y of [0, 1]) {
+    readabilityPoint.copy(readabilityOrigin)
+      .addScaledVector(readabilityRight, (x - object.center.x) * readabilityScale.x)
+      .addScaledVector(readabilityUp, (y - object.center.y) * readabilityScale.y);
+    bounds.expandByPoint(readabilityPoint);
+  }
+  return bounds;
+}
+
+function isVisibleObject(object) {
+  for (let node = object; node; node = node.parent) if (!node.visible) return false;
+  return true;
+}
+
+function isLivingAimActor(actor) {
+  return actor && !actor.dead && !actor.networkDowned && Number(actor.spawnT || 0) <= 0
+    && (actor.hp == null || Number(actor.hp) > 0);
+}
+
+function prepareReadabilityFrame() {
+  const now = performance.now();
+  readabilityFrameDt = lastReadabilityFrameAt ? Math.min(0.05, Math.max(0, (now - lastReadabilityFrameAt) / 1000)) : 1 / 60;
+  lastReadabilityFrameAt = now;
+  scene.updateMatrixWorld(true);
+}
+
+function syncSceneryVisibility(viewCamera, actor) {
+  restoreSceneryMaterials();
+  const previous = sceneryByCamera.get(viewCamera);
+  const entries = [];
+  sceneryByCamera.set(viewCamera, entries);
+  if (cameraMode !== 'third' || !actor) return;
+  viewCamera.updateMatrixWorld(true);
+  const objects = [...roomSceneryOccluders];
+  pools.destructibles.forEach((group, prop) => {
+    if (!prop.broken && isVisibleObject(group)) {
+      const intact = group.getObjectByName('intact');
+      if (intact) objects.push(intact);
+      const state = group.getObjectByName('state-art');
+      if (state?.visible) objects.push(state);
+    }
+  });
+  const probes = [new THREE.Vector3(actor.x, 5, actor.y), new THREE.Vector3(actor.x, 28, actor.y)];
+  const nearby = [...(Neo.enemies || []), ...pools.players.keys()].filter(enemy => enemy !== actor && isLivingAimActor(enemy)
+    && Math.hypot(enemy.x - actor.x, enemy.y - actor.y) < 700)
+    .sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y)).slice(0, 16);
+  nearby.forEach(enemy => probes.push(new THREE.Vector3(enemy.x, 5, enemy.y), new THREE.Vector3(enemy.x, 26, enemy.y)));
+  (Neo.projectiles || []).filter(projectile => projectile.enemy
+    && Math.hypot(projectile.x - actor.x, projectile.y - actor.y) < 320).slice(0, 12)
+    .forEach(projectile => probes.push(new THREE.Vector3(projectile.x, BEAM_Y, projectile.y)));
+  const origin = viewCamera.getWorldPosition(new THREE.Vector3());
+  for (const object of objects) {
+    if (!isVisibleObject(object)) continue;
+    const bounds = getSceneryBounds(object, viewCamera).expandByScalar(4);
+    const blocked = probes.some(point => {
+      readabilityRay.set(origin, readabilityPoint.copy(point).sub(origin).normalize());
+      const hit = readabilityRay.intersectBox(bounds, readabilityHit);
+      return hit && origin.distanceToSquared(hit) < origin.distanceToSquared(point) - 4;
+    });
+    const lastOpacity = previous?.find(entry => entry.object === object)?.opacity ?? 1;
+    const targetOpacity = blocked ? 0.18 : 1;
+    const opacity = lastOpacity + (targetOpacity - lastOpacity) * (1 - Math.exp(-(blocked ? 28 : 12) * readabilityFrameDt));
+    entries.push({ object, bounds, opacity });
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!material) continue;
+      if (!sceneryMaterialDefaults.has(material)) {
+        sceneryMaterialDefaults.set(material, true);
+        // Keep the shader/render queue stable instead of recompiling whenever
+        // a wall crosses a sightline. Full-opacity scenery still writes depth.
+        if (!material.transparent) { material.transparent = true; material.needsUpdate = true; }
+      }
+      if (opacity >= 0.995) continue;
+      fadedSceneryMaterials.set(material, { opacity: material.opacity, depthWrite: material.depthWrite, alphaTest: material.alphaTest });
+      material.opacity *= opacity;
+      material.depthWrite = false;
+      material.alphaTest = Math.min(material.alphaTest, 0.01);
+    }
+  }
+}
+
+function isOpaqueSpriteHit(hit) {
+  const material = hit.object.material;
+  const image = material.map?.image;
+  if (!hit.uv || !image?.getContext) return true;
+  let pixels = spriteAlphaMasks.get(image);
+  if (!pixels) {
+    try { pixels = image.getContext('2d').getImageData(0, 0, image.width, image.height).data; }
+    catch { return false; }
+    spriteAlphaMasks.set(image, pixels);
+  }
+  const x = Math.max(0, Math.min(image.width - 1, Math.floor(hit.uv.x * image.width)));
+  const y = Math.max(0, Math.min(image.height - 1, Math.floor((1 - hit.uv.y) * image.height)));
+  return pixels[(y * image.width + x) * 4 + 3] / 255 * material.opacity >= Math.max(0.05, material.alphaTest || 0);
+}
+
+function resolvePointerActorTarget(raycaster, viewCamera) {
+  const bodies = [];
+  const actors = new Map();
+  function addActor(group, actor) {
+    const body = group.getObjectByName('body');
+    if (!isLivingAimActor(actor) || !body || !isVisibleObject(body) || body.material.opacity < 0.2) return;
+    body.updateWorldMatrix(true, false);
+    bodies.push(body);
+    actors.set(body, actor);
+  }
+  pools.enemies.forEach(addActor);
+  if (Neo.gameMode === 'pvp') pools.players.forEach(addActor);
+  const hits = raycaster.intersectObjects(bodies, false);
+  for (const hit of hits) {
+    if (!isOpaqueSpriteHit(hit)) continue;
+    const blocked = (sceneryByCamera.get(viewCamera) || []).some(entry => {
+      if (entry.opacity < 0.99 || !isVisibleObject(entry.object)) return false;
+      const obstruction = raycaster.ray.intersectBox(entry.bounds, readabilityHit);
+      return obstruction && raycaster.ray.origin.distanceTo(obstruction) < hit.distance - 2;
+    });
+    if (blocked) return null;
+    return actors.get(hit.object);
+  }
+  return null;
+}
+
+function syncGroundAimMarker(show) {
+  const keyboard = (window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard') === 'keyboard';
+  const visible = show && keyboard && cameraMode === 'third' && Neo.gameState === 'play'
+    && !Neo.storyCamera?.active && !Neo.isOverlayBlockingInput?.()
+    && Number.isFinite(Neo.mouse?.worldX) && Number.isFinite(Neo.mouse?.worldY);
+  if (!visible) { if (groundAimMarker) groundAimMarker.visible = false; return; }
+  if (!groundAimMarker) {
+    groundAimMarker = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 32), new THREE.MeshBasicMaterial({
+      color: 0x9de9ff, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+    }));
+    groundAimMarker.rotation.x = -Math.PI / 2;
+    groundAimMarker.renderOrder = 20;
+    scene.add(groundAimMarker);
+  }
+  groundAimMarker.visible = true;
+  groundAimMarker.material.color.set(pointerAimActor ? 0xffd76a : 0x9de9ff);
+  groundAimMarker.scale.setScalar(pointerAimActor ? Math.max(10, Number(pointerAimActor.r || 12) + 4) : 7);
+  groundAimMarker.position.set(Neo.mouse.worldX, 2.5, Neo.mouse.worldY);
+}
+
+function syncLocalReadability(viewCamera, actor, localPointer) {
+  syncSceneryVisibility(viewCamera, actor);
+  if (localPointer) {
+    if (cameraMode === 'third' && (window.NeoSettings?.getEffectiveInputMode?.() || 'keyboard') === 'keyboard') Neo.updatePointerAimWorld?.();
+    syncPlayer();
+    syncPlayerMeleeIndicator();
+    syncWarpPreview();
+  }
+  syncGroundAimMarker(localPointer);
+}
+
+// ---------------------------------------------------------------------------
 // Camera + screen projection
 // ---------------------------------------------------------------------------
-const CAMERA_HEIGHT = 580;
-const CAMERA_BACK = 430;
+const CAMERA_HEIGHT = 620;
+const CAMERA_BACK = 340;
 const FP_EYE_HEIGHT = 34;
 // Below this the residual shake is sub-pixel on screen but still re-randomises
 // the camera every frame; treat it as zero so the view actually comes to rest.
@@ -4128,8 +4320,7 @@ function getCameraShakeAxes(nowMs) {
 // stair-step toward it. Smoothing the *focus point* over render time turns those
 // steps back into continuous motion. Time-based so the feel is identical at 60,
 // 120 or 144Hz (a fixed per-frame lerp factor is faster on faster displays).
-const CAMERA_FOCUS_SMOOTH_HZ = 12;
-const CAMERA_FOLLOW_SMOOTH_HZ = 9;
+const CAMERA_FOCUS_SMOOTH_HZ = 20;
 const camFocus = { x: 0, z: 0, valid: false };
 let lastCameraSyncAt = 0;
 const camTarget = new THREE.Vector3();
@@ -4158,6 +4349,7 @@ function isFirstPersonActive() {
 // the shared simulation receives the same intended world target the player is
 // actually pointing at.
 function projectCanvasMouseToWorld(canvasX, canvasY) {
+  pointerAimActor = null;
   if (!ready || !Neo.render3D || cameraMode !== 'third' || !camera || !Neo.canvas) return null;
   const split = !!Neo.isSplitScreen?.();
   const slotCount = split ? Math.max(1, (Neo.getActivePlayerSlots?.() || []).length) : 1;
@@ -4173,6 +4365,8 @@ function projectCanvasMouseToWorld(canvasX, canvasY) {
     || { x: (Number(canvasX || 0) / width) * 2 - 1, y: 1 - (Number(canvasY || 0) / height) * 2 };
   mouseAimNdc.set(ndc.x, ndc.y);
   mouseAimRay.setFromCamera(mouseAimNdc, aimCamera);
+  pointerAimActor = resolvePointerActorTarget(mouseAimRay, aimCamera);
+  if (pointerAimActor) return { x: pointerAimActor.x, y: pointerAimActor.y };
   const hit = typeof worldMapping3d.intersectRayWithGround === 'function'
     ? worldMapping3d.intersectRayWithGround(mouseAimRay.ray.origin, mouseAimRay.ray.direction, 0)
     : (() => {
@@ -4442,15 +4636,9 @@ function syncCamera() {
     thirdPersonPose?.position.y ?? CAMERA_HEIGHT,
     thirdPersonPose?.position.z ?? lookZ + CAMERA_BACK + shakeZ,
   );
-  // Framerate-independent follow. The old fixed 0.14 per-frame lerp chased the
-  // target more than twice as fast at 144Hz as at 60Hz, so the camera's trail
-  // (and any residual wobble) changed with the player's refresh rate.
-  if (camera.position.lengthSq() === 0 || frameDt <= 0) camera.position.copy(camTarget);
-  else camera.position.lerp(
-    camTarget,
-    cameraRig3d.exponentialSmoothingAlpha?.(CAMERA_FOLLOW_SMOOTH_HZ, frameDt)
-      ?? 1 - Math.exp(-CAMERA_FOLLOW_SMOOTH_HZ * frameDt),
-  );
+  // The focus already follows the interpolated player smoothly. A second
+  // position lerp trails dodges and briefly tilts the view toward an old focus.
+  camera.position.copy(camTarget);
   // Translate the eye and focus together. Rotating the camera toward a fixed
   // focus while its position jittered was the source of the odd aim wobble.
   camera.lookAt(lookX + shakeX, 12, lookZ + shakeZ);
@@ -4476,6 +4664,7 @@ function renderSceneViews() {
     renderer.setScissorTest(false);
     const rect = Neo.canvas.getBoundingClientRect();
     renderer.setViewport(0, 0, Math.max(2, rect.width), Math.max(2, rect.height));
+    syncLocalReadability(camera, Neo.presentationViewpointPlayer || Neo.player, true);
     scaleNameplatesToScreen(camera, Math.max(2, rect.height));
     renderer.render(scene, camera);
     return;
@@ -4488,6 +4677,7 @@ function renderSceneViews() {
   const count = slots.length;
   if (!count) {
     renderer.setScissorTest(false);
+    syncLocalReadability(camera, Neo.player, true);
     renderer.render(scene, camera);
     return;
   }
@@ -4503,7 +4693,7 @@ function renderSceneViews() {
   const viewW = viewportLayout?.[0]?.width || fullW / 2;
   const viewH = viewportLayout?.[0]?.height || (count >= 3 ? fullH / 2 : fullH);
   renderer.setScissorTest(true);
-  const playerWasVisible = playerSprite?.visible;
+  let playerWasVisible = playerSprite?.visible;
   slots.forEach((slot, index) => {
     const firstPersonView = cameraMode === 'fp';
     let viewCamera = firstPersonView ? camera : splitCameras[index];
@@ -4548,6 +4738,8 @@ function renderSceneViews() {
     const y = viewport?.y ?? fullH - (rowFromTop + 1) * viewH;
     renderer.setViewport(x, y, viewW, viewH);
     renderer.setScissor(x, y, viewW, viewH);
+    syncLocalReadability(viewCamera, actor, index === 0);
+    if (index === 0) playerWasVisible = playerSprite?.visible;
     if (playerSprite) playerSprite.visible = firstPersonView && index === 0 ? false : !!playerWasVisible || isFirstPersonActive();
     const actorGroup = index > 0 ? pools.players.get(actor) : null;
     const actorWasVisible = actorGroup?.visible;
@@ -4865,6 +5057,7 @@ function render() {
     document.body.classList.add('render3d');
     glCanvas.style.display = 'block';
     syncSize();
+    restoreSceneryMaterials();
 
     const buildKey = getRoomBuildKey();
     if (buildKey !== roomBuildKey) {
@@ -4878,10 +5071,7 @@ function render() {
     const darkness = Neo.getRoomDarkness?.(Neo.currentRoom, []) || 0;
     if (ambientLight) ambientLight.intensity = 0.92 - Math.min(0.45, darkness * 2.2);
 
-    syncPlayer();
     syncOtherPlayers();
-    syncPlayerMeleeIndicator();
-    syncWarpPreview();
     syncEnemies();
     syncStoryActors();
     syncProjectiles();
@@ -4899,6 +5089,7 @@ function render() {
     syncChallengeStructure();
     syncTitanHammer();
     syncCamera();
+    prepareReadabilityFrame();
     renderSceneViews();
     syncPointerLock();
     drawPrompts();
@@ -5021,6 +5212,8 @@ Neo.threeRenderer = {
     roomChildren: roomGroup?.children?.length,
     justiceBlades: pools.justiceBlades.size,
     otherPlayers: pools.players.size,
+    aimTarget: pointerAimActor ? { x: pointerAimActor.x, y: pointerAimActor.y } : null,
+    fadedScenery: (sceneryByCamera.get(Neo.isSplitScreen?.() ? splitCameras[0] : camera) || []).filter(entry => entry.opacity < 0.99).length,
     beams: beamMeshes.length,
     floorHasMap: !!floorMesh?.material?.map,
     driverContextLost: !!renderer?.getContext?.()?.isContextLost?.(),

@@ -4,7 +4,7 @@ const KOZ_PWA_CONFIG = {
   "critical": [
     {
       "url": "/",
-      "revision": "49112d3072360bda403c63d29801805e1ab2268b34492b4ae9142ee19c0da023"
+      "revision": "9c653a3ee122e5718712c24bf5f3479ebdc9910788edc72ab9ca3aef9cfa2206"
     },
     {
       "url": "/assets/fonts/PressStart2P-Latin.woff2",
@@ -400,7 +400,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/css/character-select.css",
-      "revision": "de8069b223e5b241b0897bc19e20f306bf115352fc7a574865fd8b20f9152922"
+      "revision": "b121c7e5da63d94a2fbc33a287b71b3b0256976f43bb3de6edccc4f76448f755"
     },
     {
       "url": "/css/mobile.css",
@@ -432,7 +432,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/index.html",
-      "revision": "49112d3072360bda403c63d29801805e1ab2268b34492b4ae9142ee19c0da023"
+      "revision": "9c653a3ee122e5718712c24bf5f3479ebdc9910788edc72ab9ca3aef9cfa2206"
     },
     {
       "url": "/js/achievementManager.js",
@@ -540,7 +540,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/draw/three-renderer.js",
-      "revision": "f18513e1a80c961fdf6c3bbfe617799706f175cfbdb19e960555909dfd07192c"
+      "revision": "0a15c66506952a14db5654f60c2cd6491a71952fb529d425c843f8c02e81d3a1"
     },
     {
       "url": "/js/draw/viewport.js",
@@ -860,7 +860,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/ui/controller.js",
-      "revision": "75c8651c1271b3f25d1c7e819601f8088c22794efb1e5425fcd3dfe71661b62f"
+      "revision": "31894d22ff3437d3a0d0f23bd2884e9beec605250819a003aa9323cc1bd8b6a0"
     },
     {
       "url": "/js/ui/credits.js",
@@ -1190,13 +1190,13 @@ const KOZ_PWA_CONFIG = {
   "warmOptionalOnInstall": false,
   "manifestSummary": {
     "entries": 294,
-    "bytes": 56779455,
+    "bytes": 56775675,
     "criticalEntries": 234,
-    "criticalBytes": 13813470,
+    "criticalBytes": 13809690,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "fac5b234fbb1378b"
+  "version": "e2085387d893f792"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
