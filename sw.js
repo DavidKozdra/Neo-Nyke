@@ -4,7 +4,7 @@ const KOZ_PWA_CONFIG = {
   "critical": [
     {
       "url": "/",
-      "revision": "9c653a3ee122e5718712c24bf5f3479ebdc9910788edc72ab9ca3aef9cfa2206"
+      "revision": "06aa3bcbe9a9e900200c310dc01d9f819e0661779d1f860854c92da76f076855"
     },
     {
       "url": "/assets/fonts/PressStart2P-Latin.woff2",
@@ -400,7 +400,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/css/character-select.css",
-      "revision": "b121c7e5da63d94a2fbc33a287b71b3b0256976f43bb3de6edccc4f76448f755"
+      "revision": "e9aa8bc30bc941883ee7427bf1dc1533ab462d68834cd654a57218ffcf037190"
     },
     {
       "url": "/css/mobile.css",
@@ -432,7 +432,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/index.html",
-      "revision": "9c653a3ee122e5718712c24bf5f3479ebdc9910788edc72ab9ca3aef9cfa2206"
+      "revision": "06aa3bcbe9a9e900200c310dc01d9f819e0661779d1f860854c92da76f076855"
     },
     {
       "url": "/js/achievementManager.js",
@@ -1190,13 +1190,13 @@ const KOZ_PWA_CONFIG = {
   "warmOptionalOnInstall": false,
   "manifestSummary": {
     "entries": 294,
-    "bytes": 56775675,
+    "bytes": 56775770,
     "criticalEntries": 234,
-    "criticalBytes": 13809690,
+    "criticalBytes": 13809785,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "e2085387d893f792"
+  "version": "3515db3254420049"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");

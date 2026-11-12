@@ -236,12 +236,12 @@
   background: transparent;
   box-shadow: none;
 }
-#charSelect .charselect-header { display: flex; margin: 0 0 24px; padding: 0 210px 20px 0; border-bottom: 1px solid var(--selection-line); }
+#charSelect .charselect-header { display: flex; align-items: center; gap: 24px; margin: 0 0 24px; padding: 0 0 20px; border-bottom: 1px solid var(--selection-line); }
 #charSelect .charselect-titlewrap { align-items: flex-start; text-align: left; gap: 8px; }
 #charSelect .screen-title { font-size: calc(30px * var(--font-scale, 1)); letter-spacing: .12em; text-shadow: none; }
 #charSelect .charselect-subtitle { margin: 0; font: 14px/1.4 system-ui, sans-serif; color: #9cabb8; }
 #charSelect .charselect-subtitle:empty { display: none; }
-#charSelect #charBackBtn { position: absolute; inset: 22px 32px auto auto; z-index: 20; min-height: 42px; padding: 10px 16px; font-size: 12px; }
+#charSelect #charBackBtn { position: static; inset: auto; flex: 0 0 auto; z-index: 20; min-width: 200px; min-height: 60px; margin: 0; padding: 16px 22px; font-size: calc(16px * var(--font-scale, 1)); }
 #charSelect .charselect-main { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 20px 28px; align-items: start; }
 #charSelect .charselect-roster { grid-column: 1; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 #charSelect .char-roster-head { padding: 0 0 8px; }
@@ -372,10 +372,10 @@
 #charSelect .challenge-toggle { width: 100%; min-height: 48px; padding: 10px; border-radius: 4px; }
 #charSelect .challenge-toggle strong { font: 600 13px system-ui, sans-serif; }
 #charSelect .challenge-toggle small { font: 11px system-ui, sans-serif; }
-#charSelect .story-skip-tutorial { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: center; width: 100%; box-sizing: border-box; padding: 12px; min-height: 86px; border: 1px solid var(--selection-line); border-radius: 4px; background: #0c151e; cursor: pointer; }
+#charSelect .story-skip-tutorial { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; width: 100%; box-sizing: border-box; padding: 12px; min-height: 86px; border: 1px solid var(--selection-line); border-radius: 4px; background: #0c151e; cursor: pointer; }
 #charSelect .story-skip-tutorial.hidden { display: none; }
 #charSelect .story-skip-tutorial input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-#charSelect .story-skip-tutorial__check { display: grid; place-items: center; width: 36px; height: 36px; box-sizing: border-box; border: 2px solid #617482; border-radius: 4px; color: transparent; font: 700 24px system-ui, sans-serif; }
+#charSelect .story-skip-tutorial__check { display: grid; place-items: center; width: 44px; height: 44px; box-sizing: border-box; border: 2px solid #617482; border-radius: 4px; color: transparent; font: 700 24px system-ui, sans-serif; }
 #charSelect .story-skip-tutorial__copy { display: grid; gap: 5px; }
 #charSelect .story-skip-tutorial__copy strong { font: 700 13px system-ui, sans-serif; color: #e1eaf1; }
 #charSelect .story-skip-tutorial__copy small { font: 11px/1.45 system-ui, sans-serif; color: #aebdca; }
@@ -407,10 +407,10 @@
 }
 @media (max-width: 640px) {
   #charSelect .charselect-layout { padding: 20px 14px 24px; }
-  #charSelect .charselect-header { padding-right: 70px; margin-bottom: 20px; min-height: 42px; align-items: center; }
+  #charSelect .charselect-header { flex-direction: column; align-items: flex-start; gap: 18px; padding: 0 0 20px; margin-bottom: 20px; }
   #charSelect .screen-title { font-size: 25px; }
-  #charSelect #charBackBtn { position: absolute; inset: 16px 14px auto auto; min-width: 44px; min-height: 44px; padding: 10px; }
-  #charSelect #charBackBtn .back-btn__label { display: none; }
+  #charSelect #charBackBtn { position: static; inset: auto; min-width: 190px; min-height: 56px; padding: 14px 20px; }
+  #charSelect #charBackBtn .back-btn__label { display: inline; }
   #charSelect .char-carousel-track { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   #charSelect .char-card,
   #charSelect #choose .char-card.sel { grid-template-columns: 36px minmax(0, 1fr); gap: 4px 8px; padding: 10px 8px; }
