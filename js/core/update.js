@@ -567,7 +567,7 @@ export function loop(timestamp) {
       // it auto-aims and swings without holding the button. The charged-ready
       // state additionally applies the 8x attack-speed burst (via robotArmCharge).
       const robotArmTarget = itemStats.hasRobotArm
-        ? _getNearestEnemyForAim()
+        ? simulationApi.getCampaignNearestEnemyForAim(Neo.player, Neo.enemies)
         : null;
       // Mooggy Swipe: charge-on-hold. Holding the melee button builds a charge
       // meter (suppressing the per-frame swing); releasing unleashes one swipe

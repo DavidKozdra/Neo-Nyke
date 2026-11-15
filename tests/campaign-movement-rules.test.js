@@ -2,9 +2,40 @@ const {
   resolveCampaignDashBurst,
   resolveCampaignBlinkDestination,
   resolveCampaignNimrodStomp,
+  getCampaignNearestEnemyForAim,
+  resolveCampaignControlAim,
 } = require('../js/simulation/CampaignMovementRules');
 
 describe('campaign movement rules', () => {
+  test('automatic aim skips dead enemies and enemies in other rooms', () => {
+    const player = { x: 100, y: 100, roomId: 'room-1' };
+    const target = { x: 100, y: 140, roomId: 'room-1' };
+    const enemies = [
+      null,
+      { x: 101, y: 100, dead: true, roomId: 'room-1' },
+      { x: 100, y: 101, roomId: 'room-2' },
+      { x: 250, y: 100, roomId: 'room-1' },
+      target,
+    ];
+
+    expect(getCampaignNearestEnemyForAim(player, enemies)).toBe(target);
+    for (const inputMode of ['touch', 'gamepad']) {
+      expect(resolveCampaignControlAim(player, enemies, {
+        inputMode, [inputMode]: { active: true },
+      })).toEqual({ x: 100, y: 140, aimDirection: Math.PI / 2 });
+    }
+  });
+
+  test('gamepad stick aim overrides an enemy and empty rooms retain the last aim', () => {
+    const player = { x: 100, y: 100 };
+    expect(resolveCampaignControlAim(player, [{ x: 100, y: 140 }], {
+      inputMode: 'gamepad', gamepad: { active: true, hasAim: true, aimX: 1, aimY: 0 },
+    })).toEqual({ x: 300, y: 100, aimDirection: 0 });
+    expect(resolveCampaignControlAim(player, [], {
+      inputMode: 'touch', touch: { active: true, lastAimX: 0, lastAimY: -1 },
+    })).toEqual({ x: 100, y: -100, aimDirection: -Math.PI / 2 });
+  });
+
   test('uses held movement before aim and returns the canonical dash glide timing', () => {
     const dash = resolveCampaignDashBurst({
       moveX: 1, moveY: 0, aimDirection: Math.PI / 2, attackSpeed: 2, godMode: true,

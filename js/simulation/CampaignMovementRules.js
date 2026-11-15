@@ -62,25 +62,29 @@
     };
   }
 
+  function getCampaignNearestEnemyForAim(player, enemies = []) {
+    if (!player) return null;
+    let nearest = null;
+    let bestDistanceSquared = Infinity;
+    for (const enemy of enemies) {
+      if (!enemy || enemy.dead
+        || (player.roomId && enemy.roomId && player.roomId !== enemy.roomId)) continue;
+      const distanceSquared = (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2;
+      if (distanceSquared < bestDistanceSquared) {
+        nearest = enemy;
+        bestDistanceSquared = distanceSquared;
+      }
+    }
+    return nearest;
+  }
+
   function resolveCampaignControlAim(player, enemies = [], options = {}) {
     if (!player) return null;
     const control = options.inputMode === 'touch' ? options.touch
       : options.inputMode === 'gamepad' ? options.gamepad : null;
     if (!control?.active) return null;
     const explicitAim = options.inputMode === 'gamepad' && control.hasAim;
-    let nearest = null;
-    let bestDistanceSquared = Infinity;
-    if (!explicitAim) {
-      for (const enemy of enemies) {
-        if (!enemy || enemy.dead
-          || (player.roomId && enemy.roomId && player.roomId !== enemy.roomId)) continue;
-        const distanceSquared = (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2;
-        if (distanceSquared < bestDistanceSquared) {
-          nearest = enemy;
-          bestDistanceSquared = distanceSquared;
-        }
-      }
-    }
+    const nearest = explicitAim ? null : getCampaignNearestEnemyForAim(player, enemies);
     const aimX = explicitAim ? Number(control.aimX || 0) * 200
       : nearest ? nearest.x - player.x : Number(control.lastAimX || 0) * 200;
     const aimY = explicitAim ? Number(control.aimY || 0) * 200
@@ -268,6 +272,7 @@
     applyResponsiveVelocity,
     advanceCampaignMovementTimer,
     resolveCampaignMovementInput,
+    getCampaignNearestEnemyForAim,
     resolveCampaignControlAim,
     applyCampaignImpulse,
     applyCampaignPlayerVelocity,

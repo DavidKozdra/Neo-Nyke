@@ -496,7 +496,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/core/update.js",
-      "revision": "d47ac2a6a5014f20fe6a3ceb14d67474ce38318c46394b777f5ec30ff93a385c"
+      "revision": "ad411b68ab9067a061db2b3ff2633f39c83741f63bf2a462a099a5560b1b9c2f"
     },
     {
       "url": "/js/dataAdapter.js",
@@ -644,7 +644,7 @@ const KOZ_PWA_CONFIG = {
     },
     {
       "url": "/js/simulation/CampaignMovementRules.js",
-      "revision": "42c15b686509abfd14e62ef0d8ae7f4eb2d4a5246a330147a762385392cbf6eb"
+      "revision": "9f1ad4becdb779a61331a1a2db778ffc087aeaa730f1e03f648a0121e2553404"
     },
     {
       "url": "/js/simulation/CampaignSimulation.js",
@@ -1202,13 +1202,13 @@ const KOZ_PWA_CONFIG = {
   "warmOptionalOnInstall": false,
   "manifestSummary": {
     "entries": 297,
-    "bytes": 56886367,
+    "bytes": 56886607,
     "criticalEntries": 237,
-    "criticalBytes": 13920382,
+    "criticalBytes": 13920622,
     "optionalEntries": 60,
     "optionalBytes": 42965985
   },
-  "version": "d871bf12dab29b0f"
+  "version": "fada43c170682ef9"
 };
 
 importScripts("/js/vendor/koz-pwa-service-worker-runtime.js");
